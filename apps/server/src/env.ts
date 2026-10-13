@@ -1,0 +1,50 @@
+import { releaseChannelSchema } from '@throw/shared';
+import { z } from 'zod';
+import { isProxyRange } from './lib/clientIp';
+
+const list = (value: string) =>
+  value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+const envSchema = z.object({
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  PORT: z.coerce.number().int().default(3000),
+  DATABASE_URL: z.url(),
+  BETTER_AUTH_SECRET: z.string().min(32),
+  BETTER_AUTH_URL: z.url(),
+  ELECTRIC_URL: z.url(),
+  ELECTRIC_SECRET: z.string().optional(),
+  /** Extra origins allowed to call the API, e.g. the Vite dev server. Comma separated. */
+  TRUSTED_ORIGINS: z.string().default('').transform(list),
+  /**
+   * Whether anyone who reaches the server may make an account. The first account, the
+   * admin's, can always be made; `closed` turns away every one after it.
+   */
+  REGISTRATION: z.enum(['open', 'closed']).default('closed'),
+  /**
+   * Addresses or CIDR ranges of the reverse proxies in front of the server. Only a
+   * connection from one of them has its X-Forwarded-For believed. Comma separated.
+   */
+  TRUSTED_PROXIES: z
+    .string()
+    .default('')
+    .transform(list)
+    .refine((entries) => entries.every(isProxyRange), 'Use IP addresses or CIDR ranges'),
+  /** Better Auth rate limiting (on in production). Disable only for automated tests. */
+  AUTH_RATE_LIMIT: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((value) => value === 'true'),
+  /** Directory containing the built web app. Served when set. */
+  WEB_DIST_DIR: z.string().optional(),
+  /** The release this image was built from. Unset in development. */
+  THROW_VERSION: z.string().optional(),
+  THROW_CHANNEL: releaseChannelSchema.default('dev'),
+});
+
+export const env = envSchema.parse(process.env);
+
+/** Origins used by the Capacitor Android WebView. */
+export const NATIVE_APP_ORIGINS = ['https://localhost', 'capacitor://localhost'];

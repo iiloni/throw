@@ -1,0 +1,220 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  merge_group:
+    branches: [main]
+    types: [checks_requested]
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  # PR updates supersede old commits and label state. Main/release requests still queue
+  # by exact commit so a release never cancels the CI it is waiting for.
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+  queue: ${{ github.event_name == 'pull_request' && 'single' || 'max' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  reuse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      run_checks: ${{ steps.ci.outputs.run_checks }}
+      docs_only: ${{ steps.scope.outputs.docs_only }}
+      # `run e2e` always tests. Otherwise a change confined to documentation skips E2E, and
+      # a PR waits for `merge on pass`.
+      run_e2e: ${{ contains(github.event.pull_request.labels.*.name, 'run e2e') || steps.scope.outputs.docs_only != 'true' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'merge on pass')) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # A PR's merge commit and the base it is compared with below.
+          fetch-depth: 2
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter throw
+      # Only a PR or a push has a change to read; a manual or release request tests the
+      # commit, whatever last changed in it. Anything unreadable counts as code.
+      - name: Decide whether the change is documentation only
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          base=
+          case "$EVENT_NAME" in
+            pull_request) base='HEAD^1' ;;
+            push) git fetch --quiet --depth=1 origin "$BEFORE" && base="$BEFORE" || true ;;
+          esac
+          docs_only=false
+          if [[ -n "$base" ]]; then
+            docs_only=$(git diff --name-only --no-renames "$base" HEAD | node scripts/change-scope.ts)
+          fi
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+          echo "Documentation only: $docs_only"
+      - name: Decide whether to reuse full CI
+        id: ci
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == pull_request || "$EVENT_NAME" == merge_group ]]; then
+            # Test the combined code on every update; release reuse is for exact main/tag commits.
+            echo 'run_checks=true' >> "$GITHUB_OUTPUT"
+          else
+            node scripts/wait-for-ci.ts check
+          fi
+
+  check:
+    needs: reuse
+    if: needs.reuse.outputs.run_checks == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+
+  # Each project runs on a runner with a stack of its own. The suite is small enough for one
+  # shard per project; add shards to the matrix (and to `--shard` below) as it grows, so
+  # they do not compete for one machine the way a second worker would.
+  e2e-desktop:
+    name: e2e desktop (${{ matrix.shard }}/1)
+    needs: reuse
+    if: needs.reuse.outputs.run_checks == 'true' && needs.reuse.outputs.run_e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy: &e2e-shards
+      fail-fast: false
+      matrix:
+        shard: [1]
+    env:
+      PROJECT: desktop
+    steps: &e2e-steps
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - id: playwright
+        run: echo "version=$(pnpm exec playwright --version | awk '{ print $2 }')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      # The runner image already has the libraries Chromium links against. Fetching them
+      # again goes through apt, which has taken seven minutes on a slow day, so that only
+      # happens when a launch shows one is missing.
+      - name: Install Chromium
+        run: |
+          pnpm exec playwright install chromium
+          launch="import { chromium } from '@playwright/test'; await (await chromium.launch()).close();"
+          node --input-type=module -e "$launch" || pnpm exec playwright install-deps chromium
+      # Builds the development image into this builder from layers kept between runs, so its
+      # Debian packages are only fetched when the Dockerfile changes. `dev.sh up` then builds
+      # the same image and finds every layer here. Writing the image out is what downloads
+      # the kept layers: a build with no output reads only their names, and `dev.sh up` would
+      # run every step again. One job keeps the layers: each would otherwise store a copy of
+      # its own after a change.
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: development
+          outputs: type=oci,dest=${{ runner.temp }}/dev-image.tar
+          cache-from: type=gha,scope=dev-image
+          cache-to: ${{ env.PROJECT == 'desktop' && matrix.shard == 1 && 'type=gha,scope=dev-image,mode=max' || '' }}
+      # Exercises the same worktree stack developers and agents use.
+      - run: ./scripts/dev.sh up
+      # The unit tests also run inside the stack, beside a real Postgres, which the check
+      # job's bare runner lacks. They and the API tests ride on one project's runner.
+      - if: env.PROJECT == 'android' && matrix.shard == 1
+        run: ./scripts/dev.sh test
+      # The tests that only call the API open no page, so they run once.
+      - if: env.PROJECT == 'android' && matrix.shard == 1
+        run: ./scripts/dev.sh e2e --project=api --workers=1
+      - run: ./scripts/dev.sh e2e --project=$PROJECT --shard=${{ matrix.shard }}/1 --workers=1
+      - if: failure()
+        run: ./scripts/dev.sh logs-once
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: playwright-${{ env.PROJECT }}-${{ matrix.shard }}
+          path: test-results
+          retention-days: 7
+
+  e2e-android:
+    name: e2e android (${{ matrix.shard }}/1)
+    needs: reuse
+    if: needs.reuse.outputs.run_checks == 'true' && needs.reuse.outputs.run_e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy: *e2e-shards
+    env:
+      PROJECT: android
+    steps: *e2e-steps
+
+  # One result per project under the names the release workflow waits for
+  # (scripts/wait-for-ci.ts), however many runners its tests are split over.
+  e2e-desktop-passed:
+    name: e2e (desktop)
+    needs: [reuse, e2e-desktop]
+    if: always() && needs.reuse.outputs.run_checks == 'true' && needs.reuse.outputs.run_e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: test "${{ needs.e2e-desktop.result }}" = success
+
+  e2e-android-passed:
+    name: e2e (android)
+    needs: [reuse, e2e-android]
+    if: always() && needs.reuse.outputs.run_checks == 'true' && needs.reuse.outputs.run_e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: test "${{ needs.e2e-android.result }}" = success
+
+  # Require this check in branch protection: GitHub accepts conditionally skipped jobs,
+  # so requiring the E2E jobs alone would let a PR merge without testing or approval.
+  validation:
+    name: validation
+    needs: [reuse, check, e2e-desktop-passed, e2e-android-passed]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require completed validation
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          E2E_REQUESTED: ${{ needs.reuse.outputs.run_e2e }}
+          DOCS_ONLY: ${{ needs.reuse.outputs.docs_only }}
+          MERGE_APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'merge on pass') }}
+          REUSE_RESULT: ${{ needs.reuse.result }}
+          RUN_CHECKS: ${{ needs.reuse.outputs.run_checks }}
+          CHECK_RESULT: ${{ needs.check.result }}
+          DESKTOP_RESULT: ${{ needs.e2e-desktop-passed.result }}
+          ANDROID_RESULT: ${{ needs.e2e-android-passed.result }}
+        run: bash scripts/ci-validation.sh

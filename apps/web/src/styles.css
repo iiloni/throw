@@ -1,0 +1,275 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/*
+ * Theme tokens use light-dark(), so switching theme only means changing
+ * `color-scheme` on <html>. Prefer these tokens over `dark:` variants.
+ * Neutrals carry a slight warm tint that supports the sunrise brand colors.
+ */
+:root {
+  color-scheme: light dark;
+  --radius: 0.75rem;
+  /*
+   * Warm graphite gives the amber mark a quiet canvas. The palette is Catch's.
+   */
+  --background: light-dark(oklch(0.965 0.008 85), oklch(0.205 0.01 70));
+  --foreground: light-dark(oklch(0.24 0.016 70), oklch(0.95 0.007 85));
+  --card: light-dark(oklch(1 0 0), oklch(0.255 0.012 70));
+  --card-foreground: var(--foreground);
+  --popover: light-dark(oklch(1 0 0), oklch(0.275 0.012 70));
+  --popover-foreground: var(--foreground);
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
+  --secondary: light-dark(oklch(0.93 0.009 85), oklch(0.3 0.012 70));
+  --secondary-foreground: var(--foreground);
+  --muted: var(--secondary);
+  --muted-foreground: light-dark(oklch(0.52 0.014 70), oklch(0.72 0.01 85));
+  --accent: light-dark(oklch(0.93 0.012 85), oklch(0.32 0.015 70));
+  --accent-foreground: var(--foreground);
+  --destructive: light-dark(oklch(0.56 0.2 27), oklch(0.72 0.16 22));
+  --border: light-dark(oklch(0.885 0.01 85), oklch(0.34 0.012 70));
+  --input: var(--border);
+  --ring: var(--brand);
+
+  /* Catch's brand colors, until Throw has its own. */
+  --brand-amber-light: #ffe174;
+  --brand-amber-primary: #ffc247;
+  --brand-amber-deep: #ffa32b;
+  --brand-cream: #fff9f0;
+  --brand-charcoal: #292b2d;
+  --brand: var(--brand-amber-primary);
+  --brand-foreground: #452904;
+  --brand-link: light-dark(#955000, #ffd278);
+  --brand-gradient: linear-gradient(
+    63.435deg,
+    var(--brand-amber-light) 0%,
+    var(--brand-amber-primary) 55%,
+    var(--brand-amber-deep) 100%
+  );
+
+  /* Frosted material for the dock, the navigation rail and sheets. */
+  --glass: light-dark(oklch(0.99 0.005 85 / 0.66), oklch(0.29 0.012 70 / 0.6));
+  /* Menus, dialogs and sheets hold text over content, so they need to be thicker. */
+  --glass-thick: light-dark(oklch(0.99 0.005 85 / 0.9), oklch(0.27 0.012 70 / 0.92));
+  --glass-border: light-dark(oklch(0 0 0 / 0.07), oklch(1 0 0 / 0.1));
+  --glass-highlight: light-dark(oklch(1 0 0 / 0.9), oklch(1 0 0 / 0.08));
+  --glass-shadow: light-dark(oklch(0.3 0.025 70 / 0.18), oklch(0.08 0.01 70 / 0.55));
+
+  /*
+   * System bar insets. Capacitor injects --safe-area-inset-* on Android (zero while the
+   * keyboard is open); browsers provide env() on edge-to-edge displays.
+   */
+  --safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --safe-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  --safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --safe-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+
+  /*
+   * Height of the on-screen keyboard. On Android the page is not resized for the keyboard,
+   * so anything pinned to the bottom must clear it. Nothing sets this yet: Catch's keyboard
+   * tracking has not been ported.
+   */
+  --keyboard: 0px;
+
+  /* The dock floats above the gesture bar (or the keyboard); pages leave room for it. */
+  --dock-height: 4rem;
+  /* Rounded rectangle rather than a pill; controls inside are inset to stay concentric. */
+  --dock-radius: 1.375rem;
+  --dock-bottom: max(var(--dock-rest-bottom), calc(var(--keyboard) + 0.25rem));
+  /* Where the dock sits with the keyboard down. */
+  --dock-rest-bottom: calc(max(var(--safe-bottom), 0.5rem) + 0.25rem);
+  --dock-space: calc(var(--dock-height) + var(--dock-bottom) + 1.5rem);
+  --header-height: 3.25rem;
+
+  /*
+   * How much of the screen the task pane beside the board covers on wide screens (0 without
+   * one). Fixed UI over the board leaves it free with `right: var(--task-pane)`.
+   */
+  --task-pane: 0px;
+
+  /* Gentle start, long soft finish, no overshoot. */
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Android uses touch scrolling, including inside editors, sheets and menus. */
+:root[data-platform="android"],
+:root[data-platform="android"] * {
+  scrollbar-width: none;
+}
+:root[data-platform="android"]::-webkit-scrollbar,
+:root[data-platform="android"] *::-webkit-scrollbar {
+  display: none;
+}
+:root[data-platform="android"] [data-slot="scroll-area-scrollbar"] {
+  display: none;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+/*
+ * Project and tag colors, set with data-color. Matches COLORS in @throw/shared. Hues share
+ * one lightness and chroma per theme, so text contrast is the same on every color.
+ */
+[data-color] {
+  --tint: light-dark(oklch(0.925 0.06 var(--tint-hue, 0)), oklch(0.35 0.07 var(--tint-hue, 0)));
+  /* The color at full strength, for a mark drawn on it or beside it. */
+  --tint-accent: light-dark(
+    oklch(from var(--tint) 0.5 calc(c * 2) h),
+    oklch(from var(--tint) 0.78 calc(c * 1.5) h)
+  );
+}
+[data-color="red"] {
+  --tint-hue: 25;
+}
+[data-color="orange"] {
+  --tint-hue: 50;
+}
+[data-color="amber"] {
+  --tint-hue: 72;
+}
+[data-color="yellow"] {
+  --tint: light-dark(oklch(0.95 0.085 100), oklch(0.39 0.075 90));
+}
+[data-color="lime"] {
+  --tint-hue: 125;
+}
+[data-color="green"] {
+  --tint-hue: 150;
+}
+[data-color="mint"] {
+  --tint-hue: 168;
+}
+[data-color="teal"] {
+  --tint-hue: 190;
+}
+[data-color="cyan"] {
+  --tint-hue: 215;
+}
+[data-color="blue"] {
+  --tint-hue: 245;
+}
+[data-color="dark-blue"] {
+  --tint-hue: 270;
+}
+[data-color="violet"] {
+  --tint-hue: 292;
+}
+[data-color="purple"] {
+  --tint-hue: 312;
+}
+[data-color="magenta"] {
+  --tint-hue: 334;
+}
+[data-color="pink"] {
+  --tint-hue: 355;
+}
+[data-color="brown"] {
+  --tint: light-dark(oklch(0.91 0.03 70), oklch(0.34 0.035 60));
+}
+[data-color="gray"] {
+  --tint: light-dark(oklch(0.915 0.006 255), oklch(0.33 0.008 255));
+}
+
+@theme {
+  --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
+  /* Titles: the one place the type is loud. */
+  --font-display: "Bricolage Grotesque Variable", "Figtree Variable", ui-sans-serif, sans-serif;
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-tint: var(--tint);
+  --color-tint-accent: var(--tint-accent);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+}
+
+@utility glass {
+  background-color: var(--glass);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 10px 30px -10px var(--glass-shadow);
+
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--popover);
+    backdrop-filter: none;
+  }
+}
+
+@utility glass-thick {
+  background-color: var(--glass-thick);
+  backdrop-filter: blur(32px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 16px 40px -12px var(--glass-shadow);
+
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--popover);
+    backdrop-filter: none;
+  }
+}
+
+/*
+ * Sonner gives every toast its column's full width (the whole screen on phones). Size each
+ * to its text and center it; the extra attribute outranks Sonner's own injected rules.
+ */
+[data-sonner-toaster][data-y-position] [data-sonner-toast] {
+  left: 0;
+  right: 0;
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+}
+/* Phones pin the column between side offsets; its full width would overhang the right one. */
+@media (max-width: 600px) {
+  [data-sonner-toaster][data-y-position] {
+    width: auto;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+    overscroll-behavior-y: none;
+  }
+  button:not(:disabled),
+  a[href] {
+    cursor: pointer;
+  }
+}

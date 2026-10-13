@@ -1,0 +1,29 @@
+{
+  "name": "throw",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.6.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm -r build",
+    "typecheck": "tsc -p scripts/tsconfig.json && pnpm -r typecheck",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "node --test scripts/*.test.ts && pnpm -r test",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "db:generate": "pnpm --filter @throw/server db:generate",
+    "db:migrate": "pnpm --filter @throw/server db:migrate",
+    "e2e": "./scripts/dev.sh e2e",
+    "db:seed": "pnpm --filter @throw/server db:seed"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^24.19.0",
+    "typescript": "^7.0.2",
+    "zod": "^4.6.5"
+  }
+}

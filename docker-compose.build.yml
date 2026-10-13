@@ -1,0 +1,10 @@
+# Builds Throw from this checkout instead of running a published image. Turn it on by
+# adding this line to .env, so every `docker compose` command and the helper scripts use it:
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml
+services:
+  app:
+    image: throw:source
+    build:
+      context: .
+      target: production

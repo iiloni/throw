@@ -1,0 +1,11 @@
+packages:
+  - apps/*
+  - packages/*
+
+allowBuilds:
+  # Its postinstall downloads PowerSync extensions; TanStack DB's worker bundles its own build.
+  '@journeyapps/wa-sqlite': false
+  esbuild: true
+
+patchedDependencies:
+  '@tanstack/db-sqlite-persistence-core@0.2.23': patches/@tanstack__db-sqlite-persistence-core@0.2.23.patch

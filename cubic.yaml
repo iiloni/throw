@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=https://cubic.dev/schema/cubic-repository-config.schema.json
+version: 1
+
+reviews:
+  # Disable automatic reviews; explicit comment requests still work.
+  enabled: false
+  sensitivity: medium
+  check_drafts: true
+  incremental_commits: false
+  auto_approve_behavior: disabled
+  auto_approve: disabled
+  ultrareview: manual
+  auto_ultrareview: disabled
+  ignore:
+    files:
+      - pnpm-lock.yaml
+      - apps/web/src/routeTree.gen.ts
+      - apps/server/drizzle/meta/**
+  custom_instructions: |
+    Read AGENTS.md and the relevant docs/decisions/ records before reviewing changes.
+    Prioritize concrete correctness, security, data-loss and regression findings.
+    Explain the trigger and impact of each finding using evidence from the code.
+    Avoid formatting nits already covered by Biome, speculative refactors, and
+    requests for tests that merely repeat the implementation. Keep meaningful
+    test gaps, migration SQL and CI workflows in scope.
+
+    Throw is offline-first. Optimistic writes must go through write() and survive
+    network/auth/protocol interruptions. Replay must be safe, with the correct
+    txid acknowledgement. Never discard persisted data or an outbox to recover.
+    Shape column changes require a collection schemaVersion bump; this does not
+    migrate queued writes. IDs are client-generated.
+
+    Rows belong to a workspace. Filter workspace-data queries and Electric shapes
+    by the authenticated user's membership, never by trusting an id in the request.
+    Preserve explicit shape column allowlists and admin authorization.
+    Check old-client/new-server and new-client/old-server behavior under ADR 0003.
+    Shared TypeScript types do not prove mixed-version compatibility.
+
+    Account for bearer authentication, offline PWA behavior, touch controls and
+    safe-area insets. Follow the existing design tokens. Review E2E waits against
+    settled state rather than fixed sleeps.
+
+    Reviews are advisory. Only the maintainer's merge on pass approval authorizes
+    merging; do not infer approval from an ai review label or a clean AI review.
+
+pr_descriptions:
+  generate: false
+
+issues:
+  fix_with_cubic_buttons: false
+  pr_comment_fixes: false

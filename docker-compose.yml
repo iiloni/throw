@@ -1,0 +1,70 @@
+# Self-hosted deployment. Copy .env.example to .env and set BETTER_AUTH_SECRET,
+# BETTER_AUTH_URL (your public URL), POSTGRES_PASSWORD and ELECTRIC_SECRET first.
+# No image is published yet, so add docker-compose.build.yml to build this checkout.
+# Development uses this file plus docker-compose.dev.yml through scripts/dev.sh.
+name: throw
+
+services:
+  app:
+    image: ${THROW_IMAGE:-ghcr.io/iiloni/throw:stable}
+    restart: unless-stopped
+    ports:
+      # 3100 by default, so Throw can run beside Catch (3000) on one host.
+      - '${THROW_BIND_ADDRESS:-0.0.0.0}:${THROW_PORT:-3100}:3000'
+    environment:
+      DATABASE_URL: postgres://throw:${POSTGRES_PASSWORD:-throw}@postgres:5432/throw
+      ELECTRIC_URL: http://electric:3000
+      ELECTRIC_SECRET: ${ELECTRIC_SECRET:-change-me}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3100}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET}
+      AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-true}
+      REGISTRATION: ${REGISTRATION:-closed}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      electric:
+        condition: service_started
+
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    command: postgres -c wal_level=logical
+    environment:
+      POSTGRES_USER: throw
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-throw}
+      POSTGRES_DB: throw
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U throw -d throw']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  # Streams Postgres changes to clients. Only reachable through the app's auth proxy.
+  electric:
+    image: electricsql/electric:1.8.1
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://throw:${POSTGRES_PASSWORD:-throw}@postgres:5432/throw?sslmode=disable
+      ELECTRIC_SECRET: ${ELECTRIC_SECRET:-change-me}
+    volumes:
+      - electric_data:/app/persistent
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  electric_data:
