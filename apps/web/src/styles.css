@@ -306,6 +306,10 @@
   transition: background-color 200ms ease-out;
 }
 /* The column that would take the card. */
+/* An active column sits on a faint surface of its own, which sets it apart from its neighbours. */
+.board-column[data-surface] {
+  --column: color-mix(in oklab, var(--foreground) 3.5%, transparent);
+}
 .board-column[data-over] {
   --column: color-mix(in oklab, var(--accent) 75%, transparent);
 }
@@ -362,17 +366,17 @@
     opacity 160ms ease-out;
 }
 .zone-header[data-breath] {
-  height: 0.375rem;
+  height: 0.75rem;
 }
 .zone-header[data-mode="label"],
 .zone-header[data-mode="open"] {
-  height: 1.75rem;
+  height: 2.25rem;
   opacity: 1;
 }
 .zone-header[data-mode="rail"] {
   position: sticky;
   z-index: 2;
-  height: 2.25rem;
+  height: 2.75rem;
   /* Opaque, so cards scrolling under a pinned rail do not show through the column's tint. */
   background: linear-gradient(var(--column), var(--column)), var(--background);
   opacity: 1;
@@ -382,7 +386,7 @@
   display: flex;
   width: 100%;
   height: 1.375rem;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.5rem;
   align-items: center;
   gap: 0.5rem;
   overflow: hidden;
@@ -407,9 +411,9 @@
   color: var(--brand-link);
 }
 .zone-header[data-mode="rail"] .zone-header-face {
-  height: 1.875rem;
-  margin-bottom: 0.375rem;
-  border-radius: 0.75rem;
+  height: 2.25rem;
+  margin-bottom: 0.5rem;
+  border-radius: 0.875rem;
   background: color-mix(in oklab, var(--foreground) 7%, transparent);
   padding-inline: 0.75rem;
 }
@@ -433,7 +437,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  left: -0.5rem;
+  left: -0.5625rem;
   width: 3px;
 }
 .zone-edge[data-first] {
@@ -441,7 +445,7 @@
   border-top-right-radius: 3px;
 }
 .zone-edge[data-last] {
-  bottom: 0.5rem;
+  bottom: 0.75rem;
   border-bottom-right-radius: 3px;
   border-bottom-left-radius: 3px;
 }

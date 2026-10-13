@@ -22,7 +22,7 @@ function TaskBody({ task }: { task: Task }) {
     .map((id) => project.tags.find((tag) => tag.id === id))
     .filter((tag) => tag !== undefined);
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-10">
+    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-8 pb-12">
       {parent && (
         <button
           type="button"
@@ -35,7 +35,7 @@ function TaskBody({ task }: { task: Task }) {
       <h2 className="font-display font-semibold text-[1.75rem] leading-[1.15] tracking-[-0.02em] [overflow-wrap:anywhere]">
         {task.title}
       </h2>
-      <div className="mt-4 flex flex-wrap gap-1.5">
+      <div className="mt-5 flex flex-wrap gap-2">
         {status && (
           <StatusMenu
             project={project}
@@ -58,7 +58,7 @@ function TaskBody({ task }: { task: Task }) {
           </span>
         ))}
       </div>
-      <p className="mt-6 max-w-prose text-[0.9375rem] text-foreground/85 leading-relaxed">
+      <p className="mt-8 max-w-prose text-[0.9375rem] text-foreground/85 leading-relaxed">
         {task.description ??
           'The description is written here, in the same editor as a Catch note. This pane is a placeholder: the prototype is about how the board gives it room.'}
       </p>
@@ -102,7 +102,7 @@ function TaskBody({ task }: { task: Task }) {
 function TaskHeader({ task }: { task: Task }) {
   const { project } = current(board.use());
   return (
-    <div className="flex h-14 shrink-0 items-center justify-between pr-3 pl-6">
+    <div className="flex h-14 shrink-0 items-center justify-between pr-4 pl-8">
       <span className="font-medium text-foreground/60 text-sm tabular-nums">
         {identifier(project, task)}
       </span>
@@ -186,7 +186,7 @@ export function SplitHandle({
         else return;
         event.preventDefault();
       }}
-      className="group flex w-5 shrink-0 cursor-col-resize touch-none select-none items-center justify-center outline-none"
+      className="group flex w-6 shrink-0 cursor-col-resize touch-none select-none items-center justify-center outline-none"
     >
       <motion.span
         aria-hidden

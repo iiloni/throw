@@ -50,9 +50,9 @@ export function TaskCardFace({
     ? current(state).tasks.find((item) => item.id === task.parentId)
     : undefined;
   return (
-    <div className="px-3.5 pt-3 pb-2.5">
+    <div className="px-4 pt-3.5 pb-3">
       {parent && (
-        <p className="mb-1 flex items-center gap-1 text-foreground/55 text-xs">
+        <p className="mb-1.5 flex items-center gap-1 text-foreground/55 text-xs">
           <CornerDownRight className="size-3 shrink-0" aria-hidden />
           <span className="truncate">{parent.title}</span>
         </p>
@@ -60,7 +60,7 @@ export function TaskCardFace({
       <p className="line-clamp-4 font-medium text-[0.9375rem] leading-snug [overflow-wrap:anywhere]">
         {task.title}
       </p>
-      <div className="mt-2 flex min-h-5 items-center gap-2 text-foreground/55 text-xs">
+      <div className="mt-3 flex min-h-5 items-center gap-2.5 text-foreground/55 text-xs">
         <span className="shrink-0 font-medium tabular-nums">{identifier(project, task)}</span>
         {tag && <span className="min-w-0 truncate text-tint-accent">{tag.name}</span>}
         {task.secondaryTagIds.length > 0 && (

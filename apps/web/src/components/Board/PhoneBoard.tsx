@@ -61,7 +61,7 @@ export function PhoneBoard() {
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
       <header className="shrink-0 pt-[var(--safe-top)]">
-        <div className="flex h-14 items-center gap-2 pr-2 pl-4">
+        <div className="flex h-16 items-center gap-2 pr-3 pl-5">
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
               <button
@@ -100,7 +100,7 @@ export function PhoneBoard() {
           <span className="flex-1" />
           <PrototypePanel side="bottom" />
         </div>
-        <div className="flex gap-1 overflow-x-auto px-3 pb-2 [scrollbar-width:none]">
+        <div className="flex gap-1.5 overflow-x-auto px-4 pb-4 [scrollbar-width:none]">
           {pages.map((name, index) => (
             <button
               key={name}
@@ -108,7 +108,7 @@ export function PhoneBoard() {
               aria-current={index === page ? 'page' : undefined}
               onClick={() => turnTo(index)}
               className={cn(
-                'relative flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/60',
+                'relative flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/60',
                 index === page ? 'font-medium text-foreground' : 'text-muted-foreground',
               )}
             >
@@ -148,7 +148,7 @@ export function PhoneBoard() {
         <div data-origin="closed" className="flex w-full shrink-0 snap-center flex-col">
           <StatusFilter zone="closed" />
           <div
-            className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pt-1"
+            className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3.5 pt-1"
             style={{ paddingBottom: DOCK_SPACE }}
           >
             {listTasks(state, 'closed').map((task) => (
@@ -233,7 +233,7 @@ function BacklogDrawer({
         <div aria-hidden className="flex justify-center pt-2.5">
           <span className="h-1 w-9 rounded-full bg-foreground/20" />
         </div>
-        <div className="flex h-12 items-center gap-2 px-5">
+        <div className="flex h-14 items-center gap-2.5 px-5">
           <h2 className="font-display font-semibold text-xl tracking-[-0.01em]">Backlog</h2>
           <span className="text-muted-foreground text-sm tabular-nums">{count}</span>
         </div>
@@ -242,7 +242,7 @@ function BacklogDrawer({
       {/* At part height the drawer hangs off the screen; the list must end where the screen does. */}
       <motion.div
         className="flex min-h-0 flex-col"
-        style={{ height: `calc(100% - 7rem)`, paddingBottom: y }}
+        style={{ height: `calc(100% - 8.25rem)`, paddingBottom: y }}
       >
         <CardList
           listId="backlog"
@@ -320,7 +320,7 @@ function PhoneDock({
         className="glass pointer-events-auto w-full max-w-md overflow-hidden"
       >
         {pick && mode !== 'tabs' && (
-          <motion.div layout="position" className="flex h-11 items-center pr-1 pl-4">
+          <motion.div layout="position" className="flex h-12 items-center pr-1.5 pl-4">
             <span className="flex-1 font-medium text-sm tabular-nums">{selected} selected</span>
             {mode === 'bar' && (
               <Button size="sm" className="mr-1 rounded-xl" onClick={() => setSheet(true)}>
@@ -333,9 +333,9 @@ function PhoneDock({
           </motion.div>
         )}
         {mode === 'grid' && (
-          <motion.div layout="position" className="space-y-1.5 p-2 pt-1.5">
+          <motion.div layout="position" className="space-y-2 p-2.5">
             {byCategory(project.statuses).map((group) => (
-              <div key={group.name} className="grid grid-cols-3 gap-1.5">
+              <div key={group.name} className="grid grid-cols-3 gap-2">
                 {group.statuses.map((status) => (
                   <StatusTile
                     key={status.id}
@@ -352,7 +352,7 @@ function PhoneDock({
           <motion.div
             layout="position"
             data-autoscroll-x=""
-            className="flex gap-1.5 overflow-x-auto p-2 [scrollbar-width:none]"
+            className="flex gap-2 overflow-x-auto p-2.5 [scrollbar-width:none]"
           >
             {project.statuses.map((status, index) => (
               <StatusTile

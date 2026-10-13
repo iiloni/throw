@@ -16,7 +16,9 @@ import { board, countIn, current, selectProject, sendTasks, update } from './sta
 import { PANE_MIN, SplitHandle, TaskPane } from './TaskView';
 
 const TILES_WIDTH = 176;
-const HANDLE_WIDTH = 20;
+const HANDLE_WIDTH = 24;
+/** Between the three zones. Columns sit a little closer to each other than zones do. */
+const ZONE_GAP = 16;
 
 function useWidth() {
   const ref = useRef<HTMLDivElement>(null);
@@ -49,14 +51,17 @@ export function DesktopBoard() {
   // A gallery covers the columns. A held card still needs somewhere to go, so they come
   // back as dropzones for as long as it is held.
   const covered = state.backlog === 'full' || state.closed === 'full';
-  const fullWidth = Math.max(0, rowWidth - STRIP_WIDTH - (dragging ? TILES_WIDTH : 0));
+  const fullWidth = Math.max(
+    0,
+    rowWidth - STRIP_WIDTH - ZONE_GAP * 2 - (dragging ? TILES_WIDTH : 0),
+  );
 
   return (
     <div className="flex h-dvh overflow-hidden">
       {/* Stands where the navigation rail will be. */}
       <nav
         aria-label="Projects"
-        className="flex w-16 shrink-0 flex-col items-center gap-1.5 pt-[calc(var(--safe-top)+0.75rem)] pb-3"
+        className="flex w-[4.5rem] shrink-0 flex-col items-center gap-2 pt-[calc(var(--safe-top)+1.5rem)] pb-5"
       >
         {state.boards.map(({ project: item }) => (
           <button
@@ -82,8 +87,8 @@ export function DesktopBoard() {
       </nav>
 
       <div ref={frame} className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 shrink-0 items-center gap-3 pr-4 pl-4">
-          <h1 className="font-display font-extrabold text-[2rem] leading-none tracking-[-0.03em]">
+        <header className="flex h-[5.5rem] shrink-0 items-center gap-3 pr-6 pl-2">
+          <h1 className="font-display font-extrabold text-[2.25rem] leading-none tracking-[-0.03em]">
             {project.name}
           </h1>
           <span className="flex-1" />
@@ -99,21 +104,21 @@ export function DesktopBoard() {
           </IconButton>
         </header>
 
-        <div className="flex min-h-0 flex-1 pr-3 pb-3">
-          <div ref={row} className="flex min-w-0 flex-1">
+        <div className="flex min-h-0 flex-1 pr-6 pb-6">
+          <div ref={row} className="flex min-w-0 flex-1" style={{ gap: ZONE_GAP }}>
             <SideZone zone="backlog" fullWidth={fullWidth} />
             <div
               data-origin="active"
               data-autoscroll-x=""
               className={cn(
-                'flex min-w-0 flex-1',
+                'flex min-w-0 flex-1 gap-3',
                 covered ? 'overflow-hidden' : 'overflow-x-auto overflow-y-hidden',
               )}
             >
               {covered
                 ? dragging && (
                     <motion.div
-                      className="flex shrink-0 flex-col gap-2 p-2"
+                      className="flex shrink-0 flex-col gap-2.5 p-1"
                       style={{ width: TILES_WIDTH }}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
@@ -130,13 +135,14 @@ export function DesktopBoard() {
                     <CardList
                       key={status.id}
                       listId={`status:${status.id}`}
-                      className="min-w-[16.5rem] max-w-[26rem] flex-1"
+                      surface
+                      className="min-w-[17.5rem] max-w-[27rem] flex-1 pb-2"
                       header={
-                        <div className="flex h-11 shrink-0 items-baseline gap-2 px-4 pt-2">
+                        <div className="flex h-14 shrink-0 items-center gap-2.5 px-5">
                           <h2 className="truncate font-display font-semibold text-lg tracking-[-0.01em]">
                             {status.name}
                           </h2>
-                          <span className="text-muted-foreground text-sm tabular-nums">
+                          <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-muted-foreground text-xs tabular-nums">
                             {countIn(state, status.id)}
                           </span>
                         </div>

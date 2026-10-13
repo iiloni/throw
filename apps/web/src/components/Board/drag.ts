@@ -70,10 +70,12 @@ const LONG_PRESS_MS = 260;
 const TOUCH_SLOP = 10;
 const MOUSE_SLOP = 6;
 const RAIL_DWELL_MS = 220;
+/** How long a column takes to fold its zones into rails. */
+const FOLD_MS = 300;
 const EDGE = 64;
 const PAGE_HOLD_MS = 480;
 /** Space under each card, which a gap must also open. */
-export const CARD_SPACING = 8;
+export const CARD_SPACING = 12;
 
 type Press = { taskId: string; x: number; y: number; touch: boolean; element: HTMLElement };
 
@@ -84,6 +86,8 @@ let grab = { x: 0, y: 0 };
 let moved = false;
 let frame: number | undefined;
 let dwell: { key: string; since: number } | null = null;
+let armed: string | null = null;
+let folded: { listId: string; since: number } | null = null;
 let pageHold: { side: -1 | 1; since: number } | null = null;
 let suppressClick = false;
 
@@ -144,6 +148,8 @@ function release() {
   frame = undefined;
   press = null;
   dwell = null;
+  armed = null;
+  folded = null;
   pageHold = null;
 }
 
@@ -317,6 +323,7 @@ function resolve() {
   // from elsewhere is sent to one of its statuses instead.
   if (!list || !listId || (listId === 'backlog' && state.origin !== 'backlog')) {
     dwell = null;
+    folded = null;
     return set({ target: null, rail: null });
   }
   if (state.ids.length > 1) {
@@ -326,10 +333,15 @@ function resolve() {
   let { priority } = state;
   let rail: DragState['rail'] = null;
   const railElement = hit?.closest<HTMLElement>('[data-drop-rail]');
-  if (railElement && list.contains(railElement)) {
+  // Rails appear when the column folds, sometimes right under a card that is not moving.
+  // One only starts to take the card once the column has finished folding and the card has
+  // been somewhere else in it.
+  const now = performance.now();
+  if (folded?.listId !== listId) folded = { listId, since: now };
+  if (!railElement && now - folded.since > FOLD_MS) armed = listId;
+  if (railElement && list.contains(railElement) && armed === listId) {
     const over = Number(railElement.dataset.dropRail) as Priority;
     const key = `${listId}:${over}`;
-    const now = performance.now();
     if (dwell?.key !== key) dwell = { key, since: now };
     if (now - dwell.since >= RAIL_DWELL_MS || reducedMotion()) {
       priority = over;

@@ -23,9 +23,9 @@ export const ZONES = {
 };
 export type Zone = keyof typeof ZONES;
 
-export const STRIP_WIDTH = 56;
+export const STRIP_WIDTH = 64;
 const TILES_WIDTH = 148;
-const PANEL_WIDTH = { compact: 272, roomy: 344 };
+const PANEL_WIDTH = { compact: 304, roomy: 368 };
 
 export function zoneStatuses(zone: Zone, statuses: Status[]) {
   return statuses.filter((status) => ZONES[zone].categories.includes(status.category));
@@ -71,7 +71,7 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
         {tiles ? (
           <motion.div
             key="tiles"
-            className="glass-thick absolute inset-y-0 flex flex-col gap-2 rounded-3xl p-2"
+            className="glass-thick absolute inset-y-0 flex flex-col gap-2.5 rounded-3xl p-3"
             style={{
               width: Math.max(TILES_WIDTH, width),
               [zone === 'backlog' ? 'left' : 'right']: 0,
@@ -81,7 +81,7 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
             exit={{ opacity: 0 }}
             transition={{ duration: 0.16 }}
           >
-            <p className="px-1 pt-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
+            <p className="px-1.5 pt-1.5 pb-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
               {title}
             </p>
             {statuses.map((status) => (
@@ -94,7 +94,7 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
             type="button"
             aria-label={`Open ${title.toLowerCase()}, ${count} tasks`}
             onClick={() => setView('panel')}
-            className="group absolute inset-0 flex flex-col items-center gap-3 rounded-3xl pt-3 text-muted-foreground outline-none transition-colors hover:bg-foreground/[0.04] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60"
+            className="group absolute inset-0 flex flex-col items-center gap-4 rounded-3xl bg-foreground/[0.035] pt-5 text-muted-foreground outline-none transition-colors hover:bg-foreground/[0.06] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -109,7 +109,7 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
         ) : (
           <motion.div
             key="open"
-            className="absolute inset-y-0 flex min-h-0 flex-col"
+            className="absolute inset-y-0 flex min-h-0 flex-col rounded-3xl bg-foreground/[0.035]"
             // Laid out at its resting width from the start, so opening reveals the cards
             // instead of re-wrapping them at every width on the way.
             style={{ width, [zone === 'backlog' ? 'left' : 'right']: 0 }}
@@ -118,7 +118,7 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
-            <div className="flex h-11 shrink-0 items-center gap-2 pr-1 pl-4">
+            <div className="flex h-14 shrink-0 items-center gap-2 pr-2.5 pl-5">
               <h2 className="font-display font-semibold text-lg tracking-[-0.01em]">{title}</h2>
               <span className="flex-1 text-muted-foreground text-sm tabular-nums">{count}</span>
               <IconButton
@@ -141,7 +141,7 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
                 className="flex-1"
               />
             ) : (
-              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pt-1 pb-3">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3.5 pt-1 pb-4">
                 {listTasks(state, 'closed').map((task) => (
                   <TaskCard key={task.id} task={task} showStatus={state.closedFilter === null} />
                 ))}
@@ -168,9 +168,9 @@ export function StatusFilter({ zone, className }: { zone: Zone; className?: stri
   const targets = held?.phase === 'dragging' && held.origin === zone;
   if (statuses.length < 2) return null;
   const chip =
-    'flex shrink-0 items-center rounded-full px-3 text-sm outline-none transition-[height,background-color,color,border-color] duration-200 focus-visible:ring-[3px] focus-visible:ring-ring/60';
+    'flex shrink-0 items-center rounded-full px-3.5 text-sm outline-none transition-[height,background-color,color,border-color] duration-200 focus-visible:ring-[3px] focus-visible:ring-ring/60';
   return (
-    <div className={cn('flex shrink-0 flex-wrap items-center gap-1.5 px-3 pb-2', className)}>
+    <div className={cn('flex shrink-0 flex-wrap items-center gap-2 px-4 pb-4', className)}>
       {!targets && (
         <button
           type="button"
@@ -226,7 +226,7 @@ function Gallery({ zone }: { zone: Zone }) {
       ? groupByPriority(tasks).filter((group) => group.tasks.length > 0)
       : [{ priority: null, tasks }];
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-3 pt-1 pb-3">
+    <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-1 pb-5">
       {bands.map((band) => (
         <section key={band.priority ?? 'all'}>
           {band.priority !== null && (
@@ -234,9 +234,9 @@ function Gallery({ zone }: { zone: Zone }) {
               <span className="zone-header-face">{priorityName(project, band.priority)}</span>
             </h3>
           )}
-          <div className="columns-[16rem] gap-3">
+          <div className="columns-[17rem] gap-4 pb-3">
             {band.tasks.map((task) => (
-              <div key={task.id} className="mb-2 break-inside-avoid">
+              <div key={task.id} className="mb-4 break-inside-avoid">
                 <TaskCard task={task} showStatus={filter === null} />
               </div>
             ))}

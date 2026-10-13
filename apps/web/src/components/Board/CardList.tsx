@@ -6,7 +6,7 @@ import { board, current, type ListId, listTasks, useVariants } from './state';
 import { TaskCard } from './TaskCard';
 
 /** A rail's height with the space under it, which is also how far apart they stack. */
-const RAIL = 36;
+const RAIL = 44;
 
 type Props = {
   listId: ListId;
@@ -14,6 +14,8 @@ type Props = {
   showStatus?: boolean;
   /** Space kept clear at the end of the list, for a dock floating over it. */
   endSpace?: string;
+  /** Draw the column on its own faint surface, as Catch's deck does. */
+  surface?: boolean;
   className?: string;
 };
 
@@ -26,7 +28,7 @@ type HeaderMode = 'hidden' | 'label' | 'open' | 'rail';
  * column either folds every zone but one into rails (`stretch`) or keeps its layout and
  * dims the other zones (`inPlace`); the drag engine reads the result from the DOM.
  */
-export function CardList({ listId, header, showStatus, endSpace, className }: Props) {
+export function CardList({ listId, header, showStatus, endSpace, surface, className }: Props) {
   const state = board.use();
   const held = drag.use();
   const [variants] = useVariants();
@@ -57,11 +59,15 @@ export function CardList({ listId, header, showStatus, endSpace, className }: Pr
     <section
       data-drop-list={listId}
       data-over={over ? '' : undefined}
+      data-surface={surface ? '' : undefined}
       className={cn('board-column relative flex min-h-0 min-w-0 flex-col rounded-3xl', className)}
     >
       {header}
       <div data-autoscroll className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        <div className="flex min-h-full flex-col px-3 pt-1" style={{ paddingBottom: endSpace }}>
+        <div
+          className="flex min-h-full flex-col px-3.5 pt-1 pb-1"
+          style={endSpace ? { paddingBottom: endSpace } : undefined}
+        >
           {groups.map(({ priority, tasks: zone }, groupIndex) => {
             const headerMode = mode(priority, zone.length);
             const folded = stretch && priority !== open;
@@ -136,7 +142,7 @@ export function CardList({ listId, header, showStatus, endSpace, className }: Pr
                         className="board-slot"
                       >
                         <div>
-                          <div className="relative pb-2">
+                          <div className="relative pb-3">
                             {variants.zonesAtRest === 'edge' && (
                               <span
                                 aria-hidden
@@ -164,7 +170,7 @@ export function CardList({ listId, header, showStatus, endSpace, className }: Pr
             );
           })}
           {tasks.length === 0 && !dragging && (
-            <p className="px-1 py-6 text-center text-muted-foreground text-sm">Nothing here.</p>
+            <p className="px-1 py-10 text-center text-muted-foreground text-sm">Nothing here.</p>
           )}
         </div>
       </div>

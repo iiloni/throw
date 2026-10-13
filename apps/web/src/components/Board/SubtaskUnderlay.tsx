@@ -28,7 +28,7 @@ export function SubtaskUnderlay({ parent, subtasks, inert = false }: Props) {
   return (
     <div
       data-no-drag={inert ? undefined : ''}
-      className="-z-10 -mt-3 relative mx-2 rounded-b-2xl bg-[color-mix(in_oklch,var(--tint,var(--card)),var(--foreground)_7%)] pt-3 text-xs"
+      className="-z-10 -mt-3 relative mx-2.5 rounded-b-2xl bg-[color-mix(in_oklch,var(--tint,var(--card)),var(--foreground)_7%)] pt-3 text-xs"
     >
       <button
         type="button"
@@ -36,7 +36,7 @@ export function SubtaskUnderlay({ parent, subtasks, inert = false }: Props) {
         aria-expanded={expanded}
         aria-label={`${done} of ${subtasks.length} subtasks done`}
         onClick={() => toggleExpanded(parent.id)}
-        className="flex h-9 w-full items-center gap-2 rounded-b-2xl px-3 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
+        className="flex h-10 w-full items-center gap-2.5 rounded-b-2xl px-3.5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
       >
         {/* One pip per subtask: the shape of the work, not only a fraction. */}
         <span aria-hidden className="flex min-w-0 flex-1 items-center gap-1">
@@ -69,7 +69,7 @@ export function SubtaskUnderlay({ parent, subtasks, inert = false }: Props) {
           {subtasks.map((task) => (
             <SubtaskRow key={task.id} project={project} task={task} />
           ))}
-          <li aria-hidden className="h-1.5" />
+          <li aria-hidden className="h-2" />
           <li className="sr-only">{open} still open</li>
         </ul>
       </div>
