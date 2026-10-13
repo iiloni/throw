@@ -128,13 +128,41 @@ test('brand surfaces preserve artwork, contrast and usable layout on light and d
   await expect(page.getByRole('heading', { name: 'Personal' })).toBeVisible({
     timeout: APP_LOAD_TIMEOUT,
   });
-  // The phone header gives its one quiet line to the workspace; only the wide header is branded.
+  // The rail carries the brand; the phone layout has no rail and names the workspace instead.
   if (isMobile) await expect(brand).toHaveCount(0);
-  else
+  else {
+    const rail = page.getByRole('complementary', { name: 'Navigation rail', exact: true });
+    await expect(rail.getByRole('img', { name: 'Throw', exact: true })).toHaveAttribute(
+      'src',
+      '/wordmarks/throw-lockup-horizontal-stable-light-micro.svg',
+    );
+    await expect(brand).toHaveCount(1);
+    await page.getByRole('button', { name: 'Collapse navigation', exact: true }).click();
+    await expect(brand).toHaveAttribute('src', '/favicon-mark.svg');
+    await expect
+      .poll(() =>
+        brand.evaluate(
+          (image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0,
+        ),
+      )
+      .toBe(true);
+    // The mark shares the collapsed rail's icon column.
+    await expect
+      .poll(async () => {
+        const mark = await brand.boundingBox();
+        const settings = await page
+          .getByRole('link', { name: 'Settings', exact: true })
+          .boundingBox();
+        return Math.abs(mark!.x + mark!.width / 2 - (settings!.x + settings!.width / 2));
+      })
+      .toBeLessThan(1);
+    await page.screenshot({ path: info.outputPath('shell-collapsed-dark.png') });
+    await page.getByRole('button', { name: 'Expand navigation', exact: true }).click();
     await expect(brand).toHaveAttribute(
       'src',
       '/wordmarks/throw-lockup-horizontal-stable-light-micro.svg',
     );
+  }
 
   await addProject(page, 'Brand check', isMobile);
   const selected = isMobile

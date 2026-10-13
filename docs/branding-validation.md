@@ -13,7 +13,7 @@ Validated on 2026-10-13. Android project creation remains deferred by request.
 | `apps/web/vite.config.ts`, `apps/web/index.html` | Existing channel selection wired to manifest icons, favicons and Apple touch icons |
 | `apps/web/src/styles.css`, `apps/web/src/components/ui/button.tsx` | Approved jade actions, links, focus and selected/hover states with a readable primary-button hover fill |
 | `apps/web/src/components/BrandLockup/` | Responsive, theme-aware supplied artwork with detail/minimum-size handling and tests |
-| `apps/web/src/routes/login.tsx`, `setup.tsx`, `apps/web/src/components/PageHeader/` | Branding on the sign-in, server-setup and wide page-header surfaces |
+| `apps/web/src/routes/login.tsx`, `setup.tsx`, `apps/web/src/components/AppShell/` | Branding on the sign-in, server-setup and navigation-rail surfaces |
 | `apps/web/src/components/AppShell/`, `Dock/`, `ShellForms/`, `apps/web/src/routes/_app/settings.tsx` | Jade selected and hover surfaces on the rail, dock indicator, shell menu, icon grid and theme choice |
 | `scripts/brand-assets.test.ts`, `e2e/branding.spec.ts` | Favicon, mask/safe-zone, themed-alpha, theme-preference and narrow/offline-layout checks |
 | `package.json`, `pnpm-lock.yaml`, `biome.json` | Locked renderer dependency, generation/integrity commands and protection against formatting the source package |
@@ -54,7 +54,9 @@ E2E_FIREFOX=1 ./scripts/dev.sh e2e e2e/branding.spec.ts --workers=1
 - After the rebase onto the navigation shell, the same three-project branding run also
   checks that the current rail destination, the dock indicator and the pressed theme choice
   paint the jade selected surface, that selection leaves the previous rail item, and that
-  rail and theme lettering keep 4.5:1 on it. Auth and project specs were rerun on Chromium.
+  rail and theme lettering keep 4.5:1 on it. It also checks that the expanded rail shows
+  the lockup and the collapsed rail the loaded mark alone, centred on the icon column.
+  Auth and project specs were rerun on Chromium.
 - The final jade-palette run checks normal and hovered primary-button text and link text
   against a 4.5:1 contrast floor, plus keyboard-focused input borders against a 3:1 floor,
   on actual light/dark rendered surfaces in all three browser/layout projects.
@@ -77,8 +79,9 @@ and native resources. Native masks/tint in this proof are simulations, not launc
 [phone sign-in, dark](branding/sign-in-dark-phone.png),
 [phone server setup, dark](branding/server-setup-dark-phone.png), and
 [narrow offline header](branding/header-offline-narrow.png) show the existing app surfaces.
-[Desktop shell, dark](branding/shell-dark-desktop.png) and
-[phone shell, dark](branding/shell-dark-phone.png) show the header lockup and selected
+[Desktop shell, dark](branding/shell-dark-desktop.png),
+[collapsed rail](branding/shell-collapsed-dark-desktop.png) and
+[phone shell, dark](branding/shell-dark-phone.png) show the rail lockup and selected
 states. `docs/screenshots/app-shell/` predates the jade palette.
 
 ## Unavailable validation

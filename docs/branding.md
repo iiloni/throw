@@ -80,8 +80,10 @@ Each placement has one accessible “Throw” image; there is no duplicate live 
 
 Existing surfaces use stable product artwork, following Catch's in-app convention:
 sign-in has a horizontal lockup with a 48 px icon, first-run server setup a stacked lockup
-with a 96 px icon, and the wide (rail) page header a horizontal lockup with a 32 px icon.
-The phone header has no artwork: its one quiet line names the workspace. These
+with a 96 px icon, and the navigation rail a horizontal lockup with a 32 px icon at its
+top. The collapsed rail is narrower than the lockup's minimum, so it shows the mark alone,
+on the rail's icon column. The phone layout has no rail and no artwork: its header's one
+quiet line names the workspace. These
 SVGs also work directly in Capacitor's WebView. Application typography is unchanged and
 the bundled Manrope font is retained only as source provenance. The tagline is available
 in the sources but is not added to these compact functional surfaces.
