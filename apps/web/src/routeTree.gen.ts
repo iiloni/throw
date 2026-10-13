@@ -13,6 +13,10 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppWWorkspaceIdIndexRouteImport } from './routes/_app/w.$workspaceId.index'
+import { Route as AppWWorkspaceIdBoardRouteImport } from './routes/_app/w.$workspaceId.board'
+import { Route as AppWWorkspaceIdPProjectIdRouteImport } from './routes/_app/w.$workspaceId.p.$projectId'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -33,30 +37,86 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSettingsRoute = AppSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppWWorkspaceIdIndexRoute = AppWWorkspaceIdIndexRouteImport.update({
+  id: '/w/$workspaceId/',
+  path: '/w/$workspaceId/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppWWorkspaceIdBoardRoute = AppWWorkspaceIdBoardRouteImport.update({
+  id: '/w/$workspaceId/board',
+  path: '/w/$workspaceId/board',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppWWorkspaceIdPProjectIdRoute =
+  AppWWorkspaceIdPProjectIdRouteImport.update({
+    id: '/w/$workspaceId/p/$projectId',
+    path: '/w/$workspaceId/p/$projectId',
+    getParentRoute: () => AppRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
+  '/settings': typeof AppSettingsRoute
+  '/w/$workspaceId/board': typeof AppWWorkspaceIdBoardRoute
+  '/w/$workspaceId/': typeof AppWWorkspaceIdIndexRoute
+  '/w/$workspaceId/p/$projectId': typeof AppWWorkspaceIdPProjectIdRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
+  '/settings': typeof AppSettingsRoute
   '/': typeof AppIndexRoute
+  '/w/$workspaceId/board': typeof AppWWorkspaceIdBoardRoute
+  '/w/$workspaceId': typeof AppWWorkspaceIdIndexRoute
+  '/w/$workspaceId/p/$projectId': typeof AppWWorkspaceIdPProjectIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
+  '/_app/settings': typeof AppSettingsRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/w/$workspaceId/board': typeof AppWWorkspaceIdBoardRoute
+  '/_app/w/$workspaceId/': typeof AppWWorkspaceIdIndexRoute
+  '/_app/w/$workspaceId/p/$projectId': typeof AppWWorkspaceIdPProjectIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/setup'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/setup'
+    | '/settings'
+    | '/w/$workspaceId/board'
+    | '/w/$workspaceId/'
+    | '/w/$workspaceId/p/$projectId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/setup' | '/'
-  id: '__root__' | '/_app' | '/login' | '/setup' | '/_app/'
+  to:
+    | '/login'
+    | '/setup'
+    | '/settings'
+    | '/'
+    | '/w/$workspaceId/board'
+    | '/w/$workspaceId'
+    | '/w/$workspaceId/p/$projectId'
+  id:
+    | '__root__'
+    | '/_app'
+    | '/login'
+    | '/setup'
+    | '/_app/settings'
+    | '/_app/'
+    | '/_app/w/$workspaceId/board'
+    | '/_app/w/$workspaceId/'
+    | '/_app/w/$workspaceId/p/$projectId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -95,15 +155,51 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/settings': {
+      id: '/_app/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/w/$workspaceId/': {
+      id: '/_app/w/$workspaceId/'
+      path: '/w/$workspaceId'
+      fullPath: '/w/$workspaceId/'
+      preLoaderRoute: typeof AppWWorkspaceIdIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/w/$workspaceId/board': {
+      id: '/_app/w/$workspaceId/board'
+      path: '/w/$workspaceId/board'
+      fullPath: '/w/$workspaceId/board'
+      preLoaderRoute: typeof AppWWorkspaceIdBoardRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/w/$workspaceId/p/$projectId': {
+      id: '/_app/w/$workspaceId/p/$projectId'
+      path: '/w/$workspaceId/p/$projectId'
+      fullPath: '/w/$workspaceId/p/$projectId'
+      preLoaderRoute: typeof AppWWorkspaceIdPProjectIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
+  AppSettingsRoute: typeof AppSettingsRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppWWorkspaceIdBoardRoute: typeof AppWWorkspaceIdBoardRoute
+  AppWWorkspaceIdIndexRoute: typeof AppWWorkspaceIdIndexRoute
+  AppWWorkspaceIdPProjectIdRoute: typeof AppWWorkspaceIdPProjectIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppSettingsRoute: AppSettingsRoute,
   AppIndexRoute: AppIndexRoute,
+  AppWWorkspaceIdBoardRoute: AppWWorkspaceIdBoardRoute,
+  AppWWorkspaceIdIndexRoute: AppWWorkspaceIdIndexRoute,
+  AppWWorkspaceIdPProjectIdRoute: AppWWorkspaceIdPProjectIdRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
