@@ -40,7 +40,7 @@ E2E_FIREFOX=1 ./scripts/dev.sh e2e e2e/branding.spec.ts --workers=1
 
 - Source derivation: all 57 derived SVGs and their integrity manifest pass. All 118 source
   files were also compared directly against the attached ZIP, with exact byte equality.
-- Platform generation/check: all 128 outputs pass with sharp 0.35.5 and librsvg 2.63.2.
+- Platform generation/check: all 129 outputs pass with sharp 0.35.5 and librsvg 2.63.2.
 - Required repository check passes: platform integrity, lint, typechecks, unit tests and
   production builds. Nine lockup tests and three raster/ICO/alpha tests cover this change.
 - Stable, preview and dev builds pass. Generated HTML favicon/touch links and manifest

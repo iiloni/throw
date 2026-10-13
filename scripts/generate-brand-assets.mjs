@@ -89,17 +89,17 @@ for (const channel of ['stable', 'preview', 'dev']) {
   await copy(primary, `${publicRoot}/icon.svg`);
   await copy(small, `${publicRoot}/icon-small.svg`);
   await copy(micro, `${publicRoot}/favicon-mark.svg`);
-  await output(
-    `${publicRoot}/favicon.ico`,
-    ico(
-      await Promise.all(
-        [16, 32, 48].map(async (size) => ({
-          size,
-          bytes: await render(size < 48 ? micro : small, size),
-        })),
-      ),
+  const favicon = ico(
+    await Promise.all(
+      [16, 32, 48].map(async (size) => ({
+        size,
+        bytes: await render(size < 48 ? micro : small, size),
+      })),
     ),
   );
+  await output(`${publicRoot}/favicon.ico`, favicon);
+  // Tools that list repositories look for an icon at the root; it identifies the product.
+  if (channel === 'stable') await output('favicon.ico', favicon);
   for (const size of [16, 24, 32, 48]) {
     await output(
       `${publicRoot}/favicon-${size}x${size}.png`,

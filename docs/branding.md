@@ -71,6 +71,7 @@ All generated public artwork is precached by the existing service worker.
 | 180 Apple touch icon | Channel maskable SVG; the platform supplies the mask |
 | Transparent product symbols | Shared dark/light monochrome SVGs |
 | Outlined wordmark alone | Shared dark/light wordmark SVGs |
+| Repository-root `favicon.ico` | Copy of the stable web `favicon.ico`, for tools that show a project icon |
 
 `BrandLockup` preserves the supplied tight canvas, proportions and external clear space.
 It measures the available CSS width, chooses icon detail by displayed icon size rather
