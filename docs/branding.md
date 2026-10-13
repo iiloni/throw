@@ -23,7 +23,10 @@ All builds use the same jade UI accents, independent of their installation artwo
 | Selected/hover surface | `#E3F2EC` | `#173D34` |
 
 Primary action hover adds 8% white to jade rather than reducing fill opacity, preserving
-the charcoal lettering's contrast on dark surfaces. The manifest theme color is jade;
+the charcoal lettering's contrast on dark surfaces. The selected surface marks the current
+rail destination, the dock's indicator, the highlighted menu row and a pressed choice such
+as the theme; hovering a rail or icon-grid item shows it at 60%. Project marks and the
+color picker keep their own project colors. The manifest theme color is jade;
 browser light/dark bar backgrounds stay warm. Neutral surfaces, glass, typography,
 project/tag colors and error colors retain the existing family design.
 
@@ -77,7 +80,8 @@ Each placement has one accessible “Throw” image; there is no duplicate live 
 
 Existing surfaces use stable product artwork, following Catch's in-app convention:
 sign-in has a horizontal lockup with a 48 px icon, first-run server setup a stacked lockup
-with a 96 px icon, and the signed-in header a horizontal lockup with a 32 px icon. These
+with a 96 px icon, and the wide (rail) page header a horizontal lockup with a 32 px icon.
+The phone header has no artwork: its one quiet line names the workspace. These
 SVGs also work directly in Capacitor's WebView. Application typography is unchanged and
 the bundled Manrope font is retained only as source provenance. The tagline is available
 in the sources but is not added to these compact functional surfaces.

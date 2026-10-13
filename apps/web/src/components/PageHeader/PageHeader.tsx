@@ -1,6 +1,7 @@
 import { Ellipsis } from 'lucide-react';
 import { ShellMenu } from '@/components/AppShell/ShellMenu';
 import { useShell } from '@/components/AppShell/shell';
+import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
@@ -15,8 +16,15 @@ export function PageHeader({ desktop }: { desktop: boolean }) {
       : (shell.project?.name ?? shell.workspace?.name ?? 'Throw');
   return (
     <header className="relative px-5 pt-[calc(var(--safe-top)+1rem)] pb-4 md:px-8 md:pt-[calc(var(--safe-top)+2rem)] md:pb-6">
-      <div className="flex h-8 items-center justify-between gap-3 text-xs text-muted-foreground">
-        <span className="truncate">{desktop ? 'Throw' : shell.workspace?.name}</span>
+      <div className="flex min-h-8 items-center justify-between gap-3 text-xs text-muted-foreground">
+        {desktop ? (
+          // The lockup carries its own clear space; pull it back so the mark meets the title's edge.
+          <div className="-ml-1.5 min-w-0">
+            <BrandLockup orientation="horizontal" iconSize={32} />
+          </div>
+        ) : (
+          <span className="truncate">{shell.workspace?.name}</span>
+        )}
         <SyncIndicator />
       </div>
       <div className="mt-3 flex min-w-0 items-center gap-3">

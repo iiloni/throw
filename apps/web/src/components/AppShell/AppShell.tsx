@@ -269,9 +269,7 @@ function RailButton({
     'aria-current': active ? ('page' as const) : undefined,
     className: cn(
       'relative flex h-12 w-full shrink-0 items-center gap-3 rounded-2xl px-2 text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
-      active
-        ? 'bg-foreground/[0.08] font-semibold'
-        : 'text-muted-foreground hover:bg-foreground/[0.05]',
+      active ? 'bg-accent font-semibold' : 'text-muted-foreground hover:bg-accent/60',
     ),
   };
   const content = (

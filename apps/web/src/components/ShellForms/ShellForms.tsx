@@ -158,7 +158,7 @@ function ManagementForm({ form, onClose }: { form: ShellForm; onClose: () => voi
                     aria-pressed={icon === value}
                     onClick={() => setIcon(value)}
                     className={cn(
-                      'flex size-10 items-center justify-center rounded-xl outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring',
+                      'flex size-10 items-center justify-center rounded-xl outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring',
                       icon === value && 'bg-tint text-tint-accent',
                     )}
                   >

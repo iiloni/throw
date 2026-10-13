@@ -5,7 +5,7 @@ import { useShell } from '@/components/AppShell/shell';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 
 const itemClass =
-  'flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-3 text-sm outline-none focus:bg-foreground/[0.08] data-[highlighted]:bg-foreground/[0.08]';
+  'flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-3 text-sm outline-none focus:bg-accent data-[highlighted]:bg-accent';
 
 export function ShellMenu({
   expanded = true,
@@ -34,7 +34,7 @@ export function ShellMenu({
           className={
             phone
               ? 'flex min-h-11 max-w-full items-center gap-2 rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring'
-              : 'flex h-12 w-full items-center gap-3 rounded-2xl px-2 outline-none hover:bg-foreground/[0.05] focus-visible:ring-2 focus-visible:ring-ring'
+              : 'flex h-12 w-full items-center gap-3 rounded-2xl px-2 outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring'
           }
         >
           {!phone && (
