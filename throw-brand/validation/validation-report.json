@@ -1,0 +1,108 @@
+{
+  "checks": {
+    "svgXmlParsing": "passed: 60 SVGs",
+    "jsonParsing": "passed: all 10 final JSON files, including the package manifest",
+    "noRasterOrRuntimeFonts": "passed",
+    "uniqueIdsAndResolvedPaintReferences": "passed",
+    "allChannelGeometryEqual": "passed for primary, small, micro, adaptive layers and PWA maskable",
+    "canonicalEqualsStableGeometry": "passed",
+    "adaptiveNoBackgroundTileOrShadow": "passed",
+    "adaptiveSafeCircle": "passed",
+    "maskableFullBleedOpaque": "passed",
+    "catchSourcesUnchanged": "passed: all 23 previously snapshotted Catch files unchanged",
+    "pwaMaskableSafeCircle": "passed",
+    "wordmarkContinuity": "passed: all 36 lockups preserve their shared geometry/lettering",
+    "semanticColorHexRgbConsistency": "passed",
+    "applicationUiOverrides": "all empty",
+    "derivedRegeneration": "passed: 57 SVGs and manifest verified with --check"
+  },
+  "adaptiveSafeRadius": 312.8888888888889,
+  "adaptivePaintMetrics": {
+    "stable": {
+      "maxPaintedRadius": 310.08164247501014,
+      "alphaThreshold": ">1/255",
+      "bounds": [
+        261.5,
+        321.5,
+        761.5,
+        712.5
+      ],
+      "renderSize": [
+        2048,
+        2048
+      ]
+    },
+    "preview": {
+      "maxPaintedRadius": 310.08164247501014,
+      "alphaThreshold": ">1/255",
+      "bounds": [
+        261.5,
+        321.5,
+        761.5,
+        712.5
+      ],
+      "renderSize": [
+        2048,
+        2048
+      ]
+    },
+    "dev": {
+      "maxPaintedRadius": 310.08164247501014,
+      "alphaThreshold": ">1/255",
+      "bounds": [
+        261.5,
+        321.5,
+        761.5,
+        712.5
+      ],
+      "renderSize": [
+        2048,
+        2048
+      ]
+    },
+    "monochrome": {
+      "maxPaintedRadius": 310.08164247501014,
+      "alphaThreshold": ">1/255",
+      "bounds": [
+        261.5,
+        321.5,
+        761.5,
+        712.5
+      ],
+      "renderSize": [
+        2048,
+        2048
+      ]
+    }
+  },
+  "limitations": [
+    "Proof masks and bounds are source-level tests, not an Android emulator/device build.",
+    "No application or platform integration/build was performed.",
+    "No current external Catch repository palette was supplied; preview follows the saved Catch token file."
+  ],
+  "manualReview": "Completed: reference comparison, all three size sheets, primary-versus-simplified pixel proofs, adaptive circle/rounded-square/squircle masks, dark monochrome mark and both wordmark orientations on light/dark surfaces. PWA maskable proof also inspected.",
+  "sizeFindings": {
+    "1024/512/192/128": "Distinct ribbon silhouettes, rounded tile, 16-degree tilt, square and line; restrained attached shadow.",
+    "64/48": "Shadow omitted; tile surface flat cream; gradients in ribbons and square retained.",
+    "32/24": "Flat foreground paints remove shading noise; 64-unit gray line remains visible.",
+    "16": "Tile and two separated ribbon sweeps remain recognizable; square and gray line are antialiased detail clusters, not independently crisp UI symbols.",
+    "dev": "Lower tonal contrast than preview, but cream tile and both ribbons survive; no outline/badge added."
+  },
+  "pwaForegroundMetrics": {
+    "stable": {
+      "maxPaintedRadius": 394.90584320822603,
+      "safeRadius": 409.6,
+      "alphaThreshold": ">1/255"
+    },
+    "preview": {
+      "maxPaintedRadius": 394.90584320822603,
+      "safeRadius": 409.6,
+      "alphaThreshold": ">1/255"
+    },
+    "dev": {
+      "maxPaintedRadius": 394.90584320822603,
+      "safeRadius": 409.6,
+      "alphaThreshold": ">1/255"
+    }
+  }
+}

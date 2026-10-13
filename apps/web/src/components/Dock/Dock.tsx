@@ -89,7 +89,7 @@ export function Dock() {
                   <motion.span
                     layoutId="dock-indicator"
                     aria-hidden
-                    className="-z-10 absolute inset-0 rounded-[calc(var(--dock-radius)-0.25rem)] bg-foreground/[0.08] shadow-[inset_0_1px_0_var(--glass-highlight)]"
+                    className="-z-10 absolute inset-0 rounded-[calc(var(--dock-radius)-0.25rem)] bg-accent shadow-[inset_0_1px_0_var(--glass-highlight)]"
                     animate={{ scale: pressed && !reduced ? 1.06 : 1 }}
                     transition={reduced ? { duration: 0 } : springs.snappy}
                   />

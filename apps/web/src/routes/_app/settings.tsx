@@ -37,7 +37,7 @@ function Settings() {
               key={value}
               variant="ghost"
               aria-pressed={theme === value}
-              className={cn('capitalize', theme === value && 'bg-foreground/[0.08]')}
+              className={cn('capitalize', theme === value && 'bg-accent')}
               onClick={() => setTheme(value)}
             >
               {value.charAt(0).toUpperCase() + value.slice(1)}

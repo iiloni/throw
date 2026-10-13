@@ -16,7 +16,8 @@ export function PageHeader({ desktop }: { desktop: boolean }) {
   return (
     <header className="relative px-5 pt-[calc(var(--safe-top)+1rem)] pb-4 md:px-8 md:pt-[calc(var(--safe-top)+2rem)] md:pb-6">
       <div className="flex h-8 items-center justify-between gap-3 text-xs text-muted-foreground">
-        <span className="truncate">{desktop ? 'Throw' : shell.workspace?.name}</span>
+        {/* The rail carries the brand on wide screens. */}
+        <span className="truncate">{desktop ? null : shell.workspace?.name}</span>
         <SyncIndicator />
       </div>
       <div className="mt-3 flex min-w-0 items-center gap-3">

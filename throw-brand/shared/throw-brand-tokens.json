@@ -1,0 +1,373 @@
+{
+  "tokenFormatVersion": 1,
+  "brand": "Throw",
+  "direction": "Arc Forward \u2014 Direction 4 Variant 02",
+  "tagline": "Throw yourself into it.",
+  "canonicalGeometry": "throw-icon-geometry.svg",
+  "canvas": {
+    "width": 1024,
+    "height": 1024,
+    "units": "SVG user units"
+  },
+  "sharedColors": {
+    "cream": {
+      "hex": "#FFF9F0",
+      "rgb": [
+        255,
+        249,
+        240
+      ],
+      "alpha": 1,
+      "usage": "shared warm tile surface and light wordmark"
+    },
+    "creamHighlight": {
+      "hex": "#FFFCF7",
+      "rgb": [
+        255,
+        252,
+        247
+      ],
+      "alpha": 1,
+      "usage": "tile gradient start; subtle surface lighting"
+    },
+    "charcoal": {
+      "hex": "#292B2D",
+      "rgb": [
+        41,
+        43,
+        45
+      ],
+      "alpha": 1,
+      "usage": "dark wordmark and monochrome mark"
+    },
+    "tileLine": {
+      "hex": "#C3C4C2",
+      "rgb": [
+        195,
+        196,
+        194
+      ],
+      "alpha": 1,
+      "usage": "one rounded project-detail line"
+    },
+    "microLine": {
+      "hex": "#AEB3B0",
+      "rgb": [
+        174,
+        179,
+        176
+      ],
+      "alpha": 1,
+      "usage": "micro-only detail line contrast adjustment"
+    }
+  },
+  "geometry": {
+    "background": {
+      "bounds": [
+        0,
+        0,
+        1024,
+        1024
+      ],
+      "rx": 228
+    },
+    "tile": {
+      "center": [
+        732,
+        459
+      ],
+      "width": 364,
+      "height": 384,
+      "rx": 68,
+      "rotationClockwiseDeg": 16,
+      "localRect": [
+        -182,
+        -192,
+        364,
+        384
+      ]
+    },
+    "accent": {
+      "localRect": [
+        -114,
+        -126,
+        118,
+        118
+      ],
+      "rx": 28
+    },
+    "line": {
+      "localRect": [
+        -120,
+        42,
+        248,
+        56
+      ],
+      "rx": 28
+    },
+    "ribbons": {
+      "upper": {
+        "svgId": "ribbon-upper",
+        "start": [
+          36,
+          916
+        ],
+        "terminalEdge": [
+          [
+            734,
+            300
+          ],
+          [
+            735,
+            438
+          ]
+        ]
+      },
+      "lower": {
+        "svgId": "ribbon-lower",
+        "start": [
+          60,
+          950
+        ],
+        "terminalEdge": [
+          [
+            810,
+            505
+          ],
+          [
+            808,
+            653
+          ]
+        ]
+      },
+      "pathAuthority": "Exact cubic commands in throw-icon-geometry.svg; do not independently redraw."
+    }
+  },
+  "gradients": {
+    "background": {
+      "id": "channel-background",
+      "from": [
+        0,
+        0
+      ],
+      "to": [
+        1024,
+        1024
+      ],
+      "offsets": [
+        0,
+        0.55,
+        1
+      ]
+    },
+    "ribbonUpper": {
+      "id": "ribbon-upper-paint",
+      "from": [
+        36,
+        916
+      ],
+      "to": [
+        690,
+        340
+      ],
+      "offsets": [
+        0,
+        0.48,
+        1
+      ]
+    },
+    "ribbonLower": {
+      "id": "ribbon-lower-paint",
+      "from": [
+        60,
+        950
+      ],
+      "to": [
+        750,
+        565
+      ],
+      "offsets": [
+        0,
+        0.52,
+        1
+      ]
+    },
+    "projectAccent": {
+      "id": "project-accent-paint",
+      "from": [
+        -114,
+        -126
+      ],
+      "to": [
+        4,
+        -8
+      ],
+      "offsets": [
+        0,
+        0.55,
+        1
+      ]
+    }
+  },
+  "surfaceGradient": {
+    "id": "tile-surface-paint",
+    "from": [
+      -182,
+      -192
+    ],
+    "to": [
+      182,
+      192
+    ],
+    "stops": [
+      {
+        "offset": 0,
+        "color": "creamHighlight"
+      },
+      {
+        "offset": 1,
+        "color": "cream"
+      }
+    ],
+    "units": "userSpaceOnUse",
+    "colorInterpolation": "sRGB"
+  },
+  "depth": {
+    "kind": "tile-attached drop shadow, not a landing ellipse",
+    "dx": 0,
+    "dy": 14,
+    "gaussianStdDeviation": 12,
+    "filterBoundsInTileLocalCoordinates": [
+      -242,
+      -252,
+      484,
+      504
+    ],
+    "opacity": 0.14,
+    "blendMode": "normal",
+    "colorInterpolation": "sRGB"
+  },
+  "variantRules": {
+    "primary": {
+      "minDisplayedPx": 128
+    },
+    "small": {
+      "minDisplayedPx": 48,
+      "maxDisplayedPxExclusive": 128,
+      "omit": [
+        "tile drop shadow"
+      ],
+      "flatTile": true
+    },
+    "micro": {
+      "minDisplayedPx": 16,
+      "maxDisplayedPxExclusive": 48,
+      "omit": [
+        "tile drop shadow",
+        "foreground gradients"
+      ],
+      "lineLocalRect": [
+        -120,
+        38,
+        248,
+        64
+      ],
+      "lineRx": 32,
+      "lineColor": "microLine",
+      "geometryOtherwiseUnchanged": true
+    }
+  },
+  "clearSpace": {
+    "outsideIconTile": 96,
+    "outsideStandaloneMark": 96
+  },
+  "adaptive": {
+    "layerDp": 108,
+    "viewportDp": 72,
+    "safeDiameterDp": 66,
+    "safeCircle": {
+      "center": [
+        512,
+        512
+      ],
+      "radius": 312.8888888888889
+    },
+    "foregroundTransform": {
+      "sourceCenter": [
+        491,
+        586
+      ],
+      "targetCenter": [
+        512,
+        512
+      ],
+      "scale": 0.55,
+      "matrix": [
+        0.55,
+        0,
+        0,
+        0.55,
+        241.95,
+        189.7
+      ]
+    },
+    "omit": [
+      "rounded background tile",
+      "tile drop shadow"
+    ],
+    "background": "full-bleed channel background gradient"
+  },
+  "pwaMaskable": {
+    "safeCircle": {
+      "center": [
+        512,
+        512
+      ],
+      "radius": 409.6
+    },
+    "foregroundTransform": {
+      "sourceCenter": [
+        491,
+        586
+      ],
+      "targetCenter": [
+        512,
+        512
+      ],
+      "scale": 0.7,
+      "matrix": [
+        0.7,
+        0,
+        0,
+        0.7,
+        168.3,
+        101.8
+      ]
+    },
+    "omit": [
+      "rounded background tile",
+      "tile drop shadow"
+    ]
+  },
+  "monochrome": {
+    "tileClearance": 10,
+    "tileDetails": "transparent knockouts",
+    "background": "transparent",
+    "ribbons": "solid; retain both canonical paths",
+    "themedAsset": "throw-adaptive-monochrome.svg"
+  },
+  "channelFiles": {
+    "stable": "../stable/throw-stable-tokens.json",
+    "preview": "../preview/throw-preview-tokens.json",
+    "dev": "../dev/throw-dev-tokens.json"
+  },
+  "applicationUiOverrides": {},
+  "catchRelationship": {
+    "sharedCream": "#FFF9F0",
+    "sharedCharcoal": "#292B2D",
+    "sharedWordmarkFont": "Manrope ExtraBold 800",
+    "devBackground": "matches saved Catch dev tokens",
+    "previewBackground": "matches saved Catch preview tokens; current external repository correction not supplied"
+  },
+  "standaloneColorMark": "omitted: pale ribbons and cream need the tile for dependable contrast; monochrome marks are supplied"
+}

@@ -12,6 +12,7 @@ import {
   type ShellState,
   viewSchema,
 } from '@/components/AppShell/shell';
+import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { Dock } from '@/components/Dock/Dock';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
@@ -160,6 +161,13 @@ export function AppShell() {
             transition={reduced ? { duration: 0 } : { ...springs.smooth, bounce: 0 }}
             className="glass sticky top-0 flex h-dvh shrink-0 flex-col overflow-hidden border-y-0 border-l-0 pt-[calc(var(--safe-top)+0.75rem)] pb-[calc(var(--safe-bottom)+0.75rem)] pl-[var(--safe-left)]"
           >
+            {/*
+              Inset so the mark sits on the rail's icon column. The lockup measures this box
+              and falls back to the mark alone once the collapsed rail is too narrow for it.
+            */}
+            <div className="mb-2 pr-3 pl-[1.125rem]">
+              <BrandLockup orientation="horizontal" iconSize={32} />
+            </div>
             <div className="px-3">
               <ShellMenu expanded={expanded} />
             </div>
@@ -269,9 +277,7 @@ function RailButton({
     'aria-current': active ? ('page' as const) : undefined,
     className: cn(
       'relative flex h-12 w-full shrink-0 items-center gap-3 rounded-2xl px-2 text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
-      active
-        ? 'bg-foreground/[0.08] font-semibold'
-        : 'text-muted-foreground hover:bg-foreground/[0.05]',
+      active ? 'bg-accent font-semibold' : 'text-muted-foreground hover:bg-accent/60',
     ),
   };
   const content = (

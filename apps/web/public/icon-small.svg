@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Throw stable small icon">
+<title>Throw stable small icon</title>
+<defs>
+<linearGradient id="channel-background" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="1024" y2="1024" color-interpolation="sRGB"><stop offset="0" stop-color="#34D5B5" /><stop offset="0.55" stop-color="#20AE96" /><stop offset="1" stop-color="#179A86" /></linearGradient>
+<linearGradient id="ribbon-upper-paint" gradientUnits="userSpaceOnUse" x1="36" y1="916" x2="690" y2="340" color-interpolation="sRGB"><stop offset="0" stop-color="#32BFA7" /><stop offset="0.48" stop-color="#B9FFE6" /><stop offset="1" stop-color="#55D6B8" /></linearGradient>
+<linearGradient id="ribbon-lower-paint" gradientUnits="userSpaceOnUse" x1="60" y1="950" x2="750" y2="565" color-interpolation="sRGB"><stop offset="0" stop-color="#20AE96" /><stop offset="0.52" stop-color="#82EBD0" /><stop offset="1" stop-color="#33BDA3" /></linearGradient>
+<linearGradient id="project-accent-paint" gradientUnits="userSpaceOnUse" x1="-114" y1="-126" x2="4" y2="-8" color-interpolation="sRGB"><stop offset="0" stop-color="#34DDBA" /><stop offset="0.55" stop-color="#20AE96" /><stop offset="1" stop-color="#119F88" /></linearGradient>
+</defs>
+<rect id="background-tile" x="0" y="0" width="1024" height="1024" rx="228" fill="url(#channel-background)" />
+<g id="arc-forward-foreground">
+  <g id="motion-ribbons">
+    <path id="ribbon-upper" d="M 36 916 C 84 638 286 415 594 326 C 641 313 687 305 734 300 L 735 438 C 428 427 192 628 36 916 Z" fill="url(#ribbon-upper-paint)" />
+    <path id="ribbon-lower" d="M 60 950 C 167 721 347 571 529 537 C 627 517 721 506 810 505 L 808 653 C 461 613 214 739 60 950 Z" fill="url(#ribbon-lower-paint)" />
+  </g>
+  <g id="project-tile" transform="translate(732 459) rotate(16)">
+    <rect id="project-surface" x="-182" y="-192" width="364" height="384" rx="68" fill="#FFF9F0" />
+    <rect id="project-accent" x="-114" y="-126" width="118" height="118" rx="28" fill="url(#project-accent-paint)" />
+    <rect id="project-line" x="-120" y="42" width="248" height="56" rx="28" fill="#C3C4C2" />
+  </g>
+</g>
+</svg>

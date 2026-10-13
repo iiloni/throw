@@ -32,8 +32,10 @@ device, update prompts, release channels and scripts, and the Android project.
 
 - A fix to copied code (the outbox, the shape proxy, the worktree scripts) has to be made
   in both repositories by hand.
-- The colors and design tokens are Catch's, including its brand amber, until Throw has a
-  brand of its own.
+- Application surfaces, typography and project/tag colors remain Catch's. Throw's UI uses
+  an explicitly authored jade accent palette for controls, links, focus and selected
+  states in every build. Arc Forward's jade, preview purple and dev blue artwork remains
+  independent of the UI tokens (see [branding](../branding.md)).
 - Development ports and Compose project names differ from Catch's so both run on one
   machine. The production Compose file defaults to port 3100 for the same reason.
 - Running both apps from one Compose stack against one Postgres container is intended

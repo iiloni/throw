@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Throw monochrome mark"><title>Throw monochrome mark</title><defs><mask id="ribbon-clearance" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024" style="mask-type:luminance"><rect width="1024" height="1024" fill="white" /><g transform="translate(732 459) rotate(16)"><rect id="clearance-project-surface" x="-182" y="-192" width="364" height="384" rx="68" fill="black" stroke="black" stroke-width="20" />
+    </g></mask><mask id="tile-detail-knockouts" maskUnits="userSpaceOnUse" x="-182" y="-192" width="364" height="384" style="mask-type:luminance"><rect x="-182" y="-192" width="364" height="384" fill="white" /><rect x="-114" y="-126" width="118" height="118" rx="28" fill="black" />
+    <rect x="-120" y="42" width="248" height="56" rx="28" fill="black" />
+  </mask></defs><g id="monochrome-foreground" fill="#FFFFFF" transform="matrix(0.55 0 0 0.55 241.95 189.7)"><g id="motion-ribbons" mask="url(#ribbon-clearance)">
+    <path id="ribbon-upper" d="M 36 916 C 84 638 286 415 594 326 C 641 313 687 305 734 300 L 735 438 C 428 427 192 628 36 916 Z" fill="#FFFFFF" />
+    <path id="ribbon-lower" d="M 60 950 C 167 721 347 571 529 537 C 627 517 721 506 810 505 L 808 653 C 461 613 214 739 60 950 Z" fill="#FFFFFF" />
+  </g>
+  <g transform="translate(732 459) rotate(16)"><rect id="project-surface" x="-182" y="-192" width="364" height="384" rx="68" fill="#FFFFFF" mask="url(#tile-detail-knockouts)" />
+    </g></g></svg>

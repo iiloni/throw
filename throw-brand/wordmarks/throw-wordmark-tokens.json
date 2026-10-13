@@ -1,0 +1,75 @@
+{
+  "brand": "Throw",
+  "text": "Throw",
+  "tagline": "Throw yourself into it.",
+  "canonicalWordmark": "throw-wordmark-dark.svg",
+  "lightWordmark": "throw-wordmark-light.svg",
+  "canonicalWordmarkSha256": "49276ce66cb7016416b925e60bf1db525ca17f18623872368e864d98303cb484",
+  "typeface": {
+    "family": "Manrope",
+    "style": "ExtraBold",
+    "weight": 800,
+    "trackingEm": -0.009,
+    "nativeKerning": true,
+    "runtime": "five outlined paths; no font dependency"
+  },
+  "canvas": [
+    4183.77142857,
+    1024
+  ],
+  "ink": {
+    "dark": "#292B2D",
+    "light": "#FFF9F0"
+  },
+  "layouts": {
+    "horizontal": {
+      "canvas": [
+        3731.4285714277344,
+        1024
+      ],
+      "iconBox": [
+        0,
+        0,
+        1024,
+        1024
+      ],
+      "wordmarkInkBox": [
+        1280,
+        204,
+        2451.4285714277344,
+        600
+      ],
+      "wordmarkScale": 0.5859375,
+      "gap": 256,
+      "opticalVerticalShift": -8
+    },
+    "stacked": {
+      "canvas": [
+        1536,
+        1591.9440559441844
+      ],
+      "iconBox": [
+        256,
+        0,
+        1024,
+        1024
+      ],
+      "wordmarkInkBox": [
+        0,
+        1216,
+        1536,
+        375.9440559441843
+      ],
+      "wordmarkScale": 0.3671328671329925,
+      "gap": 192
+    }
+  },
+  "clearSpace": 192,
+  "minimumDisplay": {
+    "horizontalWidthCssPx": 112,
+    "stackedWidthCssPx": 96,
+    "wordmarkOnlyInkHeightCssPx": 18
+  },
+  "iconTierSelection": "Use shared icon size rules based on displayed icon width, not raster density or lockup width.",
+  "taglineUsage": "Supporting text only; sentence case; never inside launcher icons/favicons; retain existing UI font or Manrope Medium 500 in dedicated brand collateral. No tagged lockup artwork is prescribed."
+}

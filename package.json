@@ -14,7 +14,9 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "test": "node --test scripts/*.test.ts && pnpm -r test",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "brand:generate": "node scripts/generate-brand-assets.mjs",
+    "brand:check": "node scripts/generate-brand-assets.mjs --check",
+    "check": "pnpm brand:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "db:generate": "pnpm --filter @throw/server db:generate",
     "db:migrate": "pnpm --filter @throw/server db:migrate",
     "e2e": "./scripts/dev.sh e2e",
@@ -24,6 +26,7 @@
     "@biomejs/biome": "^2.5.14",
     "@playwright/test": "^1.63.0",
     "@types/node": "^24.19.0",
+    "sharp": "^0.35.5",
     "typescript": "^7.0.2",
     "zod": "^4.6.5"
   }

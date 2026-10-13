@@ -1,0 +1,240 @@
+{
+  "tokenFormatVersion": 1,
+  "brand": "Throw",
+  "buildTreatment": "stable",
+  "officialReleaseChannel": true,
+  "extends": "../shared/throw-brand-tokens.json",
+  "scope": "icon and lockup icon paints only",
+  "palette": {
+    "backgroundStart": {
+      "hex": "#34D5B5",
+      "rgb": [
+        52,
+        213,
+        181
+      ],
+      "alpha": 1,
+      "usage": "stable background gradient stop at 0%"
+    },
+    "backgroundMid": {
+      "hex": "#20AE96",
+      "rgb": [
+        32,
+        174,
+        150
+      ],
+      "alpha": 1,
+      "usage": "stable background gradient stop at 55%"
+    },
+    "backgroundEnd": {
+      "hex": "#179A86",
+      "rgb": [
+        23,
+        154,
+        134
+      ],
+      "alpha": 1,
+      "usage": "stable background gradient stop at 100%"
+    },
+    "ribbonUpperStart": {
+      "hex": "#32BFA7",
+      "rgb": [
+        50,
+        191,
+        167
+      ],
+      "alpha": 1,
+      "usage": "stable ribbonUpper gradient stop at 0%"
+    },
+    "ribbonUpperMid": {
+      "hex": "#B9FFE6",
+      "rgb": [
+        185,
+        255,
+        230
+      ],
+      "alpha": 1,
+      "usage": "stable ribbonUpper gradient stop at 48%"
+    },
+    "ribbonUpperEnd": {
+      "hex": "#55D6B8",
+      "rgb": [
+        85,
+        214,
+        184
+      ],
+      "alpha": 1,
+      "usage": "stable ribbonUpper gradient stop at 100%"
+    },
+    "ribbonLowerStart": {
+      "hex": "#20AE96",
+      "rgb": [
+        32,
+        174,
+        150
+      ],
+      "alpha": 1,
+      "usage": "stable ribbonLower gradient stop at 0%"
+    },
+    "ribbonLowerMid": {
+      "hex": "#82EBD0",
+      "rgb": [
+        130,
+        235,
+        208
+      ],
+      "alpha": 1,
+      "usage": "stable ribbonLower gradient stop at 52%"
+    },
+    "ribbonLowerEnd": {
+      "hex": "#33BDA3",
+      "rgb": [
+        51,
+        189,
+        163
+      ],
+      "alpha": 1,
+      "usage": "stable ribbonLower gradient stop at 100%"
+    },
+    "projectAccentStart": {
+      "hex": "#34DDBA",
+      "rgb": [
+        52,
+        221,
+        186
+      ],
+      "alpha": 1,
+      "usage": "stable projectAccent gradient stop at 0%"
+    },
+    "projectAccentMid": {
+      "hex": "#20AE96",
+      "rgb": [
+        32,
+        174,
+        150
+      ],
+      "alpha": 1,
+      "usage": "stable projectAccent gradient stop at 55%"
+    },
+    "projectAccentEnd": {
+      "hex": "#119F88",
+      "rgb": [
+        17,
+        159,
+        136
+      ],
+      "alpha": 1,
+      "usage": "stable projectAccent gradient stop at 100%"
+    },
+    "tileShadow": {
+      "hex": "#075B52",
+      "rgb": [
+        7,
+        91,
+        82
+      ],
+      "alpha": 0.14,
+      "usage": "tile-attached primary shadow only"
+    },
+    "microUpper": {
+      "hex": "#A0F2D8",
+      "rgb": [
+        160,
+        242,
+        216
+      ],
+      "alpha": 1,
+      "usage": "stable micro ribbon flat fill"
+    },
+    "microLower": {
+      "hex": "#72DBC1",
+      "rgb": [
+        114,
+        219,
+        193
+      ],
+      "alpha": 1,
+      "usage": "stable micro ribbon flat fill"
+    }
+  },
+  "gradientOverrides": {
+    "background": {
+      "gradientId": "channel-background",
+      "stops": [
+        {
+          "offset": 0,
+          "color": "backgroundStart"
+        },
+        {
+          "offset": 0.55,
+          "color": "backgroundMid"
+        },
+        {
+          "offset": 1,
+          "color": "backgroundEnd"
+        }
+      ]
+    },
+    "ribbonUpper": {
+      "gradientId": "ribbon-upper-paint",
+      "stops": [
+        {
+          "offset": 0,
+          "color": "ribbonUpperStart"
+        },
+        {
+          "offset": 0.48,
+          "color": "ribbonUpperMid"
+        },
+        {
+          "offset": 1,
+          "color": "ribbonUpperEnd"
+        }
+      ]
+    },
+    "ribbonLower": {
+      "gradientId": "ribbon-lower-paint",
+      "stops": [
+        {
+          "offset": 0,
+          "color": "ribbonLowerStart"
+        },
+        {
+          "offset": 0.52,
+          "color": "ribbonLowerMid"
+        },
+        {
+          "offset": 1,
+          "color": "ribbonLowerEnd"
+        }
+      ]
+    },
+    "projectAccent": {
+      "gradientId": "project-accent-paint",
+      "stops": [
+        {
+          "offset": 0,
+          "color": "projectAccentStart"
+        },
+        {
+          "offset": 0.55,
+          "color": "projectAccentMid"
+        },
+        {
+          "offset": 1,
+          "color": "projectAccentEnd"
+        }
+      ]
+    }
+  },
+  "shadowOverride": {
+    "color": "tileShadow",
+    "opacity": 0.14
+  },
+  "microOverrides": {
+    "upper": "microUpper",
+    "lower": "microLower",
+    "accent": "projectAccentMid"
+  },
+  "applicationUiOverrides": {}
+}

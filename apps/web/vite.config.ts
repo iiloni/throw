@@ -11,6 +11,7 @@ import { buildChannel } from '../../scripts/build-channel.ts';
 import { developmentServerUrl } from '../../scripts/dev-server.ts';
 
 const channel = buildChannel(process.env.THROW_CHANNEL);
+const iconBase = channel === 'stable' ? '' : `/${channel}`;
 const webBuild = webBuildSchema.parse({ id: randomUUID() } satisfies WebBuild);
 
 export default defineConfig(({ command }) => ({
@@ -28,6 +29,15 @@ export default defineConfig(({ command }) => ({
         this.emitFile({ type: 'asset', fileName: 'build.json', source: JSON.stringify(webBuild) });
       },
     },
+    {
+      name: 'channel-icons',
+      transformIndexHtml(html) {
+        return html.replace(
+          /href="\/(favicon\.ico|favicon-mark\.svg|apple-touch-icon\.png)"/g,
+          `href="${iconBase}/$1"`,
+        );
+      },
+    },
     tanstackRouter({ target: 'react', autoCodeSplitting: true }),
     react(),
     tailwindcss(),
@@ -41,15 +51,15 @@ export default defineConfig(({ command }) => ({
         name: 'Throw',
         short_name: 'Throw',
         description: 'Self-hosted project management that works offline.',
-        theme_color: '#ffc247',
+        theme_color: '#20ae96',
         background_color: '#f7f6f2',
         display: 'standalone',
         start_url: '/',
         icons: [
-          { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: `${iconBase}/pwa-192x192.png`, sizes: '192x192', type: 'image/png' },
+          { src: `${iconBase}/pwa-512x512.png`, sizes: '512x512', type: 'image/png' },
           {
-            src: '/maskable-512x512.png',
+            src: `${iconBase}/maskable-512x512.png`,
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',
