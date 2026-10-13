@@ -23,42 +23,54 @@ its PR and on the push to `main` that follows. See
 
 Optional [AI code review](ai-reviews.md) is requested separately with the `ai review`
 label. It can run while a PR is a draft, is advisory, and does not authorize merging.
-Agents add the label themselves for higher-risk changes (see `AGENTS.md`).
+Agents recommend a review for higher-risk changes and wait for explicit developer
+approval before adding the label (see `AGENTS.md`).
 Wait for requested feedback and address useful findings before merge approval.
 The AI request job and cubic's review are not part of the required `validation` check.
 
-## One-time GitHub setup
+## GitHub repository setup
 
-1. Land this workflow change in `main`. Run it on a PR with `merge on pass` first so GitHub has a
-   recent successful `validation` check to offer in the settings picker. If the label does
-   not exist, create it under **Issues → Labels → New label**, or run:
+Throw is public and uses the same repository settings and default-branch ruleset as
+Catch. The setup below was verified on 2026-10-13.
 
-   ```bash
-   gh label create "merge on pass" --color 1D76DB --description "Functionality and design approved; merge when required checks pass"
-   gh label create "run e2e" --color FBCA04 --description "Run full E2E on GitHub; does not authorize merging"
-   ```
+- The active **PR Checks** ruleset targets the default branch (`main`), requires a PR
+  and the **`validation`** status check, and allows only squash merges into it.
+- There are no bypass actors, including repository admins. Force pushes and deletion
+  of the default branch are blocked.
+- Required approving reviews are zero, and branches need not be up to date before
+  merging (see [What gets merged](#what-gets-merged)).
+- Repository-wide merge, squash and rebase methods are available, as in Catch; the
+  ruleset restricts merges into `main` to squash.
+- **Allow auto-merge** and **Automatically delete head branches** are enabled.
+  Auto-merge availability does not enable it on individual PRs. The `merge on pass`
+  label authorizes merging after validation; the workflow itself never merges.
+  Agents normally squash-merge manually after checking intervening changes on `main`.
+- Actions are enabled with all actions allowed, read-only default token permissions,
+  and permission for Actions to create or approve PRs disabled. Individual workflows
+  declare the permissions they need. Workflow runs from first-time fork contributors
+  require approval.
 
-2. Open **Settings → Branches → Add classic branch protection rule** for `main` (or edit
-   the existing matching rule). Enable:
-   - **Require a pull request before merging**.
-   - **Require status checks to pass before merging**, with **`validation`** as a required
-     check. Choose **GitHub Actions** as its expected source when offered.
-   Leave **Require branches to be up to date before merging** off (see
-   [What gets merged](#what-gets-merged)).
-   - **Do not allow bypassing the above settings**, so the rule also applies to admins.
-   Keep force pushes and branch deletion disabled. Save the rule.
+To inspect or recreate the protection, open **Settings → Rules → Rulesets → PR Checks**.
+Keep enforcement **Active**, target the default branch, leave the bypass list empty,
+require pull requests with squash as the only merge method and zero approving reviews,
+require `validation`, and block force pushes and deletions. Leave **Require branches
+to be up to date before merging** off.
 
-   `validation` covers `check`, `e2e (desktop)` and `e2e (android)`; requiring those three
-   individually is optional. Requiring only the E2E jobs is insufficient because GitHub
-   accepts conditionally skipped jobs as successful checks. See
-   [required-check behavior](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks)
-   and [branch protection](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
+`validation` covers `check`, `e2e (desktop)` and `e2e (android)`. Requiring only E2E jobs
+is insufficient because GitHub accepts conditionally skipped jobs as successful checks.
+See [required-check behavior](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks)
+and [rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets).
+Rulesets and auto-merge are available for public repositories on GitHub Free; keeping
+Throw private while enforcing this protection would require GitHub Pro.
 
-3. Optionally open **Settings → General → Pull Requests** and enable **Allow auto-merge**.
-   This makes auto-merge available per PR; it does not automatically merge every passing
-   PR. Applying `merge on pass` authorizes the agent to enable it for that PR. The CI
-   workflow reports validation; the agent or maintainer merges or enables auto-merge.
-   See [GitHub's auto-merge setup](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-auto-merge-for-pull-requests-in-your-repository).
+The `merge on pass`, `run e2e` and `ai review` labels already exist. If recreating the
+repository, create them before using the workflows:
+
+```bash
+gh label create "merge on pass" --color 1D76DB --description "Functionality and design approved; merge when required checks pass"
+gh label create "run e2e" --color FBCA04 --description "Run full E2E on GitHub; does not authorize merging"
+gh label create "ai review" --color 1D76DB --description "Request an advisory cubic review; does not authorize merging"
+```
 
 For a solo maintainer, leave required approving reviews disabled unless someone else can
 review: GitHub does not let a PR author approve their own PR. Draft status keeps a PR from
@@ -103,7 +115,7 @@ labels such as `duplicate`, `invalid` or `wontfix`.
    `--workers=1` to reduce contention across worktrees:
 
    ```bash
-   ./scripts/dev.sh e2e e2e/notes.spec.ts --grep 'create' --workers=1
+   ./scripts/dev.sh e2e e2e/projects.spec.ts --grep 'create' --workers=1
    ```
 
    Leave `merge on pass` absent. For sweeping changes that benefit from broad regression
@@ -185,7 +197,7 @@ test queue:
 
 ```bash
 pnpm exec playwright install firefox
-E2E_FIREFOX=1 ./scripts/dev.sh e2e e2e/searchDock.spec.ts --grep 'page slides' --project=firefox --workers=1
+E2E_FIREFOX=1 ./scripts/dev.sh e2e e2e/projects.spec.ts --project=firefox --workers=1
 ```
 
 The environment variable makes the project available; `--project=firefox` selects it
@@ -204,51 +216,11 @@ isolated test display. Ordinary screenshots remain useful outside a view transit
 
 ### Firefox baseline
 
-A failure listed here was there before your change. Anything else is new: confirm it alone
-with `--workers=1 --retries=0` before deciding whose it is. Update the list in the change
-that fixes or adds an entry.
-
-- Tested 2026-10-10 on `main` at `e86405f` plus the test fixes that came with this baseline,
-  with Playwright 1.63.0's Firefox 155.0 (build 1543), headless, on Linux.
-- Whole suite, one worker, no retries: 217 tests, 174 passed, 3 failed, 40 skipped
-  (22 minutes). One of the three was a real difference, UTC listed twice in the time zone
-  picker, fixed since in #98 and confirmed passing. That leaves **175 passing and 2 failing**
-  in that run. Every entry below is flaky, so a run shows from none to three failures. The skips are the 39 that the Chromium `desktop` project also skips, and the
-  one below.
-- It covers desktop Firefox in Playwright's build only. It says nothing for Firefox on
-  Android or the native APK, and Zen or a released Firefox can differ from it.
-
-Timing changes what fails. Firefox reports `page.goto` or `page.reload` as failed
-(`NS_BINDING_ABORTED`, `NS_ERROR_FAILURE`) when it interrupts a page that is still loading
-its modules, though the new page then loads as it should; Chromium does not. Such a test
-fails on an idle machine and can pass on a busy one, so a broad run with many workers hides
-some entries and adds timeouts of its own. Wait for something the first page shows before
-navigating again.
-
-| Spec | Category | What happens |
-| --- | --- | --- |
-| `accounts.spec.ts:184` | Flaky: page crash | Firefox's content process dies (signal 11) on a full page load begun while the app is still starting. About one run in three. Reloading repeatedly in Zen did not reproduce it, so it may belong to Playwright's build. |
-| `linkCapturePlacement.spec.ts:149` | Flaky: page crash | The same crash on its `page.goto('/capture#…')`. About one run in three. |
-| `homePage.spec.ts:4` | Flaky: test artifact | A `page.goto('/')` interrupts the Search page's loading, as described above. About one run in four. |
-
-Skipped in the `firefox` project because it cannot run there:
-
-- `attachments.spec.ts:375` (live capture): Playwright's Firefox has no camera or microphone
-  permission, and the fake capture devices are Chromium launch flags.
-
-With twelve workers these three also failed once and passed on their retry, and they pass
-alone: `editorLayout.spec.ts:81`, `session.spec.ts:4` and `settings.spec.ts:134`.
-
-The `pixel.png` fixture once had a wrong IDAT checksum, which Chromium draws anyway and
-Firefox refuses; a picture a test attaches must be a valid file. A mouse gesture must end
-inside the viewport, because Playwright's Firefox sends no `pointerup` for one lifted
-outside it.
-
-Tests report an on-screen keyboard by setting `keyboardHeight`. Firefox has no
-VirtualKeyboard API, so the app measures the visual viewport and resets that height at the
-next focus change; `signUp` in `e2e/helpers.ts` gives Firefox a keyboard that never moves so
-the reported height stands. A Firefox test that reports a keyboard without `signUp` needs
-the same.
+Throw has no recorded Firefox baseline yet. Catch's test counts, failing specs and
+issue references do not establish a baseline for Throw. Confirm a failure on the
+unchanged base revision with the same browser and targeted cases before treating it as
+pre-existing. Record the commit, actual browser version, tested cases and results when
+establishing a Throw baseline.
 
 ## Documentation-only changes
 
