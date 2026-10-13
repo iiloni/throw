@@ -330,11 +330,13 @@ board, and Search shows the workspace search placeholder.
   by position, otherwise the create-project prompt.
 
 Workspace and project segments are UUIDs so names and future task prefixes can change
-without breaking bookmarks. Future task paths can have their own segment (for example
-`/w/:workspaceId/p/:projectId/tasks/CAT-12`); choosing the task identifier scheme remains
-separate work. A direct project URL keeps its view on reload. Selecting a project from
-navigation opens its board; the shell remembers the last project separately per workspace.
-Projects append by position. Deletion is permanent and requires confirmation.
+without breaking bookmarks. A future task path has its own segment holding the task's
+UUID, not its identifier: a task created offline has no number yet, and a project's key
+can change (ADR 0007). A direct project URL keeps its view on reload. Selecting a project
+from navigation opens its board; the shell remembers the last project separately per
+workspace. Projects append by position. Deleting a project is permanent in the shell as
+built and requires confirmation; it moves to the trash once the task model is built (see
+[Project](#project)).
 
 The shell's backlog and board bodies are placeholders. The backlog drawer and task-specific
 dock interactions arrive with the board feature; search and the command palette arrive later.
