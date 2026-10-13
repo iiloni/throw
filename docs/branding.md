@@ -7,8 +7,25 @@ the artwork. Do not edit public SVG copies or generated platform resources.
 
 Stable is jade, preview is the supplied purple/indigo, and local development is light
 blue. The preview tokens are deliberately retained even though Catch has subsequently
-corrected its own preview colors. No application theme, font, control or project color
-comes from these channel paints. All application UI override objects remain empty.
+corrected its own preview colors. Application UI overrides in the supplied package remain
+empty. Throw's separately approved UI palette is authored in `apps/web/src/styles.css`,
+without importing icon/channel paints into application theming.
+
+## Application palette
+
+All builds use the same jade UI accents, independent of their installation artwork:
+
+| Role | Light | Dark |
+| --- | --- | --- |
+| Primary action fill | `#20AE96` | `#20AE96` |
+| Primary action lettering | `#292B2D` | `#292B2D` |
+| Links and keyboard focus | `#0B7765` | `#70DDC6` |
+| Selected/hover surface | `#E3F2EC` | `#173D34` |
+
+Primary action hover adds 8% white to jade rather than reducing fill opacity, preserving
+the charcoal lettering's contrast on dark surfaces. The manifest theme color is jade;
+browser light/dark bar backgrounds stay warm. Neutral surfaces, glass, typography,
+project/tag colors and error colors retain the existing family design.
 
 ## Generation
 
@@ -37,8 +54,9 @@ updated package. Reference PNGs never supply production artwork.
 
 Vite's existing `THROW_CHANNEL` selects stable root paths, `/preview/` or `/dev/`; unset
 means dev and unsupported values fail through the existing channel parser. Channel paths
-keep browser caches separate. PWA names, launch URL, display mode, browser theme colors,
-manifest theme/background colors, build metadata and distribution rules are unchanged.
+keep browser caches separate. PWA names, launch URL, display mode, browser bar colors,
+manifest background color, build metadata and distribution rules are unchanged. The
+manifest theme color uses the approved jade primary action fill.
 All generated public artwork is precached by the existing service worker.
 
 | Surface | Mechanical source |

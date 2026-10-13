@@ -51,7 +51,7 @@ export default defineConfig(({ command }) => ({
         name: 'Throw',
         short_name: 'Throw',
         description: 'Self-hosted project management that works offline.',
-        theme_color: '#ffc247',
+        theme_color: '#20ae96',
         background_color: '#f7f6f2',
         display: 'standalone',
         start_url: '/',

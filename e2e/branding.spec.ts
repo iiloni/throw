@@ -1,5 +1,48 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 import { signUp } from './helpers';
+
+async function contrast(locator: Locator, ink: 'color' | 'borderColor', surface: 'self' | 'page') {
+  return locator.evaluate(
+    (element, { ink, surface }) => {
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d')!;
+      const luminance = (color: string) => {
+        context.fillStyle = color;
+        context.fillRect(0, 0, 1, 1);
+        const [r, g, b] = [...context.getImageData(0, 0, 1, 1).data].slice(0, 3).map((channel) => {
+          const value = channel / 255;
+          return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+        });
+        return r! * 0.2126 + g! * 0.7152 + b! * 0.0722;
+      };
+      const style = getComputedStyle(element);
+      const foreground = luminance(style[ink]);
+      const background = luminance(
+        getComputedStyle(surface === 'self' ? element : document.body).backgroundColor,
+      );
+      return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+    },
+    { ink, surface },
+  );
+}
+
+async function checkControlContrast(page: Page) {
+  const primary = page.getByRole('button', { name: 'Sign in', exact: true });
+  const link = page.getByRole('button', { name: 'Need an account? Sign up' });
+  expect(await contrast(primary, 'color', 'self')).toBeGreaterThanOrEqual(4.5);
+  expect(await contrast(link, 'color', 'page')).toBeGreaterThanOrEqual(4.5);
+  await primary.hover();
+  await primary.evaluate(async (element) => {
+    // Flush the hover style before waiting for its color transition's painted result.
+    getComputedStyle(element).backgroundColor;
+    await Promise.allSettled(element.getAnimations().map((animation) => animation.finished));
+  });
+  expect(await contrast(primary, 'color', 'self')).toBeGreaterThanOrEqual(4.5);
+  await page.keyboard.press('Tab');
+  const email = page.getByRole('textbox', { name: 'Email', exact: true });
+  await expect(email).toBeFocused();
+  await expect.poll(() => contrast(email, 'borderColor', 'page')).toBeGreaterThanOrEqual(3);
+}
 
 test('brand surfaces preserve artwork, contrast and usable layout on light and dark themes', async ({
   page,
@@ -31,6 +74,7 @@ test('brand surfaces preserve artwork, contrast and usable layout on light and d
       ),
     )
     .toBe(true);
+  await checkControlContrast(page);
   await page.screenshot({ path: info.outputPath('login-light.png') });
 
   // A stored preference must win over the OS, and a reload must paint the right ink.
@@ -40,6 +84,7 @@ test('brand surfaces preserve artwork, contrast and usable layout on light and d
     'src',
     '/wordmarks/throw-lockup-horizontal-stable-light-small.svg',
   );
+  await checkControlContrast(page);
   await page.screenshot({ path: info.outputPath('login-dark.png') });
 
   await page.goto('/setup');

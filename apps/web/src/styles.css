@@ -4,13 +4,13 @@
 /*
  * Theme tokens use light-dark(), so switching theme only means changing
  * `color-scheme` on <html>. Prefer these tokens over `dark:` variants.
- * Neutrals carry a slight warm tint that supports the sunrise brand colors.
+ * Warm neutrals retain the family resemblance to Catch around Throw's jade accents.
  */
 :root {
   color-scheme: light dark;
   --radius: 0.75rem;
   /*
-   * Warm graphite gives the amber mark a quiet canvas. The palette is Catch's.
+   * Catch's warm surfaces and typography stay shared; Throw's UI accents are jade.
    */
   --background: light-dark(oklch(0.965 0.008 85), oklch(0.205 0.01 70));
   --foreground: light-dark(oklch(0.24 0.016 70), oklch(0.95 0.007 85));
@@ -19,33 +19,25 @@
   --popover: light-dark(oklch(1 0 0), oklch(0.275 0.012 70));
   --popover-foreground: var(--foreground);
   --primary: var(--brand);
+  --primary-hover: color-mix(in srgb, var(--brand) 92%, white);
   --primary-foreground: var(--brand-foreground);
   --secondary: light-dark(oklch(0.93 0.009 85), oklch(0.3 0.012 70));
   --secondary-foreground: var(--foreground);
   --muted: var(--secondary);
   --muted-foreground: light-dark(oklch(0.52 0.014 70), oklch(0.72 0.01 85));
-  --accent: light-dark(oklch(0.93 0.012 85), oklch(0.32 0.015 70));
+  --accent: light-dark(#e3f2ec, #173d34);
   --accent-foreground: var(--foreground);
   --destructive: light-dark(oklch(0.56 0.2 27), oklch(0.72 0.16 22));
   --border: light-dark(oklch(0.885 0.01 85), oklch(0.34 0.012 70));
   --input: var(--border);
-  --ring: var(--brand);
+  --ring: light-dark(#0b7765, #70ddc6);
 
-  /* Catch's brand colors, until Throw has its own. */
-  --brand-amber-light: #ffe174;
-  --brand-amber-primary: #ffc247;
-  --brand-amber-deep: #ffa32b;
+  /* Explicit UI palette, independent of icon/channel tokens and their transforms. */
   --brand-cream: #fff9f0;
   --brand-charcoal: #292b2d;
-  --brand: var(--brand-amber-primary);
-  --brand-foreground: #452904;
-  --brand-link: light-dark(#955000, #ffd278);
-  --brand-gradient: linear-gradient(
-    63.435deg,
-    var(--brand-amber-light) 0%,
-    var(--brand-amber-primary) 55%,
-    var(--brand-amber-deep) 100%
-  );
+  --brand: #20ae96;
+  --brand-foreground: var(--brand-charcoal);
+  --brand-link: light-dark(#0b7765, #70ddc6);
 
   /* Frosted material for the dock, the navigation rail and sheets. */
   --glass: light-dark(oklch(0.99 0.005 85 / 0.66), oklch(0.29 0.012 70 / 0.6));
@@ -194,6 +186,7 @@
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);

@@ -35,6 +35,9 @@ integrations.
 - A companion app with its own data model, not a second client over Catch's notes.
 - Separate repository, separate server, separate client and fully decoupled releases.
 - Separate accounts in each app. No shared auth database.
+- Shared warm surfaces, typography and project/tag colors; Throw uses jade accents for
+  actions, links, keyboard focus and selected states. The UI palette is the same across
+  builds; preview purple and dev blue identify artwork only.
 - No link to Catch in the first version. "Promote a note to a task" is a later idea.
 - The repository starts from Catch's skeleton (auth, sync, outbox, local persistence, design
   tokens, scripts). Shared packages are extracted only once duplication hurts.

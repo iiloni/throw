@@ -11,11 +11,12 @@ Validated on 2026-10-13. Android project creation remains deferred by request.
 | `apps/web/public/` | Stable, preview and dev icons, favicons, touch/maskable assets and portable outlined lockups/monochrome symbols |
 | `branding/android/app/src/` | Staged density PNGs and shared API 26/33 adaptive XML; no Android project generated |
 | `apps/web/vite.config.ts`, `apps/web/index.html` | Existing channel selection wired to manifest icons, favicons and Apple touch icons |
+| `apps/web/src/styles.css`, `apps/web/src/components/ui/button.tsx` | Approved jade actions, links, focus and selected/hover states with a readable primary-button hover fill |
 | `apps/web/src/components/BrandLockup/` | Responsive, theme-aware supplied artwork with detail/minimum-size handling and tests |
 | `apps/web/src/routes/login.tsx`, `setup.tsx`, `_app.tsx` | Branding on existing sign-in, server-setup and signed-in header surfaces |
 | `scripts/brand-assets.test.ts`, `e2e/branding.spec.ts` | Favicon, mask/safe-zone, themed-alpha, theme-preference and narrow/offline-layout checks |
 | `package.json`, `pnpm-lock.yaml`, `biome.json` | Locked renderer dependency, generation/integrity commands and protection against formatting the source package |
-| `docs/branding.md`, `docs/decisions/0001-stack.md`, this report and `docs/branding/` | Integration/regeneration instructions, application-theme distinction, validation and painted screenshots |
+| `docs/branding.md`, `docs/spec.md`, `docs/decisions/0001-stack.md`, this report and `docs/branding/` | Integration/regeneration instructions, explicit UI palette, validation and painted screenshots |
 
 Catch's local integration, branding documentation/generator and active
 [PR #112](https://github.com/iiloni/catch/pull/112) were inspected read-only. No Catch file
@@ -42,12 +43,16 @@ E2E_FIREFOX=1 ./scripts/dev.sh e2e e2e/branding.spec.ts --workers=1
 - Required repository check passes: platform integrity, lint, typechecks, unit tests and
   production builds. Nine lockup tests and three raster/ICO/alpha tests cover this change.
 - Stable, preview and dev builds pass. Generated HTML favicon/touch links and manifest
-  icon paths were checked for each channel. Names, launch URL and theme/background colors
-  remain unchanged. The maskable purpose and icon/lockup precache entries were verified.
+  icon paths were checked for each channel. Names, launch URL and background colors remain
+  unchanged; the manifest theme color now uses the approved jade `#20AE96`. The maskable
+  purpose and icon/lockup precache entries were verified.
 - Targeted Chromium auth/branding: five passed, one existing mobile redirect case skipped
   because it is layout-independent. The final branding run, including the 320 px header
   with an unsaved offline write, passes on Chromium desktop, Chromium's Android layout and
   Firefox: three passed. Browser versions: Chrome for Testing 153.0.8010.12, Firefox 155.0.
+- The final jade-palette run checks normal and hovered primary-button text and link text
+  against a 4.5:1 contrast floor, plus keyboard-focused input borders against a 3:1 floor,
+  on actual light/dark rendered surfaces in all three browser/layout projects.
 - Ordinary icons, small/micro favicons, maskable surfaces, composed adaptive layers,
   shared themed alpha and light/dark lettering were visually inspected for all channels.
   Painted application screenshots were inspected as well.
@@ -78,5 +83,6 @@ masking, tinting, launcher presentation and system splash must be verified after
 
 No installed-PWA OS icon refresh or physical iOS touch-icon test was performed. Native
 WebView behavior is untested; setup/sign-in use the same web SVG surfaces. The source
-package's font/license remains provenance only, and application UI colors and typography
-remain unchanged.
+package's font/license remains provenance only. The separately approved jade UI accents
+are authored in application CSS; warm surfaces, typography, project/tag colors and
+semantic error colors retain the existing values. Canonical/channel artwork is unchanged.
