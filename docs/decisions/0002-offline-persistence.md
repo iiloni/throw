@@ -19,7 +19,9 @@ database (private browsing, an old browser) the app still works online, in memor
 stores it in IndexedDB before sending it. The outbox sends writes in order and retries
 until the server has them. A write is dropped only when it can never succeed (the server
 refused it, or the row was deleted elsewhere), and the user is told. Losing a connection,
-a session or protocol compatibility pauses the outbox; it never discards it.
+a session or protocol compatibility pauses the outbox; it never discards it. A task change
+the server does not apply because of a conflict is not a dropped write: the write succeeds
+and the refusal is recorded in the task's log (ADR 0005).
 
 **Writes are safe to replay.** A write can reach the server and lose its response, so the
 outbox may send it again. Creates and deletes that were already applied answer

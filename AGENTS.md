@@ -24,6 +24,7 @@ statuses, tags and the board itself are not built yet.
 | `packages/shared` | Zod schemas, types and pure helpers used by both apps. Exported as TypeScript source (no build step). |
 | `e2e` | Playwright tests that drive the real app against the dev database. |
 | `docs/spec.md` | The product spec, with its open questions. |
+| `docs/data-model.md` | The task data model: fields, server-assigned values and write rules. |
 | `docs/decisions` | Short architecture decision records. |
 
 ## Commands

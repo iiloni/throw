@@ -1,9 +1,12 @@
 # Throw: initial spec
 
-Status: draft (2026-10-12). The app is called Throw.
+Status: draft (2026-10-13). The app is called Throw.
 
 Items marked **(assumed)** were proposed during planning and not explicitly confirmed.
 Everything else was decided. Undecided points are collected under [Open questions](#open-questions).
+
+The fields, server-assigned values and write rules behind the domain model are stated
+precisely in [data-model.md](data-model.md).
 
 ## Purpose
 
@@ -68,7 +71,10 @@ integrations.
 | Automation | Out of scope, and it may never fit the product. |
 | Integrations, import, export | None. |
 | Task relations (blocks, duplicate of) | Later. |
-| Reports (cycle time, burndown) | Later; the activity log and timestamps make them possible. |
+| Reports (cycle time, burndown) | Later; the activity log makes them possible. |
+| Time tracking | Out of scope until further notice. |
+| Moving a task to another project | Not supported for now. A task filed in the wrong project is recreated. |
+| Description version history | Later, as its own piece of work. The activity log records that a description changed, not its text. |
 
 ## Domain model
 
@@ -89,6 +95,16 @@ can reuse Catch's bundled set.
 
 Each project owns its statuses, its priority names and its tag tree.
 
+A project has a key, the prefix of its tasks' identifiers (`CAT` in `CAT-12`). The create
+form derives it from the name and lets the user edit it. Keys are unique within a
+workspace. The server settles the key when the project syncs: if two projects were given
+the same one offline, the second gets a number appended (`CAT2`). A project created offline
+shows no key until then. The key can be changed later, and every task shows the new one at
+once; old identifiers are not kept as aliases (ADR 0007).
+
+Deleting a project sends it to the trash with everything in it. It is not a permanent
+delete.
+
 ### Status and category
 
 Each project defines its own statuses. Every status is filed under one of four fixed
@@ -105,14 +121,20 @@ The mapping is many-to-one: a category holds any number of statuses.
 
 - Statuses are always ordered by category (backlog, active, done, cancelled), with free
   ordering inside each category.
-- A project needs at least one done status and one default status for new tasks. Neither
-  can be deleted while tasks use it.
+- A project always has at least one status in each category, and starts with one in each.
+- A status's category is fixed when it is created. Changing it would close or reopen every
+  task in it at once.
 - Each project has a default status per category, used when a task is dropped on a category
-  instead of a specific status.
+  instead of a specific status. The backlog's default is the status a new task gets.
+- A status cannot be deleted while tasks use it. A task moved, from a device that was
+  offline, into a status that was deleted meanwhile stays where it was.
 - Categories let the app compute progress, hide closed work, stamp times and consolidate
   different projects onto one board without knowing any status's name.
-- A task records when it first entered an active status and when it entered a done status
-  **(assumed)**.
+- A task records when it was closed: the time it entered a done or cancelled status,
+  cleared if it is reopened. This is what the closed zone sorts by. It is not time
+  tracking, and nothing else is stamped on the task.
+- A cancelled task takes no reason. The cancelled status is the reason ("Won't do",
+  "Duplicate"), and a comment carries any detail.
 
 ### Priority
 
@@ -126,22 +148,25 @@ for that rank.
 | Field | Notes |
 | --- | --- |
 | ID | UUIDv7 generated on the device, so tasks can be created offline. |
-| Identifier | Project-prefixed number such as `CAT-12`, assigned by the server on sync. A task created offline shows none until it syncs. |
+| Identifier | The project's key and a number, such as `CAT-12`. The server assigns the number when the task syncs; a task created offline shows none until then. Numbers are never reused, and subtasks draw from the same sequence. |
 | Title | |
 | Description | BlockNote JSON, as in Catch. Text only in the first version. |
 | Status | One of the project's statuses. |
 | Priority | One of the five ranks. |
-| Position | Manual order within its status and priority; a fractional index as in Catch. |
+| Position | Manual order within its status and priority, or for a subtask within its parent; a fractional index as in Catch. |
 | Primary tag, secondary tags | See [Tags](#tags). |
 | Parent | Set on a subtask. |
+| Closed at | Set by the server; see [Status and category](#status-and-category). |
 
 A new task starts in the backlog's default status. A column's own add control creates the
 task in that column.
 
+A task stays in the project it was created in.
+
 ### Subtask
 
 A subtask is a full task: it has its own status, identifier, priority, tags, comments and
-history. Subtasks are one level deep **(assumed)**.
+history. Subtasks are one level deep, and always in their parent's project.
 
 A parent and its subtasks are independent. The parent does not complete when its subtasks
 do; it shows their progress as a count.
@@ -157,14 +182,33 @@ Tags follow Catch's model (Catch ADR 0016), scoped to a project instead of a use
 
 ### Comments and activity
 
-Every task has an append-only activity log recording each field change, shown as a timeline
-on the task. Comments appear in the same timeline. For one user they serve as a work log.
+Every task has an append-only activity log, shown as a timeline on the task. Comments
+appear in the same timeline.
+
+- The server writes the log from the changes it applies; no device writes to it (ADR 0006).
+- It records creation and changes to the title, description, status, priority, parent,
+  tags and trash state. Reordering is not recorded. A description entry says the
+  description changed and holds no text.
+- Entries are dated and ordered by the server's clock. A change made offline is dated when
+  it synced.
+- A change that was not applied because of a conflict is recorded too; see
+  [Offline changes and conflicts](#offline-changes-and-conflicts).
+- A comment is human-facing: something a person writes to themselves or to others in the
+  workspace. Comments can be edited and deleted after posting, and are ordered by when the
+  server received them.
+- The log and comments are kept on the device, so the timeline can be read offline.
 
 ### Closed and deleted tasks
 
 Done and cancelled tasks leave the board's main area, which stays focused on actionable
 work. They remain reachable in the closed zone. Deleting a task sends it to a trash with
 restore, as in Catch.
+
+- A subtask is in the trash while its parent is, and a task while its project is.
+  Restoring the parent or project brings them back.
+- A task in the trash can still receive a change made earlier on an offline device. It
+  stays in the trash.
+- The trash is emptied only by hand. Nothing is purged automatically.
 
 ## The project board
 
@@ -180,7 +224,7 @@ motion.
 - The backlog panel is open by default when space allows, collapses to a strip, and expands
   to a full-width gallery.
 - The closed strip expands on click to a single column, and from there to a full-width
-  gallery. Closed tasks are sorted by completion time **(assumed)**.
+  gallery. Closed tasks are sorted by when they were closed.
 - During a drag, each side zone turns into a column of dropzones, one per status in its
   category.
 
@@ -226,7 +270,8 @@ While a card is dragged within a column:
 A board over every project in the workspace **(assumed scope)**.
 
 - One column per category instead of per status, since categories are all that projects
-  share. Done is shown open by default.
+  share. Done is shown open by default. Cancelled is the last column and is collapsed by
+  default.
 - Cards are colored by project, because tag colors mean different things in each project.
 - Columns are banded vertically by priority rank. On wide displays a column can lay its
   cards out as a masonry grid within each band.
@@ -285,11 +330,13 @@ board, and Search shows the workspace search placeholder.
   by position, otherwise the create-project prompt.
 
 Workspace and project segments are UUIDs so names and future task prefixes can change
-without breaking bookmarks. Future task paths can have their own segment (for example
-`/w/:workspaceId/p/:projectId/tasks/CAT-12`); choosing the task identifier scheme remains
-separate work. A direct project URL keeps its view on reload. Selecting a project from
-navigation opens its board; the shell remembers the last project separately per workspace.
-Projects append by position. Deletion is permanent and requires confirmation.
+without breaking bookmarks. A future task path has its own segment holding the task's
+UUID, not its identifier: a task created offline has no number yet, and a project's key
+can change (ADR 0007). A direct project URL keeps its view on reload. Selecting a project
+from navigation opens its board; the shell remembers the last project separately per
+workspace. Projects append by position. Deleting a project is permanent in the shell as
+built and requires confirmation; it moves to the trash once the task model is built (see
+[Project](#project)).
 
 The shell's backlog and board bodies are placeholders. The backlog drawer and task-specific
 dock interactions arrive with the board feature; search and the command palette arrive later.
@@ -303,26 +350,42 @@ dock interactions arrive with the board feature; search and the command palette 
   queued writes and Capacitor for Android.
 - Shapes are filtered by workspace and project membership, not by user ID as in Catch.
 
+### Offline changes and conflicts
+
+The server is the arbiter of truth. Working offline is a convenience that should lose as
+little as possible; it is not the normal way to use the app (ADR 0005).
+
+- A change made offline is applied when it syncs, unless the same field of the same task
+  was changed on the server in the meantime. Then the server's value stands. A device
+  coming back online never undoes newer work.
+- The rule is per field. Changing a task's title on one device and its status on another
+  keeps both.
+- A change that is not applied is not lost: it is recorded in the task's activity log with
+  the value that was wanted, and can be made again by hand. For a description, the log
+  keeps the text that was not applied.
+- No device clock is involved. Which change came first is decided by the order they reach
+  the server.
+- A reorder made offline is ignored if the card has since left that column.
+- A task created offline is never dropped because its status was deleted meanwhile. It
+  lands in the project's default status.
+
 ## Open questions
 
 1. **Android application ID.** `throw` is a Java keyword, so it cannot be
    `org.iloni.throw`. The Capacitor config uses `org.iloni.throwtasks` as a placeholder.
-2. **Offline conflicts.** The proposal is last write wins per field, not per task. Not
-   confirmed.
-3. **Activity log while offline.** Whether the server derives log entries from applied
-   writes or the client queues them.
-4. **Subtask underlay.** Whether tapping a subtask shows a pop-out card with quick actions,
+2. **Subtask underlay.** Whether tapping a subtask shows a pop-out card with quick actions,
    or goes straight to the full subtask view. Changing a subtask's status in place was also
    proposed.
-5. **Priority zones at rest.** Whether a column shows priority dividers all the time or only
+3. **Priority zones at rest.** Whether a column shows priority dividers all the time or only
    during a drag.
-6. **Cancelled.** Whether a cancelled task takes a reason, and whether the cross-project
-   board shows cancelled work in its last column.
-7. **Search scope.** Presumably the current workspace with a project filter.
-8. **Membership.** Whether a future member joins a whole workspace, a single project, or
-   either.
-9. **Identifier prefix.** How a project's key is chosen and whether it can change.
-10. **Single sign-on.** Accepting an external OIDC provider in both apps would give shared
-    login without coupling them. Not decided.
-11. **Deployment.** How one Compose stack runs either or both apps when they live in
-    separate repositories.
+4. **Search scope.** Presumably the current workspace with a project filter. It does not
+   affect the task schema: a workspace's tasks are on the device, so search can run there.
+5. **Membership.** Whether a future member joins a whole workspace, a single project, or
+   either. Tasks and the rows under them carry both a workspace and a project, so either
+   answer can filter them without a migration.
+6. **Single sign-on.** Accepting an external OIDC provider in both apps would give shared
+   login without coupling them. Not decided.
+7. **Deployment.** How one Compose stack runs either or both apps when they live in
+   separate repositories.
+8. **Refused changes.** How the app tells the user that a change made offline was not
+   applied, beyond the entry in the task's log.
