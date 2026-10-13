@@ -1,7 +1,7 @@
 # Opt-in AI code review
 
-Throw uses [cubic](https://www.cubic.dev/) for an optional code review before merge
-approval. Add `ai review` to an open PR targeting `main` when the code is ready,
+Throw's opt-in workflow requests [cubic](https://www.cubic.dev/) reviews before merge
+approval once the owner connects the GitHub App. Add `ai review` to an open PR targeting `main` when the code is ready,
 including while it is a draft. The
 [AI review workflow](../.github/workflows/ai-review.yml) posts
 `@cubic-dev-ai review this PR` and records the current head commit.
@@ -21,32 +21,37 @@ the job can also succeed after skipping an unauthorized, stale, or duplicate
 request. Do not make this job or cubic's check required in branch protection while
 evaluating the reviewer.
 
-## One-time setup
+## GitHub App setup
 
-1. Sign in at [cubic.dev/sign-up](https://www.cubic.dev/sign-up) with your GitHub
-   account and install its GitHub App. Select **Only select repositories** and
-   choose `iiloni/throw`.
-2. Before this change lands on `main`, open cubic's **AI review settings** for
-   Throw and turn off **AI reviews** for this repository. Explicit comment
-   requests still work with that switch off. Disable automatic incremental
-   reviews, auto-approval, automatic PR descriptions and code fixes too, and
-   allow draft reviews. There is no need to configure branch ignore patterns.
-   Once merged, `cubic.yaml` supplies these settings.
-3. Merge the setup PR through Throw's normal approval and validation process.
-   Both the workflow and `cubic.yaml` need to be on `main` before the complete
-   setup takes effect. cubic reads its configuration from the default branch,
-   not the PR's feature branch. Once merged, verify cubic's settings show the
-   repository YAML configuration without validation errors.
-4. Keep the public repository on cubic's free plan. Public repositories use a
-   separate fair-use allowance rather than the private free plan's 20-review
-   quota. That allowance has no published numerical guarantee. No paid plan,
-   cubic API key, PAT, or repository secret is needed for this workflow.
-5. On a draft PR targeting `main`, add `ai review` with your GitHub account or
-   normal authenticated `gh` session. Confirm the **AI review** workflow posts a
-   request, then wait for cubic's acknowledgement and completed review. Remove
-   and reapply the label if it was already present before the workflow landed.
+The workflow, `cubic.yaml` and `ai review` label are already on Throw's default branch.
+They do not install or connect the GitHub App. The repository owner must grant cubic
+access in a browser, then verify the connection and a completed review separately.
 
-The `ai review` label is created during setup. To recreate it if needed:
+1. Open [GitHub Settings → Applications → Installed GitHub Apps](https://github.com/settings/installations).
+   Find cubic and choose **Configure**. Under **Only select repositories**, add
+   `iiloni/throw`, keep the existing repository selections, and **Save**. If cubic is
+   not installed, sign in at [cubic.dev/sign-up](https://www.cubic.dev/sign-up) with
+   GitHub, install its GitHub App on the `iiloni` account and select Throw.
+2. In cubic's **AI review settings**, select **Throw**, not all repositories. Confirm
+   that its default-branch YAML is loaded without validation errors. The YAML disables
+   automatic and incremental reviews, auto-approval, automatic PR descriptions and
+   comment/button fixes, and allows requested draft reviews. If YAML is not active,
+   keep those automatic features off in Throw's settings while investigating.
+3. Keep public Throw on cubic's free plan. Public repositories use a separate fair-use
+   allowance with no published numerical guarantee. Private repositories on the free
+   plan use the shared 20-review monthly quota. No cubic API key, PAT or repository
+   secret is needed by Throw's review-request workflow.
+4. With explicit developer approval, add `ai review` to a draft PR targeting `main`
+   using the owner's GitHub account or normal authenticated `gh` session. Confirm
+   that the **AI review** workflow posts a request, then wait for cubic's acknowledgement
+   and completed review. The successful request job alone does not verify the App
+   connection or review completion. See [Troubleshooting](#troubleshooting) if cubic
+   does not respond.
+
+cubic reads configuration from the default branch, not the PR's feature branch. Future
+configuration changes go through Throw's normal PR approval and validation process.
+
+The `ai review` label already exists. To recreate it if needed:
 
 ```bash
 gh label create 'ai review' --color 1D76DB \
