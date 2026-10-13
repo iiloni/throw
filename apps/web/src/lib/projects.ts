@@ -1,4 +1,11 @@
-import { COLORS, comparePositions, type Project, positionBetween } from '@throw/shared';
+import {
+  COLORS,
+  comparePositions,
+  type Project,
+  positionBetween,
+  type UpdateProject,
+  updateProjectSchema,
+} from '@throw/shared';
 import { uuidv7 } from 'uuidv7';
 import { projectsCollection, write } from './collections';
 
@@ -10,7 +17,11 @@ export function projectsIn(projects: readonly Project[], workspaceId: string) {
 }
 
 /** Adds a project at the end of its workspace, in the next color nobody there has taken. */
-export function createProject(workspaceId: string, name: string) {
+export function createProject(
+  workspaceId: string,
+  name: string,
+  appearance?: Pick<Project, 'color' | 'icon'>,
+) {
   const siblings = projectsIn([...projectsCollection.values()], workspaceId);
   const used = new Set(siblings.map((project) => project.color));
   const id = uuidv7();
@@ -22,9 +33,15 @@ export function createProject(workspaceId: string, name: string) {
       color: COLORS.find((color) => !used.has(color)) ?? COLORS[siblings.length % COLORS.length]!,
       icon: null,
       position: positionBetween(siblings.at(-1)?.position ?? null, null),
+      ...appearance,
     });
   });
   return id;
+}
+
+export function updateProject(id: string, changes: UpdateProject) {
+  const valid = updateProjectSchema.parse(changes);
+  write(() => projectsCollection.update(id, (project) => Object.assign(project, valid)));
 }
 
 export function deleteProject(id: string) {

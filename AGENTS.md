@@ -9,9 +9,11 @@ Read `docs/spec.md` before building a feature: it says what the product is and w
 of scope. Read `docs/decisions/` before changing architecture. If a decision or the spec no
 longer holds, update it in the same change rather than working around it.
 
-The repository is a scaffold. What exists is the stack end to end (auth, sync, the outbox,
-local persistence) with two synced tables, workspaces and projects, and a placeholder home
-page. Tasks, statuses, tags, the board and the navigation in the spec are not built yet.
+The repository has the stack end to end (auth, sync, the outbox, local persistence), two
+synced tables (workspaces and projects), and the responsive app shell. The shell owns
+workspace and project management, a desktop navigation rail, a phone dock and remembered
+navigation. Its project/backlog and cross-project board bodies are placeholders. Tasks,
+statuses, tags and the board itself are not built yet.
 
 ## Layout
 
@@ -306,7 +308,8 @@ ids. Do not add a dependency on Catch's repository; the two release independentl
 - Sign-up closes after the first account unless `REGISTRATION=open`, which dev stacks set.
   Catch's invite links have not been ported, so a closed server has one account.
 - The app draws edge to edge. Pad fixed UI with the `--safe-top` / `--safe-bottom` tokens.
-  `--keyboard` and `--dock-*` exist in `styles.css` but nothing sets or uses them yet.
+  The shell sets `--keyboard` through browser viewport/VirtualKeyboard tracking and uses
+  `--dock-*` for the phone dock. Native keyboard animation tracking is not ported yet.
 - TanStack DB is pre-1.0. Keep its usage inside `src/lib/collections.ts`, `src/lib/localStore.ts`
   and route files so upgrades stay contained.
 - Bump a collection's `schemaVersion` in `collections.ts` whenever the columns its shape syncs

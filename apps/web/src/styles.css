@@ -273,3 +273,44 @@
     cursor: pointer;
   }
 }
+
+@keyframes shell-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes shell-menu-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.shell-menu {
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin);
+}
+.shell-menu[data-state="open"] {
+  animation: shell-menu-in 200ms var(--ease-emphasized);
+}
+.shell-menu[data-state="closed"] {
+  animation: shell-menu-out 120ms ease-in;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: Motion preference overrides all component animations. */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: Prevent repeating motion when reduced motion is requested. */
+    animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: Override Tailwind transition utilities. */
+    transition-duration: 0.01ms !important;
+  }
+}
