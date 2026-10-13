@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { Button } from '@/components/ui/button';
+import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { CardList } from './CardList';
@@ -61,7 +62,7 @@ export function DesktopBoard() {
       {/* Stands where the navigation rail will be. */}
       <nav
         aria-label="Projects"
-        className="flex w-[4.5rem] shrink-0 flex-col items-center gap-2 pt-[calc(var(--safe-top)+1.5rem)] pb-5"
+        className="flex w-[4.5rem] shrink-0 flex-col items-center gap-2 pt-[calc(var(--safe-top)+1.25rem)] pb-6"
       >
         {state.boards.map(({ project: item }) => (
           <button
@@ -83,73 +84,67 @@ export function DesktopBoard() {
           </button>
         ))}
         <span className="flex-1" />
+        <IconButton
+          label={
+            state.subtasksAsCards ? 'Keep subtasks with their parent' : 'Show subtasks as cards'
+          }
+          aria-pressed={state.subtasksAsCards}
+          onClick={() => update({ subtasksAsCards: !state.subtasksAsCards })}
+          className={cn('size-10', state.subtasksAsCards && 'bg-accent')}
+        >
+          <ListTree />
+        </IconButton>
         <PrototypePanel />
       </nav>
 
       <div ref={frame} className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-[5.5rem] shrink-0 items-center gap-3 pr-6 pl-2">
-          <h1 className="font-display font-extrabold text-[2.25rem] leading-none tracking-[-0.03em]">
-            {project.name}
-          </h1>
-          <span className="flex-1" />
-          <IconButton
-            label={
-              state.subtasksAsCards ? 'Keep subtasks with their parent' : 'Show subtasks as cards'
-            }
-            aria-pressed={state.subtasksAsCards}
-            onClick={() => update({ subtasksAsCards: !state.subtasksAsCards })}
-            className={cn('size-10', state.subtasksAsCards && 'bg-accent')}
-          >
-            <ListTree />
-          </IconButton>
-        </header>
-
-        <div className="flex min-h-0 flex-1 pr-6 pb-6">
+        {/* No title row: the rail names the project, and the board keeps the height. */}
+        <div className="flex min-h-0 flex-1 pt-[calc(var(--safe-top)+1.25rem)] pr-6 pb-6">
           <div ref={row} className="flex min-w-0 flex-1" style={{ gap: ZONE_GAP }}>
             <SideZone zone="backlog" fullWidth={fullWidth} />
-            <div
-              data-origin="active"
-              data-autoscroll-x=""
-              className={cn(
-                'flex min-w-0 flex-1 gap-3',
-                covered ? 'overflow-hidden' : 'overflow-x-auto overflow-y-hidden',
-              )}
-            >
-              {covered
-                ? dragging && (
-                    <motion.div
-                      className="flex shrink-0 flex-col gap-2.5 p-1"
-                      style={{ width: TILES_WIDTH }}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                    >
-                      <p className="px-1 pt-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
-                        Active
-                      </p>
-                      {active.map((status) => (
-                        <StatusTile key={status.id} status={status} />
-                      ))}
-                    </motion.div>
-                  )
-                : active.map((status) => (
-                    <CardList
-                      key={status.id}
-                      listId={`status:${status.id}`}
-                      surface
-                      className="min-w-[17.5rem] max-w-[27rem] flex-1 pb-2"
-                      header={
-                        <div className="flex h-14 shrink-0 items-center gap-2.5 px-5">
-                          <h2 className="truncate font-display font-semibold text-lg tracking-[-0.01em]">
-                            {status.name}
-                          </h2>
-                          <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-muted-foreground text-xs tabular-nums">
-                            {countIn(state, status.id)}
-                          </span>
-                        </div>
-                      }
-                    />
-                  ))}
-            </div>
+            <ScrollArea className="flex-1">
+              <ScrollAreaViewport
+                data-origin="active"
+                data-autoscroll-x=""
+                className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3"
+              >
+                {covered
+                  ? dragging && (
+                      <motion.div
+                        className="flex shrink-0 flex-col gap-2.5 p-1"
+                        style={{ width: TILES_WIDTH }}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                      >
+                        <p className="px-1 pt-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
+                          Active
+                        </p>
+                        {active.map((status) => (
+                          <StatusTile key={status.id} status={status} />
+                        ))}
+                      </motion.div>
+                    )
+                  : active.map((status) => (
+                      <CardList
+                        key={status.id}
+                        listId={`status:${status.id}`}
+                        surface
+                        className="min-w-[17.5rem] max-w-[27rem] flex-1 pb-2"
+                        header={
+                          <div className="flex h-14 shrink-0 items-center gap-2.5 px-5">
+                            <h2 className="truncate font-display font-semibold text-lg tracking-[-0.01em]">
+                              {status.name}
+                            </h2>
+                            <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-muted-foreground text-xs tabular-nums">
+                              {countIn(state, status.id)}
+                            </span>
+                          </div>
+                        }
+                      />
+                    ))}
+              </ScrollAreaViewport>
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
             <SideZone zone="closed" fullWidth={fullWidth} />
           </div>
 

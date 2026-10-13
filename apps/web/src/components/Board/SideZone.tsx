@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { IconButton } from '@/components/IconButton/IconButton';
+import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { CardList } from './CardList';
@@ -50,6 +51,9 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
   const tiles = dragging && held.origin !== zone;
   const width =
     view === 'full' ? fullWidth : view === 'panel' ? PANEL_WIDTH[variants.sideWidth] : STRIP_WIDTH;
+  const surface = variants.surfaces
+    ? 'color-mix(in oklab, var(--foreground) 3.5%, transparent)'
+    : undefined;
   const other = zone === 'backlog' ? 'closed' : 'backlog';
   // A gallery takes the board, so the opposite zone steps back to its strip.
   const setView = (next: ZoneState) =>
@@ -94,11 +98,12 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
             type="button"
             aria-label={`Open ${title.toLowerCase()}, ${count} tasks`}
             onClick={() => setView('panel')}
-            className="group absolute inset-0 flex flex-col items-center gap-4 rounded-3xl bg-foreground/[0.035] pt-5 text-muted-foreground outline-none transition-colors hover:bg-foreground/[0.06] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60"
+            className="group absolute inset-0 flex flex-col items-center gap-4 rounded-3xl pt-5 text-muted-foreground outline-none transition-colors hover:bg-foreground/[0.06] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.16 }}
+            style={{ backgroundColor: surface }}
           >
             <Icon className="size-5" aria-hidden />
             <span className="font-display font-semibold text-sm [writing-mode:vertical-rl]">
@@ -109,10 +114,10 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
         ) : (
           <motion.div
             key="open"
-            className="absolute inset-y-0 flex min-h-0 flex-col rounded-3xl bg-foreground/[0.035]"
+            className="absolute inset-y-0 flex min-h-0 flex-col rounded-3xl"
             // Laid out at its resting width from the start, so opening reveals the cards
             // instead of re-wrapping them at every width on the way.
-            style={{ width, [zone === 'backlog' ? 'left' : 'right']: 0 }}
+            style={{ width, backgroundColor: surface, [zone === 'backlog' ? 'left' : 'right']: 0 }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -141,11 +146,20 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
                 className="flex-1"
               />
             ) : (
-              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3.5 pt-1 pb-4">
-                {listTasks(state, 'closed').map((task) => (
-                  <TaskCard key={task.id} task={task} showStatus={state.closedFilter === null} />
-                ))}
-              </div>
+              <ScrollArea className="flex-1 [--scrollbar-inset:0.5rem]">
+                <ScrollAreaViewport>
+                  <div className="space-y-3 px-3.5 pt-1 pb-4">
+                    {listTasks(state, 'closed').map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        showStatus={state.closedFilter === null}
+                      />
+                    ))}
+                  </div>
+                </ScrollAreaViewport>
+                <ScrollBar />
+              </ScrollArea>
             )}
           </motion.div>
         )}
@@ -226,23 +240,28 @@ function Gallery({ zone }: { zone: Zone }) {
       ? groupByPriority(tasks).filter((group) => group.tasks.length > 0)
       : [{ priority: null, tasks }];
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-1 pb-5">
-      {bands.map((band) => (
-        <section key={band.priority ?? 'all'}>
-          {band.priority !== null && (
-            <h3 className="zone-header" data-mode="label">
-              <span className="zone-header-face">{priorityName(project, band.priority)}</span>
-            </h3>
-          )}
-          <div className="columns-[17rem] gap-4 pb-3">
-            {band.tasks.map((task) => (
-              <div key={task.id} className="mb-4 break-inside-avoid">
-                <TaskCard task={task} showStatus={filter === null} />
+    <ScrollArea className="flex-1 [--scrollbar-inset:0.5rem]">
+      <ScrollAreaViewport>
+        <div className="px-5 pt-1 pb-5">
+          {bands.map((band) => (
+            <section key={band.priority ?? 'all'}>
+              {band.priority !== null && (
+                <h3 className="zone-header" data-mode="label">
+                  <span className="zone-header-face">{priorityName(project, band.priority)}</span>
+                </h3>
+              )}
+              <div className="columns-[17rem] gap-4 pb-3">
+                {band.tasks.map((task) => (
+                  <div key={task.id} className="mb-4 break-inside-avoid">
+                    <TaskCard task={task} showStatus={filter === null} />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </section>
-      ))}
-    </div>
+            </section>
+          ))}
+        </div>
+      </ScrollAreaViewport>
+      <ScrollBar />
+    </ScrollArea>
   );
 }

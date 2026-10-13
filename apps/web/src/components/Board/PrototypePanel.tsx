@@ -171,6 +171,16 @@ export function PrototypePanel({ side = 'right' }: { side?: 'right' | 'bottom' }
                 onChange={(value) => set('sideWidth', value)}
               />
               <Choice
+                label="Column surfaces"
+                hint="A faint surface behind each zone and column, as in Catch's deck."
+                value={variants.surfaces}
+                options={[
+                  [true, 'Shown'],
+                  [false, 'Bare'],
+                ]}
+                onChange={(value) => set('surfaces', value)}
+              />
+              <Choice
                 label="Theme"
                 value={theme}
                 options={[

@@ -29,6 +29,8 @@ export const variantsSchema = z.object({
   subtaskStatusInPlace: z.boolean().default(true),
   phoneMoves: z.enum(['grid', 'strip', 'sheet']).default('grid'),
   sideWidth: z.enum(['compact', 'roomy']).default('compact'),
+  /** Whether zones and columns sit on a faint surface of their own. */
+  surfaces: z.boolean().default(true),
 });
 export type Variants = z.infer<typeof variantsSchema>;
 export const DEFAULT_VARIANTS: Variants = variantsSchema.parse({});

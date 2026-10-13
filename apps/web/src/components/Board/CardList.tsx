@@ -1,4 +1,5 @@
 import { Fragment, type ReactNode } from 'react';
+import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { CARD_SPACING, drag } from './drag';
 import { groupByPriority, type Priority, priorityName, taskColor } from './model';
@@ -59,121 +60,124 @@ export function CardList({ listId, header, showStatus, endSpace, surface, classN
     <section
       data-drop-list={listId}
       data-over={over ? '' : undefined}
-      data-surface={surface ? '' : undefined}
+      data-surface={surface && variants.surfaces ? '' : undefined}
       className={cn('board-column relative flex min-h-0 min-w-0 flex-col rounded-3xl', className)}
     >
       {header}
-      <div data-autoscroll className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        <div
-          className="flex min-h-full flex-col px-3.5 pt-1 pb-1"
-          style={endSpace ? { paddingBottom: endSpace } : undefined}
-        >
-          {groups.map(({ priority, tasks: zone }, groupIndex) => {
-            const headerMode = mode(priority, zone.length);
-            const folded = stretch && priority !== open;
-            const accepts = stretch ? priority === open : inPlace;
-            const name = priorityName(project, priority);
-            const placed = zone.filter((task) => !lifted(task.id));
-            return (
-              <Fragment key={priority}>
-                <div
-                  data-zone-header={priority}
-                  data-drop-rail={headerMode === 'rail' ? priority : undefined}
-                  data-mode={headerMode}
-                  data-current={place?.priority === priority ? '' : undefined}
-                  data-charging={
-                    held?.rail?.listId === listId && held.rail.priority === priority
-                      ? ''
-                      : undefined
-                  }
-                  // A little air between zones when nothing else separates them.
-                  data-breath={
-                    variants.zonesAtRest === 'edge' &&
-                    zone.length > 0 &&
-                    groups.slice(0, groupIndex).some((group) => group.tasks.length > 0)
-                      ? ''
-                      : undefined
-                  }
-                  className="zone-header"
-                  style={
-                    headerMode === 'rail'
-                      ? priority < (open ?? 0)
-                        ? { top: priority * RAIL }
-                        : { bottom: (4 - priority) * RAIL }
-                      : undefined
-                  }
-                >
-                  <div className="zone-header-face">
-                    <span className="truncate">{name}</span>
-                    {headerMode === 'rail' && (
-                      <>
-                        <span aria-hidden className="flex min-w-0 flex-1 items-center gap-0.5">
-                          {placed.slice(0, 12).map((task) => (
-                            <span
-                              key={task.id}
-                              data-color={taskColor(project, task) ?? undefined}
-                              className="h-1.5 w-3 shrink-0 rounded-full bg-[var(--tint-accent,var(--muted-foreground))] opacity-60"
-                            />
-                          ))}
-                        </span>
-                        <span className="tabular-nums opacity-70">{placed.length || ''}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-                {accepts && (
-                  <Gap
-                    active={place?.priority === priority && place.index === 0}
-                    height={gapHeight}
-                  />
-                )}
-                {zone.map((task) => {
-                  // Same element either way, or React would remount the card mid-touch.
-                  const away = lifted(task.id);
-                  const index = placed.indexOf(task);
-                  return (
-                    <Fragment key={task.id}>
-                      <div
-                        data-slot={task.id}
-                        data-zone={priority}
-                        hidden={away}
-                        data-folded={folded ? '' : undefined}
-                        data-dim={inPlace && place?.priority !== priority ? '' : undefined}
-                        className="board-slot"
-                      >
-                        <div>
-                          <div className="relative pb-3">
-                            {variants.zonesAtRest === 'edge' && (
+      <ScrollArea className="flex-1 [--scrollbar-inset:0.5rem]">
+        <ScrollAreaViewport data-autoscroll="">
+          <div
+            className="flex flex-1 flex-col px-3.5 pt-1 pb-1"
+            style={endSpace ? { paddingBottom: endSpace } : undefined}
+          >
+            {groups.map(({ priority, tasks: zone }, groupIndex) => {
+              const headerMode = mode(priority, zone.length);
+              const folded = stretch && priority !== open;
+              const accepts = stretch ? priority === open : inPlace;
+              const name = priorityName(project, priority);
+              const placed = zone.filter((task) => !lifted(task.id));
+              return (
+                <Fragment key={priority}>
+                  <div
+                    data-zone-header={priority}
+                    data-drop-rail={headerMode === 'rail' ? priority : undefined}
+                    data-mode={headerMode}
+                    data-current={place?.priority === priority ? '' : undefined}
+                    data-charging={
+                      held?.rail?.listId === listId && held.rail.priority === priority
+                        ? ''
+                        : undefined
+                    }
+                    // A little air between zones when nothing else separates them.
+                    data-breath={
+                      variants.zonesAtRest === 'edge' &&
+                      zone.length > 0 &&
+                      groups.slice(0, groupIndex).some((group) => group.tasks.length > 0)
+                        ? ''
+                        : undefined
+                    }
+                    className="zone-header"
+                    style={
+                      headerMode === 'rail'
+                        ? priority < (open ?? 0)
+                          ? { top: priority * RAIL }
+                          : { bottom: (4 - priority) * RAIL }
+                        : undefined
+                    }
+                  >
+                    <div className="zone-header-face">
+                      <span className="truncate">{name}</span>
+                      {headerMode === 'rail' && (
+                        <>
+                          <span aria-hidden className="flex min-w-0 flex-1 items-center gap-0.5">
+                            {placed.slice(0, 12).map((task) => (
                               <span
-                                aria-hidden
-                                data-rank={priority}
-                                data-first={index === 0 ? '' : undefined}
-                                data-last={index === placed.length - 1 ? '' : undefined}
-                                className="zone-edge"
+                                key={task.id}
+                                data-color={taskColor(project, task) ?? undefined}
+                                className="h-1.5 w-3 shrink-0 rounded-full bg-[var(--tint-accent,var(--muted-foreground))] opacity-60"
                               />
-                            )}
-                            <TaskCard task={task} showStatus={showStatus} />
+                            ))}
+                          </span>
+                          <span className="tabular-nums opacity-70">{placed.length || ''}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {accepts && (
+                    <Gap
+                      active={place?.priority === priority && place.index === 0}
+                      height={gapHeight}
+                    />
+                  )}
+                  {zone.map((task) => {
+                    // Same element either way, or React would remount the card mid-touch.
+                    const away = lifted(task.id);
+                    const index = placed.indexOf(task);
+                    return (
+                      <Fragment key={task.id}>
+                        <div
+                          data-slot={task.id}
+                          data-zone={priority}
+                          hidden={away}
+                          data-folded={folded ? '' : undefined}
+                          data-dim={inPlace && place?.priority !== priority ? '' : undefined}
+                          className="board-slot"
+                        >
+                          <div>
+                            <div className="relative pb-3">
+                              {variants.zonesAtRest === 'edge' && (
+                                <span
+                                  aria-hidden
+                                  data-rank={priority}
+                                  data-first={index === 0 ? '' : undefined}
+                                  data-last={index === placed.length - 1 ? '' : undefined}
+                                  className="zone-edge"
+                                />
+                              )}
+                              <TaskCard task={task} showStatus={showStatus} />
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      {accepts && !away && (
-                        <Gap
-                          active={place?.priority === priority && place.index === index + 1}
-                          height={gapHeight}
-                        />
-                      )}
-                    </Fragment>
-                  );
-                })}
-                {stretch && priority === open && <div className="min-h-6 flex-1" />}
-              </Fragment>
-            );
-          })}
-          {tasks.length === 0 && !dragging && (
-            <p className="px-1 py-10 text-center text-muted-foreground text-sm">Nothing here.</p>
-          )}
-        </div>
-      </div>
+                        {accepts && !away && (
+                          <Gap
+                            active={place?.priority === priority && place.index === index + 1}
+                            height={gapHeight}
+                          />
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                  {stretch && priority === open && <div className="min-h-6 flex-1" />}
+                </Fragment>
+              );
+            })}
+            {tasks.length === 0 && !dragging && (
+              <p className="px-1 py-10 text-center text-muted-foreground text-sm">Nothing here.</p>
+            )}
+          </div>
+        </ScrollAreaViewport>
+        <ScrollBar />
+      </ScrollArea>
       {over && target.kind === 'list' && held && (
         <p className="pointer-events-none absolute inset-x-3 bottom-4 rounded-2xl bg-foreground py-2 text-center font-medium text-background text-sm">
           Move {held.ids.length} here

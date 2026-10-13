@@ -148,7 +148,7 @@ export function PhoneBoard() {
         <div data-origin="closed" className="flex w-full shrink-0 snap-center flex-col">
           <StatusFilter zone="closed" />
           <div
-            className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3.5 pt-1"
+            className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3.5 pt-1 [scrollbar-width:none]"
             style={{ paddingBottom: DOCK_SPACE }}
           >
             {listTasks(state, 'closed').map((task) => (

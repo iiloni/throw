@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { motion, useDragControls, useReducedMotion } from 'motion/react';
 import { type PointerEvent, useRef, useState } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
+import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { PriorityGlyph, StatusGlyph } from './glyphs';
@@ -22,80 +23,85 @@ function TaskBody({ task }: { task: Task }) {
     .map((id) => project.tags.find((tag) => tag.id === id))
     .filter((tag) => tag !== undefined);
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-8 pb-12">
-      {parent && (
-        <button
-          type="button"
-          onClick={() => update({ openTaskId: parent.id })}
-          className="mb-1 max-w-full truncate rounded text-foreground/60 text-sm underline-offset-4 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/60"
-        >
-          {identifier(project, parent)} {parent.title}
-        </button>
-      )}
-      <h2 className="font-display font-semibold text-[1.75rem] leading-[1.15] tracking-[-0.02em] [overflow-wrap:anywhere]">
-        {task.title}
-      </h2>
-      <div className="mt-5 flex flex-wrap gap-2">
-        {status && (
-          <StatusMenu
-            project={project}
-            value={status.id}
-            onSelect={(statusId) => sendTasks([task.id], statusId)}
-          >
-            <button type="button" className={cn(chip, 'hover:bg-foreground/[0.12]')}>
-              <StatusGlyph category={status.category} />
-              {status.name}
+    <ScrollArea className="flex-1 [--scrollbar-inset:1rem]">
+      <ScrollAreaViewport>
+        <div className="px-8 pb-12">
+          {parent && (
+            <button
+              type="button"
+              onClick={() => update({ openTaskId: parent.id })}
+              className="mb-1 max-w-full truncate rounded text-foreground/60 text-sm underline-offset-4 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/60"
+            >
+              {identifier(project, parent)} {parent.title}
             </button>
-          </StatusMenu>
-        )}
-        <span className={chip}>
-          <PriorityGlyph priority={task.priority} name={priorityName(project, task.priority)} />
-          {priorityName(project, task.priority)}
-        </span>
-        {tags.map((tag) => (
-          <span key={tag.id} className={chip}>
-            {tag.name}
-          </span>
-        ))}
-      </div>
-      <p className="mt-8 max-w-prose text-[0.9375rem] text-foreground/85 leading-relaxed">
-        {task.description ??
-          'The description is written here, in the same editor as a Catch note. This pane is a placeholder: the prototype is about how the board gives it room.'}
-      </p>
-      {subtasks.length > 0 && (
-        <>
+          )}
+          <h2 className="font-display font-semibold text-[1.75rem] leading-[1.15] tracking-[-0.02em] [overflow-wrap:anywhere]">
+            {task.title}
+          </h2>
+          <div className="mt-5 flex flex-wrap gap-2">
+            {status && (
+              <StatusMenu
+                project={project}
+                value={status.id}
+                onSelect={(statusId) => sendTasks([task.id], statusId)}
+              >
+                <button type="button" className={cn(chip, 'hover:bg-foreground/[0.12]')}>
+                  <StatusGlyph category={status.category} />
+                  {status.name}
+                </button>
+              </StatusMenu>
+            )}
+            <span className={chip}>
+              <PriorityGlyph priority={task.priority} name={priorityName(project, task.priority)} />
+              {priorityName(project, task.priority)}
+            </span>
+            {tags.map((tag) => (
+              <span key={tag.id} className={chip}>
+                {tag.name}
+              </span>
+            ))}
+          </div>
+          <p className="mt-8 max-w-prose text-[0.9375rem] text-foreground/85 leading-relaxed">
+            {task.description ??
+              'The description is written here, in the same editor as a Catch note. This pane is a placeholder: the prototype is about how the board gives it room.'}
+          </p>
+          {subtasks.length > 0 && (
+            <>
+              <h3 className="mt-8 mb-2 font-semibold text-foreground/60 text-xs uppercase tracking-[0.06em]">
+                Subtasks
+              </h3>
+              <ul>
+                {subtasks.map((subtask) => {
+                  const subtaskStatus = statusById(project, subtask.statusId);
+                  return (
+                    <li key={subtask.id}>
+                      <button
+                        type="button"
+                        onClick={() => update({ openTaskId: subtask.id })}
+                        className="flex min-h-10 w-full items-center gap-2.5 rounded-xl px-2 text-left text-sm outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/60"
+                      >
+                        {subtaskStatus && <StatusGlyph category={subtaskStatus.category} />}
+                        <span className="min-w-0 flex-1 truncate">{subtask.title}</span>
+                        <span className="text-foreground/50 text-xs">{subtaskStatus?.name}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
           <h3 className="mt-8 mb-2 font-semibold text-foreground/60 text-xs uppercase tracking-[0.06em]">
-            Subtasks
+            Activity
           </h3>
-          <ul>
-            {subtasks.map((subtask) => {
-              const subtaskStatus = statusById(project, subtask.statusId);
-              return (
-                <li key={subtask.id}>
-                  <button
-                    type="button"
-                    onClick={() => update({ openTaskId: subtask.id })}
-                    className="flex min-h-10 w-full items-center gap-2.5 rounded-xl px-2 text-left text-sm outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/60"
-                  >
-                    {subtaskStatus && <StatusGlyph category={subtaskStatus.category} />}
-                    <span className="min-w-0 flex-1 truncate">{subtask.title}</span>
-                    <span className="text-foreground/50 text-xs">{subtaskStatus?.name}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </>
-      )}
-      <h3 className="mt-8 mb-2 font-semibold text-foreground/60 text-xs uppercase tracking-[0.06em]">
-        Activity
-      </h3>
-      <ol className="space-y-2 text-foreground/70 text-sm">
-        <li>Moved to {status?.name} · 2 days ago</li>
-        <li>Priority set to {priorityName(project, task.priority)} · 4 days ago</li>
-        <li>Created · last week</li>
-      </ol>
-    </div>
+          <ol className="space-y-2 text-foreground/70 text-sm">
+            <li>Moved to {status?.name} · 2 days ago</li>
+            <li>Priority set to {priorityName(project, task.priority)} · 4 days ago</li>
+            <li>Created · last week</li>
+          </ol>
+        </div>
+      </ScrollAreaViewport>
+      <ScrollBar />
+    </ScrollArea>
   );
 }
 
