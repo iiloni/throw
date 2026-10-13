@@ -77,6 +77,19 @@ const shapeMessages = z.array(
   }),
 );
 
+/** Waits for the app's own stream before a test takes already-synced data offline. */
+export function waitForShapeRow(page: Page, shape: string, name: string) {
+  return page.waitForResponse(
+    async (response) => {
+      if (!new URL(response.url()).pathname.endsWith(`/api/shapes/${shape}`) || !response.ok())
+        return false;
+      const parsed = shapeMessages.safeParse(await response.json().catch(() => null));
+      return parsed.success && parsed.data.some((message) => message.value?.name === name);
+    },
+    { timeout: APP_LOAD_TIMEOUT },
+  );
+}
+
 /**
  * The rows a shape holds for the signed-in user now, read through the server's proxy. The
  * first response is the shape as it was when Electric first built it, so this follows its

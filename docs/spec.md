@@ -249,8 +249,9 @@ view), comments and activity.
 
 ### Desktop
 
-A left-mounted navigation rail, not a bottom dock. It is narrow by default and expands on
-demand:
+A left-mounted navigation rail, not a bottom dock. Below 1200 CSS pixels it starts narrow;
+at wider desktop widths it starts expanded. An explicit expand/collapse choice is remembered
+on the device and takes precedence over window width:
 
 - Workspace switcher at the top.
 - One icon per project.
@@ -264,6 +265,34 @@ also covers jumping between projects.
 
 A bottom dock with three tabs: Backlog, Board and Search. This mirrors Catch's Gallery, Deck
 and Search. Project switching and the cross-project board live in the header's title menu.
+
+The phone layout applies below 768 CSS pixels. The title menu also switches and manages
+workspaces, and opens settings. The project dock remains on project and cross-project
+boards; settings and an empty workspace use the title menu alone. On the cross-project
+board, Backlog returns to the workspace's last project, Board keeps the cross-project
+board, and Search shows the workspace search placeholder.
+
+### Shell routes and remembered selection
+
+- `/w/:workspaceId/p/:projectId?view=board` is a project. `view=backlog` selects its
+  phone backlog and `view=search` selects the search placeholder. Search is a view of
+  the current context, not a separate search page.
+- `/w/:workspaceId/board` is the cross-project board for that workspace; `view=search`
+  shows its search placeholder.
+- `/settings` holds account and appearance controls.
+- `/` restores the device's last workspace and project for the signed-in account.
+  `/w/:workspaceId` restores that workspace's last project, otherwise its first project
+  by position, otherwise the create-project prompt.
+
+Workspace and project segments are UUIDs so names and future task prefixes can change
+without breaking bookmarks. Future task paths can have their own segment (for example
+`/w/:workspaceId/p/:projectId/tasks/CAT-12`); choosing the task identifier scheme remains
+separate work. A direct project URL keeps its view on reload. Selecting a project from
+navigation opens its board; the shell remembers the last project separately per workspace.
+Projects append by position. Deletion is permanent and requires confirmation.
+
+The shell's backlog and board bodies are placeholders. The backlog drawer and task-specific
+dock interactions arrive with the board feature; search and the command palette arrive later.
 
 ## Platform and architecture
 
