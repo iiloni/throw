@@ -1,0 +1,101 @@
+{
+  "family": "Manrope",
+  "style": "ExtraBold",
+  "weight": 800,
+  "text": "Throw",
+  "fontVersion": "Version 4.505",
+  "unitsPerEm": 2000,
+  "trackingFontUnits": -18,
+  "trackingEm": -0.009,
+  "glyphEdits": "none",
+  "inkBoundsFontUnits": [
+    20,
+    -30,
+    6026,
+    1440
+  ],
+  "positionedGlyphs": [
+    {
+      "character": "T",
+      "name": "T",
+      "x": 0,
+      "advance": 1220,
+      "kerningToNext": 0,
+      "trackingToNext": -18,
+      "bounds": [
+        20,
+        0,
+        1200,
+        1440
+      ]
+    },
+    {
+      "character": "h",
+      "name": "h",
+      "x": 1202,
+      "advance": 1272,
+      "kerningToNext": 0,
+      "trackingToNext": -18,
+      "bounds": [
+        138,
+        0,
+        1152,
+        1440
+      ]
+    },
+    {
+      "character": "r",
+      "name": "r",
+      "x": 2456,
+      "advance": 824,
+      "kerningToNext": -20,
+      "trackingToNext": -18,
+      "bounds": [
+        140,
+        0,
+        774,
+        1083.7894736842106
+      ]
+    },
+    {
+      "character": "o",
+      "name": "o",
+      "x": 3242,
+      "advance": 1254,
+      "kerningToNext": -40,
+      "trackingToNext": -18,
+      "bounds": [
+        80,
+        -30,
+        1174,
+        1110
+      ]
+    },
+    {
+      "character": "w",
+      "name": "w",
+      "x": 4438,
+      "advance": 1628,
+      "kerningToNext": 0,
+      "trackingToNext": 0,
+      "bounds": [
+        40,
+        0,
+        1588,
+        1082
+      ]
+    }
+  ],
+  "outlineScale": 0.6965986394557823,
+  "visibleInkViewBox": [
+    0,
+    0,
+    4183.77142857,
+    1024
+  ],
+  "fontSha256": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6",
+  "sourceUrl": "https://github.com/google/fonts/tree/main/ofl/manrope",
+  "license": "SIL Open Font License 1.1",
+  "licenseFile": "OFL-Manrope.txt",
+  "authority": "Frozen SVG outlines; do not recreate from an updated font."
+}

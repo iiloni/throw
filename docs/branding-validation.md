@@ -1,0 +1,82 @@
+# Branding integration validation
+
+Validated on 2026-10-13. Android project creation remains deferred by request.
+
+## Changed files
+
+| Files | Change |
+| --- | --- |
+| `throw-brand/` | All 118 supplied files preserved byte for byte, including the complete source-of-truth package, tools and manifests |
+| `scripts/generate-brand-assets.mjs` | Mechanical source-integrity check and SVG/PNG/ICO/native-resource generation for all three treatments |
+| `apps/web/public/` | Stable, preview and dev icons, favicons, touch/maskable assets and portable outlined lockups/monochrome symbols |
+| `branding/android/app/src/` | Staged density PNGs and shared API 26/33 adaptive XML; no Android project generated |
+| `apps/web/vite.config.ts`, `apps/web/index.html` | Existing channel selection wired to manifest icons, favicons and Apple touch icons |
+| `apps/web/src/components/BrandLockup/` | Responsive, theme-aware supplied artwork with detail/minimum-size handling and tests |
+| `apps/web/src/routes/login.tsx`, `setup.tsx`, `_app.tsx` | Branding on existing sign-in, server-setup and signed-in header surfaces |
+| `scripts/brand-assets.test.ts`, `e2e/branding.spec.ts` | Favicon, mask/safe-zone, themed-alpha, theme-preference and narrow/offline-layout checks |
+| `package.json`, `pnpm-lock.yaml`, `biome.json` | Locked renderer dependency, generation/integrity commands and protection against formatting the source package |
+| `docs/branding.md`, `docs/decisions/0001-stack.md`, this report and `docs/branding/` | Integration/regeneration instructions, application-theme distinction, validation and painted screenshots |
+
+Catch's local integration, branding documentation/generator and active
+[PR #112](https://github.com/iiloni/catch/pull/112) were inspected read-only. No Catch file
+was modified. Its icon-preference feature was not ported. Throw retains its existing
+build identities, explicit channel selection and distribution behavior.
+
+## Exact commands and results
+
+```bash
+python3 throw-brand/tools/derive-assets.py --check
+node scripts/generate-brand-assets.mjs
+node scripts/generate-brand-assets.mjs --check
+./scripts/dev.sh check
+./scripts/dev.sh build stable
+./scripts/dev.sh build preview
+./scripts/dev.sh build dev
+./scripts/dev.sh e2e e2e/branding.spec.ts e2e/auth.spec.ts --workers=1
+E2E_FIREFOX=1 ./scripts/dev.sh e2e e2e/branding.spec.ts --workers=1
+```
+
+- Source derivation: all 57 derived SVGs and their integrity manifest pass. All 118 source
+  files were also compared directly against the attached ZIP, with exact byte equality.
+- Platform generation/check: all 128 outputs pass with sharp 0.35.5 and librsvg 2.63.2.
+- Required repository check passes: platform integrity, lint, typechecks, unit tests and
+  production builds. Nine lockup tests and three raster/ICO/alpha tests cover this change.
+- Stable, preview and dev builds pass. Generated HTML favicon/touch links and manifest
+  icon paths were checked for each channel. Names, launch URL and theme/background colors
+  remain unchanged. The maskable purpose and icon/lockup precache entries were verified.
+- Targeted Chromium auth/branding: five passed, one existing mobile redirect case skipped
+  because it is layout-independent. The final branding run, including the 320 px header
+  with an unsaved offline write, passes on Chromium desktop, Chromium's Android layout and
+  Firefox: three passed. Browser versions: Chrome for Testing 153.0.8010.12, Firefox 155.0.
+- Ordinary icons, small/micro favicons, maskable surfaces, composed adaptive layers,
+  shared themed alpha and light/dark lettering were visually inspected for all channels.
+  Painted application screenshots were inspected as well.
+
+The local E2E suite was targeted; the full suite remains the pre-merge CI guard. Earlier
+test-harness theme resets were corrected. A reproduced narrow/offline header overflow was
+fixed by allowing the branding container to shrink to its icon fallback and keeping the
+sign-out control usable.
+
+## Representative painted screenshots
+
+[All-channel platform proof](branding/platform-proof.png) includes actual generated web
+and native resources. Native masks/tint in this proof are simulations, not launcher captures.
+
+![All-channel platform artwork and shared themed alpha](branding/platform-proof.png)
+
+[Desktop sign-in, light](branding/sign-in-light.png),
+[phone sign-in, dark](branding/sign-in-dark-phone.png),
+[phone server setup, dark](branding/server-setup-dark-phone.png), and
+[narrow offline header](branding/header-offline-narrow.png) show the existing app surfaces.
+
+## Unavailable validation
+
+No Android project, APK packaging, Gradle checks, system splash or emulator/physical
+launcher tests were performed. The resources are staged for the future project, with
+shared monochrome knockouts preserved and no extra adaptive inset/mask. Actual Android
+masking, tinting, launcher presentation and system splash must be verified after wiring.
+
+No installed-PWA OS icon refresh or physical iOS touch-icon test was performed. Native
+WebView behavior is untested; setup/sign-in use the same web SVG surfaces. The source
+package's font/license remains provenance only, and application UI colors and typography
+remain unchanged.
