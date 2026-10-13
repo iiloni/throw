@@ -66,12 +66,22 @@ test('brand surfaces preserve artwork, contrast and usable layout on light and d
 
   // Sync feedback competes with branding and sign-out on the narrowest phone widths.
   await page.setViewportSize({ width: 320, height: 800 });
-  await page.context().setOffline(true);
+  // Development has no service worker: keep artwork/code reachable and block the API,
+  // as the repository's offline tests do. Production precaches every fallback asset.
+  await page.route('**/api/**', (route) => route.abort());
   await page.getByRole('textbox', { name: 'New project in Personal' }).fill('Offline brand check');
   await page.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('Offline');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
+  await expect(brand).toHaveAttribute('src', '/favicon-mark.svg');
+  await expect
+    .poll(() =>
+      brand.evaluate(
+        (image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0,
+      ),
+    )
+    .toBe(true);
   await page.screenshot({ path: info.outputPath('header-offline-narrow.png') });
 });
