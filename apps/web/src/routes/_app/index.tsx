@@ -11,7 +11,8 @@ function Home() {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const navigating = useRouterState({ select: (state) => state.isLoading });
-  const workspaceId = shell.workspace?.id;
+  // A remembered route remains valid while its rows hydrate or Electric replays its log.
+  const workspaceId = shell.remembered.workspaceId ?? shell.workspace?.id;
   useEffect(() => {
     if (pathname === '/' && !navigating && workspaceId)
       void navigate({ to: '/w/$workspaceId', params: { workspaceId }, replace: true });

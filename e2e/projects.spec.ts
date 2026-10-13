@@ -84,7 +84,9 @@ test('switch projects and workspaces; restore the last project on reload and fir
   await addProject(page, 'Kitchen', isMobile);
   const kitchenUrl = page.url();
   await addProject(page, 'Garden', isMobile);
+  const gardenUrl = page.url();
   await selectProject(page, 'Kitchen', isMobile);
+  await selectProject(page, 'Garden', isMobile);
   await openMenu(page, isMobile);
   await page.getByRole('menuitem', { name: 'New workspace', exact: true }).click();
   await page.getByLabel('Workspace name').fill('Work');
@@ -102,7 +104,7 @@ test('switch projects and workspaces; restore the last project on reload and fir
     )
     .toEqual(['Personal', 'Studio']);
   await selectWorkspace(page, 'Personal', isMobile);
-  await expect(page).toHaveURL(kitchenUrl);
+  await expect(page).toHaveURL(gardenUrl);
   await selectWorkspace(page, 'Studio', isMobile);
   await expect(page).toHaveURL(launchUrl);
   await page.reload();
@@ -122,6 +124,10 @@ test('switch projects and workspaces; restore the last project on reload and fir
   await expect(page).toHaveURL(launchUrl);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Launch');
   await selectWorkspace(page, 'Personal', isMobile);
+  await expect(page).toHaveURL(gardenUrl);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Garden');
+  await page.goto('/');
+  await expect(page).toHaveURL(gardenUrl);
   // A new device has no preference: it opens the first project by position.
   await page.evaluate(() => {
     for (const key of Object.keys(localStorage))

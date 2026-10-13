@@ -57,8 +57,7 @@ export function AppShell() {
   const preferredWorkspace = workspaces.find((item) => item.id === remembered.workspaceId);
   const workspace = params.workspaceId
     ? workspaces.find((item) => item.id === params.workspaceId)
-    : (preferredWorkspace ??
-      (loadingWorkspaces && remembered.workspaceId ? undefined : workspaces[0]));
+    : (preferredWorkspace ?? (remembered.workspaceId ? undefined : workspaces[0]));
   const projects = workspace ? projectsIn(allProjects, workspace.id) : [];
   const project = projects.find((item) => item.id === params.projectId);
   const preferredProjectId = params.projectId ?? remembered.projects[workspace?.id ?? ''];
