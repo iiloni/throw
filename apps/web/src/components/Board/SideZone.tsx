@@ -37,20 +37,11 @@ export function zoneWidth(view: ZoneState, fullWidth: number) {
 }
 
 /**
- * The view a rail takes while it shows dropzones. An open column steps down to a strip for
- * as long as the card is held, which gives its width to the columns the card is headed for.
- */
-export function heldView(view: ZoneState, tiles: boolean): ZoneState {
-  return tiles && view === 'panel' ? 'strip' : view;
-}
-
-/**
- * The width a rail is drawn at. A strip that shows dropzones widens into the gap beside it:
- * the columns stay where `zoneWidth` put them.
+ * The width a rail is drawn at. A strip widens while it shows dropzones, over the gap beside
+ * it: the columns stay where `zoneWidth` put them.
  */
 export function railWidth(view: ZoneState, fullWidth: number, tiles: boolean) {
-  const shown = heldView(view, tiles);
-  return tiles && shown === 'strip' ? HELD_STRIP_WIDTH : zoneWidth(shown, fullWidth);
+  return tiles && view === 'strip' ? HELD_STRIP_WIDTH : zoneWidth(view, fullWidth);
 }
 
 export function zoneStatuses(zone: Zone, statuses: Status[]) {
@@ -101,14 +92,14 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
             key="tiles"
             className={cn(
               'absolute inset-0 flex flex-col pt-[calc(var(--safe-top)+1.25rem)] pb-6',
-              view === 'full' ? 'gap-2.5 px-3.5' : 'gap-2 px-1',
+              view === 'strip' ? 'gap-2 px-1' : 'gap-2.5 px-3.5',
             )}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.16 }}
           >
-            {view === 'full' && (
+            {view !== 'strip' && (
               <p className="px-1.5 pt-1.5 pb-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
                 {title}
               </p>
@@ -117,7 +108,7 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
               <StatusTile
                 key={status.id}
                 status={status}
-                shape={view === 'full' ? 'block' : 'narrow'}
+                shape={view === 'strip' ? 'narrow' : 'block'}
               />
             ))}
           </motion.div>

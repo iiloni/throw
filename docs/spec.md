@@ -236,12 +236,11 @@ motion.
   either one pushes the columns along; when the columns do not all fit, the ones at the far
   end scroll under the other rail.
 - While a card from another zone is held, each rail turns into dropzones, one per status in
-  its category. A rail that was open as a column steps down to a strip for as long as the
-  card is held and opens again on the drop, so the columns the card is headed for get the
-  width **(assumed: tried, not yet confirmed)**. The strip widens into the gap beside it,
-  and no further, so the status names can be read; it does not lie over a column, because
-  the columns are drop targets too. Dropping on a status sends the card there with its
-  priority kept, at the top of that priority.
+  its category. It does this in place: no column moves and none is covered. A rail that is
+  a strip widens into the gap beside it, and no further, so the status names can be read
+  **(assumed: tried, not yet confirmed)**. It does not widen over a column, because the
+  columns are drop targets too. Dropping on a status sends the card there with
+  its priority kept, at the top of that priority.
 - A card held from the backlog can still be placed in the backlog. Its status filters grow
   into targets for changing status. The closed zone is ordered by time, so cards are sent to
   it and never placed in it.

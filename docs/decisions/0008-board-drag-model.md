@@ -56,13 +56,9 @@ the group as a whole and shows no gap.
 gallery mixes statuses, so only a card that came from the backlog can be placed in it; a
 card from elsewhere is sent to one of its statuses.
 
-**Under a held card the rails give way to the columns.** The backlog and closed rails turn
-into dropzones, and one that was open as a column steps down to a strip until the drop. The
-columns are where a held card is most often going, so they get the room. This does move the
-columns once, as the card lifts. Three other arrangements were tried: widening the rails
-slid the columns away for longer, floating the dropzones over the board hid the last
-column, and a strip wide enough for comfortable targets lay over a column that is a target
-itself.
+**The rails do not move the board during a drag.** The backlog and closed rails turn into
+dropzones at the place they already occupy. Widening them would slide the columns out from
+under the held card, and floating them over the board hid the last column.
 
 **On touch, a long press selects and movement after it drags.** A press that moves before
 it completes is a scroll. A card dragged this way alone is not left selected.
