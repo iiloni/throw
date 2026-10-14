@@ -1,6 +1,6 @@
 import { ArrowLeft, X } from 'lucide-react';
 import { motion, useDragControls, useReducedMotion } from 'motion/react';
-import { type PointerEvent, useRef, useState } from 'react';
+import { type PointerEvent, useEffect, useRef, useState } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { springs } from '@/lib/motion';
@@ -8,10 +8,45 @@ import { cn } from '@/lib/utils';
 import { PriorityGlyph, StatusGlyph } from './glyphs';
 import { identifier, priorityName, statusById, subtasksOf, type Task, taskColor } from './model';
 import { StatusMenu } from './StatusMenu';
-import { board, current, sendTasks, update } from './state';
+import { board, current, renameTask, sendTasks, update } from './state';
 
 const chip =
   'flex h-8 items-center gap-1.5 rounded-full bg-foreground/[0.07] px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60';
+
+/** The title, written in place. A task just created starts here with its title selected. */
+function TaskTitle({ task }: { task: Task }) {
+  const fresh = board.use().newTaskId === task.id;
+  const ref = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    const element = ref.current;
+    if (!fresh || !element) return;
+    element.focus();
+    window.getSelection()?.selectAllChildren(element);
+    update({ newTaskId: null });
+  }, [fresh]);
+  return (
+    <h2
+      ref={ref}
+      contentEditable="plaintext-only"
+      suppressContentEditableWarning
+      spellCheck
+      onBlur={(event) => {
+        const title = event.currentTarget.textContent?.trim();
+        if (title && title !== task.title) renameTask(task.id, title);
+        else event.currentTarget.textContent = task.title;
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          event.currentTarget.blur();
+        }
+      }}
+      className="rounded-lg font-display font-semibold text-[1.75rem] leading-[1.15] tracking-[-0.02em] outline-none [overflow-wrap:anywhere] focus-visible:ring-[3px] focus-visible:ring-ring/40"
+    >
+      {task.title}
+    </h2>
+  );
+}
 
 /** A stand-in for the task view: enough of a task to judge how the board makes room for it. */
 function TaskBody({ task, underDock = false }: { task: Task; underDock?: boolean }) {
@@ -40,9 +75,7 @@ function TaskBody({ task, underDock = false }: { task: Task; underDock?: boolean
               {identifier(project, parent)} {parent.title}
             </button>
           )}
-          <h2 className="font-display font-semibold text-[1.75rem] leading-[1.15] tracking-[-0.02em] [overflow-wrap:anywhere]">
-            {task.title}
-          </h2>
+          <TaskTitle task={task} />
           <div className="mt-5 flex flex-wrap gap-2">
             {status && (
               <StatusMenu

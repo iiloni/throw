@@ -414,6 +414,18 @@
   background: color-mix(in oklab, var(--foreground) 7%, transparent);
   padding-inline: 0.75rem;
 }
+/*
+ * A phone has no room for a rail's detail: a held card's column there shows the priority's
+ * name and nothing else, on a fainter rail.
+ */
+@media (max-width: 767px) {
+  .zone-header[data-mode="rail"] .zone-header-face {
+    background: color-mix(in oklab, var(--foreground) 4%, transparent);
+  }
+  .zone-header [data-rail-detail] {
+    display: none;
+  }
+}
 /* Fills while a card is held over the rail; when full, the rail opens and takes the card. */
 .zone-header[data-charging] .zone-header-face::before {
   position: absolute;
@@ -521,6 +533,16 @@
 }
 :root[data-hide-scrollbars] [data-slot="scroll-area-scrollbar"] {
   display: none;
+}
+
+/* Fills while a held card waits at a phone's edge; when full, the next column turns in. */
+@keyframes page-charge {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
 }
 
 :root[data-dragging] {

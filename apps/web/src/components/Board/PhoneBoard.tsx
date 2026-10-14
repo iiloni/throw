@@ -1,48 +1,68 @@
-import { ArrowRightLeft, ChevronDown, Columns3, LayoutDashboard, Search, X } from 'lucide-react';
-import { animate, motion, useMotionValue } from 'motion/react';
+import {
+  ArrowRightLeft,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Search,
+  X,
+} from 'lucide-react';
+import { motion } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
-import { type PointerEvent, useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { BoardSettingsPanel } from './BoardSettingsPanel';
 import { CardList } from './CardList';
-import { drag, holding } from './drag';
+import { drag, holding, PAGE_EDGE, PAGE_HOLD_MS } from './drag';
 import type { Category, Status } from './model';
 import { StatusFilter } from './SideZone';
 import { StatusTile } from './StatusTile';
-import { board, countIn, current, listTasks, selectProject, sendTasks, update } from './state';
+import {
+  board,
+  countIn,
+  createTask,
+  current,
+  listTasks,
+  selectProject,
+  sendTasks,
+  update,
+} from './state';
 import { TaskCard } from './TaskCard';
 
 const DOCK_SPACE = 'var(--dock-space)';
-type Drawer = 'closed' | 'half' | 'full';
 
 /**
- * The board on a phone: one active column at a time, the closed zone at the right end, the
- * backlog in a drawer that rises from the dock, and the dock itself as the place cards are
- * sent when one is held or several are selected.
+ * The board on a phone: one page at a time, swiped or chosen from the tabs. The backlog is
+ * the first page and the closed zone the last, so a card moves between them the way it moves
+ * between columns. The dock holds search and the create button, and becomes the place cards
+ * are sent when one is held or several are selected.
  */
 export function PhoneBoard() {
   const state = board.use();
-  const held = drag.use();
   const { project } = current(state);
   const active = project.statuses.filter((status) => status.category === 'active');
   const pager = useRef<HTMLDivElement>(null);
-  const [page, setPage] = useState(0);
-  const [drawer, setDrawer] = useState<Drawer>('closed');
-  const pages = [...active.map((status) => status.name), 'Closed'];
+  const [page, setPage] = useState(1);
+  const pages = ['Backlog', ...active.map((status) => status.name), 'Closed'];
+  const counts = [
+    listTasks({ ...state, backlogFilter: null }, 'backlog').length,
+    ...active.map((status) => countIn(state, status.id)),
+    null,
+  ];
 
-  // A card lifted out of a full-height drawer needs the board to be reachable above it.
-  const lifted = held?.phase === 'dragging' && held.origin === 'backlog';
-  useEffect(() => {
-    if (lifted) setDrawer((value) => (value === 'full' ? 'half' : value));
-  }, [lifted]);
-
-  function turnTo(index: number) {
+  function turnTo(index: number, behavior: ScrollBehavior = 'smooth') {
     const element = pager.current;
-    element?.scrollTo({ left: index * element.clientWidth, behavior: 'smooth' });
+    element?.scrollTo({ left: index * element.clientWidth, behavior });
   }
+
+  // The board opens on its first active column, with the backlog one page to the left.
+  useLayoutEffect(() => {
+    const element = pager.current;
+    if (element) element.scrollLeft = element.clientWidth;
+  }, []);
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
@@ -72,7 +92,7 @@ export function PhoneBoard() {
                     key={item.id}
                     onSelect={() => {
                       selectProject(item.id);
-                      pager.current?.scrollTo({ left: 0 });
+                      turnTo(1, 'instant');
                     }}
                     className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-3 text-sm outline-none data-[highlighted]:bg-accent"
                   >
@@ -107,171 +127,136 @@ export function PhoneBoard() {
                 />
               )}
               {name}
-              {active[index] && (
-                <span className="text-xs tabular-nums opacity-60">
-                  {countIn(state, active[index].id)}
-                </span>
+              {counts[index] !== null && (
+                <span className="text-xs tabular-nums opacity-60">{counts[index]}</span>
               )}
             </button>
           ))}
         </div>
       </header>
 
-      <div
-        ref={pager}
-        data-pager=""
-        onScroll={(event) => {
-          const element = event.currentTarget;
-          setPage(Math.round(element.scrollLeft / element.clientWidth));
-        }}
-        className="flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
-      >
-        {active.map((status) => (
-          <div key={status.id} data-origin="active" className="flex w-full shrink-0 snap-center">
-            <CardList listId={`status:${status.id}`} endSpace={DOCK_SPACE} className="flex-1" />
+      <div className="relative flex min-h-0 flex-1">
+        <div
+          ref={pager}
+          data-pager=""
+          onScroll={(event) => {
+            const element = event.currentTarget;
+            setPage(Math.round(element.scrollLeft / element.clientWidth));
+          }}
+          className="flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
+        >
+          <div data-origin="backlog" className="flex w-full shrink-0 snap-center flex-col">
+            <StatusFilter zone="backlog" />
+            <CardList
+              listId="backlog"
+              showStatus={state.backlogFilter === null}
+              endSpace={DOCK_SPACE}
+              className="flex-1"
+            />
           </div>
-        ))}
-        <div data-origin="closed" className="flex w-full shrink-0 snap-center flex-col">
-          <StatusFilter zone="closed" />
-          <div
-            className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3.5 pt-1 [scrollbar-width:none]"
-            style={{ paddingBottom: DOCK_SPACE }}
-          >
-            {listTasks(state, 'closed').map((task) => (
-              <TaskCard key={task.id} task={task} showStatus={state.closedFilter === null} />
-            ))}
+          {active.map((status) => (
+            <div key={status.id} data-origin="active" className="flex w-full shrink-0 snap-center">
+              <CardList listId={`status:${status.id}`} endSpace={DOCK_SPACE} className="flex-1" />
+            </div>
+          ))}
+          <div data-origin="closed" className="flex w-full shrink-0 snap-center flex-col">
+            <StatusFilter zone="closed" />
+            <div
+              className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3.5 pt-1 [scrollbar-width:none]"
+              style={{ paddingBottom: DOCK_SPACE }}
+            >
+              {listTasks(state, 'closed').map((task) => (
+                <TaskCard key={task.id} task={task} showStatus={state.closedFilter === null} />
+              ))}
+            </div>
           </div>
         </div>
+        <PageEdge side={-1} name={pages[page - 1]} />
+        <PageEdge side={1} name={pages[page + 1]} />
       </div>
 
-      <BacklogDrawer drawer={drawer} setDrawer={setDrawer} />
-      <PhoneDock
-        drawer={drawer}
-        onBacklog={() => setDrawer(drawer === 'closed' ? 'half' : 'closed')}
-        onBoard={() => setDrawer('closed')}
-      />
+      <PhoneDock onCreate={() => createTask(active[page - 1]?.id)} />
     </div>
   );
 }
 
-/** How far down the drawer sits in each state. */
-function rest(value: Drawer) {
-  return value === 'full' ? 0 : value === 'half' ? window.innerHeight * 0.42 : window.innerHeight;
-}
-
-/** The backlog, rising from the dock: part of the screen first, then all of it. */
-function BacklogDrawer({
-  drawer,
-  setDrawer,
-}: {
-  drawer: Drawer;
-  setDrawer: (value: Drawer) => void;
-}) {
-  const state = board.use();
-  const count = listTasks({ ...state, backlogFilter: null }, 'backlog').length;
-  const y = useMotionValue(window.innerHeight);
-  const grip = useRef<{ start: number; from: number } | null>(null);
-
-  useEffect(() => {
-    const controls = animate(y, rest(drawer), springs.smooth);
-    return () => controls.stop();
-  }, [drawer, y]);
-
-  function onPointerDown(event: PointerEvent<HTMLDivElement>) {
-    event.currentTarget.setPointerCapture(event.pointerId);
-    grip.current = { start: event.clientY, from: y.get() };
-  }
-  function onPointerUp(event: PointerEvent<HTMLDivElement>) {
-    const held = grip.current;
-    if (!held) return;
-    grip.current = null;
-    const travelled = event.clientY - held.start;
-    const order: Drawer[] = ['full', 'half', 'closed'];
-    const index = order.indexOf(drawer);
-    const next =
-      Math.abs(travelled) < 40
-        ? drawer
-        : order[Math.max(0, Math.min(2, index + Math.sign(travelled)))]!;
-    if (next === drawer) void animate(y, rest(drawer), springs.smooth);
-    else setDrawer(next);
-  }
-
+/**
+ * While a card is held, each side of the screen with a page beyond it shows that page's
+ * name. Holding the card there fills the edge, and the page turns when it is full.
+ */
+function PageEdge({ side, name }: { side: -1 | 1; name: string | undefined }) {
+  const held = drag.use();
+  if (held?.phase !== 'dragging' || !name) return null;
+  const waiting = held.page === side;
+  const Icon = side < 0 ? ChevronLeft : ChevronRight;
   return (
-    <motion.section
-      aria-label="Backlog"
-      aria-hidden={drawer === 'closed'}
-      inert={drawer === 'closed'}
-      data-drop-block=""
-      data-origin="backlog"
-      className="glass-thick fixed inset-x-0 top-[calc(var(--safe-top)+0.5rem)] bottom-0 z-20 flex flex-col rounded-t-[28px] border-b-0"
-      style={{ y }}
+    <div
+      aria-hidden
+      className={cn(
+        'pointer-events-none absolute inset-y-4 z-10 flex items-center',
+        side < 0 ? 'left-1' : 'right-1',
+      )}
+      style={{ width: PAGE_EDGE - 8 }}
     >
-      <div
-        className="shrink-0 touch-none"
-        onPointerDown={onPointerDown}
-        onPointerMove={(event) => {
-          if (grip.current)
-            y.set(Math.max(0, grip.current.from + event.clientY - grip.current.start));
-        }}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
+      {/* Only the edge being waited at fills, so the column under the card stays calm. */}
+      <motion.span
+        className="absolute inset-0 overflow-hidden rounded-2xl bg-accent"
+        initial={false}
+        animate={{ opacity: waiting ? 1 : 0 }}
+        transition={{ duration: 0.15 }}
       >
-        <div aria-hidden className="flex justify-center pt-2.5">
-          <span className="h-1 w-9 rounded-full bg-foreground/20" />
-        </div>
-        <div className="flex h-14 items-center gap-2.5 px-5">
-          <h2 className="font-display font-semibold text-xl tracking-[-0.01em]">Backlog</h2>
-          <span className="text-muted-foreground text-sm tabular-nums">{count}</span>
-        </div>
-      </div>
-      <StatusFilter zone="backlog" />
-      {/* At part height the drawer hangs off the screen; the list must end where the screen does. */}
-      <motion.div
-        className="flex min-h-0 flex-col"
-        style={{ height: `calc(100% - 8.25rem)`, paddingBottom: y }}
+        {waiting && (
+          <span
+            key={held.turns}
+            className="absolute inset-0 origin-bottom bg-brand/25"
+            // After a turn the next one waits for the page to settle first.
+            style={{
+              animation: `page-charge ${PAGE_HOLD_MS}ms linear ${held.turns ? 250 : 0}ms both`,
+            }}
+          />
+        )}
+      </motion.span>
+      <motion.span
+        className={cn(
+          'relative mx-auto flex max-h-[45%] flex-col items-center gap-1.5 overflow-hidden rounded-full py-2.5 text-xs shadow-sm transition-colors',
+          waiting ? 'text-foreground' : 'glass text-muted-foreground',
+        )}
+        style={{ width: PAGE_EDGE - 14 }}
+        initial={{ opacity: 0, x: side * 12 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={springs.snappy}
       >
-        <CardList
-          listId="backlog"
-          showStatus={state.backlogFilter === null}
-          endSpace={DOCK_SPACE}
-          className="flex-1"
-        />
-      </motion.div>
-    </motion.section>
+        <Icon className="size-4 shrink-0" />
+        <span className="min-h-0 truncate font-medium [writing-mode:vertical-rl]">{name}</span>
+      </motion.span>
+    </div>
   );
 }
 
-const TABS = [
-  { id: 'backlog', label: 'Backlog', icon: LayoutDashboard },
-  { id: 'board', label: 'Board', icon: Columns3 },
-  { id: 'search', label: 'Search', icon: Search },
-] as const;
-
+/**
+ * The status groups, with the active statuses last: a held card comes down onto the dock,
+ * so the row nearest it is the one it most often wants.
+ */
 function byCategory(statuses: Status[]) {
   const groups: { name: string; statuses: Status[] }[] = [
     { name: 'Backlog', statuses: [] },
-    { name: 'Active', statuses: [] },
     { name: 'Closed', statuses: [] },
+    { name: 'Active', statuses: [] },
   ];
-  const slot: Record<Category, number> = { backlog: 0, active: 1, done: 2, cancelled: 2 };
+  const slot: Record<Category, number> = { backlog: 0, done: 1, cancelled: 1, active: 2 };
   for (const status of statuses) groups[slot[status.category]]!.statuses.push(status);
   return groups;
 }
 
+const dockButton =
+  'pointer-events-auto relative flex size-[var(--dock-height)] items-center justify-center rounded-[var(--dock-radius)] outline-none focus-visible:ring-2 focus-visible:ring-ring/70';
+
 /**
- * The dock. At rest it is the three tabs. With cards selected, or a held card brought to
- * it, it opens into a grid of every status, grouped by category, so a card reaches any of
- * them without the board being scrolled. A held card elsewhere leaves it closed.
+ * The dock: search and the create button, as in Catch. With cards selected, or a held card
+ * brought to it, it opens into a grid of every status, so a card reaches any of them without
+ * the board being scrolled. A held card elsewhere shows it as the place to move to.
  */
-function PhoneDock({
-  drawer,
-  onBacklog,
-  onBoard,
-}: {
-  drawer: Drawer;
-  onBacklog: () => void;
-  onBoard: () => void;
-}) {
+function PhoneDock({ onCreate }: { onCreate: () => void }) {
   const state = board.use();
   const held = drag.use();
   const fingerDown = holding.use();
@@ -286,7 +271,35 @@ function PhoneDock({
     sendTasks(state.selection, statusId);
     update({ selection: [] });
   };
-  const tab = drawer === 'closed' ? 'board' : 'backlog';
+
+  if (!open && !dragging) {
+    return (
+      <div className="pointer-events-none fixed inset-x-0 bottom-[var(--dock-bottom)] z-30 flex justify-end gap-2 px-3">
+        <motion.button
+          type="button"
+          aria-label="Search"
+          whileTap={{ scale: 0.88 }}
+          transition={springs.snappy}
+          className={cn(dockButton, 'glass text-foreground')}
+        >
+          <Search className="size-6" aria-hidden />
+        </motion.button>
+        <motion.button
+          type="button"
+          aria-label="New task"
+          onClick={onCreate}
+          whileTap={{ scale: 0.88 }}
+          transition={springs.snappy}
+          className={cn(
+            dockButton,
+            'bg-brand text-brand-foreground shadow-[0_8px_24px_-6px_color-mix(in_oklab,var(--brand)_55%,transparent),inset_0_1px_0_rgb(255_255_255/0.45)]',
+          )}
+        >
+          <Plus className="size-7" strokeWidth={2.25} aria-hidden />
+        </motion.button>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -328,7 +341,7 @@ function PhoneDock({
               </section>
             ))}
           </motion.div>
-        ) : dragging ? (
+        ) : (
           <motion.p
             layout="position"
             className="flex h-[var(--dock-height)] items-center justify-center gap-2 font-medium text-muted-foreground text-sm"
@@ -336,36 +349,6 @@ function PhoneDock({
             <ArrowRightLeft aria-hidden className="size-4" />
             Move to a status
           </motion.p>
-        ) : (
-          <motion.nav
-            layout="position"
-            aria-label="Project views"
-            className="grid h-[var(--dock-height)] grid-cols-3 p-1"
-          >
-            {TABS.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                type="button"
-                aria-label={label}
-                aria-current={tab === id ? 'page' : undefined}
-                onClick={id === 'backlog' ? onBacklog : id === 'board' ? onBoard : undefined}
-                className={cn(
-                  'relative z-0 flex items-center justify-center rounded-[calc(var(--dock-radius)-0.25rem)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/70',
-                  tab === id ? 'text-foreground' : 'text-muted-foreground',
-                )}
-              >
-                {tab === id && (
-                  <motion.span
-                    layoutId="prototype-dock-indicator"
-                    aria-hidden
-                    className="-z-10 absolute inset-0 rounded-[calc(var(--dock-radius)-0.25rem)] bg-accent shadow-[inset_0_1px_0_var(--glass-highlight)]"
-                    transition={springs.snappy}
-                  />
-                )}
-                <Icon className="size-6" aria-hidden />
-              </button>
-            ))}
-          </motion.nav>
         )}
       </motion.div>
     </div>

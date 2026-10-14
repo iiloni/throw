@@ -57,10 +57,10 @@ export function TaskCardFace({
           <span className="truncate">{parent.title}</span>
         </p>
       )}
-      <p className="line-clamp-4 font-medium text-[0.9375rem] leading-snug [overflow-wrap:anywhere]">
+      <p className="line-clamp-4 font-medium text-[0.9375rem] leading-snug [overflow-wrap:anywhere] max-md:text-base">
         {task.title}
       </p>
-      <div className="mt-3 flex min-h-5 items-center gap-2.5 text-foreground/55 text-xs">
+      <div className="mt-3 flex min-h-5 items-center gap-2.5 text-foreground/55 text-xs max-md:text-[0.8125rem]">
         <span className="shrink-0 font-medium tabular-nums">{identifier(project, task)}</span>
         {tag && <span className="min-w-0 truncate text-tint-accent">{tag.name}</span>}
         {task.secondaryTagIds.length > 0 && (

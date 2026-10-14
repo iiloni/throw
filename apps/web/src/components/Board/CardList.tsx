@@ -101,7 +101,11 @@ export function CardList({ listId, header, showStatus, endSpace, surface, classN
                       <span className="truncate">{name}</span>
                       {headerMode === 'rail' && (
                         <>
-                          <span aria-hidden className="flex min-w-0 flex-1 items-center gap-0.5">
+                          <span
+                            aria-hidden
+                            data-rail-detail=""
+                            className="flex min-w-0 flex-1 items-center gap-0.5"
+                          >
                             {placed.slice(0, 12).map((task) => (
                               <span
                                 key={task.id}
@@ -110,7 +114,9 @@ export function CardList({ listId, header, showStatus, endSpace, surface, classN
                               />
                             ))}
                           </span>
-                          <span className="tabular-nums opacity-70">{placed.length || ''}</span>
+                          <span data-rail-detail="" className="tabular-nums opacity-70">
+                            {placed.length || ''}
+                          </span>
                         </>
                       )}
                     </div>

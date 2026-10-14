@@ -329,18 +329,24 @@ selection to a status.
 
 ### Phone
 
-- Swiping between active columns is accepted. The effort goes into making moves fast.
-- The backlog is a drawer that rises from the dock, first to part height and then to full
-  screen. Dragging a card above the drawer moves it onto the board.
-- The closed strip sits at the right end of the board.
+- The board shows one page at a time, swiped or chosen from tabs under the title: the
+  backlog first, then each active column, then the closed zone. It opens on the first active
+  column. The backlog is a page rather than a drawer, so it is never covered by the dock and
+  a card moves out of it the way it moves between columns.
 - A long press without movement selects a card. Moving after the press drags it. A touch
   that moves before the press completes scrolls.
 - The dock opens into a grid of status dropzones under a label for each category (Backlog,
   Active, Closed). This moves cards to any status without scrolling the board. A held card
   does not open the grid by itself: the dock stays closed, labelled as the place to move
   from, opens when the card is brought to it and closes when the card leaves. With cards
-  selected the grid is open and tapping a status moves them.
-- Holding a card at the side of the screen turns to the next column.
+  selected the grid is open and tapping a status moves them. The active row is last, nearest
+  a card coming down onto the dock.
+- While a card is held, each side with a page beyond it shows that page's name. Holding the
+  card in the outer 44 CSS pixels fills that edge, and the page turns after about half a
+  second.
+- Card titles are 16 CSS pixels on a phone. A held card's column shows each collapsed
+  priority as its name alone, on a fainter bar, so it stays quiet on a small screen.
+- Swipe gestures on cards (to move or close them) are polish for later.
 
 ## The cross-project board
 
@@ -368,6 +374,9 @@ view), comments and activity.
   down from the top closes it too.
 - While a task is open on a phone, the dock holds that task's actions, as it does for a note
   in Catch.
+- The phone dock's create button adds a task at the top of the current column's default
+  priority (the backlog's default status from the backlog or closed page) and opens it with
+  its title selected.
 
 ## Navigation
 
@@ -387,19 +396,20 @@ also covers jumping between projects.
 
 ### Phone
 
-A bottom dock with three tabs: Backlog, Board and Search. This mirrors Catch's Gallery, Deck
-and Search. Project switching and the cross-project board live in the header's title menu.
+A bottom dock with Search and a create button, as in Catch. There are no Backlog and Board
+tabs: the backlog is the board's first page, so a Board tab had nothing to switch to.
+Project switching and the cross-project board live in the header's title menu. The shell's
+three-tab dock is replaced when the board is built.
 
 The phone layout applies below 768 CSS pixels. The title menu also switches and manages
 workspaces, and opens settings. The project dock remains on project and cross-project
 boards; settings and an empty workspace use the title menu alone. On the cross-project
-board, Backlog returns to the workspace's last project, Board keeps the cross-project
-board, and Search shows the workspace search placeholder.
+board, Search shows the workspace search placeholder.
 
 ### Shell routes and remembered selection
 
-- `/w/:workspaceId/p/:projectId?view=board` is a project. `view=backlog` selects its
-  phone backlog and `view=search` selects the search placeholder. Search is a view of
+- `/w/:workspaceId/p/:projectId?view=board` is a project. `view=backlog` opens its
+  phone board on the backlog page and `view=search` selects the search placeholder. Search is a view of
   the current context, not a separate search page.
 - `/w/:workspaceId/board` is the cross-project board for that workspace; `view=search`
   shows its search placeholder.
@@ -417,7 +427,7 @@ workspace. Projects append by position. Deleting a project is permanent in the s
 built and requires confirmation; it moves to the trash once the task model is built (see
 [Project](#project)).
 
-The shell's backlog and board bodies are placeholders. The backlog drawer and task-specific
+The shell's backlog and board bodies are placeholders. The backlog page and task-specific
 dock interactions arrive with the board feature; search and the command palette arrive later.
 
 ## Platform and architecture

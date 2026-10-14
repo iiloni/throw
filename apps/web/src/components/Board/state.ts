@@ -1,3 +1,4 @@
+import { positionBetween } from '@throw/shared';
 import { z } from 'zod';
 import { usePersistentState } from '@/lib/storage';
 import { createStore } from '@/lib/store';
@@ -6,6 +7,7 @@ import {
   type Category,
   compareClosed,
   compareTasks,
+  DEFAULT_PRIORITY,
   isClosed,
   type Priority,
   type Project,
@@ -70,6 +72,8 @@ export type BoardState = {
   /** A card picked up from the keyboard, and the tasks as they were before. */
   carrying: { taskId: string; before: Task[] } | null;
   announcement: string;
+  /** A task just created, whose title is waiting to be written. */
+  newTaskId: string | null;
 };
 
 function initial(): BoardState {
@@ -87,6 +91,7 @@ function initial(): BoardState {
     expanded: [],
     carrying: null,
     announcement: '',
+    newTaskId: null,
   };
 }
 
@@ -178,6 +183,41 @@ export function sendTasks(taskIds: string[], statusId: string) {
 
 export function setSubtaskStatus(taskId: string, statusId: string) {
   sendTasks([taskId], statusId);
+}
+
+/**
+ * A new task at the top of the default priority in a status: by default the backlog's
+ * default status, as the spec has it, or the column it was made from.
+ */
+export function createTask(statusId?: string) {
+  const { project, tasks } = current();
+  const status =
+    project.statuses.find((item) => item.id === statusId) ??
+    project.statuses.find((item) => item.category === 'backlog' && item.isDefault);
+  if (!status) return;
+  const peers = tasks
+    .filter((task) => task.statusId === status.id && task.priority === DEFAULT_PRIORITY)
+    .sort(compareTasks);
+  const number = Math.max(0, ...tasks.map((task) => task.number)) + 1;
+  const task: Task = {
+    id: `${project.id}:task-${number}`,
+    number,
+    title: 'New task',
+    statusId: status.id,
+    priority: DEFAULT_PRIORITY,
+    position: positionBetween(null, peers[0]?.position ?? null),
+    primaryTagId: null,
+    secondaryTagIds: [],
+    parentId: null,
+    closedAt: null,
+  };
+  setTasks([...tasks, task]);
+  update({ openTaskId: task.id, newTaskId: task.id });
+}
+
+export function renameTask(taskId: string, title: string) {
+  const { tasks } = current();
+  setTasks(tasks.map((task) => (task.id === taskId ? { ...task, title } : task)));
 }
 
 export function restoreTasks(tasks: Task[]) {
