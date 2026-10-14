@@ -18,6 +18,14 @@ test('a project is visible and writable only to members of its workspace @api', 
     color: 'teal',
     icon: null,
     position: 'a0',
+    key: 'PRV',
+    statuses: (['backlog', 'active', 'done', 'cancelled'] as const).map((category) => ({
+      id: crypto.randomUUID(),
+      name: category,
+      category,
+      position: 'a0',
+      isDefault: true,
+    })),
   };
 
   // Nobody can put a project in a workspace they do not belong to.

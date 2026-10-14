@@ -1,8 +1,13 @@
 import type {
   CreateProject,
+  CreateStatus,
+  CreateTask,
   CreateWorkspace,
   TxidResponse,
   UpdateProject,
+  UpdateStatus,
+  UpdateTask,
+  UpdateTaskResponse,
   UpdateWorkspace,
 } from '@throw/shared';
 import { getAuthToken } from './auth';
@@ -42,5 +47,15 @@ export const api = {
     request<TxidResponse>('/projects', { method: 'POST', body: JSON.stringify(body) }),
   updateProject: (id: string, body: UpdateProject) =>
     request<TxidResponse>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-  deleteProject: (id: string) => request<TxidResponse>(`/projects/${id}`, { method: 'DELETE' }),
+  purgeProject: (id: string) => request<TxidResponse>(`/projects/${id}`, { method: 'DELETE' }),
+  createStatus: (body: CreateStatus) =>
+    request<TxidResponse>('/statuses', { method: 'POST', body: JSON.stringify(body) }),
+  updateStatus: (id: string, body: UpdateStatus) =>
+    request<TxidResponse>(`/statuses/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteStatus: (id: string) => request<TxidResponse>(`/statuses/${id}`, { method: 'DELETE' }),
+  createTask: (body: CreateTask) =>
+    request<TxidResponse>('/tasks', { method: 'POST', body: JSON.stringify(body) }),
+  updateTask: (id: string, body: UpdateTask) =>
+    request<UpdateTaskResponse>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  purgeTask: (id: string) => request<TxidResponse>(`/tasks/${id}`, { method: 'DELETE' }),
 };

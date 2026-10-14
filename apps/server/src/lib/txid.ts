@@ -1,7 +1,5 @@
 import { sql } from 'drizzle-orm';
-import type { Db } from '../db/client';
-
-type Transaction = Parameters<Parameters<Db['transaction']>[0]>[0];
+import type { Transaction } from '../db/client';
 
 /**
  * The id of the transaction a write is in. A client waits for Electric to stream that

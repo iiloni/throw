@@ -7,7 +7,7 @@ import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { PROJECT_ICON_LABELS, ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { createProject, deleteProject, updateProject } from '@/lib/projects';
+import { createProject, trashProject, updateProject } from '@/lib/projects';
 import { cn } from '@/lib/utils';
 import { createWorkspace, renameWorkspace } from '@/lib/workspaces';
 
@@ -87,7 +87,7 @@ function ManagementForm({ form, onClose }: { form: ShellForm; onClose: () => voi
       <div className="flex flex-col gap-5 pb-1">
         <h2 className="font-semibold">Delete {project.name}?</h2>
         <p className="text-muted-foreground text-sm">
-          This permanently deletes this project. This cannot be undone.
+          This moves the project and its tasks to the trash.
         </p>
         <div className="flex justify-end gap-2">
           <Button autoFocus variant="ghost" onClick={() => setConfirming(false)}>
@@ -96,7 +96,7 @@ function ManagementForm({ form, onClose }: { form: ShellForm; onClose: () => voi
           <Button
             variant="destructive"
             onClick={() => {
-              deleteProject(project.id);
+              trashProject(project.id);
               shell.selectWorkspace(project.workspaceId);
               onClose();
             }}

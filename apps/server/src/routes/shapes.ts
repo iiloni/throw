@@ -18,7 +18,45 @@ const SHAPES: Record<string, { table: string; columns: string[]; where: string }
   },
   projects: {
     table: 'projects',
-    columns: ['id', 'workspace_id', 'name', 'color', 'icon', 'position'],
+    // Not `task_counter`: numbers are the server's to hand out.
+    columns: [
+      'id',
+      'workspace_id',
+      'name',
+      'color',
+      'icon',
+      'position',
+      'key',
+      'priority_names',
+      'deleted_at',
+    ],
+    where: `workspace_id IN (${MEMBER_WORKSPACES})`,
+  },
+  statuses: {
+    table: 'statuses',
+    columns: ['id', 'workspace_id', 'project_id', 'name', 'category', 'position', 'is_default'],
+    where: `workspace_id IN (${MEMBER_WORKSPACES})`,
+  },
+  // Every task the user can reach, in the trash and closed ones included, so both can be
+  // shown offline.
+  tasks: {
+    table: 'tasks',
+    columns: [
+      'id',
+      'workspace_id',
+      'project_id',
+      'number',
+      'title',
+      'description',
+      'description_version',
+      'status_id',
+      'priority',
+      'position',
+      'parent_id',
+      'closed_at',
+      'deleted_at',
+      'created_at',
+    ],
     where: `workspace_id IN (${MEMBER_WORKSPACES})`,
   },
 };
