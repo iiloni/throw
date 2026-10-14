@@ -228,14 +228,57 @@ motion.
   to a full-width gallery.
 - The closed strip expands on click to a single column, and from there to a full-width
   gallery. Closed tasks are sorted by when they were closed.
-- During a drag, each side zone turns into a column of dropzones, one per status in its
-  category.
+- The backlog and the closed zone are rails, not columns, and do not look like columns. A
+  rail runs the full height of the window and is flat: it has no surface, border or shadow
+  of its own, whatever the column backgrounds setting says. Only the navigation rail has a
+  border.
+- The rails lie over the two ends of the active columns' scroller. Opening or closing
+  either one pushes the columns along; when the columns do not all fit, the ones at the far
+  end scroll under the other rail.
+- While a card from another zone is held, each rail turns into dropzones, one per status in
+  its category. It does this in place: no column moves and none is covered. A rail that is
+  a strip widens a little over the gap beside it so the status names can be read
+  **(assumed: tried, not yet confirmed)**. Dropping on a status sends the card there with
+  its priority kept, at the top of that priority.
+- A card held from the backlog can still be placed in the backlog. Its status filters grow
+  into targets for changing status. The closed zone is ordered by time, so cards are sent to
+  it and never placed in it.
+- The board has no title row. The project's name is in the expanded navigation rail, and in
+  a tooltip on the project's icon when the rail is collapsed.
+- Scrollbars are Catch's overlay scrollbars: drawn over the content, shown on hover on
+  desktop and never on touch screens.
+
+How a held card behaves, and why, is recorded in
+[ADR 0008](decisions/0008-board-drag-model.md).
+
+### Board settings
+
+The settings page has a section for how the board looks and behaves. These are kept on the
+device.
+
+| Setting | Default | Effect |
+| --- | --- | --- |
+| Priority labels | Off | Names each priority zone in a column at rest. |
+| Priority on cards | Off | Marks a card's priority on the card. A card of the default priority is never marked. |
+| Column backgrounds | On | Gives each active column a faint surface. |
+| Holding a card | Compact **(assumed default)** | Compact or Full; see [Ordering and priority](#ordering-and-priority). |
+| Theme | System | System, Light or Dark. |
+
+The board practises progressive disclosure: what is not needed at rest is not drawn at rest.
+Applying this further is ongoing.
 
 ### Cards
 
-A card shows the title, identifier, tags, priority and subtask progress. It does not show
-the description. Subtask progress is an expandable underlay, like link and media previews
-on a Catch card.
+A card shows the title, identifier, tags and subtask progress. It shows its priority only
+when the [setting](#board-settings) asks for it, since the card's place in the column
+already says it. It does not show the description.
+
+Subtask progress is an expandable underlay, like link and media previews on a Catch card.
+Folded, it shows one pip per subtask and a count. Unfolded, it lists the subtasks:
+
+- A subtask's status can be changed there, without opening it.
+- Tapping a subtask opens it in the task view. There is no pop-out card.
+- A card that is picked up folds its subtasks away as it lifts.
 
 ### Subtasks on the board
 
@@ -250,13 +293,27 @@ and dropping a card on another to make it a subtask.
 
 A column is sorted by priority, with manual order inside each priority.
 
-While a card is dragged within a column:
+At rest a column does not mark its priority zones: cards of different priorities are set
+apart by a little space and nothing else. A [setting](#board-settings) labels each zone.
 
-- Cards of other priorities dim.
-- The dragged card's priority zone stretches to take most of the column, and the card is
-  placed by dragging within it.
-- Hovering the higher or lower priority zones at the top and bottom of the column changes
-  the card's priority mid-drag.
+While a card is held over a column, the zones always show, in one of two ways the user
+chooses:
+
+- **Compact.** The card's priority zone takes the column and the card is placed by dragging
+  within it. Every other priority folds into a labelled rail above or below. Holding the
+  card over a rail for a moment changes its priority and opens that zone instead.
+- **Full.** The column keeps its layout. Zones are labelled, cards of other priorities dim,
+  and the card takes the priority of the zone it is over.
+
+A held card leans into its movement. With several cards held, each keeps its own priority
+and the column takes them as a group.
+
+A card can also be moved from the keyboard: Space picks it up, the arrows move it within
+and across columns and priorities, Space or Enter sets it down and Escape puts it back
+**(assumed)**. Each step is announced to screen readers.
+
+On desktop, a click with Ctrl, Cmd or Shift selects cards, and a bar offers to move the
+selection to a status **(assumed)**.
 
 ### Phone
 
@@ -264,9 +321,12 @@ While a card is dragged within a column:
 - The backlog is a drawer that rises from the dock, first to part height and then to full
   screen. Dragging a card above the drawer moves it onto the board.
 - The closed strip sits at the right end of the board.
-- During a drag or with several cards selected, the dock becomes a grid of status
-  dropzones grouped by category, covering backlog and closed statuses too. This moves cards
-  to any status without scrolling the board.
+- A long press without movement selects a card. Moving after the press drags it. A touch
+  that moves before the press completes scrolls.
+- During a drag or with cards selected, the dock becomes a grid of status dropzones under
+  a label for each category (Backlog, Active, Closed). This moves cards to any status
+  without scrolling the board. With cards selected, tapping a status moves them.
+- Holding a card at the side of the screen turns to the next column.
 
 ## The cross-project board
 
@@ -376,19 +436,19 @@ little as possible; it is not the normal way to use the app (ADR 0005).
 
 1. **Android application ID.** `throw` is a Java keyword, so it cannot be
    `org.iloni.throw`. The Capacitor config uses `org.iloni.throwtasks` as a placeholder.
-2. **Subtask underlay.** Whether tapping a subtask shows a pop-out card with quick actions,
-   or goes straight to the full subtask view. Changing a subtask's status in place was also
-   proposed.
-3. **Priority zones at rest.** Whether a column shows priority dividers all the time or only
-   during a drag.
-4. **Search scope.** Presumably the current workspace with a project filter. It does not
+2. **Search scope.** Presumably the current workspace with a project filter. It does not
    affect the task schema: a workspace's tasks are on the device, so search can run there.
-5. **Membership.** Whether a future member joins a whole workspace, a single project, or
+3. **Membership.** Whether a future member joins a whole workspace, a single project, or
    either. Tasks and the rows under them carry both a workspace and a project, so either
    answer can filter them without a migration.
-6. **Single sign-on.** Accepting an external OIDC provider in both apps would give shared
+4. **Single sign-on.** Accepting an external OIDC provider in both apps would give shared
    login without coupling them. Not decided.
-7. **Deployment.** How one Compose stack runs either or both apps when they live in
+5. **Deployment.** How one Compose stack runs either or both apps when they live in
    separate repositories.
-8. **Refused changes.** How the app tells the user that a change made offline was not
+6. **Refused changes.** How the app tells the user that a change made offline was not
    applied, beyond the entry in the task's log.
+7. **Reordering the full-width backlog.** The gallery lays cards out in several columns per
+   priority. Whether cards can be reordered there, and how a drop position reads in a
+   masonry layout, is not designed.
+8. **The card and the task view.** The board prototype settled how cards move, not what a
+   card or the full task view contains beyond what this spec already lists.
