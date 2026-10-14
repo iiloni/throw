@@ -1,6 +1,7 @@
 import type {
   ActivityChange,
   ActivityKind,
+  CommentBody,
   Description,
   Priority,
   PriorityNames,
@@ -220,7 +221,8 @@ export const tasks = pgTable(
 /**
  * The tasks' activity log (ADR 0006), written only by the server in the transaction of the
  * write it describes. An update's entry is also the record that its change id was applied,
- * which is how a resent update is recognised. Not synced yet.
+ * which is how a resent update is recognised. `reordered` entries are kept for that alone and
+ * are not synced.
  */
 export const taskActivity = pgTable(
   'task_activity',
@@ -241,6 +243,33 @@ export const taskActivity = pgTable(
     kind: text().$type<ActivityKind>().notNull(),
     changes: jsonb().$type<ActivityChange[]>().notNull(),
     createdAt: createdAt(),
+  },
+  (table) => [index().on(table.workspaceId), index().on(table.taskId)],
+);
+
+/**
+ * Comments on tasks, written by devices through the outbox and applied in the order they
+ * arrive. Not part of the log; the timeline merges the two.
+ */
+export const comments = pgTable(
+  'comments',
+  {
+    id: uuid().primaryKey(),
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    projectId: uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    taskId: uuid()
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    /** The author, the only one who can edit or delete it. Kept as null if the account goes. */
+    userId: text().references(() => user.id, { onDelete: 'set null' }),
+    /** A BlockNote document. */
+    body: jsonb().$type<CommentBody>().notNull(),
+    createdAt: createdAt(),
+    editedAt: timestamp({ withTimezone: true }),
   },
   (table) => [index().on(table.workspaceId), index().on(table.taskId)],
 );

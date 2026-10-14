@@ -1,6 +1,9 @@
 import {
+  type Comment,
+  type CreateComment,
   type CreateProject,
   type CreateTask,
+  createCommentSchema,
   createProjectSchema,
   createTaskSchema,
   deriveProjectKey,
@@ -10,9 +13,11 @@ import {
   type Status,
   type Task,
   type TaskChanges,
+  type UpdateComment,
   type UpdateProject,
   type UpdateStatus,
   type UpdateTask,
+  updateCommentSchema,
   updateProjectSchema,
   updateStatusSchema,
   updateTaskSchema,
@@ -87,6 +92,15 @@ export function statusUpdateRequest(changes: Partial<Status>): UpdateStatus | nu
   if ('position' in changes) body.position = changes.position;
   if (changes.isDefault === true) body.isDefault = true;
   return Object.keys(body).length === 0 ? null : updateStatusSchema.parse(body);
+}
+
+export function commentCreateRequest(comment: Comment): CreateComment {
+  return createCommentSchema.parse({ id: comment.id, taskId: comment.taskId, body: comment.body });
+}
+
+/** A comment edit, or null when the body did not change. The server stamps `editedAt`. */
+export function commentUpdateRequest(changes: Partial<Comment>): UpdateComment | null {
+  return 'body' in changes ? updateCommentSchema.parse({ body: changes.body }) : null;
 }
 
 export function taskCreateRequest(task: Task): CreateTask {

@@ -14,8 +14,9 @@ task model (workspaces, projects, statuses, tasks and subtasks, with keys, numbe
 and ADR 0005's conflict rule; see `docs/data-model.md`), and the responsive app shell. The
 shell owns workspace and project management, a desktop navigation rail, a phone dock and
 remembered navigation. Its project/backlog and cross-project board bodies are placeholders.
-Task actions live in `apps/web/src/lib/tasks.ts` and `statuses.ts`. Tags, comments, the
-synced activity log and the board itself are not built yet.
+Task actions live in `apps/web/src/lib/tasks.ts` and `statuses.ts`. The activity log syncs
+to devices and comments are built (`lib/comments.ts`), with a timeline query in
+`collections.ts` but no timeline view. Tags and the board itself are not built yet.
 
 The board's interaction was worked out in a prototype on mock data: `/prototype/board`, in
 development builds only, with its components in `apps/web/src/components/Board`. It has no

@@ -1,3 +1,4 @@
+import { SYNCED_ACTIVITY_KINDS } from '@throw/shared';
 import { Hono } from 'hono';
 import type { AppEnv } from '../context';
 import { env } from '../env';
@@ -56,6 +57,36 @@ const SHAPES: Record<string, { table: string; columns: string[]; where: string }
       'closed_at',
       'deleted_at',
       'created_at',
+    ],
+    where: `workspace_id IN (${MEMBER_WORKSPACES})`,
+  },
+  // The log of every task above, so a task's timeline reads offline. Entries that only record
+  // a reorder's change id stay on the server.
+  task_activity: {
+    table: 'task_activity',
+    columns: [
+      'id',
+      'workspace_id',
+      'project_id',
+      'task_id',
+      'user_id',
+      'kind',
+      'changes',
+      'created_at',
+    ],
+    where: `kind IN (${SYNCED_ACTIVITY_KINDS.map((kind) => `'${kind}'`).join(', ')}) AND workspace_id IN (${MEMBER_WORKSPACES})`,
+  },
+  comments: {
+    table: 'comments',
+    columns: [
+      'id',
+      'workspace_id',
+      'project_id',
+      'task_id',
+      'user_id',
+      'body',
+      'created_at',
+      'edited_at',
     ],
     where: `workspace_id IN (${MEMBER_WORKSPACES})`,
   },

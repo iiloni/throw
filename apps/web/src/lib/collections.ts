@@ -13,11 +13,15 @@ import {
 } from '@tanstack/offline-transactions';
 import {
   createCollection,
+  eq,
   type PendingMutation,
   type Transaction,
   useLiveQuery,
 } from '@tanstack/react-db';
 import {
+  activityEntrySchema,
+  type Comment,
+  commentSchema,
   createStatusSchema,
   createWorkspaceSchema,
   type Project,
@@ -48,8 +52,11 @@ import { reportRefusedChanges } from './refusedChanges';
 import { getServerUrl } from './serverUrl';
 import { shapeFetch } from './shapeFetch';
 import { addPendingWrite, getSyncStatus, settlePendingWrite, updateSyncStatus } from './syncStatus';
+import { taskTimeline } from './timeline';
 import {
   changeIdFor,
+  commentCreateRequest,
+  commentUpdateRequest,
   projectCreateRequest,
   projectUpdateRequest,
   statusUpdateRequest,
@@ -61,6 +68,9 @@ import {
 // shows and edits its data without a connection (ADR 0002).
 const user = await resolveSignedInUser();
 const database = user ? await openLocalDatabase(user.id) : null;
+
+/** Who this device's writes come from, as the server will record it. */
+export const signedInUserId = user?.id ?? null;
 
 /** Keeps nothing: without a database, collections live in memory. */
 const memoryOnly: PersistedCollectionPersistence = {
@@ -162,11 +172,43 @@ export const tasksCollection = createCollection(
   ),
 );
 
+/**
+ * The tasks' activity log (ADR 0006). The server writes every entry; devices only read it, so
+ * it is not writable. It always syncs because a task's timeline reads offline.
+ */
+export const activityCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      ...alwaysSynced,
+      id: 'task_activity',
+      schema: activityEntrySchema,
+      getKey: (entry) => entry.id,
+      shapeOptions: shapeOptions('task_activity'),
+    }),
+    1,
+  ),
+);
+
+/** The comments on those tasks. */
+export const commentsCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      ...alwaysSynced,
+      id: 'comments',
+      schema: commentSchema,
+      getKey: (comment) => comment.id,
+      shapeOptions: shapeOptions('comments'),
+    }),
+    1,
+  ),
+);
+
 const writableCollections = {
   workspaces: workspacesCollection,
   projects: projectsCollection,
   statuses: statusesCollection,
   tasks: tasksCollection,
+  comments: commentsCollection,
 };
 
 type WritableCollection = (typeof writableCollections)[keyof typeof writableCollections];
@@ -344,7 +386,7 @@ function send(
         if (!body) return null;
         return sending(
           api.updateTask(key, body).then((response) => {
-            reportRefusedChanges(key, response.refused);
+            reportRefusedChanges(key, response.refused, body.changeId);
             return response;
           }),
           tasksCollection,
@@ -360,6 +402,21 @@ function send(
           return null;
         return sending(api.purgeTask(key), tasksCollection);
       }
+    }
+  }
+  if (mutation.collection.id === commentsCollection.id) {
+    switch (mutation.type) {
+      case 'insert':
+        return sending(
+          api.createComment(commentCreateRequest(mutation.modified as Comment)),
+          commentsCollection,
+        );
+      case 'update': {
+        const body = commentUpdateRequest(mutation.changes as Partial<Comment>);
+        return body ? sending(api.updateComment(key, body), commentsCollection) : null;
+      }
+      case 'delete':
+        return sending(api.deleteComment(key), commentsCollection);
     }
   }
   throw new NonRetriableError(`Writes to ${mutation.collection.id} are not supported`);
@@ -496,4 +553,32 @@ export function useStatuses() {
 export function useTasks() {
   const { data = [], isLoading } = useLiveQuery((q) => q.from({ task: tasksCollection }));
   return { tasks: data, isLoading };
+}
+
+/**
+ * A task's timeline as the device holds it now: its log entries and comments in the server's
+ * order, with comments not yet received by the server last (see `taskTimeline`).
+ */
+export function readTaskTimeline(taskId: string) {
+  return taskTimeline(
+    [...activityCollection.values()].filter((entry) => entry.taskId === taskId),
+    [...commentsCollection.values()].filter((comment) => comment.taskId === taskId),
+  );
+}
+
+/** `readTaskTimeline`, kept up to date. */
+export function useTaskTimeline(taskId: string) {
+  const entries = useLiveQuery(
+    (q) => q.from({ entry: activityCollection }).where(({ entry }) => eq(entry.taskId, taskId)),
+    [taskId],
+  );
+  const comments = useLiveQuery(
+    (q) =>
+      q.from({ comment: commentsCollection }).where(({ comment }) => eq(comment.taskId, taskId)),
+    [taskId],
+  );
+  return {
+    timeline: taskTimeline(entries.data ?? [], comments.data ?? []),
+    isLoading: entries.isLoading || comments.isLoading,
+  };
 }
