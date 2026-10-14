@@ -333,8 +333,9 @@ selection to a status.
   backlog first, then each active column, then the closed zone. It opens on the first active
   column. The backlog is a page rather than a drawer, so it is never covered by the dock and
   a card moves out of it the way it moves between columns. While a card is held, each page
-  narrows a little so the pages beside it peek in at the edges as where the card can go
-  next; at rest a page fills the screen.
+  narrows a little and the pages beside it peek in at the edges as bare rounded surfaces,
+  without their cards: targets that turn the board, kept quiet. At rest a page fills the
+  screen.
 - A long press without movement selects a card. Moving after the press drags it. A touch
   that moves before the press completes scrolls.
 - While a card is held, the dock gives way to a glass drawer at the bottom edge. It opens
@@ -343,8 +344,8 @@ selection to a status.
   cards to any status without scrolling the board. Above the drawer the column scrolls
   under the held card. With cards selected the drawer is open and tapping a status moves
   them. On the backlog and closed pages, the status filters are dropzones for any card.
-- Holding a card in the outer 44 CSS pixels, where the next page peeks in, leans that page
-  further in, and the page turns after about half a second.
+- Holding a card in the outer 44 CSS pixels, where the next page peeks in, leans that
+  surface further in and tints it, and the page turns after about half a second.
 - Card titles are 16 CSS pixels on a phone. A held card's column shows each collapsed
   priority as its name alone, on a fainter bar, so it stays quiet on a small screen.
 - Swipe gestures on cards (to move or close them) are polish for later.

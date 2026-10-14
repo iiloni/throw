@@ -181,8 +181,9 @@ function PageSpacer() {
 }
 
 /**
- * One page of the phone board. While a held card waits at the side it peeks in from, it
- * leans further in, and turns into view when the wait is over.
+ * One page of the phone board. While a card is held, the pages beside the current one show
+ * as bare surfaces at the screen's edges: targets that turn the board, not their cards. One
+ * the card waits at leans further in and turns into view when the wait is over.
  */
 function Page({
   index,
@@ -196,8 +197,10 @@ function Page({
   children: ReactNode;
 }) {
   const held = drag.use();
-  const side = held?.phase === 'dragging' ? held.page : 0;
+  const dragging = held?.phase === 'dragging';
+  const side = dragging ? held.page : 0;
   const waiting = side !== 0 && index === current + side;
+  const bare = dragging && index !== current;
   return (
     // Leaning moves an inner box: scroll snapping measures the page with its transform.
     <div
@@ -206,12 +209,29 @@ function Page({
       className="flex w-[calc(100%-2*var(--peek))] shrink-0 snap-center"
     >
       <motion.div
-        className="flex min-w-0 flex-1 flex-col"
+        className="relative flex min-w-0 flex-1 flex-col"
         initial={false}
         animate={{ x: waiting ? -side * 16 : 0 }}
         transition={springs.snappy}
       >
-        {children}
+        <motion.div
+          className="flex min-h-0 flex-1 flex-col"
+          initial={false}
+          animate={{ opacity: bare ? 0 : 1 }}
+          transition={{ duration: 0.15 }}
+        >
+          {children}
+        </motion.div>
+        <motion.div
+          aria-hidden
+          className={cn(
+            'pointer-events-none absolute inset-x-0 top-1 bottom-[calc(var(--safe-bottom)+4.5rem)] rounded-3xl transition-colors',
+            waiting ? 'bg-brand/20' : 'bg-foreground/[0.06]',
+          )}
+          initial={false}
+          animate={{ opacity: bare ? 1 : 0 }}
+          transition={{ duration: 0.15 }}
+        />
       </motion.div>
     </div>
   );
