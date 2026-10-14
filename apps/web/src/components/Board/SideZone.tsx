@@ -15,7 +15,15 @@ import { CardList } from './CardList';
 import { drag } from './drag';
 import { type Category, groupByPriority, priorityName, type Status } from './model';
 import { StatusTile } from './StatusTile';
-import { board, countIn, current, listTasks, update, type ZoneState } from './state';
+import {
+  board,
+  countIn,
+  current,
+  listTasks,
+  update,
+  useBoardSettings,
+  type ZoneState,
+} from './state';
 import { TaskCard } from './TaskCard';
 
 export const ZONES = {
@@ -25,8 +33,11 @@ export const ZONES = {
 export type Zone = keyof typeof ZONES;
 
 export const STRIP_WIDTH = 64;
-const TILES_WIDTH = 148;
 const PANEL_WIDTH = 304;
+
+export function zoneWidth(view: ZoneState, fullWidth: number) {
+  return view === 'full' ? fullWidth : view === 'panel' ? PANEL_WIDTH : STRIP_WIDTH;
+}
 
 export function zoneStatuses(zone: Zone, statuses: Status[]) {
   return statuses.filter((status) => ZONES[zone].categories.includes(status.category));
@@ -38,11 +49,12 @@ export function zoneStatuses(zone: Zone, statuses: Status[]) {
  * it was in.
  *
  * These are not columns and do not look like them: they are rails that run the height of
- * the window on the page itself, never on a column's surface.
+ * the window, over the ends of the columns' scroller, and never take a column's surface.
  */
 export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number }) {
   const state = board.use();
   const held = drag.use();
+  const [settings] = useBoardSettings();
   const { project } = current(state);
   const { title, icon: Icon } = ZONES[zone];
   const statuses = zoneStatuses(zone, project.statuses);
@@ -51,7 +63,7 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
   const dragging = held?.phase === 'dragging';
   // A card held from this zone keeps the zone as it is, so it can still be placed here.
   const tiles = dragging && held.origin !== zone;
-  const width = view === 'full' ? fullWidth : view === 'panel' ? PANEL_WIDTH : STRIP_WIDTH;
+  const width = zoneWidth(view, fullWidth);
   const other = zone === 'backlog' ? 'closed' : 'backlog';
   // A gallery takes the board, so the opposite zone steps back to its strip.
   const setView = (next: ZoneState) =>
@@ -62,32 +74,40 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
       aria-label={title}
       data-origin={zone}
       data-status-home={statuses.map((status) => status.id).join(' ')}
-      // Dropzones float over the board's edge: widening the zone would slide the columns
-      // out from under the held card.
-      className={cn('relative z-20 flex min-h-0 shrink-0 flex-col', !tiles && 'overflow-hidden')}
+      data-side={zone === 'backlog' ? 'start' : 'end'}
+      data-surface={settings.railSurface}
+      data-open={view === 'strip' ? undefined : ''}
+      className="board-rail relative z-20 flex min-h-0 shrink-0 flex-col overflow-hidden"
       initial={false}
       animate={{ width }}
       transition={springs.smooth}
     >
       <AnimatePresence initial={false}>
         {tiles ? (
+          // The rail keeps its width and turns into the targets: nothing on the board moves
+          // or is covered for a card that is only passing.
           <motion.div
             key="tiles"
-            className="glass-thick absolute inset-y-3 flex flex-col gap-2.5 rounded-3xl p-3"
-            style={{
-              width: Math.max(TILES_WIDTH, width),
-              [zone === 'backlog' ? 'left' : 'right']: 8,
-            }}
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
+            className={cn(
+              'absolute inset-0 flex flex-col pt-[calc(var(--safe-top)+1.25rem)] pb-6',
+              view === 'strip' ? 'gap-2 px-2' : 'gap-2.5 px-3.5',
+            )}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.16 }}
           >
-            <p className="px-1.5 pt-1.5 pb-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
-              {title}
-            </p>
+            {view !== 'strip' && (
+              <p className="px-1.5 pt-1.5 pb-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
+                {title}
+              </p>
+            )}
             {statuses.map((status) => (
-              <StatusTile key={status.id} status={status} />
+              <StatusTile
+                key={status.id}
+                status={status}
+                shape={view === 'strip' ? 'strip' : 'block'}
+              />
             ))}
           </motion.div>
         ) : view === 'strip' ? (

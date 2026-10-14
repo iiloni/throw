@@ -83,7 +83,10 @@ let press: Press | null = null;
 let longPress: number | undefined;
 let pointer = { x: 0, y: 0 };
 let grab = { x: 0, y: 0 };
-let moved = false;
+/** A touch held long enough to select its card; moving it from here is a drag. */
+let primed = false;
+/** Whether that hold selected a card that was not selected before. */
+let primedSelect = false;
 let frame: number | undefined;
 let dwell: { key: string; since: number } | null = null;
 let armed: string | null = null;
@@ -112,13 +115,21 @@ if (typeof window !== 'undefined') {
   window.addEventListener(
     'touchmove',
     (event) => {
-      if (drag.get()?.phase === 'dragging') event.preventDefault();
+      if (primed || drag.get()?.phase === 'dragging') event.preventDefault();
     },
     { passive: false },
   );
 }
 
-/** Start watching a press on a card. It becomes a drag on movement, or on a held touch. */
+/** True while a held touch has selected a card and may yet become a drag. */
+export function isPrimed() {
+  return primed;
+}
+
+/**
+ * Start watching a press on a card. A mouse drags it on movement. A touch has to hold
+ * first, which selects the card; moving after that drags it.
+ */
 export function pressCard(event: ReactPointerEvent<HTMLElement>, taskId: string) {
   if (event.button !== 0 || drag.get() || press) return;
   if (event.target instanceof Element && event.target.closest('[data-no-drag]')) return;
@@ -130,8 +141,7 @@ export function pressCard(event: ReactPointerEvent<HTMLElement>, taskId: string)
     element: event.currentTarget,
   };
   pointer = { x: event.clientX, y: event.clientY };
-  moved = false;
-  if (press.touch) longPress = window.setTimeout(begin, LONG_PRESS_MS);
+  if (press.touch) longPress = window.setTimeout(prime, LONG_PRESS_MS);
   window.addEventListener('pointermove', onPointerMove);
   window.addEventListener('pointerup', onPointerUp);
   window.addEventListener('pointercancel', onPointerCancel);
@@ -147,6 +157,8 @@ function release() {
   if (frame !== undefined) cancelAnimationFrame(frame);
   frame = undefined;
   press = null;
+  primed = false;
+  primedSelect = false;
   dwell = null;
   armed = null;
   folded = null;
@@ -158,20 +170,21 @@ function onPointerMove(event: PointerEvent) {
   pointer = { x: event.clientX, y: event.clientY };
   const distance = Math.hypot(pointer.x - press.x, pointer.y - press.y);
   if (!drag.get()) {
-    // A touch that travels before the hold completes is a scroll.
     if (press.touch) {
-      if (distance > TOUCH_SLOP) release();
+      // A touch that travels before the hold completes is a scroll.
+      if (distance > TOUCH_SLOP) primed ? begin() : release();
     } else if (distance > MOUSE_SLOP) begin();
     return;
   }
-  if (distance > MOUSE_SLOP) moved = true;
   overlayPosition.x.set(pointer.x - grab.x);
   overlayPosition.y.set(pointer.y - grab.y);
 }
 
 function onPointerUp() {
-  if (drag.get()) finish(true);
-  else release();
+  if (drag.get()) return finish(true);
+  // The hold already selected the card; the click that follows must not undo it.
+  if (primed) swallowClick();
+  release();
 }
 
 function onPointerCancel() {
@@ -186,6 +199,23 @@ function onKeyDown(event: KeyboardEvent) {
   finish(false);
 }
 
+function swallowClick() {
+  suppressClick = true;
+  window.setTimeout(() => {
+    suppressClick = false;
+  }, 80);
+}
+
+function prime() {
+  if (!press) return;
+  primed = true;
+  navigator.vibrate?.(12);
+  if (!board.get().selection.includes(press.taskId)) {
+    primedSelect = true;
+    toggleSelected(press.taskId);
+  }
+}
+
 function begin() {
   if (!press) return;
   const { taskId, element, touch } = press;
@@ -193,17 +223,25 @@ function begin() {
   const task = tasks.find((item) => item.id === taskId);
   if (!task) return release();
   // With its underlay, when it has one.
-  const rect = (element.closest('[data-card-root]') ?? element).getBoundingClientRect();
-  grab = { x: pointer.x - rect.left, y: pointer.y - rect.top };
-  overlayPosition.x.jump(rect.left);
-  overlayPosition.y.jump(rect.top);
+  const root = element.closest('[data-card-root]') ?? element;
+  const rect = root.getBoundingClientRect();
+  // A card travels with its subtasks folded away, so it is measured without them.
+  const unfolded = board.get().expanded.includes(taskId)
+    ? (root.querySelector('[data-subtask-list]')?.getBoundingClientRect().height ?? 0)
+    : 0;
+  update((state) => ({ expanded: state.expanded.filter((id) => id !== taskId) }));
+  grab = { x: pointer.x - rect.left, y: Math.min(pointer.y - rect.top, rect.height - unfolded) };
+  overlayPosition.x.jump(pointer.x - grab.x);
+  overlayPosition.y.jump(pointer.y - grab.y);
+  // The hold selected this card alone: it is being moved, not gathered into a selection.
+  if (primedSelect && board.get().selection.length === 1) update({ selection: [] });
   const selection = board.get().selection;
   drag.set({
     ids: selection.includes(taskId)
       ? [taskId, ...selection.filter((id) => id !== taskId)]
       : [taskId],
     width: rect.width,
-    height: rect.height,
+    height: rect.height - unfolded,
     grab,
     origin: element.closest<HTMLElement>('[data-origin]')?.dataset.origin ?? null,
     priority: task.priority,
@@ -374,9 +412,14 @@ function autoScroll() {
   const row = document.querySelector<HTMLElement>('[data-autoscroll-x]');
   if (row && row.scrollWidth > row.clientWidth) {
     const rect = row.getBoundingClientRect();
-    if (pointer.y > rect.top && pointer.y < rect.bottom) {
-      const left = rect.left + EDGE - pointer.x;
-      const right = pointer.x - (rect.right - EDGE);
+    // The rails lie over the scroller's ends; its edges are where they stop.
+    const start = rect.left + Number(row.dataset.insetStart ?? 0);
+    const end = rect.right - Number(row.dataset.insetEnd ?? 0);
+    // Over a rail the card is headed for it, not for a column further along.
+    const between = pointer.x >= start && pointer.x <= end;
+    if (between && pointer.y > rect.top && pointer.y < rect.bottom) {
+      const left = start + EDGE - pointer.x;
+      const right = pointer.x - (end - EDGE);
       if (left > 0 && left < EDGE * 2) row.scrollLeft -= Math.min(14, left / 4);
       else if (right > 0 && right < EDGE * 2) row.scrollLeft += Math.min(14, right / 4);
     }
@@ -399,7 +442,6 @@ function autoScroll() {
 function finish(commit: boolean) {
   const state = drag.get();
   const wasTouch = press?.touch ?? false;
-  const held = moved;
   release();
   if (!state) return;
   const [lead] = state.ids;
@@ -411,12 +453,7 @@ function finish(commit: boolean) {
     if (statusId) sendTasks(state.ids, statusId);
   }
   if (target && state.ids.length > 1) update({ selection: [] });
-  // Lifting a card and setting it straight back down selects it.
-  if (commit && wasTouch && !held) toggleSelected(lead!);
-  suppressClick = !wasTouch;
-  window.setTimeout(() => {
-    suppressClick = false;
-  }, 80);
+  if (!wasTouch) swallowClick();
   if (target) tick(14);
   drag.set({ ...state, phase: 'landing', target: null, rail: null });
   land(lead!, target?.kind === 'status' ? target.statusId : null);

@@ -59,6 +59,7 @@ export function SubtaskUnderlay({ parent, subtasks, inert = false }: Props) {
         />
       </button>
       <div
+        data-subtask-list=""
         className={cn(
           'grid transition-[grid-template-rows] duration-300 ease-[var(--ease-emphasized)]',
           expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',

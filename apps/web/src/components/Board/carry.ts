@@ -41,10 +41,12 @@ function listOf(taskId: string): ListId | null {
 }
 
 export function pickUp(taskId: string) {
-  update({
+  update((state) => ({
+    // A card travels with its subtasks folded away.
+    expanded: state.expanded.filter((id) => id !== taskId),
     carrying: { taskId, before: current().tasks },
     announcement: `Picked up. ${describe(taskId)}. Arrows move it, Space sets it down, Escape puts it back.`,
-  });
+  }));
 }
 
 export function setDown() {

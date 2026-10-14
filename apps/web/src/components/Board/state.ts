@@ -29,6 +29,11 @@ export const boardSettingsSchema = z.object({
    * keeps the column's layout and dims the other priorities.
    */
   heldColumn: z.enum(['compact', 'full']).default('compact'),
+  /**
+   * Still being decided, not a setting: an open backlog or closed rail is the page with a
+   * border, or glass the columns show through as they scroll beneath it.
+   */
+  railSurface: z.enum(['plain', 'glass']).default('plain'),
 });
 export type BoardSettings = z.infer<typeof boardSettingsSchema>;
 

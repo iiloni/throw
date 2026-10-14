@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import { BoardSettingsPanel } from './BoardSettingsPanel';
 import { CardList } from './CardList';
 import { drag } from './drag';
-import { SideZone, STRIP_WIDTH } from './SideZone';
+import { SideZone, STRIP_WIDTH, zoneWidth } from './SideZone';
 import { StatusMenu } from './StatusMenu';
 import { StatusTile } from './StatusTile';
 import { board, countIn, current, selectProject, sendTasks, update } from './state';
@@ -22,8 +22,8 @@ const HANDLE_WIDTH = 24;
 /** The pane's `pr-6`: the closed rail reaches the window's edge, the pane does not. */
 const PANE_MARGIN = 24;
 /**
- * Between a rail and the first column beside it. The space is inside the columns' scroller,
- * so scrolled columns pass through it and under the rail's edge.
+ * Between a rail and the first column beside it. The rails lie over the ends of the columns'
+ * scroller, so scrolled columns pass through this space and on under the rail.
  */
 const ZONE_GAP = 20;
 
@@ -40,9 +40,20 @@ function useWidth() {
   return [ref, width] as const;
 }
 
-/** With the columns' own gap, keeps the first and last column `ZONE_GAP` from the rails. */
-function ColumnsEdge() {
-  return <span aria-hidden className="w-2 shrink-0" />;
+/** The columns' own gap, which follows each of the scroller's end spacers. */
+const COLUMN_GAP = 12;
+
+/** Holds the first or last column clear of the rail that lies over that end of the scroller. */
+function ColumnsEdge({ rail }: { rail: number }) {
+  return (
+    <motion.span
+      aria-hidden
+      className="shrink-0"
+      initial={false}
+      animate={{ width: rail + ZONE_GAP - COLUMN_GAP }}
+      transition={springs.smooth}
+    />
+  );
 }
 
 /**
@@ -67,6 +78,9 @@ export function DesktopBoard() {
     0,
     rowWidth - STRIP_WIDTH - ZONE_GAP * 2 - (dragging ? TILES_WIDTH : 0),
   );
+
+  const backlogWidth = zoneWidth(state.backlog, fullWidth);
+  const closedWidth = zoneWidth(state.closed, fullWidth);
 
   return (
     <div className="flex h-dvh overflow-hidden">
@@ -122,16 +136,18 @@ export function DesktopBoard() {
       <div ref={frame} className="flex min-w-0 flex-1 flex-col">
         {/* No title row: the rail names the project, and the board keeps the height. */}
         <div className="flex min-h-0 flex-1">
-          <div ref={row} className="flex min-w-0 flex-1">
+          <div ref={row} className="relative flex min-w-0 flex-1 justify-between">
             <SideZone zone="backlog" fullWidth={fullWidth} />
-            <div className="relative flex min-w-0 flex-1">
+            <div className="absolute inset-0 flex">
               <ScrollArea className="flex-1 pt-[calc(var(--safe-top)+1.25rem)] pb-6">
                 <ScrollAreaViewport
                   data-origin="active"
                   data-autoscroll-x=""
+                  data-inset-start={backlogWidth}
+                  data-inset-end={closedWidth}
                   className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3"
                 >
-                  <ColumnsEdge />
+                  <ColumnsEdge rail={backlogWidth} />
                   {covered
                     ? dragging && (
                         <motion.div
@@ -166,17 +182,10 @@ export function DesktopBoard() {
                           }
                         />
                       ))}
-                  <ColumnsEdge />
+                  <ColumnsEdge rail={closedWidth} />
                 </ScrollAreaViewport>
                 <ScrollBar orientation="horizontal" />
               </ScrollArea>
-              {/* An open rail sits above the columns: they blur as they slide under its edge. */}
-              {state.backlog === 'panel' && (
-                <div aria-hidden className="rail-edge" data-side="left" />
-              )}
-              {state.closed === 'panel' && (
-                <div aria-hidden className="rail-edge" data-side="right" />
-              )}
             </div>
             <SideZone zone="closed" fullWidth={fullWidth} />
           </div>

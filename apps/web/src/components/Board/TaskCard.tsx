@@ -4,7 +4,7 @@ import { type KeyboardEvent, type MouseEvent, useEffect, useRef } from 'react';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { carryAcross, carryVertically, pickUp, putBack, setDown } from './carry';
-import { consumeDragClick, drag, pressCard } from './drag';
+import { consumeDragClick, drag, isPrimed, pressCard } from './drag';
 import { PriorityGlyph, StatusGlyph } from './glyphs';
 import {
   identifier,
@@ -152,7 +152,7 @@ export function TaskCard({ task, showStatus, overlay = false, className }: Props
       onClick={onClick}
       onKeyDown={overlay ? undefined : onKeyDown}
       onContextMenu={(event) => {
-        if (dragState) event.preventDefault();
+        if (dragState || isPrimed()) event.preventDefault();
       }}
       whileTap={overlay || carried ? undefined : { scale: 0.97 }}
       animate={{ scale: carried ? 1.03 : 1 }}

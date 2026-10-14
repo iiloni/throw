@@ -433,26 +433,29 @@
 }
 
 /*
- * The edge of an open backlog or closed rail, drawn over the columns beside it. The rail is
- * a surface above them: it casts a soft shadow, and columns scrolled towards it lose focus
- * before they pass underneath.
+ * The backlog and closed rails lie over the ends of the columns' scroller. Plain, a rail is
+ * the page itself and an open one draws a border; as glass, columns show through it.
  */
-.rail-edge {
-  position: absolute;
-  inset-block: 0;
-  z-index: 10;
-  width: 1.25rem;
-  pointer-events: none;
-  background: light-dark(rgb(0 0 0 / 0.07), rgb(0 0 0 / 0.4));
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  &[data-side="left"] {
-    left: 0;
-    mask-image: linear-gradient(to right, black, transparent);
+.board-rail {
+  background-color: var(--background);
+  border: 0 solid var(--border);
+  &[data-surface="glass"] {
+    background-color: var(--glass);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border-color: var(--glass-border);
+    @media (prefers-reduced-transparency: reduce) {
+      background-color: var(--background);
+      backdrop-filter: none;
+    }
   }
-  &[data-side="right"] {
-    right: 0;
-    mask-image: linear-gradient(to left, black, transparent);
+  &[data-open][data-side="start"],
+  &[data-surface="glass"][data-side="start"] {
+    border-right-width: 1px;
+  }
+  &[data-open][data-side="end"],
+  &[data-surface="glass"][data-side="end"] {
+    border-left-width: 1px;
   }
 }
 
