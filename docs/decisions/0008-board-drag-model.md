@@ -45,10 +45,10 @@ from choosing it, and the rail shows the dwell filling. With reduced motion ther
 to show, so the rail takes the card at once.
 
 **Placing and sending are different drops.** A card dropped in a column is placed. A card
-dropped on a status (a dropzone in the backlog or closed rail, a status in the phone dock)
-is sent: it keeps its priority and lands at the top of that priority. Sending is how a card
-reaches a status that shows no cards, and the held card shrinks to a token over such a
-target to say so.
+dropped on a status (a dropzone in the backlog or closed rail, the phone's move drawer or
+done pocket) is sent: it keeps its priority and lands at the top of that priority. Sending
+is how a card reaches a status that shows no cards, and the held card shrinks to a token
+over such a target to say so.
 
 **Several held cards are sent, not placed.** Each keeps its own priority, so a column takes
 the group as a whole and shows no gap.

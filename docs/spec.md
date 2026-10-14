@@ -329,21 +329,41 @@ selection to a status.
 
 ### Phone
 
-- The board shows one page at a time, swiped or chosen from tabs under the title: the
-  backlog first, then each active column, then the closed zone. It opens on the first active
-  column. The backlog is a page rather than a drawer, so it is never covered by the dock and
-  a card moves out of it the way it moves between columns. While a card is held, each page
-  narrows a little and the pages beside it peek in at the edges as bare rounded surfaces,
-  without their cards: targets that turn the board, kept quiet. At rest a page fills the
+The backlog and the closed tasks are not columns on a phone. Each has its own shape and its
+own way in and out, so the board is not a row of identical pages.
+
+- The board is the active columns, one page at a time, swiped or chosen from a flow track
+  under the title: one segment per column in board order, the columns behind the current
+  one filled in. Above the track are the current column's name and count, and the next
+  column's name, which turns to it. The board opens on the first active column.
+- The backlog is a glass tray at the bottom with three heights:
+  - **Closed**, it is the dock: the backlog's handle (a small stack of cards, its name and
+    count) beside Search and the create button.
+  - **Half open**, it is a supply of work with the board still above it. Lifting a card
+    sinks the tray out of sight, so the whole screen is board to place the card on. Its
+    cards are not reordered at this height. The tray comes back to half open after the drop.
+  - **Full**, the backlog is groomed: its cards are reordered in place, and the status
+    filters are dropzones for its own cards.
+
+  The tray is pulled between heights by its top, and tapping the handle opens or closes it.
+- While a card is held, the pages beside the current one peek in at the edges as bare
+  rounded surfaces, without their cards: targets that turn the board, kept quiet. The current
+  page draws its cards in from the edges to leave room for them. At rest a page fills the
   screen.
+- Past the last column there is a done pocket instead of a page: a card dropped there moves
+  to the project's default done status. The card flies into the header's done count, which
+  counts tasks done in the last seven days, and the count bumps.
+- The done count opens the closed tasks as a sheet: grouped by when they were closed (today,
+  yesterday, this week, earlier) and filtered by closed status. A card held there reopens
+  through the move drawer.
 - A long press without movement selects a card. Moving after the press drags it. A touch
   that moves before the press completes scrolls.
-- While a card is held, the dock gives way to a glass drawer at the bottom edge. It opens
-  into a grid of status dropzones under a label for each category (Backlog, Active,
-  Closed) when the card is brought onto it, and closes when the card leaves. This moves
-  cards to any status without scrolling the board. Above the drawer the column scrolls
-  under the held card. With cards selected the drawer is open and tapping a status moves
-  them. On the backlog and closed pages, the status filters are dropzones for any card.
+- While a card is held, from the board, the tray or the closed sheet, a glass move drawer
+  sits at the bottom edge. It opens into a grid of status dropzones under a label for each
+  category (Backlog, Active, Closed) when the card is brought onto it, and closes when the
+  card leaves. This is how a board card goes back to the backlog, and how any card reaches
+  any status without scrolling the board. Above the drawer the column scrolls under the held
+  card. With cards selected the drawer is open and tapping a status moves them.
 - Holding a card in the outer 44 CSS pixels, where the next page peeks in, leans that
   surface further in and tints it, and the page turns after about half a second.
 - Card titles are 16 CSS pixels on a phone. A held card's column shows each collapsed
@@ -377,7 +397,7 @@ view), comments and activity.
 - While a task is open on a phone, the dock holds that task's actions, as it does for a note
   in Catch.
 - The phone dock's create button adds a task at the top of the current column's default
-  priority (the backlog's default status from the backlog or closed page) and opens it with
+  priority (the backlog's default status while the backlog tray is open) and opens it with
   its title selected.
 
 ## Navigation
@@ -398,8 +418,9 @@ also covers jumping between projects.
 
 ### Phone
 
-A bottom dock with Search and a create button, as in Catch. There are no Backlog and Board
-tabs: the backlog is the board's first page, so a Board tab had nothing to switch to.
+A bottom dock with Search and a create button, as in Catch. On a project board the dock is
+the closed backlog tray, with the backlog's handle beside them. There are no Backlog and
+Board tabs: the backlog is the tray, so a Board tab had nothing to switch to.
 Project switching and the cross-project board live in the header's title menu. The shell's
 three-tab dock is replaced when the board is built.
 
@@ -411,7 +432,7 @@ board, Search shows the workspace search placeholder.
 ### Shell routes and remembered selection
 
 - `/w/:workspaceId/p/:projectId?view=board` is a project. `view=backlog` opens its
-  phone board on the backlog page and `view=search` selects the search placeholder. Search is a view of
+  phone board with the backlog tray half open and `view=search` selects the search placeholder. Search is a view of
   the current context, not a separate search page.
 - `/w/:workspaceId/board` is the cross-project board for that workspace; `view=search`
   shows its search placeholder.

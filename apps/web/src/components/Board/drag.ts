@@ -476,9 +476,12 @@ function autoScroll() {
   if (scroller) {
     const rect = scroller.getBoundingClientRect();
     // A surface over the end of the list (the phone's drawer) is a target of its own, so
-    // the list scrolls from just above it.
-    const block = document.querySelector('[data-drop-block]')?.getBoundingClientRect();
-    const bottom = block && block.top > rect.top ? Math.min(rect.bottom, block.top) : rect.bottom;
+    // the list scrolls from just above it. One the list itself lies on is not in the way.
+    let bottom = rect.bottom;
+    for (const block of document.querySelectorAll('[data-drop-block]')) {
+      const { top } = block.getBoundingClientRect();
+      if (top > rect.top) bottom = Math.min(bottom, top);
+    }
     const up = rect.top + EDGE - pointer.y;
     const down = pointer.y - (bottom - EDGE);
     if (up > 0) scroller.scrollTop -= Math.min(16, up / 4);
