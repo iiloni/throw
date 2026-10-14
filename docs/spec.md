@@ -271,6 +271,7 @@ device.
 | Priority labels | Off | Names each priority zone in a column at rest. |
 | Priority on cards | Off | Marks a card's priority on the card. A card of the default priority is never marked. |
 | Column backgrounds | On | Gives each active column a faint surface. |
+| Backlog rail, Closed rail | Sticky | One setting for each. Sticky keeps the rail at the window's edge with the columns scrolling beneath it. With board puts it at its end of the columns, and it scrolls away with them. |
 | Scrollbars | Off | Draws scrollbars. Off, a faded edge shows where a list goes on. |
 | Holding a card | Compact **(assumed default)** | Compact or Full; see [Ordering and priority](#ordering-and-priority). |
 | Theme | System | System, Light or Dark. |

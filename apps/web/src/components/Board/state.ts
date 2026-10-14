@@ -30,6 +30,12 @@ export const boardSettingsSchema = z.object({
    */
   heldColumn: z.enum(['compact', 'full']).default('compact'),
   /**
+   * Each of the backlog and closed rails: `sticky` keeps it at the window's edge with the
+   * columns scrolling beneath, `bound` puts it at its end of the columns and scrolls it too.
+   */
+  backlogRail: z.enum(['sticky', 'bound']).default('sticky'),
+  closedRail: z.enum(['sticky', 'bound']).default('sticky'),
+  /**
    * Draw scrollbars. Off, a faded edge is all that says a list goes on; some people need the
    * bar itself.
    */

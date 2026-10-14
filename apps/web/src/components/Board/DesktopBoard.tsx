@@ -14,7 +14,15 @@ import { drag } from './drag';
 import { railWidth, SideZone, STRIP_WIDTH, zoneWidth } from './SideZone';
 import { StatusMenu } from './StatusMenu';
 import { StatusTile } from './StatusTile';
-import { board, countIn, current, selectProject, sendTasks, update } from './state';
+import {
+  board,
+  countIn,
+  current,
+  selectProject,
+  sendTasks,
+  update,
+  useBoardSettings,
+} from './state';
 import { PANE_MIN, SplitHandle, TaskPane } from './TaskView';
 
 const TILES_WIDTH = 176;
@@ -73,6 +81,11 @@ function ColumnsEdge({ rail, trailing = false }: { rail: number; trailing?: bool
   );
 }
 
+/** With the columns' own gap, the space between a bound rail and the column beside it. */
+function RailGap() {
+  return <span aria-hidden style={{ width: ZONE_GAP - COLUMN_GAP }} className="shrink-0" />;
+}
+
 /**
  * The board on a wide screen: backlog, active columns and the closed zone in a row, with an
  * open task taking width from all three.
@@ -81,6 +94,10 @@ export function DesktopBoard() {
   const state = board.use();
   const held = drag.use();
   const { project, tasks } = current(state);
+  const [settings] = useBoardSettings();
+  // Bound rails sit at the two ends of the columns' scroller and scroll away with them.
+  const backlogBound = settings.backlogRail === 'bound';
+  const closedBound = settings.closedRail === 'bound';
   const [frame, frameWidth] = useWidth();
   const [row, rowWidth] = useWidth();
   const [paneWidth, setPaneWidth] = useState(440);
@@ -125,6 +142,25 @@ export function DesktopBoard() {
 
   const backlogWidth = zoneWidth(state.backlog, fullWidth);
   const closedWidth = zoneWidth(state.closed, fullWidth);
+
+  // A bound closed rail opens past the end of the scroller, so the scroller follows it.
+  const closedView = state.closed;
+  const followed = useRef(closedView);
+  useEffect(() => {
+    if (followed.current === closedView) return;
+    followed.current = closedView;
+    const scroller = row.current?.querySelector<HTMLElement>('[data-autoscroll-x]');
+    if (!closedBound || !scroller || closedView === 'strip') return;
+    const started = performance.now();
+    let frame = requestAnimationFrame(function follow(now) {
+      scroller.scrollLeft = scroller.scrollWidth;
+      if (now - started < 700) frame = requestAnimationFrame(follow);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [closedBound, closedView, row]);
+
+  const backlogRail = <SideZone zone="backlog" fullWidth={fullWidth} />;
+  const closedRail = <SideZone zone="closed" fullWidth={fullWidth} />;
 
   return (
     <div className="flex h-dvh overflow-hidden">
@@ -180,30 +216,38 @@ export function DesktopBoard() {
       <div ref={frame} className="flex min-w-0 flex-1 flex-col">
         {/* No title row: the rail names the project, and the board keeps the height. */}
         <div className="flex min-h-0 flex-1">
-          <div ref={row} className="relative flex min-w-0 flex-1 justify-between">
-            <SideZone zone="backlog" fullWidth={fullWidth} />
+          <div ref={row} className="relative flex min-w-0 flex-1">
+            {!backlogBound && backlogRail}
             <div className="absolute inset-0 flex">
-              <ScrollArea className="flex-1 pt-[calc(var(--safe-top)+1.25rem)] pb-6">
+              {/* The columns carry the top and bottom margin, so a rail in here runs full height. */}
+              <ScrollArea className="flex-1">
                 <ScrollAreaViewport
                   data-origin="active"
                   data-autoscroll-x=""
-                  data-inset-start={railWidth(
-                    state.backlog,
-                    fullWidth,
-                    dragging && held.origin !== 'backlog',
-                  )}
-                  data-inset-end={railWidth(
-                    state.closed,
-                    fullWidth,
-                    dragging && held.origin !== 'closed',
-                  )}
+                  data-inset-start={
+                    backlogBound
+                      ? 0
+                      : railWidth(state.backlog, fullWidth, dragging && held.origin !== 'backlog')
+                  }
+                  data-inset-end={
+                    closedBound
+                      ? 0
+                      : railWidth(state.closed, fullWidth, dragging && held.origin !== 'closed')
+                  }
                   className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3"
                 >
-                  <ColumnsEdge rail={backlogWidth} />
+                  {backlogBound ? (
+                    <>
+                      {backlogRail}
+                      <RailGap />
+                    </>
+                  ) : (
+                    <ColumnsEdge rail={backlogWidth} />
+                  )}
                   {covered
                     ? dragging && (
                         <motion.div
-                          className="flex shrink-0 flex-col gap-2.5 p-1"
+                          className="mt-[calc(var(--safe-top)+1.25rem)] mb-6 flex shrink-0 flex-col gap-2.5 p-1"
                           style={{ width: TILES_WIDTH }}
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
@@ -221,7 +265,7 @@ export function DesktopBoard() {
                           key={status.id}
                           listId={`status:${status.id}`}
                           surface
-                          className="min-w-[17.5rem] max-w-[27rem] flex-1 pb-2"
+                          className="mt-[calc(var(--safe-top)+1.25rem)] mb-6 min-w-[17.5rem] max-w-[27rem] flex-1 pb-2"
                           header={
                             <div className="flex h-14 shrink-0 items-center gap-2.5 px-5">
                               <h2 className="truncate font-display font-semibold text-lg tracking-[-0.01em]">
@@ -234,12 +278,21 @@ export function DesktopBoard() {
                           }
                         />
                       ))}
-                  <ColumnsEdge rail={closedWidth} trailing />
+                  {closedBound ? (
+                    <>
+                      <RailGap />
+                      {closedRail}
+                    </>
+                  ) : (
+                    <ColumnsEdge rail={closedWidth} trailing />
+                  )}
                 </ScrollAreaViewport>
                 <ScrollBar orientation="horizontal" />
               </ScrollArea>
             </div>
-            <SideZone zone="closed" fullWidth={fullWidth} />
+            {/* Keeps a sticky closed rail at the far edge when the backlog is not beside it. */}
+            <span aria-hidden className="pointer-events-none flex-1" />
+            {!closedBound && closedRail}
           </div>
 
           <AnimatePresence initial={false}>

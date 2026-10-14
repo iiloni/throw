@@ -153,6 +153,28 @@ export function BoardSettingsPanel({ side = 'right' }: { side?: 'right' | 'botto
               onChange={(value) => set('heldColumn', value)}
             />
           </Row>
+          {(
+            [
+              ['backlogRail', 'Backlog'],
+              ['closedRail', 'Closed'],
+            ] as const
+          ).map(([key, label]) => (
+            <Row
+              key={key}
+              label={label}
+              hint="Sticky stays at the window's edge. With board scrolls with the columns."
+            >
+              <Segmented
+                label={label}
+                value={settings[key]}
+                options={[
+                  ['sticky', 'Sticky'],
+                  ['bound', 'With board'],
+                ]}
+                onChange={(value) => set(key, value)}
+              />
+            </Row>
+          ))}
           <Row label="Theme">
             <Segmented
               label="Theme"
