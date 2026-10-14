@@ -2,31 +2,17 @@ import { ChevronDown, Columns3, LayoutDashboard, Search, X } from 'lucide-react'
 import { animate, motion, useMotionValue } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
 import { type PointerEvent, useEffect, useRef, useState } from 'react';
-import { BottomSheet } from '@/components/BottomSheet/BottomSheet';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
-import { Button } from '@/components/ui/button';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
+import { BoardSettingsPanel } from './BoardSettingsPanel';
 import { CardList } from './CardList';
 import { drag } from './drag';
-import { PriorityGlyph } from './glyphs';
-import { CATEGORIES, type Category, PRIORITIES, priorityName, type Status } from './model';
-import { PrototypePanel } from './PrototypePanel';
+import type { Category, Status } from './model';
 import { StatusFilter } from './SideZone';
-import { CATEGORY_NAMES } from './StatusMenu';
 import { StatusTile } from './StatusTile';
-import {
-  board,
-  countIn,
-  current,
-  listTasks,
-  prioritize,
-  selectProject,
-  sendTasks,
-  update,
-  useVariants,
-} from './state';
+import { board, countIn, current, listTasks, selectProject, sendTasks, update } from './state';
 import { TaskCard } from './TaskCard';
 
 const DOCK_SPACE = 'var(--dock-space)';
@@ -98,7 +84,7 @@ export function PhoneBoard() {
             </DropdownMenu.Portal>
           </DropdownMenu.Root>
           <span className="flex-1" />
-          <PrototypePanel side="bottom" />
+          <BoardSettingsPanel side="bottom" />
         </div>
         <div className="flex gap-1.5 overflow-x-auto px-4 pb-4 [scrollbar-width:none]">
           {pages.map((name, index) => (
@@ -273,8 +259,9 @@ function byCategory(statuses: Status[]) {
 }
 
 /**
- * The dock. At rest it is the three tabs. With a card held or cards selected it becomes the
- * statuses they can be sent to, in whichever arrangement is under test.
+ * The dock. At rest it is the three tabs. With a card held or cards selected it becomes a
+ * grid of every status, grouped by category, so a card reaches any of them without the
+ * board being scrolled.
  */
 function PhoneDock({
   drawer,
@@ -287,24 +274,13 @@ function PhoneDock({
 }) {
   const state = board.use();
   const held = drag.use();
-  const [variants] = useVariants();
-  const [sheet, setSheet] = useState(false);
   const { project } = current(state);
   const selected = state.selection.length;
   const dragging = held?.phase === 'dragging';
-  const mode =
-    variants.phoneMoves === 'sheet'
-      ? selected > 0 && !dragging
-        ? 'bar'
-        : 'tabs'
-      : dragging || selected > 0
-        ? variants.phoneMoves
-        : 'tabs';
   const pick = selected > 0 && !dragging;
   const send = (statusId: string) => {
     sendTasks(state.selection, statusId);
     update({ selection: [] });
-    setSheet(false);
   };
   const tab = drawer === 'closed' ? 'board' : 'backlog';
 
@@ -319,57 +295,35 @@ function PhoneDock({
         style={{ borderRadius: 22 }}
         className="glass pointer-events-auto w-full max-w-md overflow-hidden"
       >
-        {pick && mode !== 'tabs' && (
+        {pick && (
           <motion.div layout="position" className="flex h-12 items-center pr-1.5 pl-4">
             <span className="flex-1 font-medium text-sm tabular-nums">{selected} selected</span>
-            {mode === 'bar' && (
-              <Button size="sm" className="mr-1 rounded-xl" onClick={() => setSheet(true)}>
-                Move
-              </Button>
-            )}
             <IconButton label="Clear selection" onClick={() => update({ selection: [] })}>
               <X />
             </IconButton>
           </motion.div>
         )}
-        {mode === 'grid' && (
-          <motion.div layout="position" className="space-y-2 p-2.5">
+        {dragging || pick ? (
+          <motion.div layout="position" className={cn('space-y-2.5 p-3', pick && 'pt-0')}>
             {byCategory(project.statuses).map((group) => (
-              <div key={group.name} className="grid grid-cols-3 gap-2">
-                {group.statuses.map((status) => (
-                  <StatusTile
-                    key={status.id}
-                    status={status}
-                    shape="row"
-                    onPick={pick ? () => send(status.id) : undefined}
-                  />
-                ))}
-              </div>
+              <section key={group.name}>
+                <h3 className="px-1 pb-1.5 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
+                  {group.name}
+                </h3>
+                <div className="grid grid-cols-3 gap-2">
+                  {group.statuses.map((status) => (
+                    <StatusTile
+                      key={status.id}
+                      status={status}
+                      shape="row"
+                      onPick={pick ? () => send(status.id) : undefined}
+                    />
+                  ))}
+                </div>
+              </section>
             ))}
           </motion.div>
-        )}
-        {mode === 'strip' && (
-          <motion.div
-            layout="position"
-            data-autoscroll-x=""
-            className="flex gap-2 overflow-x-auto p-2.5 [scrollbar-width:none]"
-          >
-            {project.statuses.map((status, index) => (
-              <StatusTile
-                key={status.id}
-                status={status}
-                shape="row"
-                onPick={pick ? () => send(status.id) : undefined}
-                className={cn(
-                  'w-32 shrink-0',
-                  // A wider step where the category changes.
-                  index > 0 && project.statuses[index - 1]!.category !== status.category && 'ml-2',
-                )}
-              />
-            ))}
-          </motion.div>
-        )}
-        {mode === 'tabs' && (
+        ) : (
           <motion.nav
             layout="position"
             aria-label="Project views"
@@ -401,57 +355,6 @@ function PhoneDock({
           </motion.nav>
         )}
       </motion.div>
-
-      <BottomSheet
-        open={sheet}
-        onOpenChange={setSheet}
-        title={`Move ${selected} ${selected === 1 ? 'task' : 'tasks'}`}
-      >
-        <div className="space-y-3 pb-2">
-          {CATEGORIES.map((category) => (
-            <section key={category}>
-              <h3 className="px-1 pb-1 text-muted-foreground text-xs">
-                {CATEGORY_NAMES[category]}
-              </h3>
-              <div className="grid grid-cols-2 gap-1.5">
-                {project.statuses
-                  .filter((status) => status.category === category)
-                  .map((status) => (
-                    <StatusTile
-                      key={status.id}
-                      status={status}
-                      shape="row"
-                      onPick={() => send(status.id)}
-                    />
-                  ))}
-              </div>
-            </section>
-          ))}
-          <section>
-            <h3 className="px-1 pb-1 text-muted-foreground text-xs">Priority</h3>
-            <div className="grid grid-cols-5 gap-1.5">
-              {PRIORITIES.map((priority) => (
-                <button
-                  key={priority}
-                  type="button"
-                  aria-label={priorityName(project, priority)}
-                  onClick={() => {
-                    prioritize(state.selection, priority);
-                    update({ selection: [] });
-                    setSheet(false);
-                  }}
-                  className="flex h-12 flex-col items-center justify-center rounded-2xl bg-foreground/[0.06] text-[0.6875rem] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
-                >
-                  <PriorityGlyph priority={priority} name={priorityName(project, priority)} />
-                  <span className="max-w-full truncate px-1">
-                    {priorityName(project, priority)}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </section>
-        </div>
-      </BottomSheet>
     </div>
   );
 }

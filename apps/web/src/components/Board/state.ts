@@ -15,28 +15,29 @@ import {
 } from './model';
 
 /**
- * The alternatives the prototype exists to compare. Each is a design question that is still
- * open; a chosen value becomes the only behavior and its switch goes away.
+ * How the board looks and behaves, as the person using it prefers. Kept on the device.
  */
-export const variantsSchema = z.object({
-  /** What marks priority zones in a column nobody is dragging over. */
-  zonesAtRest: z.enum(['always', 'edge', 'drag']).default('edge'),
-  /** How a column behaves under a held card. */
-  zoneModel: z.enum(['stretch', 'inPlace']).default('stretch'),
-  lift: z.enum(['tilt', 'flat']).default('tilt'),
-  priorityGlyph: z.boolean().default(true),
-  subtaskTap: z.enum(['popout', 'open']).default('popout'),
-  subtaskStatusInPlace: z.boolean().default(true),
-  phoneMoves: z.enum(['grid', 'strip', 'sheet']).default('grid'),
-  sideWidth: z.enum(['compact', 'roomy']).default('compact'),
-  /** Whether zones and columns sit on a faint surface of their own. */
+export const boardSettingsSchema = z.object({
+  /** Name the priority zones in a column at rest. Off: they show only under a held card. */
+  zoneLabels: z.boolean().default(false),
+  /** Mark a card's priority on the card itself. */
+  cardPriority: z.boolean().default(false),
+  /** Zones and columns sit on a faint surface of their own. */
   surfaces: z.boolean().default(true),
+  /**
+   * A column under a held card: `compact` folds every priority but one into rails, `full`
+   * keeps the column's layout and dims the other priorities.
+   */
+  heldColumn: z.enum(['compact', 'full']).default('compact'),
 });
-export type Variants = z.infer<typeof variantsSchema>;
-export const DEFAULT_VARIANTS: Variants = variantsSchema.parse({});
+export type BoardSettings = z.infer<typeof boardSettingsSchema>;
 
-export function useVariants() {
-  return usePersistentState('throw-board-prototype', variantsSchema, DEFAULT_VARIANTS);
+export function useBoardSettings() {
+  return usePersistentState(
+    'throw-board-settings',
+    boardSettingsSchema,
+    boardSettingsSchema.parse({}),
+  );
 }
 
 /** A side zone is a strip, a single column, or a gallery across the whole board. */
@@ -162,21 +163,6 @@ export function placeInList(taskId: string, listId: ListId, priority: Priority, 
 export function sendTasks(taskIds: string[], statusId: string) {
   const { project, tasks } = current();
   setTasks(sendToStatus(project, tasks, taskIds, statusId));
-}
-
-/** Gives tasks a priority, each at the top of that zone in its own status. */
-export function prioritize(taskIds: string[], priority: Priority) {
-  const { project } = current();
-  let tasks = current().tasks;
-  for (const taskId of [...taskIds].reverse()) {
-    const task = tasks.find((item) => item.id === taskId);
-    if (!task || task.priority === priority) continue;
-    const peers = tasks
-      .filter((item) => item.statusId === task.statusId && item.priority === priority)
-      .sort(compareTasks);
-    tasks = placeTask(project, tasks, taskId, { priority, index: 0, peers });
-  }
-  setTasks(tasks);
 }
 
 export function setSubtaskStatus(taskId: string, statusId: string) {

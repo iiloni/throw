@@ -2,7 +2,7 @@ import { motion, useSpring, useTransform, useVelocity } from 'motion/react';
 import { createPortal } from 'react-dom';
 import { springs } from '@/lib/motion';
 import { drag, overlayPosition } from './drag';
-import { board, current, useVariants } from './state';
+import { board, current } from './state';
 import { TaskCard } from './TaskCard';
 
 /**
@@ -12,7 +12,6 @@ import { TaskCard } from './TaskCard';
 export function DragOverlay() {
   const held = drag.use();
   const state = board.use();
-  const [variants] = useVariants();
   // The card swings back against the direction it is carried, like something held by a corner.
   const velocity = useVelocity(overlayPosition.x);
   const lean = useSpring(useTransform(velocity, [-1400, 0, 1400], [-6, 0, 6], { clamp: true }), {
@@ -23,7 +22,6 @@ export function DragOverlay() {
   const task = current(state).tasks.find((item) => item.id === held.ids[0]);
   if (!task) return null;
   const flying = held.phase === 'dragging';
-  const tilt = variants.lift === 'tilt';
   const more = held.ids.length - 1;
   // Over a dropzone the card is being sent, not placed: it shrinks to a token so the
   // zones around it stay readable.
@@ -37,13 +35,13 @@ export function DragOverlay() {
     >
       <motion.div
         style={{
-          rotate: tilt && flying && !token ? lean : 0,
+          rotate: flying && !token ? lean : 0,
           // Scaled about the finger, so a shrinking card stays under it.
           transformOrigin: `${held.grab.x}px ${held.grab.y}px`,
         }}
         initial={{ scale: 1 }}
         animate={{
-          scale: held.swallowed ? 0.2 : token ? 0.55 : flying ? (tilt ? 1.05 : 1.02) : 1,
+          scale: held.swallowed ? 0.2 : token ? 0.55 : flying ? 1.05 : 1,
           opacity: held.swallowed ? 0 : token ? 0.92 : 1,
         }}
         transition={held.swallowed ? { duration: 0.28, ease: [0.2, 0, 0, 1] } : springs.snappy}

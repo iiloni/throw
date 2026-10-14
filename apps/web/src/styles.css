@@ -432,38 +432,28 @@
   }
 }
 
-/* A zone marked along the column's edge instead of by a label. Default rank draws nothing. */
-.zone-edge {
+/*
+ * The edge of an open backlog or closed rail, drawn over the columns beside it. The rail is
+ * a surface above them: it casts a soft shadow, and columns scrolled towards it lose focus
+ * before they pass underneath.
+ */
+.rail-edge {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -0.5625rem;
-  width: 3px;
-}
-.zone-edge[data-first] {
-  border-top-left-radius: 3px;
-  border-top-right-radius: 3px;
-}
-.zone-edge[data-last] {
-  bottom: 0.75rem;
-  border-bottom-right-radius: 3px;
-  border-bottom-left-radius: 3px;
-}
-.zone-edge[data-rank="0"] {
-  background: var(--destructive);
-}
-.zone-edge[data-rank="1"] {
-  background: color-mix(in oklab, var(--foreground) 50%, transparent);
-}
-.zone-edge[data-rank="3"] {
-  background: color-mix(in oklab, var(--foreground) 18%, transparent);
-}
-.zone-edge[data-rank="4"] {
-  background: repeating-linear-gradient(
-    to bottom,
-    color-mix(in oklab, var(--foreground) 22%, transparent) 0 3px,
-    transparent 3px 7px
-  );
+  inset-block: 0;
+  z-index: 10;
+  width: 1.25rem;
+  pointer-events: none;
+  background: light-dark(rgb(0 0 0 / 0.07), rgb(0 0 0 / 0.4));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  &[data-side="left"] {
+    left: 0;
+    mask-image: linear-gradient(to right, black, transparent);
+  }
+  &[data-side="right"] {
+    right: 0;
+    mask-image: linear-gradient(to left, black, transparent);
+  }
 }
 
 :root[data-dragging] {

@@ -5,11 +5,12 @@ import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
+import { BoardSettingsPanel } from './BoardSettingsPanel';
 import { CardList } from './CardList';
 import { drag } from './drag';
-import { PrototypePanel } from './PrototypePanel';
 import { SideZone, STRIP_WIDTH } from './SideZone';
 import { StatusMenu } from './StatusMenu';
 import { StatusTile } from './StatusTile';
@@ -18,8 +19,13 @@ import { PANE_MIN, SplitHandle, TaskPane } from './TaskView';
 
 const TILES_WIDTH = 176;
 const HANDLE_WIDTH = 24;
-/** Between the three zones. Columns sit a little closer to each other than zones do. */
-const ZONE_GAP = 16;
+/** The pane's `pr-6`: the closed rail reaches the window's edge, the pane does not. */
+const PANE_MARGIN = 24;
+/**
+ * Between a rail and the first column beside it. The space is inside the columns' scroller,
+ * so scrolled columns pass through it and under the rail's edge.
+ */
+const ZONE_GAP = 20;
 
 function useWidth() {
   const ref = useRef<HTMLDivElement>(null);
@@ -32,6 +38,11 @@ function useWidth() {
     return () => observer.disconnect();
   }, []);
   return [ref, width] as const;
+}
+
+/** With the columns' own gap, keeps the first and last column `ZONE_GAP` from the rails. */
+function ColumnsEdge() {
+  return <span aria-hidden className="w-2 shrink-0" />;
 }
 
 /**
@@ -62,26 +73,37 @@ export function DesktopBoard() {
       {/* Stands where the navigation rail will be. */}
       <nav
         aria-label="Projects"
-        className="flex w-[4.5rem] shrink-0 flex-col items-center gap-2 pt-[calc(var(--safe-top)+1.25rem)] pb-6"
+        className="flex w-[4.5rem] shrink-0 flex-col items-center gap-2 border-border/70 border-r pt-[calc(var(--safe-top)+1.25rem)] pb-6"
       >
         {state.boards.map(({ project: item }) => (
-          <button
-            key={item.id}
-            type="button"
-            data-color={item.color}
-            aria-label={item.name}
-            aria-current={item.id === project.id ? 'page' : undefined}
-            title={item.name}
-            onClick={() => selectProject(item.id)}
-            className={cn(
-              'flex size-11 items-center justify-center rounded-2xl outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/60',
-              item.id === project.id
-                ? 'bg-tint text-foreground'
-                : 'text-muted-foreground hover:bg-foreground/[0.06]',
-            )}
-          >
-            <ProjectIcon name={item.icon} className="size-5" />
-          </button>
+          // The collapsed rail shows icons only; the name arrives on hover.
+          <Tooltip key={item.id}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                data-color={item.color}
+                aria-label={item.name}
+                aria-current={item.id === project.id ? 'page' : undefined}
+                onClick={() => selectProject(item.id)}
+                className={cn(
+                  'flex size-11 items-center justify-center rounded-2xl outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/60',
+                  item.id === project.id
+                    ? 'bg-tint text-foreground'
+                    : 'text-muted-foreground hover:bg-foreground/[0.06]',
+                )}
+              >
+                <ProjectIcon name={item.icon} className="size-5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent
+              side="right"
+              sideOffset={10}
+              variant="glass"
+              className="rounded-xl px-3.5 py-2 font-display font-semibold text-base tracking-[-0.01em]"
+            >
+              {item.name}
+            </TooltipContent>
+          </Tooltip>
         ))}
         <span className="flex-1" />
         <IconButton
@@ -94,57 +116,68 @@ export function DesktopBoard() {
         >
           <ListTree />
         </IconButton>
-        <PrototypePanel />
+        <BoardSettingsPanel />
       </nav>
 
       <div ref={frame} className="flex min-w-0 flex-1 flex-col">
         {/* No title row: the rail names the project, and the board keeps the height. */}
-        <div className="flex min-h-0 flex-1 pt-[calc(var(--safe-top)+1.25rem)] pr-6 pb-6">
-          <div ref={row} className="flex min-w-0 flex-1" style={{ gap: ZONE_GAP }}>
+        <div className="flex min-h-0 flex-1">
+          <div ref={row} className="flex min-w-0 flex-1">
             <SideZone zone="backlog" fullWidth={fullWidth} />
-            <ScrollArea className="flex-1">
-              <ScrollAreaViewport
-                data-origin="active"
-                data-autoscroll-x=""
-                className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3"
-              >
-                {covered
-                  ? dragging && (
-                      <motion.div
-                        className="flex shrink-0 flex-col gap-2.5 p-1"
-                        style={{ width: TILES_WIDTH }}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                      >
-                        <p className="px-1 pt-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
-                          Active
-                        </p>
-                        {active.map((status) => (
-                          <StatusTile key={status.id} status={status} />
-                        ))}
-                      </motion.div>
-                    )
-                  : active.map((status) => (
-                      <CardList
-                        key={status.id}
-                        listId={`status:${status.id}`}
-                        surface
-                        className="min-w-[17.5rem] max-w-[27rem] flex-1 pb-2"
-                        header={
-                          <div className="flex h-14 shrink-0 items-center gap-2.5 px-5">
-                            <h2 className="truncate font-display font-semibold text-lg tracking-[-0.01em]">
-                              {status.name}
-                            </h2>
-                            <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-muted-foreground text-xs tabular-nums">
-                              {countIn(state, status.id)}
-                            </span>
-                          </div>
-                        }
-                      />
-                    ))}
-              </ScrollAreaViewport>
-              <ScrollBar orientation="horizontal" />
-            </ScrollArea>
+            <div className="relative flex min-w-0 flex-1">
+              <ScrollArea className="flex-1 pt-[calc(var(--safe-top)+1.25rem)] pb-6">
+                <ScrollAreaViewport
+                  data-origin="active"
+                  data-autoscroll-x=""
+                  className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3"
+                >
+                  <ColumnsEdge />
+                  {covered
+                    ? dragging && (
+                        <motion.div
+                          className="flex shrink-0 flex-col gap-2.5 p-1"
+                          style={{ width: TILES_WIDTH }}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                        >
+                          <p className="px-1 pt-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
+                            Active
+                          </p>
+                          {active.map((status) => (
+                            <StatusTile key={status.id} status={status} />
+                          ))}
+                        </motion.div>
+                      )
+                    : active.map((status) => (
+                        <CardList
+                          key={status.id}
+                          listId={`status:${status.id}`}
+                          surface
+                          className="min-w-[17.5rem] max-w-[27rem] flex-1 pb-2"
+                          header={
+                            <div className="flex h-14 shrink-0 items-center gap-2.5 px-5">
+                              <h2 className="truncate font-display font-semibold text-lg tracking-[-0.01em]">
+                                {status.name}
+                              </h2>
+                              <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-muted-foreground text-xs tabular-nums">
+                                {countIn(state, status.id)}
+                              </span>
+                            </div>
+                          }
+                        />
+                      ))}
+                  <ColumnsEdge />
+                </ScrollAreaViewport>
+                <ScrollBar orientation="horizontal" />
+              </ScrollArea>
+              {/* An open rail sits above the columns: they blur as they slide under its edge. */}
+              {state.backlog === 'panel' && (
+                <div aria-hidden className="rail-edge" data-side="left" />
+              )}
+              {state.closed === 'panel' && (
+                <div aria-hidden className="rail-edge" data-side="right" />
+              )}
+            </div>
             <SideZone zone="closed" fullWidth={fullWidth} />
           </div>
 
@@ -152,9 +185,9 @@ export function DesktopBoard() {
             {openTask && (
               <motion.div
                 key="pane"
-                className="flex shrink-0 overflow-hidden"
+                className="flex shrink-0 overflow-hidden pt-[calc(var(--safe-top)+1.25rem)] pr-6 pb-6"
                 initial={{ width: 0, opacity: 0 }}
-                animate={{ width: paneWidth + HANDLE_WIDTH, opacity: 1 }}
+                animate={{ width: paneWidth + HANDLE_WIDTH + PANE_MARGIN, opacity: 1 }}
                 exit={{ width: 0, opacity: 0 }}
                 transition={resizing ? { duration: 0 } : springs.smooth}
               >

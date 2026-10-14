@@ -15,7 +15,7 @@ import { CardList } from './CardList';
 import { drag } from './drag';
 import { type Category, groupByPriority, priorityName, type Status } from './model';
 import { StatusTile } from './StatusTile';
-import { board, countIn, current, listTasks, update, useVariants, type ZoneState } from './state';
+import { board, countIn, current, listTasks, update, type ZoneState } from './state';
 import { TaskCard } from './TaskCard';
 
 export const ZONES = {
@@ -26,7 +26,7 @@ export type Zone = keyof typeof ZONES;
 
 export const STRIP_WIDTH = 64;
 const TILES_WIDTH = 148;
-const PANEL_WIDTH = { compact: 304, roomy: 368 };
+const PANEL_WIDTH = 304;
 
 export function zoneStatuses(zone: Zone, statuses: Status[]) {
   return statuses.filter((status) => ZONES[zone].categories.includes(status.category));
@@ -36,11 +36,13 @@ export function zoneStatuses(zone: Zone, statuses: Status[]) {
  * The backlog or the closed zone: a strip, a column, or a gallery across the board. While a
  * card from elsewhere is held, it is a column of dropzones, one per status, whatever state
  * it was in.
+ *
+ * These are not columns and do not look like them: they are rails that run the height of
+ * the window on the page itself, never on a column's surface.
  */
 export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number }) {
   const state = board.use();
   const held = drag.use();
-  const [variants] = useVariants();
   const { project } = current(state);
   const { title, icon: Icon } = ZONES[zone];
   const statuses = zoneStatuses(zone, project.statuses);
@@ -49,11 +51,7 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
   const dragging = held?.phase === 'dragging';
   // A card held from this zone keeps the zone as it is, so it can still be placed here.
   const tiles = dragging && held.origin !== zone;
-  const width =
-    view === 'full' ? fullWidth : view === 'panel' ? PANEL_WIDTH[variants.sideWidth] : STRIP_WIDTH;
-  const surface = variants.surfaces
-    ? 'color-mix(in oklab, var(--foreground) 3.5%, transparent)'
-    : undefined;
+  const width = view === 'full' ? fullWidth : view === 'panel' ? PANEL_WIDTH : STRIP_WIDTH;
   const other = zone === 'backlog' ? 'closed' : 'backlog';
   // A gallery takes the board, so the opposite zone steps back to its strip.
   const setView = (next: ZoneState) =>
@@ -75,10 +73,10 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
         {tiles ? (
           <motion.div
             key="tiles"
-            className="glass-thick absolute inset-y-0 flex flex-col gap-2.5 rounded-3xl p-3"
+            className="glass-thick absolute inset-y-3 flex flex-col gap-2.5 rounded-3xl p-3"
             style={{
               width: Math.max(TILES_WIDTH, width),
-              [zone === 'backlog' ? 'left' : 'right']: 0,
+              [zone === 'backlog' ? 'left' : 'right']: 8,
             }}
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -98,12 +96,11 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
             type="button"
             aria-label={`Open ${title.toLowerCase()}, ${count} tasks`}
             onClick={() => setView('panel')}
-            className="group absolute inset-0 flex flex-col items-center gap-4 rounded-3xl pt-5 text-muted-foreground outline-none transition-colors hover:bg-foreground/[0.06] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60"
+            className="group absolute inset-0 flex flex-col items-center gap-4 pt-[calc(var(--safe-top)+2.375rem)] text-muted-foreground outline-none transition-colors hover:bg-foreground/[0.04] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60 focus-visible:ring-inset"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.16 }}
-            style={{ backgroundColor: surface }}
           >
             <Icon className="size-5" aria-hidden />
             <span className="font-display font-semibold text-sm [writing-mode:vertical-rl]">
@@ -114,10 +111,10 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
         ) : (
           <motion.div
             key="open"
-            className="absolute inset-y-0 flex min-h-0 flex-col rounded-3xl"
+            className="absolute inset-y-0 flex min-h-0 flex-col pt-[calc(var(--safe-top)+1.25rem)]"
             // Laid out at its resting width from the start, so opening reveals the cards
             // instead of re-wrapping them at every width on the way.
-            style={{ width, backgroundColor: surface, [zone === 'backlog' ? 'left' : 'right']: 0 }}
+            style={{ width, [zone === 'backlog' ? 'left' : 'right']: 0 }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

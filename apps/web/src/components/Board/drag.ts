@@ -60,8 +60,8 @@ export const drag = createStore<DragState | null>(null);
 /** Where the held card's copy is drawn. Written every frame, so not React state. */
 export const overlayPosition = { x: motionValue(0), y: motionValue(0) };
 
-type Config = { zoneModel: 'stretch' | 'inPlace' };
-let config: Config = { zoneModel: 'stretch' };
+type Config = { heldColumn: 'compact' | 'full' };
+let config: Config = { heldColumn: 'compact' };
 export function configureDrag(next: Config) {
   config = next;
 }
@@ -277,7 +277,7 @@ function listAt(hit: Element | null) {
   return nearest;
 }
 
-/** The zone whose stretch of the list holds `y` (in-place zones only). */
+/** The zone whose stretch of the list holds `y`, when the column keeps its full layout. */
 function zoneAt(list: HTMLElement, y: number, fallback: Priority): Priority {
   let zone: Priority | null = null;
   for (const header of list.querySelectorAll<HTMLElement>('[data-zone-header]')) {
@@ -354,7 +354,7 @@ function resolve() {
   }
 
   const centre = pointer.y - grab.y + state.height / 2;
-  if (config.zoneModel === 'inPlace') priority = zoneAt(list, centre, priority);
+  if (config.heldColumn === 'full') priority = zoneAt(list, centre, priority);
   const index = indexIn(list, priority, centre, state.height, state.ids);
   set({ target: { kind: 'place', listId, priority, index }, priority, rail });
 }

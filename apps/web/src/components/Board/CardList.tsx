@@ -3,7 +3,7 @@ import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scrol
 import { cn } from '@/lib/utils';
 import { CARD_SPACING, drag } from './drag';
 import { groupByPriority, type Priority, priorityName, taskColor } from './model';
-import { board, current, type ListId, listTasks, useVariants } from './state';
+import { board, current, type ListId, listTasks, useBoardSettings } from './state';
 import { TaskCard } from './TaskCard';
 
 /** A rail's height with the space under it, which is also how far apart they stack. */
@@ -25,22 +25,22 @@ type HeaderMode = 'hidden' | 'label' | 'open' | 'rail';
 /**
  * A column of cards in five priority zones.
  *
- * At rest the zones are marked as the `zonesAtRest` variant says. Under a held card the
- * column either folds every zone but one into rails (`stretch`) or keeps its layout and
- * dims the other zones (`inPlace`); the drag engine reads the result from the DOM.
+ * At rest the zones are unmarked, or labelled if the user asks. Under a held card the column
+ * either folds every zone but one into rails (`compact`) or keeps its layout and dims the
+ * other zones (`full`); the drag engine reads the result from the DOM.
  */
 export function CardList({ listId, header, showStatus, endSpace, surface, className }: Props) {
   const state = board.use();
   const held = drag.use();
-  const [variants] = useVariants();
+  const [settings] = useBoardSettings();
   const { project } = current(state);
 
   const dragging = held?.phase === 'dragging';
   const target = dragging ? held.target : null;
   const over = target !== null && target.kind !== 'status' && target.listId === listId;
   const place = over && target.kind === 'place' ? target : null;
-  const stretch = place !== null && variants.zoneModel === 'stretch';
-  const inPlace = place !== null && variants.zoneModel === 'inPlace';
+  const stretch = place !== null && settings.heldColumn === 'compact';
+  const inPlace = place !== null && settings.heldColumn === 'full';
 
   // A held card stays mounted but out of the layout: a touch keeps reporting to the element
   // it began on, and stops if that element is removed.
@@ -53,14 +53,14 @@ export function CardList({ listId, header, showStatus, endSpace, surface, classN
   function mode(priority: Priority, count: number): HeaderMode {
     if (stretch) return priority === open ? 'open' : 'rail';
     if (inPlace) return 'label';
-    return variants.zonesAtRest === 'always' && count > 0 ? 'label' : 'hidden';
+    return settings.zoneLabels && count > 0 ? 'label' : 'hidden';
   }
 
   return (
     <section
       data-drop-list={listId}
       data-over={over ? '' : undefined}
-      data-surface={surface && variants.surfaces ? '' : undefined}
+      data-surface={surface && settings.surfaces ? '' : undefined}
       className={cn('board-column relative flex min-h-0 min-w-0 flex-col rounded-3xl', className)}
     >
       {header}
@@ -88,9 +88,9 @@ export function CardList({ listId, header, showStatus, endSpace, surface, classN
                         ? ''
                         : undefined
                     }
-                    // A little air between zones when nothing else separates them.
+                    // A little air between zones when no label separates them.
                     data-breath={
-                      variants.zonesAtRest === 'edge' &&
+                      !settings.zoneLabels &&
                       zone.length > 0 &&
                       groups.slice(0, groupIndex).some((group) => group.tasks.length > 0)
                         ? ''
@@ -145,15 +145,6 @@ export function CardList({ listId, header, showStatus, endSpace, surface, classN
                         >
                           <div>
                             <div className="relative pb-3">
-                              {variants.zonesAtRest === 'edge' && (
-                                <span
-                                  aria-hidden
-                                  data-rank={priority}
-                                  data-first={index === 0 ? '' : undefined}
-                                  data-last={index === placed.length - 1 ? '' : undefined}
-                                  className="zone-edge"
-                                />
-                              )}
                               <TaskCard task={task} showStatus={showStatus} />
                             </div>
                           </div>

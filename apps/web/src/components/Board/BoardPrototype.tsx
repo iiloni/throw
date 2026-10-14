@@ -6,18 +6,18 @@ import { DesktopBoard } from './DesktopBoard';
 import { DragOverlay } from './DragOverlay';
 import { configureDrag, drag } from './drag';
 import { PhoneBoard } from './PhoneBoard';
-import { board, current, update, useVariants } from './state';
+import { board, current, update, useBoardSettings } from './state';
 import { TaskSheet } from './TaskView';
 
 /**
- * The project board on mock data, with switches for the interactions still being decided.
+ * The project board on mock data.
  * It brings its own frame and leaves the app shell alone.
  */
 export function BoardPrototype() {
   const phone = useMedia('(max-width: 767px)');
   const state = board.use();
-  const [variants] = useVariants();
-  configureDrag({ zoneModel: variants.zoneModel });
+  const [settings] = useBoardSettings();
+  configureDrag({ heldColumn: settings.heldColumn });
   const openTask = current(state).tasks.find((task) => task.id === state.openTaskId);
 
   useEffect(() => {

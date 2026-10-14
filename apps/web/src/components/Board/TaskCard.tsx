@@ -16,7 +16,7 @@ import {
   taskColor,
 } from './model';
 import { SubtaskUnderlay } from './SubtaskUnderlay';
-import { board, current, toggleSelected, update, useVariants } from './state';
+import { board, current, toggleSelected, update, useBoardSettings } from './state';
 
 type Props = {
   task: Task;
@@ -42,7 +42,7 @@ export function TaskCardFace({
   task: Task;
   showStatus?: boolean;
 }) {
-  const [variants] = useVariants();
+  const [settings] = useBoardSettings();
   const state = board.use();
   const tag = project.tags.find((item) => item.id === task.primaryTagId);
   const status = statusById(project, task.statusId);
@@ -74,7 +74,7 @@ export function TaskCardFace({
           </span>
         )}
         {task.closedAt !== null && <span className="shrink-0">{closedAgo(task.closedAt)}</span>}
-        {variants.priorityGlyph && task.closedAt === null && (
+        {settings.cardPriority && task.closedAt === null && (
           <PriorityGlyph priority={task.priority} name={priorityName(project, task.priority)} />
         )}
       </div>
