@@ -1,6 +1,14 @@
 import { Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { comparePositions } from '@throw/shared';
-import { Columns3, PanelLeftClose, PanelLeftOpen, Plus, Settings2 } from 'lucide-react';
+import {
+  Columns3,
+  ListTree,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Pencil,
+  Plus,
+  Settings2,
+} from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { z } from 'zod';
@@ -12,11 +20,14 @@ import {
   type ShellState,
   viewSchema,
 } from '@/components/AppShell/shell';
+import { BoardSettingsPanel } from '@/components/Board/BoardSettingsPanel';
+import { board, update } from '@/components/Board/state';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { Dock } from '@/components/Dock/Dock';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { type ShellForm, ShellForms } from '@/components/ShellForms/ShellForms';
+import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { getSignedInUser } from '@/lib/auth';
 import { useProjects, useWorkspaces } from '@/lib/collections';
 import { useMedia } from '@/lib/media';
@@ -69,6 +80,8 @@ export function AppShell() {
   );
   const view = viewSchema.catch('board').parse((location.search as { view?: unknown }).view);
   const crossBoard = location.pathname.endsWith('/board');
+  const projectBoard = !!project && (view !== 'search' || !desktop);
+  const boardState = board.use();
   const settings = location.pathname === '/settings';
 
   useEffect(() => {
@@ -214,6 +227,37 @@ export function AppShell() {
               )}
             </nav>
             <div className="mt-3 flex flex-col gap-2 px-3">
+              {projectBoard && (
+                <div className="px-2">
+                  <SyncIndicator />
+                </div>
+              )}
+              {projectBoard && (
+                <>
+                  <RailButton
+                    label="Edit project"
+                    expanded={expanded}
+                    onClick={() => setForm({ kind: 'edit-project', project })}
+                  >
+                    <Pencil className="size-5" />
+                  </RailButton>
+                  <RailButton
+                    label={
+                      boardState.subtasksAsCards
+                        ? 'Keep subtasks with their parent'
+                        : 'Show subtasks as cards'
+                    }
+                    expanded={expanded}
+                    onClick={() => update({ subtasksAsCards: !boardState.subtasksAsCards })}
+                  >
+                    <ListTree className="size-5" />
+                  </RailButton>
+                  <div className="px-2">
+                    <BoardSettingsPanel />
+                  </div>
+                </>
+              )}
+
               <RailButton
                 label="Settings"
                 href="/settings"
@@ -238,17 +282,20 @@ export function AppShell() {
           </motion.aside>
         )}
         <div className="flex min-w-0 flex-1 flex-col pr-[var(--safe-right)]">
-          <PageHeader desktop={desktop} />
+          {!projectBoard && <PageHeader desktop={desktop} />}
           <main
             id="main-content"
             tabIndex={-1}
-            className="min-h-0 flex-1 pb-[var(--dock-space)] outline-none md:pb-8"
+            className={cn(
+              'min-h-0 flex-1 outline-none',
+              projectBoard ? 'h-dvh flex-none' : 'pb-[var(--dock-space)] md:pb-8',
+            )}
           >
             <Outlet />
           </main>
         </div>
       </div>
-      {!desktop && <Dock />}
+      {!desktop && !projectBoard && <Dock />}
       <ShellForms form={form} onClose={() => setForm(null)} />
     </ShellContext.Provider>
   );

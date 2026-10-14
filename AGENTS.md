@@ -13,17 +13,20 @@ The repository has the stack end to end (auth, sync, the outbox, local persisten
 task model (workspaces, projects, statuses, tasks and subtasks, with keys, numbers, the trash
 and ADR 0005's conflict rule; see `docs/data-model.md`), and the responsive app shell. The
 shell owns workspace and project management, a desktop navigation rail, a phone dock and
-remembered navigation. Its project/backlog and cross-project board bodies are placeholders.
+remembered navigation. Its project board uses the shared Board components on synced tasks
+and statuses; the cross-project board body is a placeholder.
 Task actions live in `apps/web/src/lib/tasks.ts` and `statuses.ts`. The activity log syncs
 to devices and comments are built (`lib/comments.ts`), with a timeline query in
 `collections.ts` but no timeline view. Tags have their data layer and reusable controls in
 `components/Tag*`, with a real-data `/prototype/tags` workshop in development only. The
-board colour helper is `taskTagColor` in `@throw/shared`. The board itself is not built yet.
+board colour helper is `taskTagColor` in `@throw/shared`. The task pane content is a separate
+step. Real-board dragging and keyboard moves are not wired yet.
 
 The board's interaction was worked out in a prototype on mock data: `/prototype/board`, in
-development builds only, with its components in `apps/web/src/components/Board`. It has no
-server, schema or sync behind it. Build the real board from those components and from
-ADR 0008 rather than starting again.
+development builds only, with its components in `apps/web/src/components/Board`. It keeps
+mock data and the drag engine, and shares the components with the real project board. `Board/ProjectBoard.tsx` adapts collections and task actions at the boundary;
+`Board/selection.ts` selects visible rows. The drag step should use ADR 0008 and wire
+placements through `moveTask` without replacing those components.
 
 ## Layout
 

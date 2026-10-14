@@ -1,8 +1,10 @@
 import { ArrowLeft, X } from 'lucide-react';
 import { motion, useDragControls, useReducedMotion } from 'motion/react';
-import { type PointerEvent, useEffect, useRef, useState } from 'react';
+import { Dialog } from 'radix-ui';
+import { type PointerEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
+import { useBackHandler } from '@/lib/backButton';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { PriorityGlyph, StatusGlyph } from './glyphs';
@@ -16,24 +18,48 @@ const chip =
 /** The title, written in place. A task just created starts here with its title selected. */
 function TaskTitle({ task }: { task: Task }) {
   const fresh = board.use().newTaskId === task.id;
-  const ref = useRef<HTMLHeadingElement>(null);
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    if (document.activeElement !== element) element.value = task.title;
+    element.style.height = 'auto';
+    element.style.height = `${element.scrollHeight}px`;
+    if (fresh) {
+      element.focus();
+      element.select();
+      update({ newTaskId: null });
+    }
+  }, [fresh, task.title]);
   useEffect(() => {
     const element = ref.current;
-    if (!fresh || !element) return;
-    element.focus();
-    window.getSelection()?.selectAllChildren(element);
-    update({ newTaskId: null });
-  }, [fresh]);
+    if (!element) return;
+    let width = 0;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry!.contentRect.width === width) return;
+      width = entry!.contentRect.width;
+      element.style.height = 'auto';
+      element.style.height = `${element.scrollHeight}px`;
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   return (
-    <h2
+    <textarea
       ref={ref}
-      contentEditable="plaintext-only"
-      suppressContentEditableWarning
-      spellCheck
+      aria-label="Task title"
+      rows={1}
+      maxLength={500}
+      onInput={(event) => {
+        const element = event.currentTarget;
+        element.style.height = 'auto';
+        element.style.height = `${element.scrollHeight}px`;
+      }}
+      defaultValue={task.title}
+      placeholder="Untitled task"
       onBlur={(event) => {
-        const title = event.currentTarget.textContent?.trim();
-        if (title && title !== task.title) renameTask(task.id, title);
-        else event.currentTarget.textContent = task.title;
+        const title = event.currentTarget.value.trim();
+        if (title !== task.title) renameTask(task.id, title);
       }}
       onKeyDown={(event) => {
         if (event.key === 'Enter') {
@@ -41,16 +67,15 @@ function TaskTitle({ task }: { task: Task }) {
           event.currentTarget.blur();
         }
       }}
-      className="rounded-lg font-display font-semibold text-[1.75rem] leading-[1.15] tracking-[-0.02em] outline-none [overflow-wrap:anywhere] focus-visible:ring-[3px] focus-visible:ring-ring/40"
-    >
-      {task.title}
-    </h2>
+      className="w-full resize-none rounded-lg bg-transparent font-display font-semibold text-[1.75rem] leading-[1.15] tracking-[-0.02em] outline-none [field-sizing:content] focus-visible:ring-[3px] focus-visible:ring-ring/40"
+    />
   );
 }
 
 /** A stand-in for the task view: enough of a task to judge how the board makes room for it. */
 function TaskBody({ task, underDock = false }: { task: Task; underDock?: boolean }) {
-  const { project, tasks } = current(board.use());
+  const state = board.use();
+  const { project, tasks } = current(state);
   const status = statusById(project, task.statusId);
   const parent = tasks.find((item) => item.id === task.parentId);
   const subtasks = subtasksOf(tasks, task.id);
@@ -76,66 +101,77 @@ function TaskBody({ task, underDock = false }: { task: Task; underDock?: boolean
             </button>
           )}
           <TaskTitle task={task} />
-          <div className="mt-5 flex flex-wrap gap-2">
-            {status && (
-              <StatusMenu
-                project={project}
-                value={status.id}
-                onSelect={(statusId) => sendTasks([task.id], statusId)}
-              >
-                <button type="button" className={cn(chip, 'hover:bg-foreground/[0.12]')}>
-                  <StatusGlyph category={status.category} />
-                  {status.name}
-                </button>
-              </StatusMenu>
-            )}
-            <span className={chip}>
-              <PriorityGlyph priority={task.priority} name={priorityName(project, task.priority)} />
-              {priorityName(project, task.priority)}
-            </span>
-            {tags.map((tag) => (
-              <span key={tag.id} className={chip}>
-                {tag.name}
-              </span>
-            ))}
-          </div>
-          <p className="mt-8 max-w-prose text-[0.9375rem] text-foreground/85 leading-relaxed">
-            {task.description ??
-              'The description is written here, in the same editor as a Catch note. This pane is a placeholder: the prototype is about how the board gives it room.'}
-          </p>
-          {subtasks.length > 0 && (
+          {state.actions ? (
+            <p className="mt-8 text-muted-foreground text-sm">Task details are coming next.</p>
+          ) : (
             <>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {status && (
+                  <StatusMenu
+                    project={project}
+                    value={status.id}
+                    onSelect={(statusId) => sendTasks([task.id], statusId)}
+                  >
+                    <button type="button" className={cn(chip, 'hover:bg-foreground/[0.12]')}>
+                      <StatusGlyph category={status.category} />
+                      {status.name}
+                    </button>
+                  </StatusMenu>
+                )}
+                <span className={chip}>
+                  <PriorityGlyph
+                    priority={task.priority}
+                    name={priorityName(project, task.priority)}
+                  />
+                  {priorityName(project, task.priority)}
+                </span>
+                {tags.map((tag) => (
+                  <span key={tag.id} className={chip}>
+                    {tag.name}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-8 max-w-prose text-[0.9375rem] text-foreground/85 leading-relaxed">
+                {task.description ??
+                  'The description is written here, in the same editor as a Catch note. This pane is a placeholder: the prototype is about how the board gives it room.'}
+              </p>
+              {subtasks.length > 0 && (
+                <>
+                  <h3 className="mt-8 mb-2 font-semibold text-foreground/60 text-xs uppercase tracking-[0.06em]">
+                    Subtasks
+                  </h3>
+                  <ul>
+                    {subtasks.map((subtask) => {
+                      const subtaskStatus = statusById(project, subtask.statusId);
+                      return (
+                        <li key={subtask.id}>
+                          <button
+                            type="button"
+                            onClick={() => update({ openTaskId: subtask.id })}
+                            className="flex min-h-10 w-full items-center gap-2.5 rounded-xl px-2 text-left text-sm outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/60"
+                          >
+                            {subtaskStatus && <StatusGlyph category={subtaskStatus.category} />}
+                            <span className="min-w-0 flex-1 truncate">{subtask.title}</span>
+                            <span className="text-foreground/50 text-xs">
+                              {subtaskStatus?.name}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
+              )}
               <h3 className="mt-8 mb-2 font-semibold text-foreground/60 text-xs uppercase tracking-[0.06em]">
-                Subtasks
+                Activity
               </h3>
-              <ul>
-                {subtasks.map((subtask) => {
-                  const subtaskStatus = statusById(project, subtask.statusId);
-                  return (
-                    <li key={subtask.id}>
-                      <button
-                        type="button"
-                        onClick={() => update({ openTaskId: subtask.id })}
-                        className="flex min-h-10 w-full items-center gap-2.5 rounded-xl px-2 text-left text-sm outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/60"
-                      >
-                        {subtaskStatus && <StatusGlyph category={subtaskStatus.category} />}
-                        <span className="min-w-0 flex-1 truncate">{subtask.title}</span>
-                        <span className="text-foreground/50 text-xs">{subtaskStatus?.name}</span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+              <ol className="space-y-2 text-foreground/70 text-sm">
+                <li>Moved to {status?.name} · 2 days ago</li>
+                <li>Priority set to {priorityName(project, task.priority)} · 4 days ago</li>
+                <li>Created · last week</li>
+              </ol>
             </>
           )}
-          <h3 className="mt-8 mb-2 font-semibold text-foreground/60 text-xs uppercase tracking-[0.06em]">
-            Activity
-          </h3>
-          <ol className="space-y-2 text-foreground/70 text-sm">
-            <li>Moved to {status?.name} · 2 days ago</li>
-            <li>Priority set to {priorityName(project, task.priority)} · 4 days ago</li>
-            <li>Created · last week</li>
-          </ol>
         </div>
       </ScrollAreaViewport>
       <ScrollBar />
@@ -148,7 +184,7 @@ function TaskHeader({ task }: { task: Task }) {
   return (
     <div className="flex h-14 shrink-0 items-center justify-between pr-4 pl-8">
       <span className="font-medium text-foreground/60 text-sm tabular-nums">
-        {identifier(project, task)}
+        {identifier(project, task) ?? 'Pending'}
       </span>
       <IconButton label="Close task" onClick={() => update({ openTaskId: null })}>
         <X />
@@ -161,6 +197,7 @@ export const PANE_MIN = 340;
 
 /** Wide screens: the task beside the board, on the card's own color. */
 export function TaskPane({ task }: { task: Task }) {
+  useBackHandler(true, () => update({ openTaskId: null }));
   const { project } = current(board.use());
   return (
     <motion.section
@@ -273,70 +310,112 @@ export function TaskScreen({ task }: { task: Task }) {
   const clip = reduced ? null : clipTo(task.id);
   const closed = clip ? { clipPath: clip, opacity: 1 } : { clipPath: UNCLIPPED, opacity: 0 };
   const close = () => update({ openTaskId: null });
+  useBackHandler(true, close);
+  const opener = useRef(
+    document.activeElement instanceof HTMLElement ? document.activeElement : null,
+  );
   return (
-    <motion.section
-      aria-label="Task"
-      data-drop-block=""
-      data-color={taskColor(project, task) ?? undefined}
-      className="fixed inset-0 z-40 flex flex-col bg-[var(--tint,var(--card))]"
-      initial={closed}
-      animate={{ clipPath: UNCLIPPED, opacity: 1 }}
-      exit={closed}
-      transition={springs.smooth}
-      drag="y"
-      dragControls={controls}
-      dragListener={false}
-      dragConstraints={{ top: 0, bottom: 0 }}
-      dragElastic={{ top: 0, bottom: 0.6 }}
-      onDragEnd={(_, info) => {
-        if (info.offset.y > 120 || info.velocity.y > 500) close();
+    <Dialog.Root
+      open
+      onOpenChange={(open) => {
+        if (!open) close();
       }}
     >
-      <motion.div
-        className="flex min-h-0 flex-1 flex-col"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1, transition: { delay: 0.12, duration: 0.2 } }}
-        exit={{ opacity: 0, transition: { duration: 0.1 } }}
+      <Dialog.Content
+        asChild
+        aria-describedby={undefined}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          if (
+            board.get().newTaskId !== task.id &&
+            document.activeElement?.getAttribute('aria-label') !== 'Task title'
+          )
+            document.querySelector<HTMLElement>('[role="dialog"][aria-label="Task"]')?.focus();
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          const target =
+            opener.current?.isConnected && opener.current !== document.body
+              ? opener.current
+              : document.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(task.id)}"]`);
+          target?.focus();
+        }}
       >
-        <div
-          className="flex h-[calc(var(--safe-top)+3.5rem)] shrink-0 touch-none items-end px-8 pb-2"
-          onPointerDown={(event) => controls.start(event)}
+        <motion.section
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' && !event.defaultPrevented) {
+              event.preventDefault();
+              close();
+            }
+          }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Task"
+          tabIndex={-1}
+          data-drop-block=""
+          data-color={taskColor(project, task) ?? undefined}
+          className="fixed inset-0 z-40 flex flex-col bg-[var(--tint,var(--card))]"
+          initial={closed}
+          animate={{ clipPath: UNCLIPPED, opacity: 1 }}
+          exit={closed}
+          transition={springs.smooth}
+          drag="y"
+          dragControls={controls}
+          dragListener={false}
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={{ top: 0, bottom: 0.6 }}
+          onDragEnd={(_, info) => {
+            if (info.offset.y > 120 || info.velocity.y > 500) close();
+          }}
         >
-          <span className="font-medium text-foreground/60 text-sm tabular-nums">
-            {identifier(project, task)}
-          </span>
-        </div>
-        <TaskBody key={task.id} task={task} underDock />
-      </motion.div>
-      <div className="pointer-events-none absolute inset-x-0 bottom-[var(--dock-bottom)] flex items-center gap-2 px-3">
-        <div className="glass pointer-events-auto flex rounded-[var(--dock-radius)] p-1">
-          <IconButton
-            label="Back to the board"
-            onClick={close}
-            className="size-[calc(var(--dock-height)-0.5rem)] rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-6"
+          <Dialog.Title className="sr-only">Task</Dialog.Title>
+          <motion.div
+            className="flex min-h-0 flex-1 flex-col"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, transition: { delay: 0.12, duration: 0.2 } }}
+            exit={{ opacity: 0, transition: { duration: 0.1 } }}
           >
-            <ArrowLeft />
-          </IconButton>
-        </div>
-        <span className="flex-1" />
-        {status && (
-          <div className="glass pointer-events-auto flex rounded-[var(--dock-radius)] p-1">
-            <StatusMenu
-              project={project}
-              value={status.id}
-              onSelect={(statusId) => sendTasks([task.id], statusId)}
+            <div
+              className="flex h-[calc(var(--safe-top)+3.5rem)] shrink-0 touch-none items-end px-8 pb-2"
+              onPointerDown={(event) => controls.start(event)}
             >
-              <button
-                type="button"
-                className="flex h-[calc(var(--dock-height)-0.5rem)] items-center gap-2 rounded-[calc(var(--dock-radius)-0.25rem)] px-4 font-medium text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
+              <span className="font-medium text-foreground/60 text-sm tabular-nums">
+                {identifier(project, task) ?? 'Pending'}
+              </span>
+            </div>
+            <TaskBody key={task.id} task={task} underDock />
+          </motion.div>
+          <div className="pointer-events-none absolute inset-x-0 bottom-[var(--dock-bottom)] flex items-center gap-2 px-3">
+            <div className="glass pointer-events-auto flex rounded-[var(--dock-radius)] p-1">
+              <IconButton
+                label="Back to the board"
+                onClick={close}
+                className="size-[calc(var(--dock-height)-0.5rem)] rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-6"
               >
-                <StatusGlyph category={status.category} className="size-4" />
-                {status.name}
-              </button>
-            </StatusMenu>
+                <ArrowLeft />
+              </IconButton>
+            </div>
+            <span className="flex-1" />
+            {status && (
+              <div className="glass pointer-events-auto flex rounded-[var(--dock-radius)] p-1">
+                <StatusMenu
+                  project={project}
+                  value={status.id}
+                  onSelect={(statusId) => sendTasks([task.id], statusId)}
+                >
+                  <button
+                    type="button"
+                    className="flex h-[calc(var(--dock-height)-0.5rem)] items-center gap-2 rounded-[calc(var(--dock-radius)-0.25rem)] px-4 font-medium text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
+                  >
+                    <StatusGlyph category={status.category} className="size-4" />
+                    {status.name}
+                  </button>
+                </StatusMenu>
+              </div>
+            )}
           </div>
-        )}
-      </div>
-    </motion.section>
+        </motion.section>
+      </Dialog.Content>
+    </Dialog.Root>
   );
 }

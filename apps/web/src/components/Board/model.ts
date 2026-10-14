@@ -1,18 +1,22 @@
-import { type Color, comparePositions, positionBetween } from '@throw/shared';
+import {
+  type Color,
+  comparePositions,
+  compareTasks as compareTaskRows,
+  positionBetween,
+  taskIdentifier,
+} from '@throw/shared';
+
+export { DEFAULT_PRIORITY, DEFAULT_PRIORITY_NAMES, PRIORITIES, type Priority } from '@throw/shared';
+
+import { DEFAULT_PRIORITY_NAMES, PRIORITIES, type Priority } from '@throw/shared';
 
 /**
- * The board's data as the prototype holds it. Field names follow docs/data-model.md so the
- * ordering and move rules here can carry over to synced rows.
+ * Presentation data shared by the synced board and the development prototype. Ranks and
+ * ordering follow the shared task model; timestamps are milliseconds for motion and grouping.
  */
 
 export type Category = 'backlog' | 'active' | 'done' | 'cancelled';
 export const CATEGORIES: Category[] = ['backlog', 'active', 'done', 'cancelled'];
-
-/** Rank 0 is the most urgent. */
-export type Priority = 0 | 1 | 2 | 3 | 4;
-export const PRIORITIES: Priority[] = [0, 1, 2, 3, 4];
-export const DEFAULT_PRIORITY: Priority = 2;
-export const DEFAULT_PRIORITY_NAMES = ['Critical', 'High', 'Default', 'Low', 'Very low'] as const;
 
 export type Status = {
   id: string;
@@ -31,7 +35,7 @@ export type Tag = {
 
 export type Task = {
   id: string;
-  number: number;
+  number: number | null;
   title: string;
   statusId: string;
   priority: Priority;
@@ -46,10 +50,10 @@ export type Task = {
 
 export type Project = {
   id: string;
-  key: string;
+  key: string | null;
   name: string;
   color: Color;
-  icon: string;
+  icon: string | null;
   /** In board order: by category, then as arranged within it. */
   statuses: Status[];
   tags: Tag[];
@@ -58,7 +62,7 @@ export type Project = {
 };
 
 export function priorityName(project: Project, priority: Priority) {
-  return project.priorityNames[priority] || DEFAULT_PRIORITY_NAMES[priority];
+  return project.priorityNames[priority - 1] || DEFAULT_PRIORITY_NAMES[priority - 1]!;
 }
 
 export function isClosed(category: Category) {
@@ -81,23 +85,26 @@ export function taskColor(project: Project, task: Task): Color | null {
 }
 
 export function identifier(project: Project, task: Task) {
-  return `${project.key}-${task.number}`;
+  return taskIdentifier(project, task);
 }
 
 /** Priority first, then manual order. The order of every column and gallery. */
 export function compareTasks(a: Task, b: Task) {
-  return a.priority - b.priority || comparePositions(a.position, b.position);
+  return compareTaskRows(a, b);
 }
 
 /** Closed work reads newest first. */
 export function compareClosed(a: Task, b: Task) {
-  return (b.closedAt ?? 0) - (a.closedAt ?? 0);
+  return (b.closedAt ?? 0) - (a.closedAt ?? 0) || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
 }
 
 export function subtasksOf(tasks: Task[], parentId: string) {
   return tasks
     .filter((task) => task.parentId === parentId)
-    .sort((a, b) => comparePositions(a.position, b.position));
+    .sort(
+      (a, b) =>
+        comparePositions(a.position, b.position) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+    );
 }
 
 /** Where a move puts a task. */
@@ -194,3 +201,5 @@ export function groupByPriority(tasks: Task[]): PriorityGroup[] {
     tasks: tasks.filter((task) => task.priority === priority),
   }));
 }
+
+export type BoardData = { project: Project; tasks: Task[] };

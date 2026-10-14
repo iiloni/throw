@@ -162,7 +162,9 @@ for that rank.
 | Closed at | Set by the server; see [Status and category](#status-and-category). |
 
 A new task starts in the backlog's default status. A column's own add control creates the
-task in that column.
+task in that column. On desktop, a plain “Add task” control at the foot of a
+column creates it at the top of its default priority and opens its title for editing; the
+backlog also has an add button in its header.
 
 A task stays in the project it was created in.
 
@@ -280,7 +282,11 @@ Applying this further is ongoing.
 
 ### Cards
 
-A card shows the title, identifier, tags and subtask progress. It shows its priority only
+A card shows the title, a muted identifier, the primary tag name and subtask progress.
+Until its number and project key sync, the identifier reads “Pending”. The owner chose this
+quiet content when the real board was built (2026-10-14): status appears only in the mixed
+backlog and closed zones; a subtask card has a small marker instead of a parent-title row,
+and a closed card does not add a relative timestamp. It shows its priority only
 when the [setting](#board-settings) asks for it, since the card's place in the column
 already says it. It does not show the description.
 
@@ -422,7 +428,7 @@ A bottom dock with Search and a create button, as in Catch. On a project board t
 the closed backlog tray, with the backlog's handle beside them. There are no Backlog and
 Board tabs: the backlog is the tray, so a Board tab had nothing to switch to.
 Project switching and the cross-project board live in the header's title menu. The shell's
-three-tab dock is replaced when the board is built.
+three-tab dock is replaced on the project board.
 
 The phone layout applies below 768 CSS pixels. The title menu also switches and manages
 workspaces, and opens settings. The project dock remains on project and cross-project
@@ -449,8 +455,11 @@ from navigation opens its board; the shell remembers the last project separately
 workspace. Projects append by position. Deleting a project requires confirmation and moves
 it to the trash (see [Project](#project)); the trash has no view yet.
 
-The shell's backlog and board bodies are placeholders. The backlog page and task-specific
-dock interactions arrive with the board feature; search and the command palette arrive later.
+The project board uses synced tasks and statuses, with the backlog tray on a phone. The
+cross-project board, search and the command palette remain placeholders. Task panes have a
+title and a placeholder body; their content comes later. Dragging, phone long-press
+selection and keyboard reordering remain in the development prototype until the drag step wires them to
+task actions.
 
 ## Platform and architecture
 
@@ -500,5 +509,5 @@ little as possible; it is not the normal way to use the app (ADR 0005).
 6. **Reordering the full-width backlog.** The gallery lays cards out in several columns per
    priority. Whether cards can be reordered there, and how a drop position reads in a
    masonry layout, is not designed.
-7. **The card and the task view.** The board prototype settled how cards move, not what a
-   card or the full task view contains beyond what this spec already lists.
+7. **The task view.** Card content is settled in [Cards](#cards). The full task view
+   still needs its content designed beyond what this spec already lists.

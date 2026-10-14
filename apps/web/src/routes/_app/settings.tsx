@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { BoardSettingsControls } from '@/components/Board/BoardSettingsPanel';
 import { Button } from '@/components/ui/button';
 import { authClient, clearAuthToken, getSignedInUser } from '@/lib/auth';
 import { clearLocalData } from '@/lib/collections';
@@ -45,6 +46,10 @@ function Settings() {
           ))}
         </div>
       </fieldset>
+      <section className="border-t pt-6">
+        <h2 className="mb-3 font-semibold">Board</h2>
+        <BoardSettingsControls includeTheme={false} />
+      </section>
       <section className="border-t pt-6">
         <h2 className="font-semibold">Account</h2>
         <p className="mt-2 break-all text-muted-foreground text-sm">{user?.name || user?.email}</p>

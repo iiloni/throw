@@ -1,9 +1,17 @@
 import { Check, CheckCheck, ChevronDown, ChevronRight, Plus, Search, X } from 'lucide-react';
-import { AnimatePresence, animate, motion, useDragControls, useMotionValue } from 'motion/react';
-import { DropdownMenu } from 'radix-ui';
-import { useLayoutEffect, useRef, useState } from 'react';
+import {
+  AnimatePresence,
+  animate,
+  motion,
+  useDragControls,
+  useMotionValue,
+  useReducedMotion,
+} from 'motion/react';
+import { Dialog, DropdownMenu } from 'radix-ui';
+import { type ReactNode, useLayoutEffect, useRef, useState } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
+import { useBackHandler } from '@/lib/backButton';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { BoardSettingsPanel } from './BoardSettingsPanel';
@@ -34,94 +42,136 @@ const DAY = 86_400_000;
  * done count. Neither is a column, so moving work in and out of them is its own gesture: pull
  * a card up out of the tray, or finish it into the done pocket past the last column.
  */
-export function PhoneBoard() {
+export function PhoneBoard({
+  projectMenu,
+  syncIndicator,
+  initialBacklog = false,
+  onSearch,
+  onReset,
+  searchContent,
+  onBacklogChange,
+  onReturnBoard,
+}: {
+  projectMenu?: ReactNode;
+  syncIndicator?: ReactNode;
+  initialBacklog?: boolean;
+  onSearch?: () => void;
+  onReset?: () => void;
+  searchContent?: ReactNode;
+  onBacklogChange?: (open: boolean) => void;
+  onReturnBoard?: () => void;
+}) {
   const state = board.use();
   const { project } = current(state);
   const active = project.statuses.filter((status) => status.category === 'active');
   const done =
     project.statuses.find((status) => status.category === 'done' && status.isDefault) ??
     project.statuses.find((status) => status.category === 'done');
+  const reduced = useReducedMotion();
   const pager = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(0);
   const [history, setHistory] = useState(false);
 
   function turnTo(index: number, behavior: ScrollBehavior = 'smooth') {
     const element = pager.current;
-    element?.scrollTo({ left: index * pageStride(element), behavior });
+    element?.scrollTo({
+      left: index * pageStride(element),
+      behavior: reduced ? 'instant' : behavior,
+    });
   }
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
       <header className="shrink-0 pt-[var(--safe-top)]">
         <div className="flex h-16 items-center gap-2 pr-3 pl-5">
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger asChild>
-              <button
-                type="button"
-                aria-label="Switch project"
-                className="flex min-h-11 min-w-0 items-center gap-2 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <span className="truncate font-display font-extrabold text-[1.75rem] leading-tight tracking-[-0.03em]">
-                  {project.name}
-                </span>
-                <ChevronDown aria-hidden className="size-4 shrink-0 text-muted-foreground" />
-              </button>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content
-                align="start"
-                sideOffset={8}
-                className="shell-menu glass-thick z-50 w-64 rounded-3xl p-2"
-              >
-                {state.boards.map(({ project: item }) => (
-                  <DropdownMenu.Item
-                    key={item.id}
-                    onSelect={() => {
-                      selectProject(item.id);
-                      turnTo(0, 'instant');
-                    }}
-                    className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-3 text-sm outline-none data-[highlighted]:bg-accent"
-                  >
-                    <ProjectIcon name={item.icon} className="size-4 shrink-0" />
-                    {item.name}
-                  </DropdownMenu.Item>
-                ))}
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
+          {projectMenu ?? (
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <button
+                  type="button"
+                  aria-label="Switch project"
+                  className="flex min-h-11 min-w-0 items-center gap-2 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="truncate font-display font-extrabold text-[1.75rem] leading-tight tracking-[-0.03em]">
+                    {project.name}
+                  </span>
+                  <ChevronDown aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+                </button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                  align="start"
+                  sideOffset={8}
+                  className="shell-menu glass-thick z-50 w-64 rounded-3xl p-2"
+                >
+                  {state.boards.map(({ project: item }) => (
+                    <DropdownMenu.Item
+                      key={item.id}
+                      onSelect={() => {
+                        selectProject(item.id);
+                        turnTo(0, 'instant');
+                      }}
+                      className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-3 text-sm outline-none data-[highlighted]:bg-accent"
+                    >
+                      <ProjectIcon name={item.icon} className="size-4 shrink-0" />
+                      {item.name}
+                    </DropdownMenu.Item>
+                  ))}
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
+          )}
           <span className="flex-1" />
           <DoneCount onOpen={() => setHistory(true)} />
-          <BoardSettingsPanel side="bottom" />
+          <BoardSettingsPanel side="bottom" onReset={onReset} />
         </div>
-        <FlowTrack statuses={active} page={page} onTurn={turnTo} />
+        {syncIndicator && (
+          <div className="px-5 text-muted-foreground empty:hidden">{syncIndicator}</div>
+        )}
+        {!searchContent && <FlowTrack statuses={active} page={page} onTurn={turnTo} />}
       </header>
 
-      <div className="relative flex min-h-0 flex-1">
-        <div
-          ref={pager}
-          data-pager=""
-          onScroll={(event) =>
-            setPage(Math.round(event.currentTarget.scrollLeft / pageStride(event.currentTarget)))
-          }
-          className="phone-pager flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
-        >
-          {active.map((status) => (
-            <div key={status.id} data-page="" data-origin="active" className={pageClass}>
-              <CardList
-                listId={`status:${status.id}`}
-                endSpace={TRAY_SPACE}
-                tight
-                className="flex-1"
-              />
-            </div>
-          ))}
+      {searchContent ? (
+        <div className="min-h-0 flex-1 pb-[var(--dock-space)]">{searchContent}</div>
+      ) : (
+        <div className="relative flex min-h-0 flex-1">
+          <div
+            ref={pager}
+            data-pager=""
+            onScroll={(event) =>
+              setPage(Math.round(event.currentTarget.scrollLeft / pageStride(event.currentTarget)))
+            }
+            className="phone-pager flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
+          >
+            {active.map((status) => (
+              <div key={status.id} data-page="" data-origin="active" className={pageClass}>
+                <CardList
+                  listId={`status:${status.id}`}
+                  endSpace={TRAY_SPACE}
+                  tight
+                  className="flex-1"
+                />
+              </div>
+            ))}
+          </div>
+          <PeekEdge side={-1} shown={page > 0} />
+          <PeekEdge side={1} shown={page < active.length - 1} />
+          {done && <DonePocket status={done} shown={page === active.length - 1} />}
         </div>
-        <PeekEdge side={-1} shown={page > 0} />
-        <PeekEdge side={1} shown={page < active.length - 1} />
-        {done && <DonePocket status={done} shown={page === active.length - 1} />}
-      </div>
+      )}
 
-      <BacklogTray onCreate={(inBacklog) => createTask(inBacklog ? undefined : active[page]?.id)} />
+      <BacklogTray
+        initialOpen={initialBacklog}
+        onSearch={() => {
+          setPage(0);
+          onSearch?.();
+        }}
+        onChange={onBacklogChange}
+        onCreate={(inBacklog) => {
+          onReturnBoard?.();
+          createTask(inBacklog ? undefined : active[page]?.id);
+        }}
+      />
       <MoveDrawer />
       <ClosedSheet open={history} onClose={() => setHistory(false)} />
     </div>
@@ -240,6 +290,7 @@ function DoneCount({ onOpen }: { onOpen: () => void }) {
   return (
     <button
       type="button"
+      data-closed-trigger=""
       data-status-home={closedIds.map(({ id }) => id).join(' ')}
       aria-label={`${count} done this week. Show closed tasks`}
       onClick={onOpen}
@@ -328,18 +379,29 @@ const dockButton =
  * still above: lifting a card sinks the tray out of the way so the whole screen is board to
  * place it on. Full, it is the backlog to groom, and its cards are reordered in place.
  */
-function BacklogTray({ onCreate }: { onCreate: (inBacklog: boolean) => void }) {
+function BacklogTray({
+  onCreate,
+  initialOpen,
+  onSearch,
+  onChange,
+}: {
+  onCreate: (inBacklog: boolean) => void;
+  initialOpen: boolean;
+  onSearch?: () => void;
+  onChange?: (open: boolean) => void;
+}) {
   const state = board.use();
   const held = drag.use();
   const { project } = current(state);
   const statuses = zoneStatuses('backlog', project.statuses);
   const count = listTasks({ ...state, backlogFilter: null }, 'backlog').length;
-  const [detent, setDetent] = useState<Detent>('closed');
+  const [detent, setDetent] = useState<Detent>(initialOpen ? 'half' : 'closed');
   // What the tray leaves off screen at half height, kept clear at the end of its list.
   const [hidden, setHidden] = useState(0);
   const tray = useRef<HTMLElement>(null);
   const head = useRef<HTMLDivElement>(null);
   const safe = useRef<HTMLDivElement>(null);
+  const reduced = useReducedMotion();
   const y = useMotionValue(0);
   const panFrom = useRef(0);
   // Grooming keeps the tray where it is; anything else held wants the board.
@@ -349,22 +411,29 @@ function BacklogTray({ onCreate }: { onCreate: (inBacklog: boolean) => void }) {
 
   function goTo(next: Detent) {
     setDetent(next);
+    onChange?.(next !== 'closed');
     setHidden(next === 'half' ? offsets().half : 0);
     // Let go at the height it was at: there is no new detent to move it.
-    if (next === detent) animate(y, offsets()[next], springs.smooth);
+    if (next === detent) animate(y, offsets()[next], reduced ? { duration: 0 } : springs.smooth);
   }
 
+  useBackHandler(detent !== 'closed', () => goTo('closed'));
   const placed = useRef(false);
   useLayoutEffect(() => {
     const at = trayOffsets(tray.current, head.current, safe.current);
     const to = sunk ? at.sunk : at[detent];
-    if (placed.current) animate(y, to, springs.smooth);
+    setHidden(detent === 'half' ? at.half : 0);
+    if (placed.current) animate(y, to, reduced ? { duration: 0 } : springs.smooth);
     else y.jump(to);
     placed.current = true;
-  }, [sunk, detent, y]);
+  }, [sunk, detent, y, reduced]);
 
   useLayoutEffect(() => {
-    const onResize = () => y.jump(offsets()[detent]);
+    const onResize = () => {
+      const at = offsets();
+      y.jump(at[detent]);
+      setHidden(detent === 'half' ? at.half : 0);
+    };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   });
@@ -373,6 +442,7 @@ function BacklogTray({ onCreate }: { onCreate: (inBacklog: boolean) => void }) {
     <motion.section
       ref={tray}
       aria-label="Backlog"
+      data-detent={detent}
       data-drop-block=""
       data-origin="backlog"
       style={{ y }}
@@ -404,6 +474,20 @@ function BacklogTray({ onCreate }: { onCreate: (inBacklog: boolean) => void }) {
           <button
             type="button"
             aria-expanded={detent !== 'closed'}
+            aria-keyshortcuts="ArrowUp ArrowDown"
+            onKeyDown={(event) => {
+              const order: Detent[] = ['closed', 'half', 'full'];
+              if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+              event.preventDefault();
+              goTo(
+                order[
+                  Math.max(
+                    0,
+                    Math.min(2, order.indexOf(detent) + (event.key === 'ArrowUp' ? 1 : -1)),
+                  )
+                ]!,
+              );
+            }}
             data-status-home={statuses.map(({ id }) => id).join(' ')}
             onClick={() => goTo(detent === 'closed' ? 'half' : 'closed')}
             className={cn(
@@ -418,6 +502,10 @@ function BacklogTray({ onCreate }: { onCreate: (inBacklog: boolean) => void }) {
           <motion.button
             type="button"
             aria-label="Search"
+            onClick={() => {
+              setDetent('closed');
+              onSearch?.();
+            }}
             whileTap={{ scale: 0.88 }}
             transition={springs.snappy}
             className={cn(dockButton, 'bg-foreground/[0.06] text-foreground')}
@@ -601,60 +689,101 @@ function closedByDay(tasks: Task[]) {
 function ClosedSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const state = board.use();
   const controls = useDragControls();
+  useBackHandler(open, onClose);
   const groups = closedByDay(listTasks(state, 'closed'));
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.section
-          aria-label="Closed"
-          data-origin="closed"
-          data-drop-block=""
-          className="fixed inset-x-0 top-[calc(var(--safe-top)+0.5rem)] bottom-0 z-40 mx-auto flex w-full max-w-md flex-col rounded-t-[1.75rem] bg-background shadow-[0_-12px_40px_-12px_oklch(0_0_0/0.35)]"
-          initial={{ y: '100%' }}
-          animate={{ y: 0 }}
-          exit={{ y: '100%' }}
-          transition={springs.smooth}
-          drag="y"
-          dragControls={controls}
-          dragListener={false}
-          dragConstraints={{ top: 0, bottom: 0 }}
-          dragElastic={{ top: 0, bottom: 0.6 }}
-          onDragEnd={(_, info) => {
-            if (info.offset.y > 120 || info.velocity.y > 500) onClose();
-          }}
-        >
-          <div
-            className="shrink-0 touch-none select-none"
-            onPointerDown={(event) => controls.start(event)}
+    <Dialog.Root
+      open={open}
+      onOpenChange={(value) => {
+        if (!value) onClose();
+      }}
+    >
+      <AnimatePresence>
+        {open && (
+          <Dialog.Content
+            asChild
+            forceMount
+            aria-describedby={undefined}
+            onOpenAutoFocus={(event) => {
+              event.preventDefault();
+              document.querySelector<HTMLElement>('[role="dialog"][aria-label="Closed"]')?.focus();
+            }}
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              document.querySelector<HTMLElement>('[data-closed-trigger]')?.focus();
+            }}
           >
-            <div aria-hidden className="mx-auto mt-2 h-1 w-9 rounded-full bg-foreground/20" />
-            <div className="flex h-14 items-center pr-2 pl-5">
-              <h2 className="flex-1 font-bold font-display text-xl tracking-[-0.01em]">Closed</h2>
-              <IconButton label="Close" onClick={onClose}>
-                <X />
-              </IconButton>
-            </div>
-          </div>
-          <StatusFilter zone="closed" />
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3.5 pb-[calc(var(--safe-bottom)+1.5rem)] [scrollbar-width:none]">
-            {groups.map((group) => (
-              <section key={group.label}>
-                <h3 className="px-1.5 pt-3 pb-2 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
-                  {group.label}
-                </h3>
-                <div className="space-y-3">
-                  {group.tasks.map((task) => (
-                    <TaskCard key={task.id} task={task} showStatus={state.closedFilter === null} />
-                  ))}
+            <motion.section
+              role="dialog"
+              aria-modal="true"
+              onKeyDown={(event) => {
+                if (event.key === 'Escape' && !event.defaultPrevented) {
+                  event.preventDefault();
+                  onClose();
+                }
+              }}
+              aria-label="Closed"
+              tabIndex={-1}
+              data-origin="closed"
+              data-drop-block=""
+              className="fixed inset-x-0 top-[calc(var(--safe-top)+0.5rem)] bottom-0 z-40 mx-auto flex w-full max-w-md flex-col rounded-t-[1.75rem] bg-background shadow-[0_-12px_40px_-12px_oklch(0_0_0/0.35)]"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={springs.smooth}
+              drag="y"
+              dragControls={controls}
+              dragListener={false}
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.6 }}
+              onDragEnd={(_, info) => {
+                if (info.offset.y > 120 || info.velocity.y > 500) onClose();
+              }}
+            >
+              <div
+                className="shrink-0 touch-none select-none"
+                onPointerDown={(event) => controls.start(event)}
+              >
+                <div aria-hidden className="mx-auto mt-2 h-1 w-9 rounded-full bg-foreground/20" />
+                <div className="flex h-14 items-center pr-2 pl-5">
+                  <Dialog.Title asChild>
+                    <h2 className="flex-1 font-bold font-display text-xl tracking-[-0.01em]">
+                      Closed
+                    </h2>
+                  </Dialog.Title>
+                  <IconButton label="Close" onClick={onClose}>
+                    <X />
+                  </IconButton>
                 </div>
-              </section>
-            ))}
-            {groups.length === 0 && (
-              <p className="py-10 text-center text-muted-foreground text-sm">Nothing closed.</p>
-            )}
-          </div>
-        </motion.section>
-      )}
-    </AnimatePresence>
+              </div>
+              <StatusFilter zone="closed" />
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3.5 pb-[calc(var(--safe-bottom)+1.5rem)] [scrollbar-width:none]">
+                {groups.map((group) => (
+                  <section key={group.label}>
+                    <h3 className="px-1.5 pt-3 pb-2 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
+                      {group.label}
+                    </h3>
+                    <div className="space-y-3">
+                      {group.tasks.map((task) => (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          showStatus={state.closedFilter === null}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                ))}
+                {groups.length === 0 && (
+                  <p className="py-10 text-center text-muted-foreground text-sm">
+                    {state.awaitingTasks ? 'Loading tasks…' : 'Nothing closed.'}
+                  </p>
+                )}
+              </div>
+            </motion.section>
+          </Dialog.Content>
+        )}
+      </AnimatePresence>
+    </Dialog.Root>
   );
 }

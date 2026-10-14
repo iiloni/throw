@@ -6,7 +6,7 @@ import { IconButton } from '@/components/IconButton/IconButton';
 import { springs } from '@/lib/motion';
 import { useThemePreference } from '@/lib/theme';
 import { cn } from '@/lib/utils';
-import { type BoardSettings, resetBoard, useBoardSettings } from './state';
+import { type BoardSettings, board, update, useBoardSettings } from './state';
 
 function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
@@ -90,11 +90,13 @@ function Segmented<T extends string>({
  * The board's look-and-feel settings, as they will appear on the settings page. Here they
  * open from the prototype's frame, with a reset for its mock data.
  */
-export function BoardSettingsPanel({ side = 'right' }: { side?: 'right' | 'bottom' }) {
-  const [settings, setSettings] = useBoardSettings();
-  const [theme, setTheme] = useThemePreference();
-  const set = <K extends keyof BoardSettings>(key: K, value: BoardSettings[K]) =>
-    setSettings({ ...settings, [key]: value });
+export function BoardSettingsPanel({
+  side = 'right',
+  onReset,
+}: {
+  side?: 'right' | 'bottom';
+  onReset?: () => void;
+}) {
   return (
     <Popover.Root>
       <Popover.Trigger asChild>
@@ -111,92 +113,116 @@ export function BoardSettingsPanel({ side = 'right' }: { side?: 'right' | 'botto
           className="shell-menu glass-thick z-50 max-h-[calc(100dvh-1.5rem)] w-[22rem] max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-3xl px-5 py-4 outline-none"
         >
           <h2 className="pb-1 font-display font-semibold text-lg tracking-[-0.01em]">Board</h2>
-          <Row label="Priority labels" hint="Name each priority zone in a column.">
-            <Switch
-              label="Priority labels"
-              checked={settings.zoneLabels}
-              onChange={(value) => set('zoneLabels', value)}
-            />
-          </Row>
-          <Row label="Priority on cards" hint="Mark cards that are not the default priority.">
-            <Switch
-              label="Priority on cards"
-              checked={settings.cardPriority}
-              onChange={(value) => set('cardPriority', value)}
-            />
-          </Row>
-          <Row label="Column backgrounds">
-            <Switch
-              label="Column backgrounds"
-              checked={settings.surfaces}
-              onChange={(value) => set('surfaces', value)}
-            />
-          </Row>
-          <Row label="Scrollbars" hint="Off, a faded edge shows where a list goes on.">
-            <Switch
-              label="Scrollbars"
-              checked={settings.scrollbars}
-              onChange={(value) => set('scrollbars', value)}
-            />
-          </Row>
-          <Row
-            label="Holding a card"
-            hint="Compact folds the other priorities away. Full keeps the column as it is."
-          >
-            <Segmented
-              label="Holding a card"
-              value={settings.heldColumn}
-              options={[
-                ['compact', 'Compact'],
-                ['full', 'Full'],
-              ]}
-              onChange={(value) => set('heldColumn', value)}
-            />
-          </Row>
-          {(
-            [
-              ['backlogRail', 'Backlog'],
-              ['closedRail', 'Closed'],
-            ] as const
-          ).map(([key, label]) => (
-            <Row
-              key={key}
-              label={label}
-              hint="Sticky stays at the window's edge. With board scrolls with the columns."
+          <BoardSettingsControls />
+          {onReset && (
+            <button
+              type="button"
+              onClick={onReset}
+              className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-foreground/[0.06] font-medium text-sm outline-none hover:bg-foreground/[0.1] focus-visible:ring-[3px] focus-visible:ring-ring/60"
             >
-              <Segmented
-                label={label}
-                value={settings[key]}
-                options={[
-                  ['sticky', 'Sticky'],
-                  ['bound', 'With board'],
-                ]}
-                onChange={(value) => set(key, value)}
-              />
-            </Row>
-          ))}
-          <Row label="Theme">
-            <Segmented
-              label="Theme"
-              value={theme}
-              options={[
-                ['system', 'System'],
-                ['light', 'Light'],
-                ['dark', 'Dark'],
-              ]}
-              onChange={setTheme}
-            />
-          </Row>
-          <button
-            type="button"
-            onClick={resetBoard}
-            className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-foreground/[0.06] font-medium text-sm outline-none hover:bg-foreground/[0.1] focus-visible:ring-[3px] focus-visible:ring-ring/60"
-          >
-            <RotateCcw aria-hidden className="size-4" />
-            Reset the mock data
-          </button>
+              <RotateCcw aria-hidden className="size-4" />
+              Reset the mock data
+            </button>
+          )}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+  );
+}
+
+export function BoardSettingsControls({ includeTheme = true }: { includeTheme?: boolean }) {
+  const state = board.use();
+  const [settings, setSettings] = useBoardSettings();
+  const [theme, setTheme] = useThemePreference();
+  const set = <K extends keyof BoardSettings>(key: K, value: BoardSettings[K]) =>
+    setSettings({ ...settings, [key]: value });
+  return (
+    <>
+      <Row label="Subtasks as cards">
+        <Switch
+          label="Subtasks as cards"
+          checked={state.subtasksAsCards}
+          onChange={(value) => update({ subtasksAsCards: value })}
+        />
+      </Row>
+      <Row label="Priority labels" hint="Name each priority zone in a column.">
+        <Switch
+          label="Priority labels"
+          checked={settings.zoneLabels}
+          onChange={(value) => set('zoneLabels', value)}
+        />
+      </Row>
+      <Row label="Priority on cards" hint="Mark cards that are not the default priority.">
+        <Switch
+          label="Priority on cards"
+          checked={settings.cardPriority}
+          onChange={(value) => set('cardPriority', value)}
+        />
+      </Row>
+      <Row label="Column backgrounds">
+        <Switch
+          label="Column backgrounds"
+          checked={settings.surfaces}
+          onChange={(value) => set('surfaces', value)}
+        />
+      </Row>
+      <Row label="Scrollbars" hint="Off, a faded edge shows where a list goes on.">
+        <Switch
+          label="Scrollbars"
+          checked={settings.scrollbars}
+          onChange={(value) => set('scrollbars', value)}
+        />
+      </Row>
+      <Row
+        label="Holding a card"
+        hint="Compact folds the other priorities away. Full keeps the column as it is."
+      >
+        <Segmented
+          label="Holding a card"
+          value={settings.heldColumn}
+          options={[
+            ['compact', 'Compact'],
+            ['full', 'Full'],
+          ]}
+          onChange={(value) => set('heldColumn', value)}
+        />
+      </Row>
+      {(
+        [
+          ['backlogRail', 'Backlog'],
+          ['closedRail', 'Closed'],
+        ] as const
+      ).map(([key, label]) => (
+        <Row
+          key={key}
+          label={label}
+          hint="Sticky stays at the window's edge. With board scrolls with the columns."
+        >
+          <Segmented
+            label={label}
+            value={settings[key]}
+            options={[
+              ['sticky', 'Sticky'],
+              ['bound', 'With board'],
+            ]}
+            onChange={(value) => set(key, value)}
+          />
+        </Row>
+      ))}
+      {includeTheme && (
+        <Row label="Theme">
+          <Segmented
+            label="Theme"
+            value={theme}
+            options={[
+              ['system', 'System'],
+              ['light', 'Light'],
+              ['dark', 'Dark'],
+            ]}
+            onChange={setTheme}
+          />
+        </Row>
+      )}
+    </>
   );
 }
