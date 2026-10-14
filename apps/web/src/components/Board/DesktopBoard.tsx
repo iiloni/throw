@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import { BoardSettingsPanel } from './BoardSettingsPanel';
 import { CardList } from './CardList';
 import { drag } from './drag';
-import { railWidth, SideZone, STRIP_WIDTH, zoneWidth } from './SideZone';
+import { heldView, railWidth, SideZone, STRIP_WIDTH, zoneWidth } from './SideZone';
 import { StatusMenu } from './StatusMenu';
 import { StatusTile } from './StatusTile';
 import { board, countIn, current, selectProject, sendTasks, update } from './state';
@@ -96,8 +96,11 @@ export function DesktopBoard() {
     rowWidth - STRIP_WIDTH - ZONE_GAP * 2 - (dragging ? TILES_WIDTH : 0),
   );
 
-  const backlogWidth = zoneWidth(state.backlog, fullWidth);
-  const closedWidth = zoneWidth(state.closed, fullWidth);
+  // Whether each rail is showing dropzones: a card is held that did not come from it.
+  const backlogTiles = dragging && held.origin !== 'backlog';
+  const closedTiles = dragging && held.origin !== 'closed';
+  const backlogWidth = zoneWidth(heldView(state.backlog, backlogTiles), fullWidth);
+  const closedWidth = zoneWidth(heldView(state.closed, closedTiles), fullWidth);
 
   return (
     <div className="flex h-dvh overflow-hidden">
@@ -160,16 +163,8 @@ export function DesktopBoard() {
                 <ScrollAreaViewport
                   data-origin="active"
                   data-autoscroll-x=""
-                  data-inset-start={railWidth(
-                    state.backlog,
-                    fullWidth,
-                    dragging && held.origin !== 'backlog',
-                  )}
-                  data-inset-end={railWidth(
-                    state.closed,
-                    fullWidth,
-                    dragging && held.origin !== 'closed',
-                  )}
+                  data-inset-start={railWidth(state.backlog, fullWidth, backlogTiles)}
+                  data-inset-end={railWidth(state.closed, fullWidth, closedTiles)}
                   className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3"
                 >
                   <ColumnsEdge rail={backlogWidth} />
