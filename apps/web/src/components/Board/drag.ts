@@ -1,5 +1,6 @@
-import { motionValue } from 'motion/react';
+import { animate, motionValue } from 'motion/react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
+import { springs } from '@/lib/motion';
 import { createStore } from '@/lib/store';
 import type { Priority } from './model';
 import {
@@ -61,6 +62,28 @@ export const drag = createStore<DragState | null>(null);
 
 /** Where the held card's copy is drawn. Written every frame, so not React state. */
 export const overlayPosition = { x: motionValue(0), y: motionValue(0) };
+
+/**
+ * The copy's width. A backlog card and a column card differ in width, so the copy springs
+ * to the width of whatever it is over, as a card in Catch springs to a new column width,
+ * and arrives at its place already the right size.
+ */
+export const overlayWidth = motionValue(0);
+let widthTarget = 0;
+/** Where across the card it is held, as a share of its width, so it stays under the finger. */
+let grabRatio = 0;
+
+function resize(width: number) {
+  if (Math.abs(width - widthTarget) < 1) return;
+  widthTarget = width;
+  if (reducedMotion()) overlayWidth.jump(width);
+  else animate(overlayWidth, width, springs.snappy);
+}
+
+function follow() {
+  overlayPosition.x.set(pointer.x - grabRatio * overlayWidth.get());
+  overlayPosition.y.set(pointer.y - grab.y);
+}
 
 type Config = { heldColumn: 'compact' | 'full' };
 let config: Config = { heldColumn: 'compact' };
@@ -178,8 +201,7 @@ function onPointerMove(event: PointerEvent) {
     } else if (distance > MOUSE_SLOP) begin();
     return;
   }
-  overlayPosition.x.set(pointer.x - grab.x);
-  overlayPosition.y.set(pointer.y - grab.y);
+  follow();
 }
 
 function onPointerUp() {
@@ -233,6 +255,9 @@ function begin() {
     : 0;
   update((state) => ({ expanded: state.expanded.filter((id) => id !== taskId) }));
   grab = { x: pointer.x - rect.left, y: Math.min(pointer.y - rect.top, rect.height - unfolded) };
+  grabRatio = grab.x / rect.width;
+  widthTarget = rect.width;
+  overlayWidth.jump(rect.width);
   overlayPosition.x.jump(pointer.x - grab.x);
   overlayPosition.y.jump(pointer.y - grab.y);
   // The hold selected this card alone: it is being moved, not gathered into a selection.
@@ -261,9 +286,21 @@ function begin() {
   frame = requestAnimationFrame(loop);
 }
 
+/** The copy re-wraps as its width changes; the gap it will fill has to keep its height. */
+function measure() {
+  const state = drag.get();
+  const copy = document.querySelector<HTMLElement>('[data-overlay]');
+  const height = (copy?.closest<HTMLElement>('[data-card-root]') ?? copy)?.offsetHeight;
+  if (!state || !height || Math.abs(height - state.height) < 0.5) return;
+  grab = { x: grab.x, y: Math.min(grab.y, height) };
+  drag.set({ ...state, height, grab });
+}
+
 function loop() {
   autoScroll();
   resolve();
+  measure();
+  follow();
   frame = requestAnimationFrame(loop);
 }
 
@@ -367,6 +404,9 @@ function resolve() {
     folded = null;
     return set({ target: null, rail: null });
   }
+  // The copy takes the width cards have in this list.
+  const peer = list.querySelector<HTMLElement>('[data-slot]:not([hidden]) [data-card-root]');
+  if (peer && peer.offsetWidth > 0) resize(peer.offsetWidth);
   if (state.ids.length > 1) {
     return set({ target: listStatusId(listId) ? { kind: 'list', listId } : null, rail: null });
   }
@@ -494,11 +534,12 @@ function land(taskId: string, statusId: string | null) {
     let toY = y;
     if (card) {
       const rect = card.getBoundingClientRect();
+      resize(rect.width);
       toX = rect.left;
       toY = rect.top;
     } else if (home) {
       const rect = home.getBoundingClientRect();
-      toX = rect.left + rect.width / 2 - state.width / 2;
+      toX = rect.left + rect.width / 2 - overlayWidth.get() / 2;
       toY = rect.top + rect.height / 2 - state.height / 2;
     }
     const ease = 1 - Math.exp(-(now - last) / 60);
@@ -507,7 +548,8 @@ function land(taskId: string, statusId: string | null) {
     y += (toY - y) * ease;
     overlayPosition.x.set(x);
     overlayPosition.y.set(y);
-    const arrived = Math.hypot(toX - x, toY - y) < 0.75;
+    const arrived =
+      Math.hypot(toX - x, toY - y) < 0.75 && Math.abs(overlayWidth.get() - widthTarget) < 0.75;
     if ((arrived && now - started > 120) || now - started > 560) return settle();
     requestAnimationFrame(step);
   };

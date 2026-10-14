@@ -1,7 +1,7 @@
 import { motion, useSpring, useTransform, useVelocity } from 'motion/react';
 import { createPortal } from 'react-dom';
 import { springs } from '@/lib/motion';
-import { drag, overlayPosition } from './drag';
+import { drag, overlayPosition, overlayWidth } from './drag';
 import { board, current } from './state';
 import { TaskCard } from './TaskCard';
 
@@ -31,13 +31,13 @@ export function DragOverlay() {
     <motion.div
       aria-hidden
       className="pointer-events-none fixed top-0 left-0 z-[60]"
-      style={{ x: overlayPosition.x, y: overlayPosition.y, width: held.width }}
+      style={{ x: overlayPosition.x, y: overlayPosition.y, width: overlayWidth }}
     >
       <motion.div
         style={{
           rotate: flying && !token ? lean : 0,
           // Scaled about the finger, so a shrinking card stays under it.
-          transformOrigin: `${held.grab.x}px ${held.grab.y}px`,
+          transformOrigin: `${(held.grab.x / held.width) * 100}% ${held.grab.y}px`,
         }}
         initial={{ scale: 1 }}
         animate={{

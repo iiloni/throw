@@ -79,6 +79,12 @@ frame.
 started on. Removing that element ends the drag on a phone, so the card is hidden in place
 and a copy follows the finger.
 
+**The held copy takes the width of the list it is over.** Cards in the backlog and in a
+column differ in width. The copy springs to the new width as it crosses, keeps the same
+point under the finger, and the gap it will fill follows its re-wrapped height. It lands
+already the right size instead of snapping, the way a Catch card springs to a new column
+width.
+
 **Every move has a keyboard equivalent.** A card is picked up, carried with the arrow keys
 across priorities and columns, and set down or put back. Each step is announced.
 
