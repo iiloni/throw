@@ -19,7 +19,6 @@ import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { type ShellForm, ShellForms } from '@/components/ShellForms/ShellForms';
 import { getSignedInUser } from '@/lib/auth';
 import { useProjects, useWorkspaces } from '@/lib/collections';
-import { useKeyboardTracking } from '@/lib/keyboard';
 import { useMedia } from '@/lib/media';
 import { springs } from '@/lib/motion';
 import { projectsIn } from '@/lib/projects';
@@ -34,7 +33,6 @@ const paramsSchema = z.object({
 });
 
 export function AppShell() {
-  useKeyboardTracking();
   const navigate = useNavigate();
   const rawParams = useRouterState({ select: (state) => state.matches.at(-1)?.params });
   const params = paramsSchema.parse(rawParams ?? {});

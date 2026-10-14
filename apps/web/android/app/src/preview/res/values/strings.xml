@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Throw Preview</string>
+    <string name="title_activity_main">Throw Preview</string>
+    <string name="package_name">org.iloni.throwtasks.preview</string>
+    <string name="custom_url_scheme">org.iloni.throwtasks.preview</string>
+</resources>

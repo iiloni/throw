@@ -12,6 +12,7 @@ const passing = {
   REUSE_RESULT: 'success',
   RUN_CHECKS: 'true',
   CHECK_RESULT: 'success',
+  NATIVE_RESULT: 'success',
   DESKTOP_RESULT: 'success',
   ANDROID_RESULT: 'success',
 };
@@ -47,7 +48,13 @@ test('E2E without merge approval cannot pass validation, even after all tests pa
 
 test('a merge-approved PR passes only when every prerequisite succeeds', () => {
   assert.equal(validate().status, 0);
-  for (const key of ['REUSE_RESULT', 'CHECK_RESULT', 'DESKTOP_RESULT', 'ANDROID_RESULT']) {
+  for (const key of [
+    'REUSE_RESULT',
+    'CHECK_RESULT',
+    'NATIVE_RESULT',
+    'DESKTOP_RESULT',
+    'ANDROID_RESULT',
+  ]) {
     for (const value of ['failure', 'cancelled', 'skipped', '']) {
       assert.equal(validate({ [key]: value }).status, 1, `${key}=${value} must block merging`);
     }
@@ -84,6 +91,7 @@ test('a documentation-only PR or main push passes on checks alone', () => {
   const docs = {
     DOCS_ONLY: 'true',
     E2E_REQUESTED: 'false',
+    NATIVE_RESULT: 'skipped',
     DESKTOP_RESULT: 'skipped',
     ANDROID_RESULT: 'skipped',
   };

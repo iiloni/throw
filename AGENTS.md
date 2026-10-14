@@ -2,8 +2,8 @@
 
 Throw is a self-hosted, offline-first project management app. It is a companion to
 [Catch](https://github.com/iiloni/catch) (notes): the same design language and stack, with
-its own repository, server, accounts and data. It ships as a web app (installable PWA); the
-Android app is planned from the same code.
+its own repository, server, accounts and data. It ships as a web app (installable PWA) and
+a Capacitor Android app from the same code.
 
 Read `docs/spec.md` before building a feature: it says what the product is and what is out
 of scope. Read `docs/decisions/` before changing architecture. If a decision or the spec no
@@ -26,7 +26,7 @@ ADR 0008 rather than starting again.
 
 | Path | What lives there |
 | --- | --- |
-| `apps/web` | Vite + React SPA, TanStack Router (file routes in `src/routes`), TanStack DB, Tailwind v4 + shadcn/ui. Also the Capacitor config; the Android project is not generated yet. |
+| `apps/web` | Vite + React SPA, TanStack Router (file routes in `src/routes`), TanStack DB, Tailwind v4 + shadcn/ui. Also the Capacitor config and native Android project. |
 | `apps/server` | Hono API on Node. Better Auth, Drizzle (Postgres), Electric shape proxy. Serves the built web app in production. |
 | `packages/shared` | Zod schemas, types and pure helpers used by both apps. Exported as TypeScript source (no build step). |
 | `e2e` | Playwright tests that drive the real app against the dev database. |
@@ -44,6 +44,8 @@ checkout's stack. Never hard-code container or project names.
 - `./scripts/dev.sh check`: lint, typecheck, unit tests, build. **Must pass before you finish.**
 - `./scripts/dev.sh e2e <file> [--grep <pattern>] --workers=1`: targeted Playwright tests
   against this worktree's stack. Select the affected specs or cases; see the E2E policy below.
+- `./scripts/dev.sh android [--static] [--usb] [--target <id>]`: install Throw Dev; use
+  `--static` for bundled code and offline testing. Host JDK 21, SDK 36 and adb are required.
 - `./scripts/dev.sh generate`: create a migration after editing `apps/server/src/db/schema.ts`.
   Commit the generated SQL and journal.
 - `./scripts/dev.sh logs app`, `psql`, `shell`, `seed`, `reset -y`: see `./scripts/dev.sh help`.
@@ -308,16 +310,20 @@ ids. Do not add a dependency on Catch's repository; the two release independentl
   a shape when membership changes, so do not denormalize a user id onto rows to filter them.
 - A shape's first response (`offset=-1`) is the shape as Electric first built it, not as it
   is now. Tests read a shape with `shapeRows` in `e2e/helpers.ts`, which follows its log.
-- `throw` is a Java keyword, so the Android application id cannot be `org.iloni.throw`
-  (`capacitor.config.ts` uses `org.iloni.throwtasks` as a placeholder).
+- `throw` is a Java keyword, so the Android application id cannot be `org.iloni.throw`.
+  The permanent application id is `org.iloni.throwtasks`; dev and preview add `.dev` and
+  `.preview`, with names Throw Dev and Throw Preview.
 - All clients authenticate with Better Auth bearer tokens (`set-auth-token` header), not
   cookies, so the Android app on another origin shares the web app's code path. Only the
   signed token from `set-auth-token` works as a bearer token.
 - Sign-up closes after the first account unless `REGISTRATION=open`, which dev stacks set.
   Catch's invite links have not been ported, so a closed server has one account.
 - The app draws edge to edge. Pad fixed UI with the `--safe-top` / `--safe-bottom` tokens.
-  The shell sets `--keyboard` through browser viewport/VirtualKeyboard tracking and uses
-  `--dock-*` for the phone dock. Native keyboard animation tracking is not ported yet.
+  The root sets `--keyboard` through browser viewport/VirtualKeyboard tracking; the shell
+  uses `--dock-*` for the phone dock. Catch's native KeyboardInsets plugin owns system
+  insets and keyboard animations on Android;
+  Capacitor SystemBars inset handling is disabled to avoid competing owners. Android Back
+  dismisses open sheets through `lib/backButton.ts` before navigating history.
 - TanStack DB is pre-1.0. Keep its usage inside `src/lib/collections.ts`, `src/lib/localStore.ts`
   and route files so upgrades stay contained.
 - Bump a collection's `schemaVersion` in `collections.ts` whenever the columns its shape syncs
