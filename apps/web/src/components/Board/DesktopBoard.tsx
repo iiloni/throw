@@ -43,15 +43,32 @@ function useWidth() {
 /** The columns' own gap, which follows each of the scroller's end spacers. */
 const COLUMN_GAP = 12;
 
-/** Holds the first or last column clear of the rail that lies over that end of the scroller. */
-function ColumnsEdge({ rail }: { rail: number }) {
+/**
+ * Holds the first or last column clear of the rail that lies over that end of the scroller.
+ *
+ * Space growing at the start pushes the columns along by itself. At the end it would only
+ * add room past the last column and leave the rail lying over it, so the scroller follows
+ * the trailing spacer: the closed rail pushes the columns as the backlog does.
+ */
+function ColumnsEdge({ rail, trailing = false }: { rail: number; trailing?: boolean }) {
+  const width = rail + ZONE_GAP - COLUMN_GAP;
+  const drawn = useRef(width);
   return (
     <motion.span
+      ref={(element) => {
+        if (element && trailing) drawn.current = element.getBoundingClientRect().width;
+      }}
       aria-hidden
       className="shrink-0"
       initial={false}
-      animate={{ width: rail + ZONE_GAP - COLUMN_GAP }}
+      animate={{ width }}
       transition={springs.smooth}
+      onUpdate={(latest) => {
+        if (!trailing || typeof latest.width !== 'number') return;
+        const scroller = document.querySelector<HTMLElement>('[data-autoscroll-x]');
+        if (scroller) scroller.scrollLeft += latest.width - drawn.current;
+        drawn.current = latest.width;
+      }}
     />
   );
 }
@@ -182,7 +199,7 @@ export function DesktopBoard() {
                           }
                         />
                       ))}
-                  <ColumnsEdge rail={closedWidth} />
+                  <ColumnsEdge rail={closedWidth} trailing />
                 </ScrollAreaViewport>
                 <ScrollBar orientation="horizontal" />
               </ScrollArea>
