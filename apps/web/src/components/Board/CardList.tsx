@@ -64,7 +64,7 @@ export function CardList({ listId, header, showStatus, endSpace, surface, classN
       className={cn('board-column relative flex min-h-0 min-w-0 flex-col rounded-3xl', className)}
     >
       {header}
-      <ScrollArea className="flex-1 [--scrollbar-inset:0.5rem]">
+      <ScrollArea edges className="flex-1 [--scrollbar-inset:0.5rem]">
         <ScrollAreaViewport data-autoscroll="">
           <div
             className="flex flex-1 flex-col px-3.5 pt-1 pb-1"

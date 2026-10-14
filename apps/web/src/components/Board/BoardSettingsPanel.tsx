@@ -132,6 +132,13 @@ export function BoardSettingsPanel({ side = 'right' }: { side?: 'right' | 'botto
               onChange={(value) => set('surfaces', value)}
             />
           </Row>
+          <Row label="Scrollbars" hint="Off, a faded edge shows where a list goes on.">
+            <Switch
+              label="Scrollbars"
+              checked={settings.scrollbars}
+              onChange={(value) => set('scrollbars', value)}
+            />
+          </Row>
           <Row
             label="Holding a card"
             hint="Compact folds the other priorities away. Full keeps the column as it is."

@@ -1,16 +1,55 @@
 import { ScrollArea as ScrollAreaPrimitive } from 'radix-ui';
 import type * as React from 'react';
+import { useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 
-/** Catch's overlay scrollbars: a thin rounded thumb drawn over the content, never beside it. */
+/**
+ * Marks the root with `data-more-top` and `data-more-bottom` while its viewport has content
+ * scrolled out that way. Written to the element, not to state: it changes on every scroll.
+ */
+function useEdges(enabled: boolean) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = ref.current;
+    const viewport = root?.querySelector<HTMLElement>(
+      ':scope > [data-slot="scroll-area-viewport"]',
+    );
+    if (!enabled || !root || !viewport) return;
+    const measure = () => {
+      const below = viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop;
+      root.toggleAttribute('data-more-top', viewport.scrollTop > 1);
+      root.toggleAttribute('data-more-bottom', below > 1);
+    };
+    measure();
+    viewport.addEventListener('scroll', measure, { passive: true });
+    const observer = new ResizeObserver(measure);
+    observer.observe(viewport);
+    if (viewport.firstElementChild) observer.observe(viewport.firstElementChild);
+    return () => {
+      viewport.removeEventListener('scroll', measure);
+      observer.disconnect();
+    };
+  }, [enabled]);
+  return ref;
+}
+
+/**
+ * Catch's overlay scrollbars: a thin rounded thumb drawn over the content, never beside it.
+ * With `edges`, content fades and blurs out at the top or bottom while there is more that
+ * way, so the area says it scrolls without showing a bar.
+ */
 function ScrollArea({
   className,
   type = 'hover',
+  edges = false,
   ...props
-}: React.ComponentProps<typeof ScrollAreaPrimitive.Root>) {
+}: React.ComponentProps<typeof ScrollAreaPrimitive.Root> & { edges?: boolean }) {
+  const ref = useEdges(edges);
   return (
     <ScrollAreaPrimitive.Root
+      ref={ref}
       data-slot="scroll-area"
+      data-edges={edges ? '' : undefined}
       type={type}
       className={cn('relative min-h-0 min-w-0', className)}
       {...props}

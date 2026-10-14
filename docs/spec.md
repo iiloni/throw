@@ -246,8 +246,15 @@ motion.
   it and never placed in it.
 - The board has no title row. The project's name is in the expanded navigation rail, and in
   a tooltip on the project's icon when the rail is collapsed.
-- Scrollbars are Catch's overlay scrollbars: drawn over the content, shown on hover on
-  desktop and never on touch screens.
+- A list of cards fades and blurs out over its last few pixels at the top or bottom while
+  there is more that way. No card is cut off in a straight line, and the fade is what says
+  the list scrolls.
+- Scrollbars are off by default, since the fades do their job with less noise. A
+  [setting](#board-settings) turns them on for people who need the bar. They are then
+  Catch's overlay scrollbars: drawn over the content, shown on hover on desktop and never
+  on touch screens.
+- A wheel turned where nothing scrolls up and down (the page, a rail's strip, a column short
+  enough to fit) scrolls the columns sideways.
 
 How a held card behaves, and why, is recorded in
 [ADR 0008](decisions/0008-board-drag-model.md).
@@ -262,6 +269,7 @@ device.
 | Priority labels | Off | Names each priority zone in a column at rest. |
 | Priority on cards | Off | Marks a card's priority on the card. A card of the default priority is never marked. |
 | Column backgrounds | On | Gives each active column a faint surface. |
+| Scrollbars | Off | Draws scrollbars. Off, a faded edge shows where a list goes on. |
 | Holding a card | Compact **(assumed default)** | Compact or Full; see [Ordering and priority](#ordering-and-priority). |
 | Theme | System | System, Light or Dark. |
 

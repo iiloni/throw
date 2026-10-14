@@ -29,6 +29,11 @@ export const boardSettingsSchema = z.object({
    * keeps the column's layout and dims the other priorities.
    */
   heldColumn: z.enum(['compact', 'full']).default('compact'),
+  /**
+   * Draw scrollbars. Off, a faded edge is all that says a list goes on; some people need the
+   * bar itself.
+   */
+  scrollbars: z.boolean().default(false),
 });
 export type BoardSettings = z.infer<typeof boardSettingsSchema>;
 

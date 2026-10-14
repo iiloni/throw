@@ -440,6 +440,80 @@
   background-color: var(--background);
 }
 
+/*
+ * A scroll area's edges. While content is scrolled out at the top or bottom, the last few
+ * pixels there fade and lose focus: no card is cut off in a straight line, and the fade is
+ * the sign that there is more that way.
+ */
+@property --edge-top {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+@property --edge-bottom {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+[data-slot="scroll-area"][data-edges] {
+  --edge: 1.125rem;
+  transition:
+    --edge-top 160ms ease,
+    --edge-bottom 160ms ease;
+  &[data-more-top] {
+    --edge-top: var(--edge);
+  }
+  &[data-more-bottom] {
+    --edge-bottom: var(--edge);
+  }
+  & > [data-slot="scroll-area-viewport"] {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      black var(--edge-top),
+      black calc(100% - var(--edge-bottom)),
+      transparent
+    );
+  }
+  &::before,
+  &::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    z-index: 1;
+    height: var(--edge);
+    pointer-events: none;
+    opacity: 0;
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    transition: opacity 160ms ease;
+  }
+  &::before {
+    top: 0;
+    mask-image: linear-gradient(to bottom, black, transparent);
+  }
+  &::after {
+    bottom: 0;
+    mask-image: linear-gradient(to top, black, transparent);
+  }
+  &[data-more-top]::before,
+  &[data-more-bottom]::after {
+    opacity: 1;
+  }
+}
+/* A held card's column shows rails at its top and bottom; they are its edges. */
+:root[data-dragging] [data-slot="scroll-area"][data-edges] {
+  --edge-top: 0px;
+  --edge-bottom: 0px;
+  &::before,
+  &::after {
+    opacity: 0;
+  }
+}
+:root[data-hide-scrollbars] [data-slot="scroll-area-scrollbar"] {
+  display: none;
+}
+
 :root[data-dragging] {
   user-select: none;
   -webkit-user-select: none;

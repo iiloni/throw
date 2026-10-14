@@ -165,7 +165,7 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
                 className="flex-1"
               />
             ) : (
-              <ScrollArea className="flex-1 [--scrollbar-inset:0.5rem]">
+              <ScrollArea edges className="flex-1 [--scrollbar-inset:0.5rem]">
                 <ScrollAreaViewport>
                   <div className="space-y-3 px-3.5 pt-1 pb-4">
                     {listTasks(state, 'closed').map((task) => (
@@ -259,7 +259,7 @@ function Gallery({ zone }: { zone: Zone }) {
       ? groupByPriority(tasks).filter((group) => group.tasks.length > 0)
       : [{ priority: null, tasks }];
   return (
-    <ScrollArea className="flex-1 [--scrollbar-inset:0.5rem]">
+    <ScrollArea edges className="flex-1 [--scrollbar-inset:0.5rem]">
       <ScrollAreaViewport>
         <div className="px-5 pt-1 pb-5">
           {bands.map((band) => (

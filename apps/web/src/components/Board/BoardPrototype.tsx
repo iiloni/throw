@@ -18,6 +18,11 @@ export function BoardPrototype() {
   const state = board.use();
   const [settings] = useBoardSettings();
   configureDrag({ heldColumn: settings.heldColumn });
+
+  useEffect(() => {
+    document.documentElement.toggleAttribute('data-hide-scrollbars', !settings.scrollbars);
+    return () => document.documentElement.removeAttribute('data-hide-scrollbars');
+  }, [settings.scrollbars]);
   const openTask = current(state).tasks.find((task) => task.id === state.openTaskId);
 
   useEffect(() => {
