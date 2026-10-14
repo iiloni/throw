@@ -314,6 +314,6 @@ The owner has not reviewed these yet.
 - **Statuses and tasks always sync**, whether or not anything on screen reads them, so a
   device has them before it goes offline.
 - **Refused fields** reach the client through `onRefusedChanges` in
-  `apps/web/src/lib/refusedChanges.ts`. Nothing listens yet (spec, open question 6).
+  `apps/web/src/lib/refusedChanges.ts`. Nothing listens yet (spec, open question 5).
 - **Deleting a project in the shell** now moves it to the trash. There is no trash view yet.
 
