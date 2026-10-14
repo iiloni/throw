@@ -237,10 +237,9 @@ motion.
   end scroll under the other rail.
 - While a card from another zone is held, each rail turns into dropzones, one per status in
   its category. It does this in place: no column moves and none is covered. A rail that is
-  a strip widens into the gap beside it, and no further, so the status names can be read
-  **(assumed: tried, not yet confirmed)**. It does not widen over a column, because the
-  columns are drop targets too. Dropping on a status sends the card there with
-  its priority kept, at the top of that priority.
+  a strip widens into the gap beside it, and no further, so the status names can be read.
+  It does not widen over a column, because the columns are drop targets too. Dropping on a
+  status sends the card there with its priority kept, at the top of that priority.
 - A card held from the backlog can still be placed in the backlog. Its status filters grow
   into targets for changing status. The closed zone is ordered by time, so cards are sent to
   it and never placed in it.
@@ -273,7 +272,7 @@ device.
 | Column backgrounds | On | Gives each active column a faint surface. |
 | Backlog rail, Closed rail | Sticky | One setting for each. Sticky keeps the rail at the window's edge with the columns scrolling beneath it. With board puts it at its end of the columns, and it scrolls away with them. |
 | Scrollbars | Off | Draws scrollbars. Off, a faded edge shows where a list goes on. |
-| Holding a card | Compact **(assumed default)** | Compact or Full; see [Ordering and priority](#ordering-and-priority). |
+| Holding a card | Compact | Compact or Full; see [Ordering and priority](#ordering-and-priority). |
 | Theme | System | System, Light or Dark. |
 
 The board practises progressive disclosure: what is not needed at rest is not drawn at rest.
@@ -322,11 +321,11 @@ A held card leans into its movement. With several cards held, each keeps its own
 and the column takes them as a group.
 
 A card can also be moved from the keyboard: Space picks it up, the arrows move it within
-and across columns and priorities, Space or Enter sets it down and Escape puts it back
-**(assumed)**. Each step is announced to screen readers.
+and across columns and priorities, Space or Enter sets it down and Escape puts it back.
+Each step is announced to screen readers.
 
 On desktop, a click with Ctrl, Cmd or Shift selects cards, and a bar offers to move the
-selection to a status **(assumed)**.
+selection to a status.
 
 ### Phone
 
