@@ -458,10 +458,13 @@
   &[data-more-bottom] {
     --bottom: var(--round);
   }
+  /* The pieces overlap by a pixel: laid edge to edge they leave hairlines between them at
+     fractional display scales. */
   mask:
-    var(--solid) 0 var(--top) / 100% calc(100% - var(--top) - var(--bottom)) no-repeat,
-    var(--solid) 50% 0 / calc(100% - 2 * var(--inset) - 2 * var(--top)) var(--top) no-repeat,
-    var(--solid) 50% 100% / calc(100% - 2 * var(--inset) - 2 * var(--bottom)) var(--bottom)
+    var(--solid) 0 calc(var(--top) - 1px) / 100% calc(100% - var(--top) - var(--bottom) + 2px)
+    no-repeat,
+    var(--solid) 50% 0 / calc(100% - 2 * var(--inset) - 2 * var(--top) + 2px) var(--top) no-repeat,
+    var(--solid) 50% 100% / calc(100% - 2 * var(--inset) - 2 * var(--bottom) + 2px) var(--bottom)
     no-repeat,
     var(--solid) 0 0 / var(--inset) var(--top) no-repeat,
     var(--solid) 100% 0 / var(--inset) var(--top) no-repeat,
