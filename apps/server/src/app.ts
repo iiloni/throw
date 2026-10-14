@@ -11,6 +11,8 @@ import { CLIENT_IP_HEADER, clientIp, proxyList } from './lib/clientIp';
 import { requireCompatibleProtocol } from './lib/protocol';
 import { projectRoutes } from './routes/projects';
 import { shapeRoutes } from './routes/shapes';
+import { statusRoutes } from './routes/statuses';
+import { taskRoutes } from './routes/tasks';
 import { workspaceRoutes } from './routes/workspaces';
 
 /** JSON bodies are read into memory whole. */
@@ -82,6 +84,8 @@ export function createApp() {
     .get('/health', (c) => c.json({ ok: true }))
     .route('/workspaces', workspaceRoutes)
     .route('/projects', projectRoutes)
+    .route('/statuses', statusRoutes)
+    .route('/tasks', taskRoutes)
     .route('/shapes', shapeRoutes);
 
   return api;

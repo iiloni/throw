@@ -9,11 +9,13 @@ Read `docs/spec.md` before building a feature: it says what the product is and w
 of scope. Read `docs/decisions/` before changing architecture. If a decision or the spec no
 longer holds, update it in the same change rather than working around it.
 
-The repository has the stack end to end (auth, sync, the outbox, local persistence), two
-synced tables (workspaces and projects), and the responsive app shell. The shell owns
-workspace and project management, a desktop navigation rail, a phone dock and remembered
-navigation. Its project/backlog and cross-project board bodies are placeholders. Tasks,
-statuses, tags and the board itself are not built yet.
+The repository has the stack end to end (auth, sync, the outbox, local persistence), the
+task model (workspaces, projects, statuses, tasks and subtasks, with keys, numbers, the trash
+and ADR 0005's conflict rule; see `docs/data-model.md`), and the responsive app shell. The
+shell owns workspace and project management, a desktop navigation rail, a phone dock and
+remembered navigation. Its project/backlog and cross-project board bodies are placeholders.
+Task actions live in `apps/web/src/lib/tasks.ts` and `statuses.ts`. Tags, comments, the
+synced activity log and the board itself are not built yet.
 
 The board's interaction was worked out in a prototype on mock data: `/prototype/board`, in
 development builds only, with its components in `apps/web/src/components/Board`. It has no
@@ -326,6 +328,17 @@ ids. Do not add a dependency on Catch's repository; the two release independentl
   and route files so upgrades stay contained.
 - Bump a collection's `schemaVersion` in `collections.ts` whenever the columns its shape syncs
   change, or devices keep reading rows of the old shape from their local database.
+- A collection syncs only while something reads it, unless it sets `startSync: true` and
+  `gcTime: 0` as statuses and tasks do. A write to one that is not syncing waits the full
+  hand-over time for a transaction it never streams.
+- Electric streams an update for any write to a row, even one that changes no synced column.
+  A task update that changes nothing must skip the `UPDATE` and answer `{ txid: null }`.
+- Raw shape messages (what `shapeRows` returns) hold every value as a string: booleans are
+  `true` in a snapshot but `t` in later changes, and `jsonb` is a JSON string. The client's
+  parser handles both.
+- E2E tests run against the dev server, which serves each module at its source path. A test
+  can `import('/src/lib/tasks.ts')` inside `page.evaluate` to drive the app's own actions
+  without UI (`e2e/tasks-offline.spec.ts`).
 - Collections open the signed-in user's local database when the module loads (top-level
   await), so signing in does a full page load. Offline, collections never become ready (that
   needs the server); pages wait with `useAwaitingSync`, not `isLoading`.

@@ -446,9 +446,8 @@ without breaking bookmarks. A future task path has its own segment holding the t
 UUID, not its identifier: a task created offline has no number yet, and a project's key
 can change (ADR 0007). A direct project URL keeps its view on reload. Selecting a project
 from navigation opens its board; the shell remembers the last project separately per
-workspace. Projects append by position. Deleting a project is permanent in the shell as
-built and requires confirmation; it moves to the trash once the task model is built (see
-[Project](#project)).
+workspace. Projects append by position. Deleting a project requires confirmation and moves
+it to the trash (see [Project](#project)); the trash has no view yet.
 
 The shell's backlog and board bodies are placeholders. The backlog page and task-specific
 dock interactions arrive with the board feature; search and the command palette arrive later.

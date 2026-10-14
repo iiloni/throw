@@ -18,11 +18,16 @@ import {
   useLiveQuery,
 } from '@tanstack/react-db';
 import {
-  createProjectSchema,
+  createStatusSchema,
   createWorkspaceSchema,
+  type Project,
+  parseTimestamptz,
   projectSchema,
+  type Status,
+  statusSchema,
+  type Task,
   type TxidResponse,
-  updateProjectSchema,
+  taskSchema,
   updateWorkspaceSchema,
   workspaceSchema,
 } from '@throw/shared';
@@ -39,9 +44,18 @@ import {
   openLocalDatabase,
 } from './localStore';
 import { orderQueuedWrites } from './orderQueuedWrites';
+import { reportRefusedChanges } from './refusedChanges';
 import { getServerUrl } from './serverUrl';
 import { shapeFetch } from './shapeFetch';
 import { addPendingWrite, getSyncStatus, settlePendingWrite, updateSyncStatus } from './syncStatus';
+import {
+  changeIdFor,
+  projectCreateRequest,
+  projectUpdateRequest,
+  statusUpdateRequest,
+  taskCreateRequest,
+  taskUpdateRequest,
+} from './writeRequests';
 
 // Collections read from and write to the signed-in user's store on this device, so the app
 // shows and edits its data without a connection (ADR 0002).
@@ -80,6 +94,8 @@ const shapeOptions = (shape: string) => ({
   fetchClient: shapeFetch,
   headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
   columnMapper: snakeCamelMapper(),
+  // Server times are kept as ISO strings, which compare in order (see `timestampSchema`).
+  parser: { timestamptz: parseTimestamptz },
 });
 
 /**
@@ -98,7 +114,7 @@ export const workspacesCollection = createCollection(
   ),
 );
 
-/** The projects in those workspaces. */
+/** The projects in those workspaces, those in the trash included. */
 export const projectsCollection = createCollection(
   persisted(
     electricCollectionOptions({
@@ -107,6 +123,41 @@ export const projectsCollection = createCollection(
       getKey: (project) => project.id,
       shapeOptions: shapeOptions('projects'),
     }),
+    2,
+  ),
+);
+
+/**
+ * Keeps a collection syncing whether or not anything on screen reads it, so its rows are on
+ * the device before the user goes offline, and a write's hand-over (`awaitTxId`) always has a
+ * stream to wait on. Workspaces and projects need none: the shell always reads them.
+ */
+const alwaysSynced = { startSync: true, gcTime: 0 } as const;
+
+/** The statuses of those projects. */
+export const statusesCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      ...alwaysSynced,
+      id: 'statuses',
+      schema: statusSchema,
+      getKey: (status) => status.id,
+      shapeOptions: shapeOptions('statuses'),
+    }),
+    1,
+  ),
+);
+
+/** Every task and subtask in those projects, closed and trashed ones included. */
+export const tasksCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      ...alwaysSynced,
+      id: 'tasks',
+      schema: taskSchema,
+      getKey: (task) => task.id,
+      shapeOptions: shapeOptions('tasks'),
+    }),
     1,
   ),
 );
@@ -114,7 +165,11 @@ export const projectsCollection = createCollection(
 const writableCollections = {
   workspaces: workspacesCollection,
   projects: projectsCollection,
+  statuses: statusesCollection,
+  tasks: tasksCollection,
 };
+
+type WritableCollection = (typeof writableCollections)[keyof typeof writableCollections];
 
 /** How long to wait for Electric to stream a write back before letting it settle anyway. */
 const SYNC_WAIT_MS = 30_000;
@@ -124,15 +179,19 @@ const SYNC_WAIT_MS = 30_000;
  * optimistic state hands over to synced rows without flicker. The outbox retries whatever
  * this throws, except `NonRetriableError`, which drops the write and rolls it back.
  */
-async function pushWrites({ transaction }: Parameters<OfflineConfig['mutationFns'][string]>[0]) {
-  let sent: { collectionId: string; txid: TxidResponse['txid'] }[];
+async function pushWrites({
+  transaction,
+  idempotencyKey,
+}: Parameters<OfflineConfig['mutationFns'][string]>[0]) {
+  const waits: { collections: WritableCollection[]; txid: number }[] = [];
   try {
-    sent = [];
     // A workspace must exist before its projects. Preserve mutation order, also during a
     // retry after only the first requests reached the server.
     for (const mutation of transaction.mutations) {
-      const response = await send(mutation);
-      sent.push({ collectionId: mutation.collection.id, txid: response?.txid ?? null });
+      const sent = send(mutation, transaction.mutations, idempotencyKey);
+      if (!sent) continue;
+      const response = await sent.request;
+      if (response.txid !== null) waits.push({ collections: sent.waitOn, txid: response.txid });
     }
   } catch (error) {
     const classified = classifyWriteError(error);
@@ -142,43 +201,165 @@ async function pushWrites({ transaction }: Parameters<OfflineConfig['mutationFns
   updateSyncStatus({ offline: false, signedOut: false });
   settlePendingWrite(transaction.id);
   await Promise.all(
-    sent.flatMap(({ collectionId, txid }) => {
-      if (txid === null) return [];
-      const collection = Object.values(writableCollections).find(
-        (item) => item.id === collectionId,
-      );
+    waits.flatMap(({ collections, txid }) =>
       // The server has the write; a slow stream only delays the hand-over.
-      return collection ? [collection.utils.awaitTxId(txid, SYNC_WAIT_MS).catch(() => false)] : [];
-    }),
+      collections.map((collection) =>
+        collection.utils.awaitTxId(txid, SYNC_WAIT_MS).catch(() => false),
+      ),
+    ),
   );
 }
 
-/** The API call for one mutation, or null when there is nothing to send. */
-function send(mutation: PendingMutation): Promise<TxidResponse> | null {
+/** One mutation's request, and the collections whose shapes will stream its transaction. */
+interface Sent {
+  request: Promise<TxidResponse>;
+  waitOn: WritableCollection[];
+}
+
+const sending = (request: Promise<TxidResponse>, ...waitOn: WritableCollection[]): Sent => ({
+  request,
+  waitOn,
+});
+
+const deletedInWrite = (mutations: readonly PendingMutation[], collectionId: string, key: string) =>
+  mutations.some(
+    (other) =>
+      other.type === 'delete' && other.collection.id === collectionId && String(other.key) === key,
+  );
+
+/**
+ * The API call for one mutation, or null when there is nothing to send. `mutations` is the
+ * whole write, since some rows travel with another's request.
+ */
+function send(
+  mutation: PendingMutation,
+  mutations: readonly PendingMutation[],
+  idempotencyKey: string,
+): Sent | null {
   const key = String(mutation.key);
   if (mutation.collection.id === workspacesCollection.id) {
     switch (mutation.type) {
       case 'insert':
-        return api.createWorkspace(createWorkspaceSchema.parse(mutation.modified));
+        return sending(
+          api.createWorkspace(createWorkspaceSchema.parse(mutation.modified)),
+          workspacesCollection,
+        );
       case 'update': {
         const changes = updateWorkspaceSchema.parse(mutation.changes);
         // A write that changes no synced column would never have its txid streamed back.
-        return Object.keys(changes).length === 0 ? null : api.updateWorkspace(key, changes);
+        return Object.keys(changes).length === 0
+          ? null
+          : sending(api.updateWorkspace(key, changes), workspacesCollection);
       }
       case 'delete':
-        return api.deleteWorkspace(key);
+        return sending(api.deleteWorkspace(key), workspacesCollection);
     }
   }
   if (mutation.collection.id === projectsCollection.id) {
     switch (mutation.type) {
-      case 'insert':
-        return api.createProject(createProjectSchema.parse(mutation.modified));
+      case 'insert': {
+        // A new project's statuses are created with it, in the same request.
+        const statuses = mutations.flatMap((other) =>
+          other.type === 'insert' &&
+          other.collection.id === statusesCollection.id &&
+          (other.modified as Status).projectId === key
+            ? [other.modified as Status]
+            : [],
+        );
+        return sending(
+          api.createProject(projectCreateRequest(mutation.modified as Project, statuses)),
+          projectsCollection,
+          statusesCollection,
+        );
+      }
       case 'update': {
-        const changes = updateProjectSchema.parse(mutation.changes);
-        return Object.keys(changes).length === 0 ? null : api.updateProject(key, changes);
+        const body = projectUpdateRequest(
+          mutation.original as Project,
+          mutation.modified as Project,
+          mutation.changes as Partial<Project>,
+        );
+        return body ? sending(api.updateProject(key, body), projectsCollection) : null;
+      }
+      case 'delete': {
+        // A delete queued before projects had a trash meant "delete"; it now trashes.
+        if ((mutation.original as Partial<Project>).deletedAt == null)
+          return sending(api.updateProject(key, { trashed: true }), projectsCollection);
+        // The purge removes the project's statuses and tasks too, which the device deleted in
+        // the same write. Wait for them as well, but only on shapes that will stream it.
+        const tasksGo = mutations.some(
+          (other) =>
+            other.type === 'delete' &&
+            other.collection.id === tasksCollection.id &&
+            (other.original as Task).projectId === key,
+        );
+        return tasksGo
+          ? sending(api.purgeProject(key), projectsCollection, statusesCollection, tasksCollection)
+          : sending(api.purgeProject(key), projectsCollection, statusesCollection);
+      }
+    }
+  }
+  if (mutation.collection.id === statusesCollection.id) {
+    switch (mutation.type) {
+      case 'insert': {
+        const status = mutation.modified as Status;
+        const withProject = mutations.some(
+          (other) =>
+            other.type === 'insert' &&
+            other.collection.id === projectsCollection.id &&
+            String(other.key) === status.projectId,
+        );
+        return withProject
+          ? null
+          : sending(api.createStatus(createStatusSchema.parse(status)), statusesCollection);
+      }
+      case 'update': {
+        const body = statusUpdateRequest(mutation.changes as Partial<Status>);
+        return body ? sending(api.updateStatus(key, body), statusesCollection) : null;
       }
       case 'delete':
-        return api.deleteProject(key);
+        // Purging a project removes its statuses on the server.
+        return deletedInWrite(
+          mutations,
+          projectsCollection.id,
+          (mutation.original as Status).projectId,
+        )
+          ? null
+          : sending(api.deleteStatus(key), statusesCollection);
+    }
+  }
+  if (mutation.collection.id === tasksCollection.id) {
+    switch (mutation.type) {
+      case 'insert':
+        return sending(
+          api.createTask(taskCreateRequest(mutation.modified as Task)),
+          tasksCollection,
+        );
+      case 'update': {
+        const body = taskUpdateRequest(
+          mutation.original as Task,
+          mutation.modified as Task,
+          mutation.changes as Partial<Task>,
+          changeIdFor(idempotencyKey, key),
+        );
+        if (!body) return null;
+        return sending(
+          api.updateTask(key, body).then((response) => {
+            reportRefusedChanges(key, response.refused);
+            return response;
+          }),
+          tasksCollection,
+        );
+      }
+      case 'delete': {
+        // Purging a task or project removes the subtasks and tasks under it on the server.
+        const task = mutation.original as Task;
+        if (
+          deletedInWrite(mutations, projectsCollection.id, task.projectId) ||
+          (task.parentId !== null && deletedInWrite(mutations, tasksCollection.id, task.parentId))
+        )
+          return null;
+        return sending(api.purgeTask(key), tasksCollection);
+      }
     }
   }
   throw new NonRetriableError(`Writes to ${mutation.collection.id} are not supported`);
@@ -303,4 +484,16 @@ export function useWorkspaces() {
 export function useProjects() {
   const { data = [], isLoading } = useLiveQuery((q) => q.from({ project: projectsCollection }));
   return { projects: data, isLoading };
+}
+
+/** Every status of the user's projects, unordered. */
+export function useStatuses() {
+  const { data = [], isLoading } = useLiveQuery((q) => q.from({ status: statusesCollection }));
+  return { statuses: data, isLoading };
+}
+
+/** Every task and subtask in the user's projects, unordered, trashed ones included. */
+export function useTasks() {
+  const { data = [], isLoading } = useLiveQuery((q) => q.from({ task: tasksCollection }));
+  return { tasks: data, isLoading };
 }

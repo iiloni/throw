@@ -1,6 +1,8 @@
 # Task data model
 
-Status: agreed with the owner on 2026-10-13. Nothing here is built yet.
+Status: agreed with the owner on 2026-10-13. Projects, statuses, priorities, keys, tasks,
+subtasks, the trash and the conflict rule are built; tags, comments and the log's sync are
+not. Decisions taken while building it are under [Implementation notes](#implementation-notes).
 
 This states the model behind tasks precisely enough to implement: the entities, their
 fields, who assigns each value, how rows are ordered and what the server does with each
@@ -249,3 +251,77 @@ Created, edited and deleted by clients through the outbox, like projects are tod
 
 Workspaces, projects, statuses and comments apply updates in the order they arrive, with a
 request that carries only the changed fields, as the scaffold's project route does.
+
+## Implementation notes
+
+Decided while building the model (2026-10-14), where the sections above left a detail open.
+The owner has not reviewed these yet.
+
+### Writes
+
+- **A field already at the wanted value counts as applied.** When the server's value equals
+  the value an update asks for, the field is applied and changes nothing, whatever its
+  "before" value was. Two devices that make the same change are not told of a conflict.
+- **Stale before invalid.** A field that is both stale and invalid is reported as `stale`.
+- **The log table exists now, and is written for every task write.** Recognising a resent
+  update needs a record of every change id the server applied; without one, a lost response
+  followed by another device's change would let the resend undo that change. That record is
+  the activity entry, so `task_activity` is created and each create and update writes its
+  entry, with every field it touched, applied or not. An update that only moves a position
+  writes an entry with no changes, which the timeline should skip. The log is not synced
+  yet; its shape, collection and timeline come with comments.
+- **A `created` entry** lists the title, status, priority and, when set, the description
+  version and parent, each with no previous value. When the status the device asked for no
+  longer existed, the status item names the status the task took and carries the reason
+  `replaced`.
+- **Purging only takes what is still in the trash.** A purge of a task or project that no
+  longer counts as trashed (restored on another device) does nothing and answers
+  `{ txid: null }`, so the restore stands and the write is not dropped with a notice.
+- **Emptying the trash** is one write that purges each project and task the device listed:
+  projects in the trash, and tasks trashed on their own whose parent and project are not.
+- **Trashing a project already in the trash keeps its time.**
+- **A create with a parent in another project** answers 409, like one whose parent is a
+  subtask. A parent that does not exist answers 404.
+- **Status writes** lock the project row, so the rules over a project's statuses hold under
+  concurrent writes. An update cannot clear `isDefault`; making another status the default
+  clears it. Deleting the default (which also covers the last status of a category) or a
+  status in use answers 409, and the outbox drops the write with a notice.
+- **Change ids are derived.** The outbox keeps a mutation's row before and after, but not
+  its metadata, so the change id is derived from the queued write's idempotency key (a
+  UUIDv7, whose time it keeps) and the task id. It is the same on every resend.
+- **Writes queued by the previous client are carried over.** A project create queued before
+  projects had statuses is sent with the starter statuses, under ids derived from the
+  project's, so a resend sends the same ones. A project delete queued before the trash
+  existed moves the project to the trash.
+- **A create resent after its row was deleted elsewhere recreates it.** Creates are
+  recognised as resends while their row exists; a status deleted, or a task or project
+  purged, between a create and the resend of its lost response comes back. This holds for
+  every table, as in the scaffold. Closing it needs a record of deleted ids.
+- **Titles may be empty**, up to 500 characters, so a create is never refused for its title.
+  A description is a BlockNote document or null; its version is null until the first save.
+
+### Keys and priorities
+
+- **A settled key can pass six characters.** The format applies to proposals and changes.
+  A suffix added to settle a clash (`CATCAT2`) is stored as it is.
+- **The proposal travels on the device's row.** The optimistic project has `key: null` and a
+  device-only `proposedKey`, which the create request sends and the synced row replaces.
+- **Deriving a proposal** **(default)**: the initials of a name of several words, otherwise
+  the first three characters of the name, in capitals and without accents; `P` when nothing
+  fits.
+- **Priority names** are stored as a JSON array of five strings; an empty string shows the
+  default name. A name is at most 30 characters **(default)**.
+- **Existing projects** were given keys `P1`, `P2`... in workspace order, and the starter
+  statuses, by the migration that added them.
+
+### On the device
+
+- **Server times are ISO strings** in UTC with milliseconds, so they compare as strings. A
+  device stamps a placeholder from its own clock for `createdAt`, `closedAt` and `deletedAt`
+  so a change shows at once; requests never carry them.
+- **Statuses and tasks always sync**, whether or not anything on screen reads them, so a
+  device has them before it goes offline.
+- **Refused fields** reach the client through `onRefusedChanges` in
+  `apps/web/src/lib/refusedChanges.ts`. Nothing listens yet (spec, open question 5).
+- **Deleting a project in the shell** now moves it to the trash. There is no trash view yet.
+

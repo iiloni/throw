@@ -1,10 +1,10 @@
-import { type Color, positionBetween } from '@throw/shared';
+import { type Color, deriveProjectKey, positionBetween, STARTER_STATUSES } from '@throw/shared';
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { auth } from '../auth';
 import { memberWorkspaces } from '../lib/workspaces';
 import { sql as connection, db } from './client';
-import { projects, user } from './schema';
+import { projects, statuses, user } from './schema';
 
 /**
  * Idempotent development fixtures. `basic` creates the admin account; `demo`
@@ -41,12 +41,26 @@ async function ensureDemoProjects(userId: string) {
     .limit(1);
   if (existing) return;
   let position: string | null = null;
-  await db.insert(projects).values(
-    DEMO_PROJECTS.map((project) => {
-      position = positionBetween(position, null);
-      return { ...project, id: uuidv7(), workspaceId: workspace.id, position };
-    }),
-  );
+  const rows = DEMO_PROJECTS.map((project) => {
+    position = positionBetween(position, null);
+    const key = deriveProjectKey(project.name);
+    return { ...project, id: uuidv7(), workspaceId: workspace.id, position, key };
+  });
+  await db.transaction(async (tx) => {
+    await tx.insert(projects).values(rows);
+    await tx.insert(statuses).values(
+      rows.flatMap((project) =>
+        STARTER_STATUSES.map((status) => ({
+          ...status,
+          id: uuidv7(),
+          workspaceId: workspace.id,
+          projectId: project.id,
+          position: positionBetween(null, null),
+          isDefault: true,
+        })),
+      ),
+    );
+  });
   console.log(`Seeded ${DEMO_PROJECTS.length} demo projects`);
 }
 

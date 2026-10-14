@@ -1,10 +1,10 @@
 import { DEFAULT_WORKSPACE_NAME, positionBetween } from '@throw/shared';
 import { and, eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
-import { type Db, db } from '../db/client';
+import { type Db, db, type Transaction } from '../db/client';
 import { workspaceMembers, workspaces } from '../db/schema';
 
-type Queryable = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
+type Queryable = Db | Transaction;
 
 /** The workspaces a user belongs to, for `inArray` on a table's `workspaceId`. */
 export const memberWorkspaces = (queryable: Queryable, userId: string) =>

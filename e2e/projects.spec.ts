@@ -73,7 +73,15 @@ test('create, edit and confirm deletion of a project from the shell', async ({
   await page.getByRole('button', { name: 'Delete project', exact: true }).click();
   await page.getByRole('button', { name: 'Delete project', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Your first project' })).toBeVisible();
-  await expect.poll(() => shapeRows(page.request, 'projects', headers)).toEqual([]);
+  // Deleting moves the project to the trash, which keeps it.
+  await expect
+    .poll(async () =>
+      (await shapeRows(page.request, 'projects', headers)).map(({ name, deleted_at }) => ({
+        name,
+        trashed: typeof deleted_at === 'string',
+      })),
+    )
+    .toEqual([{ name: 'New kitchen', trashed: true }]);
 });
 
 test('switch projects and workspaces; restore the last project on reload and first load', async ({

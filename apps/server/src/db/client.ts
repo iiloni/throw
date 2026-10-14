@@ -8,3 +8,4 @@ export const sql = postgres(env.DATABASE_URL);
 export const db = drizzle(sql, { schema, casing: 'snake_case' });
 
 export type Db = typeof db;
+export type Transaction = Parameters<Parameters<Db['transaction']>[0]>[0];

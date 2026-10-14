@@ -1,5 +1,27 @@
-import type { WorkspaceRole } from '@throw/shared';
-import { boolean, index, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import type {
+  ActivityChange,
+  ActivityKind,
+  Description,
+  Priority,
+  PriorityNames,
+  StatusCategory,
+  WorkspaceRole,
+} from '@throw/shared';
+import { sql } from 'drizzle-orm';
+import {
+  type AnyPgColumn,
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  smallint,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 const createdAt = () => timestamp({ withTimezone: true }).notNull().defaultNow();
 const updatedAt = () =>
@@ -114,8 +136,111 @@ export const projects = pgTable(
     icon: text(),
     /** Fractional index among the workspace's projects. */
     position: text().notNull(),
+    /** The prefix of task identifiers, unique in the workspace counting the trash (ADR 0007). */
+    key: text().notNull(),
+    /** The last task number handed out. Never synced. */
+    taskCounter: integer().notNull().default(0),
+    /** The five ranks' names, in rank order. An empty name shows the default. */
+    priorityNames: jsonb().$type<PriorityNames>().notNull().default(sql`'["","","","",""]'::jsonb`),
+    /** Set while the project is in the trash. */
+    deletedAt: timestamp({ withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (table) => [index().on(table.workspaceId)],
+  (table) => [index().on(table.workspaceId), uniqueIndex().on(table.workspaceId, table.key)],
+);
+
+// Rows below a project carry its workspace for membership filters (ADR 0004) and its project
+// so that project membership can be added later without changing a table. The server sets
+// both from the parent row.
+
+export const statuses = pgTable(
+  'statuses',
+  {
+    id: uuid().primaryKey(),
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    projectId: uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    name: text().notNull(),
+    category: text().$type<StatusCategory>().notNull(),
+    /** Fractional index among the project's statuses of the same category. */
+    position: text().notNull(),
+    isDefault: boolean().notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    index().on(table.workspaceId),
+    index().on(table.projectId),
+    // At most one default per category; the routes keep it at exactly one.
+    uniqueIndex().on(table.projectId, table.category).where(sql`${table.isDefault}`),
+  ],
+);
+
+export const tasks = pgTable(
+  'tasks',
+  {
+    id: uuid().primaryKey(),
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    projectId: uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    /** From the project's counter, in the transaction that creates the task. Never reused. */
+    number: integer().notNull(),
+    title: text().notNull(),
+    /** A BlockNote document. */
+    description: jsonb().$type<Description>(),
+    descriptionVersion: uuid(),
+    // A status in use cannot be deleted. Purging a project removes both in one statement,
+    // which the default (end of statement) check allows.
+    statusId: uuid()
+      .notNull()
+      .references(() => statuses.id),
+    priority: smallint().$type<Priority>().notNull(),
+    position: text().notNull(),
+    parentId: uuid().references((): AnyPgColumn => tasks.id, { onDelete: 'cascade' }),
+    closedAt: timestamp({ withTimezone: true }),
+    deletedAt: timestamp({ withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    index().on(table.workspaceId),
+    uniqueIndex().on(table.projectId, table.number),
+    index().on(table.statusId),
+    index().on(table.parentId),
+  ],
+);
+
+/**
+ * The tasks' activity log (ADR 0006), written only by the server in the transaction of the
+ * write it describes. An update's entry is also the record that its change id was applied,
+ * which is how a resent update is recognised. Not synced yet.
+ */
+export const taskActivity = pgTable(
+  'task_activity',
+  {
+    /** The task's id for its `created` entry, otherwise the update's change id. */
+    id: uuid().primaryKey(),
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    projectId: uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    taskId: uuid()
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    /** Who sent the write. Kept when the account is deleted, as the entry is the task's. */
+    userId: text().references(() => user.id, { onDelete: 'set null' }),
+    kind: text().$type<ActivityKind>().notNull(),
+    changes: jsonb().$type<ActivityChange[]>().notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [index().on(table.workspaceId), index().on(table.taskId)],
 );
