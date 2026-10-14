@@ -1,7 +1,7 @@
 import { ChevronDown, Plus, Search, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
-import { type ReactNode, useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { springs } from '@/lib/motion';
@@ -127,47 +127,49 @@ export function PhoneBoard() {
         </div>
       </header>
 
-      <div
-        ref={pager}
-        data-pager=""
-        onScroll={(event) =>
-          setPage(Math.round(event.currentTarget.scrollLeft / pageStride(event.currentTarget)))
-        }
-        className="phone-pager flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
-      >
-        <PageSpacer />
-        <Page index={0} current={page} origin="backlog">
-          <StatusFilter zone="backlog" anyCard className="px-[var(--gutter)]" />
-          <CardList
-            listId="backlog"
-            showStatus={state.backlogFilter === null}
-            endSpace={DOCK_SPACE}
-            tight
-            className="flex-1"
-          />
-        </Page>
-        {active.map((status, index) => (
-          <Page key={status.id} index={index + 1} current={page} origin="active">
+      <div className="relative flex min-h-0 flex-1">
+        <div
+          ref={pager}
+          data-pager=""
+          onScroll={(event) =>
+            setPage(Math.round(event.currentTarget.scrollLeft / pageStride(event.currentTarget)))
+          }
+          className="phone-pager flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
+        >
+          <div data-page="" data-origin="backlog" className={pageClass}>
+            <StatusFilter zone="backlog" anyCard className="px-[var(--gutter)]" />
             <CardList
-              listId={`status:${status.id}`}
+              listId="backlog"
+              showStatus={state.backlogFilter === null}
               endSpace={DOCK_SPACE}
               tight
               className="flex-1"
             />
-          </Page>
-        ))}
-        <Page index={active.length + 1} current={page} origin="closed">
-          <StatusFilter zone="closed" anyCard className="px-[var(--gutter)]" />
-          <div
-            className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-y-contain px-[var(--gutter)] pt-1 [scrollbar-width:none]"
-            style={{ paddingBottom: DOCK_SPACE }}
-          >
-            {listTasks(state, 'closed').map((task) => (
-              <TaskCard key={task.id} task={task} showStatus={state.closedFilter === null} />
-            ))}
           </div>
-        </Page>
-        <PageSpacer />
+          {active.map((status) => (
+            <div key={status.id} data-page="" data-origin="active" className={pageClass}>
+              <CardList
+                listId={`status:${status.id}`}
+                endSpace={DOCK_SPACE}
+                tight
+                className="flex-1"
+              />
+            </div>
+          ))}
+          <div data-page="" data-origin="closed" className={pageClass}>
+            <StatusFilter zone="closed" anyCard className="px-[var(--gutter)]" />
+            <div
+              className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-y-contain px-[var(--gutter)] pt-1 [scrollbar-width:none]"
+              style={{ paddingBottom: DOCK_SPACE }}
+            >
+              {listTasks(state, 'closed').map((task) => (
+                <TaskCard key={task.id} task={task} showStatus={state.closedFilter === null} />
+              ))}
+            </div>
+          </div>
+        </div>
+        <PeekEdge side={-1} shown={page > 0} />
+        <PeekEdge side={1} shown={page < pages.length - 1} />
       </div>
 
       <PhoneDock onCreate={() => createTask(active[page - 1]?.id)} />
@@ -175,65 +177,31 @@ export function PhoneBoard() {
   );
 }
 
-/** Lets the first and last pages come to the middle of the screen like the others. */
-function PageSpacer() {
-  return <div aria-hidden className="w-[var(--peek)] shrink-0" />;
-}
+const pageClass = 'flex w-full shrink-0 snap-center flex-col px-[var(--page-inset)]';
 
 /**
- * One page of the phone board. While a card is held, the pages beside the current one show
- * as bare surfaces at the screen's edges: targets that turn the board, not their cards. One
- * the card waits at leans further in and turns into view when the wait is over.
+ * While a card is held, a page beside the current one peeks in at the screen's edge as a
+ * bare surface, without its cards: a target that turns the board, kept quiet. It leans
+ * further in while the card waits there. The surface lies over the pager rather than being
+ * the page itself, so the pages keep their width and scroll position under a finger, which
+ * Chrome on Android does not re-snap.
  */
-function Page({
-  index,
-  current,
-  origin,
-  children,
-}: {
-  index: number;
-  current: number;
-  origin: 'backlog' | 'active' | 'closed';
-  children: ReactNode;
-}) {
+function PeekEdge({ side, shown }: { side: -1 | 1; shown: boolean }) {
   const held = drag.use();
-  const dragging = held?.phase === 'dragging';
-  const side = dragging ? held.page : 0;
-  const waiting = side !== 0 && index === current + side;
-  const bare = dragging && index !== current;
+  const visible = held?.phase === 'dragging' && shown;
+  const waiting = visible && held.page === side;
   return (
-    // Leaning moves an inner box: scroll snapping measures the page with its transform.
-    <div
-      data-page=""
-      data-origin={origin}
-      className="flex w-[calc(100%-2*var(--peek))] shrink-0 snap-center"
-    >
-      <motion.div
-        className="relative flex min-w-0 flex-1 flex-col"
-        initial={false}
-        animate={{ x: waiting ? -side * 16 : 0 }}
-        transition={springs.snappy}
-      >
-        <motion.div
-          className="flex min-h-0 flex-1 flex-col"
-          initial={false}
-          animate={{ opacity: bare ? 0 : 1 }}
-          transition={{ duration: 0.15 }}
-        >
-          {children}
-        </motion.div>
-        <motion.div
-          aria-hidden
-          className={cn(
-            'pointer-events-none absolute inset-x-0 top-1 bottom-[calc(var(--safe-bottom)+4.5rem)] rounded-3xl transition-colors',
-            waiting ? 'bg-brand/20' : 'bg-foreground/[0.06]',
-          )}
-          initial={false}
-          animate={{ opacity: bare ? 1 : 0 }}
-          transition={{ duration: 0.15 }}
-        />
-      </motion.div>
-    </div>
+    <motion.div
+      aria-hidden
+      className={cn(
+        'pointer-events-none absolute top-1 bottom-[calc(var(--safe-bottom)+4.5rem)] z-10 w-10 rounded-3xl transition-colors',
+        side < 0 ? '-left-[1.625rem]' : '-right-[1.625rem]',
+        waiting ? 'bg-brand/25' : 'bg-foreground/[0.07]',
+      )}
+      initial={false}
+      animate={{ x: visible ? (waiting ? -side * 8 : 0) : side * 24, opacity: visible ? 1 : 0 }}
+      transition={springs.snappy}
+    />
   );
 }
 
