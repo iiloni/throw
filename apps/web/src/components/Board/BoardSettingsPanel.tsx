@@ -158,20 +158,6 @@ export function BoardSettingsPanel({ side = 'right' }: { side?: 'right' | 'botto
               onChange={setTheme}
             />
           </Row>
-          <h2 className="pt-4 pb-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
-            Prototype
-          </h2>
-          <Row label="Backlog and closed" hint="Still being decided, not a setting.">
-            <Segmented
-              label="Backlog and closed"
-              value={settings.railSurface}
-              options={[
-                ['plain', 'Flat'],
-                ['glass', 'Glass'],
-              ]}
-              onChange={(value) => set('railSurface', value)}
-            />
-          </Row>
           <button
             type="button"
             onClick={resetBoard}

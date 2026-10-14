@@ -15,15 +15,7 @@ import { CardList } from './CardList';
 import { drag } from './drag';
 import { type Category, groupByPriority, priorityName, type Status } from './model';
 import { StatusTile } from './StatusTile';
-import {
-  board,
-  countIn,
-  current,
-  listTasks,
-  update,
-  useBoardSettings,
-  type ZoneState,
-} from './state';
+import { board, countIn, current, listTasks, update, type ZoneState } from './state';
 import { TaskCard } from './TaskCard';
 
 export const ZONES = {
@@ -54,7 +46,6 @@ export function zoneStatuses(zone: Zone, statuses: Status[]) {
 export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number }) {
   const state = board.use();
   const held = drag.use();
-  const [settings] = useBoardSettings();
   const { project } = current(state);
   const { title, icon: Icon } = ZONES[zone];
   const statuses = zoneStatuses(zone, project.statuses);
@@ -75,7 +66,6 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
       data-origin={zone}
       data-status-home={statuses.map((status) => status.id).join(' ')}
       data-side={zone === 'backlog' ? 'start' : 'end'}
-      data-surface={settings.railSurface}
       className="board-rail relative z-20 flex min-h-0 shrink-0 flex-col overflow-hidden"
       initial={false}
       animate={{ width }}

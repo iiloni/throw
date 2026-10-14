@@ -433,28 +433,11 @@
 }
 
 /*
- * The backlog and closed rails lie over the ends of the columns' scroller. Plain, a rail is
- * the page itself with no edge of its own; as glass, columns show through it.
+ * The backlog and closed rails lie over the ends of the columns' scroller: the page itself,
+ * flat, with no surface or edge of their own.
  */
 .board-rail {
   background-color: var(--background);
-  border: 0 solid var(--border);
-  &[data-surface="glass"] {
-    background-color: var(--glass);
-    backdrop-filter: blur(24px) saturate(180%);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
-    border-color: var(--glass-border);
-    @media (prefers-reduced-transparency: reduce) {
-      background-color: var(--background);
-      backdrop-filter: none;
-    }
-  }
-  &[data-surface="glass"][data-side="start"] {
-    border-right-width: 1px;
-  }
-  &[data-surface="glass"][data-side="end"] {
-    border-left-width: 1px;
-  }
 }
 
 :root[data-dragging] {
