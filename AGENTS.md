@@ -15,6 +15,11 @@ workspace and project management, a desktop navigation rail, a phone dock and re
 navigation. Its project/backlog and cross-project board bodies are placeholders. Tasks,
 statuses, tags and the board itself are not built yet.
 
+The board's interaction was worked out in a prototype on mock data: `/prototype/board`, in
+development builds only, with its components in `apps/web/src/components/Board`. It has no
+server, schema or sync behind it. Build the real board from those components and from
+ADR 0008 rather than starting again.
+
 ## Layout
 
 | Path | What lives there |
