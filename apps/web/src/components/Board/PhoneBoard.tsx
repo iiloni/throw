@@ -133,13 +133,11 @@ export function PhoneBoard() {
         onScroll={(event) =>
           setPage(Math.round(event.currentTarget.scrollLeft / pageStride(event.currentTarget)))
         }
-        // Each page is a little narrower than the screen, so its neighbours show at the sides
-        // as the places a swipe, or a card held there, goes next.
-        className="flex min-h-0 flex-1 snap-x snap-mandatory gap-[var(--page-gap)] overflow-x-auto overflow-y-hidden [--page-gap:0.5rem] [--peek:1.5rem] [scrollbar-width:none]"
+        className="phone-pager flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
       >
         <PageSpacer />
         <Page index={0} current={page} origin="backlog">
-          <StatusFilter zone="backlog" anyCard className="px-1" />
+          <StatusFilter zone="backlog" anyCard className="px-[var(--gutter)]" />
           <CardList
             listId="backlog"
             showStatus={state.backlogFilter === null}
@@ -159,9 +157,9 @@ export function PhoneBoard() {
           </Page>
         ))}
         <Page index={active.length + 1} current={page} origin="closed">
-          <StatusFilter zone="closed" anyCard className="px-1" />
+          <StatusFilter zone="closed" anyCard className="px-[var(--gutter)]" />
           <div
-            className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-y-contain px-1 pt-1 [scrollbar-width:none]"
+            className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-y-contain px-[var(--gutter)] pt-1 [scrollbar-width:none]"
             style={{ paddingBottom: DOCK_SPACE }}
           >
             {listTasks(state, 'closed').map((task) => (
@@ -179,7 +177,7 @@ export function PhoneBoard() {
 
 /** Lets the first and last pages come to the middle of the screen like the others. */
 function PageSpacer() {
-  return <div aria-hidden className="w-[calc(var(--peek)-var(--page-gap))] shrink-0" />;
+  return <div aria-hidden className="w-[var(--peek)] shrink-0" />;
 }
 
 /**

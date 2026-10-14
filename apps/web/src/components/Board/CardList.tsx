@@ -17,7 +17,7 @@ type Props = {
   endSpace?: string;
   /** Draw the column on its own faint surface, as Catch's deck does. */
   surface?: boolean;
-  /** Cards run nearly to the list's sides, where a phone's pages already keep them apart. */
+  /** Take the side padding from the phone pager, which narrows it while a card is held. */
   tight?: boolean;
   className?: string;
 };
@@ -77,7 +77,10 @@ export function CardList({
       <ScrollArea edges className="card-scroller flex-1 [--scrollbar-inset:0.5rem]">
         <ScrollAreaViewport data-autoscroll="">
           <div
-            className={cn('flex flex-1 flex-col pt-1 pb-1', tight ? 'px-1' : 'px-3.5')}
+            className={cn(
+              'flex flex-1 flex-col pt-1 pb-1',
+              tight ? 'px-[var(--gutter)]' : 'px-3.5',
+            )}
             style={endSpace ? { paddingBottom: endSpace } : undefined}
           >
             {groups.map(({ priority, tasks: zone }) => {

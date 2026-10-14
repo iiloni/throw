@@ -535,6 +535,32 @@
   display: none;
 }
 
+@property --peek {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+@property --gutter {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 14px;
+}
+/*
+ * A phone's pages fill the screen until a card is held. Then each narrows, and its cards run
+ * nearer its sides, so the pages beside it peek in as where the card can go next.
+ */
+.phone-pager {
+  --peek: 0px;
+  --gutter: 0.875rem;
+  transition:
+    --peek 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
+    --gutter 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+:root[data-dragging] .phone-pager {
+  --peek: 1.25rem;
+  --gutter: 0.25rem;
+}
+
 :root[data-dragging] {
   user-select: none;
   -webkit-user-select: none;

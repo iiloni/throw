@@ -332,8 +332,9 @@ selection to a status.
 - The board shows one page at a time, swiped or chosen from tabs under the title: the
   backlog first, then each active column, then the closed zone. It opens on the first active
   column. The backlog is a page rather than a drawer, so it is never covered by the dock and
-  a card moves out of it the way it moves between columns. Each page is a little narrower
-  than the screen, so the pages beside it show at the edges as where a swipe goes next.
+  a card moves out of it the way it moves between columns. While a card is held, each page
+  narrows a little so the pages beside it peek in at the edges as where the card can go
+  next; at rest a page fills the screen.
 - A long press without movement selects a card. Moving after the press drags it. A touch
   that moves before the press completes scrolls.
 - While a card is held, the dock gives way to a glass drawer at the bottom edge. It opens
