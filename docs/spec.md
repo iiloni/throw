@@ -332,18 +332,18 @@ selection to a status.
 - The board shows one page at a time, swiped or chosen from tabs under the title: the
   backlog first, then each active column, then the closed zone. It opens on the first active
   column. The backlog is a page rather than a drawer, so it is never covered by the dock and
-  a card moves out of it the way it moves between columns.
+  a card moves out of it the way it moves between columns. Each page is a little narrower
+  than the screen, so the pages beside it show at the edges as where a swipe goes next.
 - A long press without movement selects a card. Moving after the press drags it. A touch
   that moves before the press completes scrolls.
-- The dock opens into a grid of status dropzones under a label for each category (Backlog,
-  Active, Closed). This moves cards to any status without scrolling the board. A held card
-  does not open the grid by itself: the dock stays closed, labelled as the place to move
-  from, opens when the card is brought to it and closes when the card leaves. With cards
-  selected the grid is open and tapping a status moves them. The active row is last, nearest
-  a card coming down onto the dock.
-- While a card is held, each side with a page beyond it shows that page's name. Holding the
-  card in the outer 44 CSS pixels fills that edge, and the page turns after about half a
-  second.
+- While a card is held, the dock gives way to a glass drawer at the bottom edge. It opens
+  into a grid of status dropzones under a label for each category (Backlog, Active,
+  Closed) when the card is brought onto it, and closes when the card leaves. This moves
+  cards to any status without scrolling the board. Above the drawer the column scrolls
+  under the held card. With cards selected the drawer is open and tapping a status moves
+  them. On the backlog and closed pages, the status filters are dropzones for any card.
+- Holding a card in the outer 44 CSS pixels, where the next page peeks in, leans that page
+  further in, and the page turns after about half a second.
 - Card titles are 16 CSS pixels on a phone. A held card's column shows each collapsed
   priority as its name alone, on a fainter bar, so it stays quiet on a small screen.
 - Swipe gestures on cards (to move or close them) are polish for later.

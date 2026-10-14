@@ -1,22 +1,14 @@
-import {
-  ArrowRightLeft,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Plus,
-  Search,
-  X,
-} from 'lucide-react';
+import { ChevronDown, Plus, Search, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { type ReactNode, useLayoutEffect, useRef, useState } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { BoardSettingsPanel } from './BoardSettingsPanel';
 import { CardList } from './CardList';
-import { drag, holding, PAGE_EDGE, PAGE_HOLD_MS } from './drag';
+import { drag, holding, pageStride } from './drag';
 import type { Category, Status } from './model';
 import { StatusFilter } from './SideZone';
 import { StatusTile } from './StatusTile';
@@ -55,13 +47,13 @@ export function PhoneBoard() {
 
   function turnTo(index: number, behavior: ScrollBehavior = 'smooth') {
     const element = pager.current;
-    element?.scrollTo({ left: index * element.clientWidth, behavior });
+    element?.scrollTo({ left: index * pageStride(element), behavior });
   }
 
   // The board opens on its first active column, with the backlog one page to the left.
   useLayoutEffect(() => {
     const element = pager.current;
-    if (element) element.scrollLeft = element.clientWidth;
+    if (element) element.scrollLeft = pageStride(element);
   }, []);
 
   return (
@@ -135,44 +127,49 @@ export function PhoneBoard() {
         </div>
       </header>
 
-      <div className="relative flex min-h-0 flex-1">
-        <div
-          ref={pager}
-          data-pager=""
-          onScroll={(event) => {
-            const element = event.currentTarget;
-            setPage(Math.round(element.scrollLeft / element.clientWidth));
-          }}
-          className="flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
-        >
-          <div data-origin="backlog" className="flex w-full shrink-0 snap-center flex-col">
-            <StatusFilter zone="backlog" />
+      <div
+        ref={pager}
+        data-pager=""
+        onScroll={(event) =>
+          setPage(Math.round(event.currentTarget.scrollLeft / pageStride(event.currentTarget)))
+        }
+        // Each page is a little narrower than the screen, so its neighbours show at the sides
+        // as the places a swipe, or a card held there, goes next.
+        className="flex min-h-0 flex-1 snap-x snap-mandatory gap-[var(--page-gap)] overflow-x-auto overflow-y-hidden [--page-gap:0.5rem] [--peek:1.5rem] [scrollbar-width:none]"
+      >
+        <PageSpacer />
+        <Page index={0} current={page} origin="backlog">
+          <StatusFilter zone="backlog" anyCard className="px-1" />
+          <CardList
+            listId="backlog"
+            showStatus={state.backlogFilter === null}
+            endSpace={DOCK_SPACE}
+            tight
+            className="flex-1"
+          />
+        </Page>
+        {active.map((status, index) => (
+          <Page key={status.id} index={index + 1} current={page} origin="active">
             <CardList
-              listId="backlog"
-              showStatus={state.backlogFilter === null}
+              listId={`status:${status.id}`}
               endSpace={DOCK_SPACE}
+              tight
               className="flex-1"
             />
+          </Page>
+        ))}
+        <Page index={active.length + 1} current={page} origin="closed">
+          <StatusFilter zone="closed" anyCard className="px-1" />
+          <div
+            className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-y-contain px-1 pt-1 [scrollbar-width:none]"
+            style={{ paddingBottom: DOCK_SPACE }}
+          >
+            {listTasks(state, 'closed').map((task) => (
+              <TaskCard key={task.id} task={task} showStatus={state.closedFilter === null} />
+            ))}
           </div>
-          {active.map((status) => (
-            <div key={status.id} data-origin="active" className="flex w-full shrink-0 snap-center">
-              <CardList listId={`status:${status.id}`} endSpace={DOCK_SPACE} className="flex-1" />
-            </div>
-          ))}
-          <div data-origin="closed" className="flex w-full shrink-0 snap-center flex-col">
-            <StatusFilter zone="closed" />
-            <div
-              className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3.5 pt-1 [scrollbar-width:none]"
-              style={{ paddingBottom: DOCK_SPACE }}
-            >
-              {listTasks(state, 'closed').map((task) => (
-                <TaskCard key={task.id} task={task} showStatus={state.closedFilter === null} />
-              ))}
-            </div>
-          </div>
-        </div>
-        <PageEdge side={-1} name={pages[page - 1]} />
-        <PageEdge side={1} name={pages[page + 1]} />
+        </Page>
+        <PageSpacer />
       </div>
 
       <PhoneDock onCreate={() => createTask(active[page - 1]?.id)} />
@@ -180,70 +177,56 @@ export function PhoneBoard() {
   );
 }
 
+/** Lets the first and last pages come to the middle of the screen like the others. */
+function PageSpacer() {
+  return <div aria-hidden className="w-[calc(var(--peek)-var(--page-gap))] shrink-0" />;
+}
+
 /**
- * While a card is held, each side of the screen with a page beyond it shows that page's
- * name. Holding the card there fills the edge, and the page turns when it is full.
+ * One page of the phone board. While a held card waits at the side it peeks in from, it
+ * leans further in, and turns into view when the wait is over.
  */
-function PageEdge({ side, name }: { side: -1 | 1; name: string | undefined }) {
+function Page({
+  index,
+  current,
+  origin,
+  children,
+}: {
+  index: number;
+  current: number;
+  origin: 'backlog' | 'active' | 'closed';
+  children: ReactNode;
+}) {
   const held = drag.use();
-  if (held?.phase !== 'dragging' || !name) return null;
-  const waiting = held.page === side;
-  const Icon = side < 0 ? ChevronLeft : ChevronRight;
+  const side = held?.phase === 'dragging' ? held.page : 0;
+  const waiting = side !== 0 && index === current + side;
   return (
+    // Leaning moves an inner box: scroll snapping measures the page with its transform.
     <div
-      aria-hidden
-      className={cn(
-        'pointer-events-none absolute inset-y-4 z-10 flex items-center',
-        side < 0 ? 'left-1' : 'right-1',
-      )}
-      style={{ width: PAGE_EDGE - 8 }}
+      data-page=""
+      data-origin={origin}
+      className="flex w-[calc(100%-2*var(--peek))] shrink-0 snap-center"
     >
-      {/* Only the edge being waited at fills, so the column under the card stays calm. */}
-      <motion.span
-        className="absolute inset-0 overflow-hidden rounded-2xl bg-accent"
+      <motion.div
+        className="flex min-w-0 flex-1 flex-col"
         initial={false}
-        animate={{ opacity: waiting ? 1 : 0 }}
-        transition={{ duration: 0.15 }}
-      >
-        {waiting && (
-          <span
-            key={held.turns}
-            className="absolute inset-0 origin-bottom bg-brand/25"
-            // After a turn the next one waits for the page to settle first.
-            style={{
-              animation: `page-charge ${PAGE_HOLD_MS}ms linear ${held.turns ? 250 : 0}ms both`,
-            }}
-          />
-        )}
-      </motion.span>
-      <motion.span
-        className={cn(
-          'relative mx-auto flex max-h-[45%] flex-col items-center gap-1.5 overflow-hidden rounded-full py-2.5 text-xs shadow-sm transition-colors',
-          waiting ? 'text-foreground' : 'glass text-muted-foreground',
-        )}
-        style={{ width: PAGE_EDGE - 14 }}
-        initial={{ opacity: 0, x: side * 12 }}
-        animate={{ opacity: 1, x: 0 }}
+        animate={{ x: waiting ? -side * 16 : 0 }}
         transition={springs.snappy}
       >
-        <Icon className="size-4 shrink-0" />
-        <span className="min-h-0 truncate font-medium [writing-mode:vertical-rl]">{name}</span>
-      </motion.span>
+        {children}
+      </motion.div>
     </div>
   );
 }
 
-/**
- * The status groups, with the active statuses last: a held card comes down onto the dock,
- * so the row nearest it is the one it most often wants.
- */
+/** The status groups, in the board's order. */
 function byCategory(statuses: Status[]) {
   const groups: { name: string; statuses: Status[] }[] = [
     { name: 'Backlog', statuses: [] },
-    { name: 'Closed', statuses: [] },
     { name: 'Active', statuses: [] },
+    { name: 'Closed', statuses: [] },
   ];
-  const slot: Record<Category, number> = { backlog: 0, done: 1, cancelled: 1, active: 2 };
+  const slot: Record<Category, number> = { backlog: 0, active: 1, done: 2, cancelled: 2 };
   for (const status of statuses) groups[slot[status.category]]!.statuses.push(status);
   return groups;
 }
@@ -252,9 +235,10 @@ const dockButton =
   'pointer-events-auto relative flex size-[var(--dock-height)] items-center justify-center rounded-[var(--dock-radius)] outline-none focus-visible:ring-2 focus-visible:ring-ring/70';
 
 /**
- * The dock: search and the create button, as in Catch. With cards selected, or a held card
- * brought to it, it opens into a grid of every status, so a card reaches any of them without
- * the board being scrolled. A held card elsewhere shows it as the place to move to.
+ * The dock: search and the create button, as in Catch. While a card is held it gives way to
+ * a drawer at the bottom edge, which opens into a grid of every status when the card is
+ * brought onto it, so a card reaches any status without the board being scrolled. Selected
+ * cards open it too.
  */
 function PhoneDock({ onCreate }: { onCreate: () => void }) {
   const state = board.use();
@@ -302,17 +286,21 @@ function PhoneDock({ onCreate }: { onCreate: () => void }) {
   }
 
   return (
-    <div
-      data-drop-block=""
-      className="pointer-events-none fixed inset-x-0 bottom-[var(--dock-bottom)] z-30 flex justify-center px-3"
-    >
+    <div data-drop-block="" className="pointer-events-none fixed inset-x-0 bottom-0 z-30">
+      {/* A drawer at the screen's edge, not a bar over the list: the list scrolls under a held
+          card until the card is brought down onto it. */}
       <motion.div
         layout
         transition={springs.snappy}
         data-drop-expand=""
-        style={{ borderRadius: 22 }}
-        className="glass pointer-events-auto w-full max-w-md overflow-hidden"
+        style={{ borderTopLeftRadius: 28, borderTopRightRadius: 28 }}
+        className="glass-thick pointer-events-auto mx-auto w-full max-w-md overflow-hidden pb-[var(--safe-bottom)]"
       >
+        <motion.div
+          layout="position"
+          aria-hidden
+          className="mx-auto mt-2 h-1 w-9 rounded-full bg-foreground/20"
+        />
         {pick && (
           <motion.div layout="position" className="flex h-12 items-center pr-1.5 pl-4">
             <span className="flex-1 font-medium text-sm tabular-nums">{selected} selected</span>
@@ -322,7 +310,10 @@ function PhoneDock({ onCreate }: { onCreate: () => void }) {
           </motion.div>
         )}
         {open ? (
-          <motion.div layout="position" className={cn('space-y-2.5 p-3', pick && 'pt-0')}>
+          <motion.div
+            layout="position"
+            className={cn('space-y-2.5 px-3 pt-2 pb-3', pick && 'pt-0')}
+          >
             {byCategory(project.statuses).map((group) => (
               <section key={group.name}>
                 <h3 className="px-1 pb-1.5 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
@@ -344,9 +335,8 @@ function PhoneDock({ onCreate }: { onCreate: () => void }) {
         ) : (
           <motion.p
             layout="position"
-            className="flex h-[var(--dock-height)] items-center justify-center gap-2 font-medium text-muted-foreground text-sm"
+            className="flex h-10 items-center justify-center pb-1 font-medium text-muted-foreground text-xs"
           >
-            <ArrowRightLeft aria-hidden className="size-4" />
             Move to a status
           </motion.p>
         )}

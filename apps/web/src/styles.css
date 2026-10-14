@@ -535,16 +535,6 @@
   display: none;
 }
 
-/* Fills while a held card waits at a phone's edge; when full, the next column turns in. */
-@keyframes page-charge {
-  from {
-    transform: scaleY(0);
-  }
-  to {
-    transform: scaleY(1);
-  }
-}
-
 :root[data-dragging] {
   user-select: none;
   -webkit-user-select: none;

@@ -66,7 +66,7 @@ function ScrollAreaViewport({
       data-slot="scroll-area-viewport"
       // Replace Radix's table wrapper so content wraps and a short list can fill the area.
       className={cn(
-        'size-full rounded-[inherit] overscroll-contain outline-none focus-visible:ring-2 focus-visible:ring-ring [&>div]:min-h-full [&>div]:flex-col [&>div]:!flex',
+        'size-full rounded-[inherit] overscroll-y-contain outline-none focus-visible:ring-2 focus-visible:ring-ring [&>div]:min-h-full [&>div]:flex-col [&>div]:!flex',
         className,
       )}
       {...props}

@@ -17,6 +17,8 @@ type Props = {
   endSpace?: string;
   /** Draw the column on its own faint surface, as Catch's deck does. */
   surface?: boolean;
+  /** Cards run nearly to the list's sides, where a phone's pages already keep them apart. */
+  tight?: boolean;
   className?: string;
 };
 
@@ -29,7 +31,15 @@ type HeaderMode = 'hidden' | 'label' | 'open' | 'rail';
  * either folds every zone but one into rails (`compact`) or keeps its layout and dims the
  * other zones (`full`); the drag engine reads the result from the DOM.
  */
-export function CardList({ listId, header, showStatus, endSpace, surface, className }: Props) {
+export function CardList({
+  listId,
+  header,
+  showStatus,
+  endSpace,
+  surface,
+  tight,
+  className,
+}: Props) {
   const state = board.use();
   const held = drag.use();
   const [settings] = useBoardSettings();
@@ -67,7 +77,7 @@ export function CardList({ listId, header, showStatus, endSpace, surface, classN
       <ScrollArea edges className="card-scroller flex-1 [--scrollbar-inset:0.5rem]">
         <ScrollAreaViewport data-autoscroll="">
           <div
-            className="flex flex-1 flex-col px-3.5 pt-1 pb-1"
+            className={cn('flex flex-1 flex-col pt-1 pb-1', tight ? 'px-1' : 'px-3.5')}
             style={endSpace ? { paddingBottom: endSpace } : undefined}
           >
             {groups.map(({ priority, tasks: zone }) => {

@@ -59,8 +59,6 @@ export type DragState = {
   over: boolean;
   /** The side of a phone's screen the card is held at, turning to the next column. */
   page: -1 | 0 | 1;
-  /** Counts the columns turned, so each wait at the edge starts over. */
-  turns: number;
   /** The card was lifted with its subtasks unfolded, and its copy folds them as it rises. */
   unfolded: boolean;
 };
@@ -106,8 +104,11 @@ const RAIL_DWELL_MS = 220;
 const FOLD_MS = 300;
 const EDGE = 64;
 export const PAGE_HOLD_MS = 480;
-/** The band at each side of a phone's screen that turns to the next column. */
-export const PAGE_EDGE = 44;
+/**
+ * The band at each side of a phone's screen that turns to the next column: the neighbour
+ * peeking in there and a little of the column beside it.
+ */
+const PAGE_EDGE = 44;
 /** A surface that opens under a held card waits this long before its targets take it. */
 const EXPAND_ARM_MS = 200;
 /** Space under each card, which a gap must also open. */
@@ -296,7 +297,6 @@ function begin() {
     unfolded: unfolded > 0,
     over: false,
     page: 0,
-    turns: 0,
   });
   document.documentElement.dataset.dragging = '';
   tick(12);
@@ -417,7 +417,8 @@ function resolve() {
   const tile = hit?.closest<HTMLElement>('[data-drop-status]');
   // The surface opens under the finger: what lands beneath it is not chosen yet.
   const arming = over && performance.now() - overSince < EXPAND_ARM_MS;
-  if (arming) return set({ target: null, rail: null });
+  // At a phone's edge the card is waiting for the next column, not for the one it is over.
+  if (arming || pageSide(hit) !== 0) return set({ target: null, rail: null });
   if (tile?.dataset.dropStatus) {
     dwell = null;
     return set({ target: { kind: 'status', statusId: tile.dataset.dropStatus }, rail: null });
@@ -474,10 +475,14 @@ function autoScroll() {
     listAt(hit)?.querySelector<HTMLElement>('[data-autoscroll]');
   if (scroller) {
     const rect = scroller.getBoundingClientRect();
+    // A surface over the end of the list (the phone's drawer) is a target of its own, so
+    // the list scrolls from just above it.
+    const block = document.querySelector('[data-drop-block]')?.getBoundingClientRect();
+    const bottom = block && block.top > rect.top ? Math.min(rect.bottom, block.top) : rect.bottom;
     const up = rect.top + EDGE - pointer.y;
-    const down = pointer.y - (rect.bottom - EDGE);
+    const down = pointer.y - (bottom - EDGE);
     if (up > 0) scroller.scrollTop -= Math.min(16, up / 4);
-    else if (down > 0) scroller.scrollTop += Math.min(16, down / 4);
+    else if (down > 0 && pointer.y < bottom) scroller.scrollTop += Math.min(16, down / 4);
   }
   const row = document.querySelector<HTMLElement>('[data-autoscroll-x]');
   if (row && row.scrollWidth > row.clientWidth) {
@@ -496,25 +501,36 @@ function autoScroll() {
   }
   // A phone shows one column: holding a card at a side turns to the next.
   const pager = document.querySelector<HTMLElement>('[data-pager]');
-  if (pager && !hit?.closest('[data-drop-block]')) {
-    const side = pointer.x < PAGE_EDGE ? -1 : pointer.x > window.innerWidth - PAGE_EDGE ? 1 : 0;
+  if (pager) {
+    const side = pageSide(hit);
     const state = drag.get();
     if (state && state.page !== side) drag.set({ ...state, page: side });
     const now = performance.now();
     if (side === 0) pageHold = null;
     else if (pageHold?.side !== side) pageHold = { side, since: now };
     else if (now - pageHold.since > PAGE_HOLD_MS) {
-      pager.scrollBy({ left: side * pager.clientWidth, behavior: 'smooth' });
+      pager.scrollBy({ left: side * pageStride(pager), behavior: 'smooth' });
+      // The next turn waits for this one to settle as well.
       pageHold = { side, since: now + 250 };
-      const held = drag.get();
-      if (held) drag.set({ ...held, turns: held.turns + 1 });
       tick();
     }
-  } else if (pager) {
-    pageHold = null;
-    const state = drag.get();
-    if (state?.page) drag.set({ ...state, page: 0 });
   }
+}
+
+/** The side of a phone's pager a held card is waiting at, if there is a page beyond it. */
+function pageSide(hit: Element | null): -1 | 0 | 1 {
+  const pager = document.querySelector<HTMLElement>('[data-pager]');
+  if (!pager || hit?.closest('[data-drop-block]')) return 0;
+  if (pointer.x < PAGE_EDGE) return pager.scrollLeft > 1 ? -1 : 0;
+  const end = pager.scrollWidth - pager.clientWidth - 1;
+  if (pointer.x > window.innerWidth - PAGE_EDGE) return pager.scrollLeft < end ? 1 : 0;
+  return 0;
+}
+
+/** The distance from one page of a phone's pager to the next. */
+export function pageStride(pager: HTMLElement) {
+  const [first, second] = pager.querySelectorAll<HTMLElement>('[data-page]');
+  return first && second ? second.offsetLeft - first.offsetLeft : pager.clientWidth;
 }
 
 function finish(commit: boolean) {

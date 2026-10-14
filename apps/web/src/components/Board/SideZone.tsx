@@ -191,14 +191,23 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
  * The zone's statuses as filters. While one of the zone's own cards is held they are also
  * where it is dropped to change status, so they grow into targets.
  */
-export function StatusFilter({ zone, className }: { zone: Zone; className?: string }) {
+export function StatusFilter({
+  zone,
+  anyCard,
+  className,
+}: {
+  zone: Zone;
+  /** Take cards from anywhere: on a phone the zone is a page, and these are its targets. */
+  anyCard?: boolean;
+  className?: string;
+}) {
   const state = board.use();
   const held = drag.use();
   const statuses = zoneStatuses(zone, current(state).project.statuses);
   const filter = zone === 'backlog' ? state.backlogFilter : state.closedFilter;
   const setFilter = (value: string | null) =>
     update(zone === 'backlog' ? { backlogFilter: value } : { closedFilter: value });
-  const targets = held?.phase === 'dragging' && held.origin === zone;
+  const targets = held?.phase === 'dragging' && (anyCard || held.origin === zone);
   if (statuses.length < 2) return null;
   const chip =
     'flex shrink-0 items-center rounded-full px-3.5 text-sm outline-none transition-[height,background-color,color,border-color] duration-200 focus-visible:ring-[3px] focus-visible:ring-ring/60';
