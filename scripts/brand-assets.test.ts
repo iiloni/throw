@@ -34,7 +34,7 @@ test('maskable and Apple icons are full bleed; adaptive and themed ink stays in 
       const { data } = await sharp(`${base}/${file}`).raw().toBuffer({ resolveWithObject: true });
       for (let index = 3; index < data.length; index += 4) assert.equal(data[index], 255);
     }
-    const native = `branding/android/app/src/${channel === 'stable' ? 'main' : channel}/res`;
+    const native = `apps/web/android/app/src/${channel === 'stable' ? 'main' : channel}/res`;
     const sources = [`${native}/mipmap-xhdpi/ic_launcher_foreground.png`];
     if (channel === 'stable') sources.push(`${native}/mipmap-xhdpi/ic_launcher_monochrome.png`);
     for (const source of sources) {
@@ -60,7 +60,7 @@ test('maskable and Apple icons are full bleed; adaptive and themed ink stays in 
 
 test('the shared Android monochrome keeps transparent project-detail knockouts', async () => {
   const { data } = await sharp(
-    'branding/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_monochrome.png',
+    'apps/web/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_monochrome.png',
   )
     .raw()
     .toBuffer({ resolveWithObject: true });

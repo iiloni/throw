@@ -66,10 +66,59 @@ the optional review.
 
 ## Android
 
-The client is written to run in a Capacitor WebView as well (`apps/web/capacitor.config.ts`,
-the native paths in `lib/localStore.ts` and `lib/serverUrl.ts`), but the Android project has
-not been generated yet. Catch's `android` commands, release channels and signing have not
-been ported.
+The Capacitor project is in `apps/web/android`. Install Android Studio (Otter or newer),
+JDK 21, SDK platform 36, build-tools 36.0.0 and platform-tools; set `ANDROID_HOME` to your
+SDK and put `adb` on your PATH. Enable USB debugging on the phone, authorize this computer,
+and connect over USB or wireless adb (`adb connect <ip>:<port>`).
+
+```bash
+./scripts/dev.sh android                 # Throw Dev with live reload over the worktree URL
+./scripts/dev.sh android --usb           # adb forwards this worktree's port, including on wireless adb
+./scripts/dev.sh android --static --usb  # bundled code: can reopen/edit offline
+./scripts/dev.sh android --static --target <device-id>
+```
+
+The command starts this checkout's stack, builds/syncs the matching dev web assets, and
+installs the separate **Throw Dev** app. Other arguments pass to `cap run android`, e.g.
+`--target` when several devices are connected. The dev channel is forced; these commands
+never replace the stable or preview app. Live reload needs the running server to load code;
+only `--static` verifies offline cold starts. `--usb` works over either USB or wireless adb.
+Without it, the phone must reach the printed worktree URL (normally over Tailscale).
+Bundled dev builds pin API calls to that URL; ordinary stable/preview builds ask for the
+owner's HTTPS server URL on first run. Server URL and session/preferences stay in WebView
+storage, synced rows in a per-user native SQLite database, and queued writes in IndexedDB,
+through the same collection/outbox path used on the web with OPFS.
+
+| Channel | Display name | Application ID | Artwork |
+| --- | --- | --- | --- |
+| stable | Throw | `org.iloni.throwtasks` | Jade |
+| preview | Throw Preview | `org.iloni.throwtasks.preview` | Purple/indigo |
+| dev | Throw Dev | `org.iloni.throwtasks.dev` | Light blue |
+
+To compile without a phone, sync the channel and then build its matching debug variant:
+
+```bash
+THROW_CHANNEL=preview pnpm --filter @throw/web android:sync
+(cd apps/web/android && ./gradlew assemblePreviewDebug)
+# stable -> assembleStableDebug; dev -> assembleDevDebug
+pnpm --filter @throw/web android:open
+```
+
+Always sync each channel before building it: the native source sets choose launcher/splash
+artwork, while the web build chooses its own channel assets/config. All three debug variants
+compile in CI, without an emulator. CI's Playwright `android` project is Chromium with a
+phone viewport, **not** a native Android test. Native icons and splash are generated from
+Throw's canonical artwork with `pnpm brand:generate`; see [branding](docs/branding.md).
+The App plugin supplies native back navigation; Network and Capacitor SQLite provide
+connectivity and collection storage. System-bar styling follows the selected application
+theme and Catch's local keyboard-insets plugin keeps the WebView full size.
+Android 7 (API 24) is the minimum OS; the WebView must support the app's modern browser APIs.
+
+Release tasks deliberately fail until signing and distribution are implemented. Before
+releasing, establish version/versionCode metadata, signing keys, a release pipeline, upgrade
+and backup policy, and update prompts alongside the web release. A debug build under a
+stable/preview ID must be uninstalled before installing a differently signed release; keep
+unsynced data safe. The permanent IDs must remain unchanged after distribution.
 
 ## Releasing
 

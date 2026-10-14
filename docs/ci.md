@@ -277,3 +277,11 @@ queued PRs. See [merge queues](https://docs.github.com/en/repositories/configuri
 Local work still must pass `./scripts/dev.sh check` before finishing. Local E2E should be
 targeted; full E2E runs on GitHub through `run e2e` when early coverage is justified,
 or through `merge on pass` before merging.
+
+## Native Android build
+
+For code changes, `android build` syncs and compiles dev, stable and preview debug APKs
+on one runner with JDK 21 and SDK 36. It uses Gradle caching, no emulator or signing secrets.
+`validation` requires this job as well as `check` and the requested E2E jobs. Documentation
+changes skip native builds. The E2E `android` project still means a Chromium phone viewport,
+not a physical device or emulator.

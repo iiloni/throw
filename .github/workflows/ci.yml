@@ -93,6 +93,36 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
 
+  android-build:
+    name: android build
+    needs: reuse
+    if: needs.reuse.outputs.run_checks == 'true' && needs.reuse.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - run: pnpm install --frozen-lockfile
+      - name: Install Android SDK packages
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"'
+      - name: Compile bundled debug apps for all channels
+        # One runner and Gradle cache; no emulator, signing secrets or release artifacts.
+        run: |
+          for channel in dev stable preview; do
+            THROW_CHANNEL="$channel" pnpm --filter @throw/web android:sync
+            task="assemble${channel^}Debug"
+            (cd apps/web/android && ./gradlew "$task" --no-daemon --no-configuration-cache)
+          done
+
   # Each project runs on a runner with a stack of its own. The suite is small enough for one
   # shard per project; add shards to the matrix (and to `--shard` below) as it grows, so
   # they do not compete for one machine the way a second worker would.
@@ -198,7 +228,7 @@ jobs:
   # so requiring the E2E jobs alone would let a PR merge without testing or approval.
   validation:
     name: validation
-    needs: [reuse, check, e2e-desktop-passed, e2e-android-passed]
+    needs: [reuse, check, android-build, e2e-desktop-passed, e2e-android-passed]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -215,6 +245,7 @@ jobs:
           REUSE_RESULT: ${{ needs.reuse.result }}
           RUN_CHECKS: ${{ needs.reuse.outputs.run_checks }}
           CHECK_RESULT: ${{ needs.check.result }}
+          NATIVE_RESULT: ${{ needs.android-build.result }}
           DESKTOP_RESULT: ${{ needs.e2e-desktop-passed.result }}
           ANDROID_RESULT: ${{ needs.e2e-android-passed.result }}
         run: bash scripts/ci-validation.sh

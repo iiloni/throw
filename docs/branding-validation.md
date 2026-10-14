@@ -1,6 +1,7 @@
 # Branding integration validation
 
-Validated on 2026-10-13. Android project creation remains deferred by request.
+Validated on 2026-10-13. This report records the original branding integration; subsequent
+Android packaging and device checks are in [Android validation](android-validation.md).
 
 ## Changed files
 

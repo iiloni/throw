@@ -13,13 +13,13 @@ const run = {
   conclusion: 'success',
   html_url: 'https://github.com/example/throw/actions/runs/1',
 };
-const jobs = ['check', 'e2e (desktop)', 'e2e (android)'].map((name) => ({
+const jobs = ['check', 'android build', 'e2e (desktop)', 'e2e (android)'].map((name) => ({
   name,
   status: 'completed',
   conclusion: 'success',
 }));
 
-test('a release waits for CI to appear and finish, then reuses all three successful jobs', async () => {
+test('a release waits for CI to appear and finish, then reuses all four successful jobs', async () => {
   let time = 0;
   let calls = 0;
   let inspected = 0;
@@ -138,7 +138,7 @@ test('an existing push CI run is awaited without requesting another one', async 
   );
 });
 
-test('an overall green run must include successful checks and both E2E projects', async () => {
+test('an overall green run must include successful checks, native builds and both E2E projects', async () => {
   for (const required of jobs) {
     for (const invalid of [
       jobs.filter((job) => job !== required),

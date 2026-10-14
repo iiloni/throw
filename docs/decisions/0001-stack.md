@@ -23,10 +23,12 @@ keeping two copies in step costs more than the coupling would.
 **Separate server, accounts and database.** Throw has its own server and its own users.
 Nothing reads Catch's database, and there is no shared auth.
 
-**Only what the scaffold needs was ported.** Left in Catch until a feature needs them:
-the dock and navigation, keyboard and system-bar handling, split view, the BlockNote
-editor, tags, attachments, server backups, invites and admin pages, multiple accounts on a
-device, update prompts, release channels and scripts, and the Android project.
+**Port features when needed.** The scaffold was followed by the responsive shell and the
+Capacitor Android project, including native SQLite, keyboard/system-bar handling and the
+stable/preview/dev source sets. Split view, the BlockNote editor, attachments, server backups,
+invites and admin pages, multiple accounts on a device, update prompts and release/signing
+scripts stay in Catch until a feature needs them. No sharing, reminders, media or widgets
+are ported with the Android shell.
 
 ## Consequences
 

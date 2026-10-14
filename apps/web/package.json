@@ -7,13 +7,16 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "android:sync": "vite build && cap sync android",
+    "android:open": "cap open android"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^8.1.1",
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "8.1.1",
     "@capacitor/core": "^8.5.2",
     "@capacitor/network": "^8.0.1",
-    "@throw/shared": "workspace:*",
     "@electric-sql/client": "^1.5.28",
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",
     "@fontsource-variable/figtree": "^5.3.0",
@@ -26,6 +29,7 @@
     "@tanstack/offline-transactions": "^1.0.56",
     "@tanstack/react-db": "^0.4.1",
     "@tanstack/react-router": "^1.170.40",
+    "@throw/shared": "workspace:*",
     "better-auth": "^1.7.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

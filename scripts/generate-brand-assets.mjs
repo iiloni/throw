@@ -78,7 +78,7 @@ const densities = [
   ['xxhdpi', 3],
   ['xxxhdpi', 4],
 ];
-const nativeRoot = 'branding/android/app/src';
+const nativeRoot = 'apps/web/android/app/src';
 for (const channel of ['stable', 'preview', 'dev']) {
   const publicRoot = `apps/web/public${channel === 'stable' ? '' : `/${channel}`}`;
   const native = `${nativeRoot}/${channel === 'stable' ? 'main' : channel}/res`;
@@ -123,6 +123,8 @@ for (const channel of ['stable', 'preview', 'dev']) {
   }
 
   for (const [density, scale] of densities) {
+    // Android's icon-only system splash slot is 288 dp without a separate icon background.
+    await output(`${native}/drawable-${density}/splash.png`, await render(primary, 288 * scale));
     const mipmap = `${native}/mipmap-${density}`;
     // The legacy launcher displays a 48 dp icon at every density: always small-tier.
     await output(`${mipmap}/ic_launcher.png`, await render(small, 48 * scale));

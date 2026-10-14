@@ -3,6 +3,8 @@ import { MotionConfig } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useKeyboardTracking } from '@/lib/keyboard';
+import { useSystemBarsStyle } from '@/lib/systemBars';
 import { useApplyTheme } from '@/lib/theme';
 
 export const Route = createRootRoute({
@@ -27,6 +29,8 @@ const toastOffset = { top: 'calc(var(--safe-top) + 0.5rem)' };
 
 function Root() {
   useApplyTheme();
+  useSystemBarsStyle();
+  useKeyboardTracking();
   return (
     <MotionConfig reducedMotion="user">
       <TooltipProvider>
