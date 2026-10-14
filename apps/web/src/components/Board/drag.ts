@@ -53,6 +53,8 @@ export type DragState = {
   /** Set when the card lands somewhere that shows no cards and shrinks into it. */
   swallowed: boolean;
   touch: boolean;
+  /** The card was lifted with its subtasks unfolded, and its copy folds them as it rises. */
+  unfolded: boolean;
 };
 
 export const drag = createStore<DragState | null>(null);
@@ -250,6 +252,7 @@ function begin() {
     phase: 'dragging',
     swallowed: false,
     touch,
+    unfolded: unfolded > 0,
   });
   document.documentElement.dataset.dragging = '';
   tick(12);

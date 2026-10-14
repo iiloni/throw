@@ -1,4 +1,5 @@
 import { ChevronDown } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { StatusGlyph } from './glyphs';
 import { isClosed, type Project, statusById, type Task } from './model';
@@ -10,16 +11,24 @@ type Props = {
   subtasks: Task[];
   /** Drawn on the dragged copy: shown, not operable. */
   inert?: boolean;
+  /** Starts unfolded and folds at once, for a copy of a card lifted with its subtasks open. */
+  folding?: boolean;
 };
 
 /**
  * A tab tucked under a card that counts its subtasks and unfolds to list them, as a link
  * tucks under a note in Catch. Its top edge hides under the card, so it reads as a card behind.
  */
-export function SubtaskUnderlay({ parent, subtasks, inert = false }: Props) {
+export function SubtaskUnderlay({ parent, subtasks, inert = false, folding = false }: Props) {
   const state = board.use();
   const { project } = current(state);
-  const expanded = state.expanded.includes(parent.id);
+  const [unfolded, setUnfolded] = useState(folding);
+  // One painted frame unfolded, so the fold is a transition and not a jump.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setUnfolded(false));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  const expanded = unfolded || state.expanded.includes(parent.id);
   const category = (task: Task) => statusById(project, task.statusId)?.category ?? 'backlog';
   const done = subtasks.filter((task) => category(task) === 'done').length;
   const open = subtasks.filter((task) => !isClosed(category(task))).length;

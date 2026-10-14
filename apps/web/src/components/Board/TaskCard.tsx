@@ -200,7 +200,12 @@ export function TaskCard({ task, showStatus, overlay = false, className }: Props
       className={cn('isolate flex flex-col', landing && 'invisible')}
     >
       {card}
-      <SubtaskUnderlay parent={task} subtasks={subtasks} inert={overlay} />
+      <SubtaskUnderlay
+        parent={task}
+        subtasks={subtasks}
+        inert={overlay}
+        folding={overlay && dragState?.unfolded}
+      />
     </div>
   );
 }

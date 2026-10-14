@@ -25,10 +25,20 @@ export const ZONES = {
 export type Zone = keyof typeof ZONES;
 
 export const STRIP_WIDTH = 64;
+/** A strip under a held card: wide enough for its statuses to be read and hit. */
+const HELD_STRIP_WIDTH = 104;
 const PANEL_WIDTH = 304;
 
 export function zoneWidth(view: ZoneState, fullWidth: number) {
   return view === 'full' ? fullWidth : view === 'panel' ? PANEL_WIDTH : STRIP_WIDTH;
+}
+
+/**
+ * The width a rail is drawn at. A strip widens while it shows dropzones, over the gap beside
+ * it: the columns stay where `zoneWidth` put them.
+ */
+export function railWidth(view: ZoneState, fullWidth: number, tiles: boolean) {
+  return tiles && view === 'strip' ? HELD_STRIP_WIDTH : zoneWidth(view, fullWidth);
 }
 
 export function zoneStatuses(zone: Zone, statuses: Status[]) {
@@ -54,7 +64,7 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
   const dragging = held?.phase === 'dragging';
   // A card held from this zone keeps the zone as it is, so it can still be placed here.
   const tiles = dragging && held.origin !== zone;
-  const width = zoneWidth(view, fullWidth);
+  const width = railWidth(view, fullWidth, tiles);
   const other = zone === 'backlog' ? 'closed' : 'backlog';
   // A gallery takes the board, so the opposite zone steps back to its strip.
   const setView = (next: ZoneState) =>
@@ -95,7 +105,7 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
               <StatusTile
                 key={status.id}
                 status={status}
-                shape={view === 'strip' ? 'strip' : 'block'}
+                className={view === 'strip' ? 'px-1.5' : undefined}
               />
             ))}
           </motion.div>

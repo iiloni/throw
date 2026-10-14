@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import { BoardSettingsPanel } from './BoardSettingsPanel';
 import { CardList } from './CardList';
 import { drag } from './drag';
-import { SideZone, STRIP_WIDTH, zoneWidth } from './SideZone';
+import { railWidth, SideZone, STRIP_WIDTH, zoneWidth } from './SideZone';
 import { StatusMenu } from './StatusMenu';
 import { StatusTile } from './StatusTile';
 import { board, countIn, current, selectProject, sendTasks, update } from './state';
@@ -160,8 +160,16 @@ export function DesktopBoard() {
                 <ScrollAreaViewport
                   data-origin="active"
                   data-autoscroll-x=""
-                  data-inset-start={backlogWidth}
-                  data-inset-end={closedWidth}
+                  data-inset-start={railWidth(
+                    state.backlog,
+                    fullWidth,
+                    dragging && held.origin !== 'backlog',
+                  )}
+                  data-inset-end={railWidth(
+                    state.closed,
+                    fullWidth,
+                    dragging && held.origin !== 'closed',
+                  )}
                   className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3"
                 >
                   <ColumnsEdge rail={backlogWidth} />
