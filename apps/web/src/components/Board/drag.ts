@@ -25,6 +25,7 @@ import {
  *   wraps each card, `data-gap` marks where a card may land, `data-zone-header` starts a
  *   priority zone and `data-drop-rail` is a folded zone that takes the card when held over.
  * - `data-drop-status`: a tile that sends cards to a status without placing them.
+ * - `data-drop-expand`: a surface that shows its targets only while the card is over it.
  * - `data-drop-block`: a surface over the board (a drawer, the dock) that hides what is
  *   under it from the drag.
  * - `data-autoscroll`: a vertical scroller to nudge while a card is held near its edge.
@@ -54,6 +55,8 @@ export type DragState = {
   /** Set when the card lands somewhere that shows no cards and shrinks into it. */
   swallowed: boolean;
   touch: boolean;
+  /** The card is over a surface that opens for it, such as the phone dock. */
+  over: boolean;
   /** The card was lifted with its subtasks unfolded, and its copy folds them as it rises. */
   unfolded: boolean;
 };
@@ -110,6 +113,8 @@ let pointer = { x: 0, y: 0 };
 let grab = { x: 0, y: 0 };
 /** A touch held long enough to select its card; moving it from here is a drag. */
 let primed = false;
+/** The same, for components: true while that touch is still down. */
+export const holding = createStore(false);
 /** Whether that hold selected a card that was not selected before. */
 let primedSelect = false;
 let frame: number | undefined;
@@ -184,6 +189,7 @@ function release() {
   press = null;
   primed = false;
   primedSelect = false;
+  if (holding.get()) holding.set(false);
   dwell = null;
   armed = null;
   folded = null;
@@ -233,6 +239,7 @@ function swallowClick() {
 function prime() {
   if (!press) return;
   primed = true;
+  holding.set(true);
   navigator.vibrate?.(12);
   if (!board.get().selection.includes(press.taskId)) {
     primedSelect = true;
@@ -278,6 +285,7 @@ function begin() {
     swallowed: false,
     touch,
     unfolded: unfolded > 0,
+    over: false,
   });
   document.documentElement.dataset.dragging = '';
   tick(12);
@@ -390,6 +398,8 @@ function resolve() {
   const state = drag.get();
   if (state?.phase !== 'dragging') return;
   const hit = document.elementFromPoint(pointer.x, pointer.y);
+  const over = Boolean(hit?.closest('[data-drop-expand]'));
+  if (over !== state.over) drag.set({ ...state, over });
   const tile = hit?.closest<HTMLElement>('[data-drop-status]');
   if (tile?.dataset.dropStatus) {
     dwell = null;

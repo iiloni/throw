@@ -336,9 +336,11 @@ selection to a status **(assumed)**.
 - The closed strip sits at the right end of the board.
 - A long press without movement selects a card. Moving after the press drags it. A touch
   that moves before the press completes scrolls.
-- During a drag or with cards selected, the dock becomes a grid of status dropzones under
-  a label for each category (Backlog, Active, Closed). This moves cards to any status
-  without scrolling the board. With cards selected, tapping a status moves them.
+- The dock opens into a grid of status dropzones under a label for each category (Backlog,
+  Active, Closed). This moves cards to any status without scrolling the board. A held card
+  does not open the grid by itself: the dock stays closed, labelled as the place to move
+  from, opens when the card is brought to it and closes when the card leaves. With cards
+  selected the grid is open and tapping a status moves them.
 - Holding a card at the side of the screen turns to the next column.
 
 ## The cross-project board

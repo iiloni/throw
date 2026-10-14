@@ -1,4 +1,4 @@
-import { ChevronDown, Columns3, LayoutDashboard, Search, X } from 'lucide-react';
+import { ArrowRightLeft, ChevronDown, Columns3, LayoutDashboard, Search, X } from 'lucide-react';
 import { animate, motion, useMotionValue } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
 import { type PointerEvent, useEffect, useRef, useState } from 'react';
@@ -8,7 +8,7 @@ import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { BoardSettingsPanel } from './BoardSettingsPanel';
 import { CardList } from './CardList';
-import { drag } from './drag';
+import { drag, holding } from './drag';
 import type { Category, Status } from './model';
 import { StatusFilter } from './SideZone';
 import { StatusTile } from './StatusTile';
@@ -259,9 +259,9 @@ function byCategory(statuses: Status[]) {
 }
 
 /**
- * The dock. At rest it is the three tabs. With a card held or cards selected it becomes a
- * grid of every status, grouped by category, so a card reaches any of them without the
- * board being scrolled.
+ * The dock. At rest it is the three tabs. With cards selected, or a held card brought to
+ * it, it opens into a grid of every status, grouped by category, so a card reaches any of
+ * them without the board being scrolled. A held card elsewhere leaves it closed.
  */
 function PhoneDock({
   drawer,
@@ -274,10 +274,14 @@ function PhoneDock({
 }) {
   const state = board.use();
   const held = drag.use();
+  const fingerDown = holding.use();
   const { project } = current(state);
   const selected = state.selection.length;
   const dragging = held?.phase === 'dragging';
-  const pick = selected > 0 && !dragging;
+  // Selecting by holding a card must not open the grid under the finger that is still down.
+  const pick = selected > 0 && !dragging && !fingerDown;
+  // A held card opens the grid by being brought to the dock, and closes it by leaving.
+  const open = pick || (dragging && held.over);
   const send = (statusId: string) => {
     sendTasks(state.selection, statusId);
     update({ selection: [] });
@@ -292,6 +296,7 @@ function PhoneDock({
       <motion.div
         layout
         transition={springs.snappy}
+        data-drop-expand=""
         style={{ borderRadius: 22 }}
         className="glass pointer-events-auto w-full max-w-md overflow-hidden"
       >
@@ -303,7 +308,7 @@ function PhoneDock({
             </IconButton>
           </motion.div>
         )}
-        {dragging || pick ? (
+        {open ? (
           <motion.div layout="position" className={cn('space-y-2.5 p-3', pick && 'pt-0')}>
             {byCategory(project.statuses).map((group) => (
               <section key={group.name}>
@@ -323,6 +328,14 @@ function PhoneDock({
               </section>
             ))}
           </motion.div>
+        ) : dragging ? (
+          <motion.p
+            layout="position"
+            className="flex h-[var(--dock-height)] items-center justify-center gap-2 font-medium text-muted-foreground text-sm"
+          >
+            <ArrowRightLeft aria-hidden className="size-4" />
+            Move to a status
+          </motion.p>
         ) : (
           <motion.nav
             layout="position"
