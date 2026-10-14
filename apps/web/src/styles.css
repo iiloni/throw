@@ -441,6 +441,43 @@
 }
 
 /*
+ * A single column of cards. Where cards are scrolled out, the corners of the visible area
+ * take a card's radius at the cards' own edges, so a card that is cut off still shows four
+ * round corners. The gutters beside the cards stay whole: shadows and selection marks reach
+ * into them. Each line below is one piece of the visible area.
+ */
+.card-scroller {
+  --inset: 0.875rem;
+  --round: 1rem;
+  --top: 0px;
+  --bottom: 0px;
+  --solid: linear-gradient(#000 0 0);
+  &[data-more-top] {
+    --top: var(--round);
+  }
+  &[data-more-bottom] {
+    --bottom: var(--round);
+  }
+  mask:
+    var(--solid) 0 var(--top) / 100% calc(100% - var(--top) - var(--bottom)) no-repeat,
+    var(--solid) 50% 0 / calc(100% - 2 * var(--inset) - 2 * var(--top)) var(--top) no-repeat,
+    var(--solid) 50% 100% / calc(100% - 2 * var(--inset) - 2 * var(--bottom)) var(--bottom)
+    no-repeat,
+    var(--solid) 0 0 / var(--inset) var(--top) no-repeat,
+    var(--solid) 100% 0 / var(--inset) var(--top) no-repeat,
+    var(--solid) 0 100% / var(--inset) var(--bottom) no-repeat,
+    var(--solid) 100% 100% / var(--inset) var(--bottom) no-repeat,
+    radial-gradient(circle at 100% 100%, #000 calc(var(--top) - 0.5px), #0000 var(--top))
+    var(--inset) 0 / var(--top) var(--top) no-repeat,
+    radial-gradient(circle at 0 100%, #000 calc(var(--top) - 0.5px), #0000 var(--top))
+    calc(100% - var(--inset)) 0 / var(--top) var(--top) no-repeat,
+    radial-gradient(circle at 100% 0, #000 calc(var(--bottom) - 0.5px), #0000 var(--bottom))
+    var(--inset) 100% / var(--bottom) var(--bottom) no-repeat,
+    radial-gradient(circle at 0 0, #000 calc(var(--bottom) - 0.5px), #0000 var(--bottom))
+    calc(100% - var(--inset)) 100% / var(--bottom) var(--bottom) no-repeat;
+}
+
+/*
  * A scroll area's edges. While content is scrolled out at the top or bottom, the last few
  * pixels there fade and lose focus: no card is cut off in a straight line, and the fade is
  * the sign that there is more that way.

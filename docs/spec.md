@@ -249,6 +249,8 @@ motion.
 - A list of cards fades and blurs out over its last few pixels at the top or bottom while
   there is more that way. No card is cut off in a straight line, and the fade is what says
   the list scrolls.
+- Where cards are scrolled out of a column, the visible area's corners take the card radius
+  at the cards' own edges, so a card that is cut off still shows four round corners.
 - Scrollbars are off by default, since the fades do their job with less noise. A
   [setting](#board-settings) turns them on for people who need the bar. They are then
   Catch's overlay scrollbars: drawn over the content, shown on hover on desktop and never
