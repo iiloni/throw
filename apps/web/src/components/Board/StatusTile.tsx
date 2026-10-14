@@ -10,8 +10,8 @@ type Props = {
   status: Status;
   /** Set when cards are selected: the tile is then a button that moves them. */
   onPick?: () => void;
-  /** `row` is the compact form used in the phone dock. */
-  shape?: 'block' | 'row';
+  /** `row` is the compact form in the phone dock, `narrow` a block for a rail that is a strip. */
+  shape?: 'block' | 'row' | 'narrow';
   className?: string;
 };
 
@@ -35,6 +35,7 @@ export function StatusTile({ status, onPick, shape = 'block', className }: Props
       className={cn(
         'flex min-h-0 min-w-0 select-none items-center gap-2 rounded-2xl border text-left outline-none transition-colors duration-150 focus-visible:ring-[3px] focus-visible:ring-ring/60',
         shape === 'block' && 'flex-1 flex-col justify-center px-3 py-2 text-center',
+        shape === 'narrow' && 'flex-1 flex-col justify-center px-1 py-2 text-center',
         shape === 'row' && 'h-12 px-2.5',
         over
           ? 'border-brand bg-accent text-foreground shadow-md'
@@ -42,7 +43,7 @@ export function StatusTile({ status, onPick, shape = 'block', className }: Props
         className,
       )}
     >
-      {shape === 'block' && <StatusGlyph category={status.category} className="size-5" />}
+      {shape !== 'row' && <StatusGlyph category={status.category} className="size-5" />}
       <span
         className={cn(
           'min-w-0 max-w-full truncate font-medium',

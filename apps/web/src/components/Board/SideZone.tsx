@@ -25,8 +25,11 @@ export const ZONES = {
 export type Zone = keyof typeof ZONES;
 
 export const STRIP_WIDTH = 64;
-/** A strip under a held card: wide enough for its statuses to be read and hit. */
-const HELD_STRIP_WIDTH = 104;
+/**
+ * A strip under a held card takes the gap beside it and no more, so its statuses read
+ * across without it lying over a column, which is a drop target too.
+ */
+const HELD_STRIP_WIDTH = 80;
 const PANEL_WIDTH = 304;
 
 export function zoneWidth(view: ZoneState, fullWidth: number) {
@@ -89,7 +92,7 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
             key="tiles"
             className={cn(
               'absolute inset-0 flex flex-col pt-[calc(var(--safe-top)+1.25rem)] pb-6',
-              view === 'strip' ? 'gap-2 px-2' : 'gap-2.5 px-3.5',
+              view === 'strip' ? 'gap-2 px-1' : 'gap-2.5 px-3.5',
             )}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -105,7 +108,7 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
               <StatusTile
                 key={status.id}
                 status={status}
-                className={view === 'strip' ? 'px-1.5' : undefined}
+                shape={view === 'strip' ? 'narrow' : 'block'}
               />
             ))}
           </motion.div>

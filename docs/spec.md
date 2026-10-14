@@ -237,8 +237,9 @@ motion.
   end scroll under the other rail.
 - While a card from another zone is held, each rail turns into dropzones, one per status in
   its category. It does this in place: no column moves and none is covered. A rail that is
-  a strip widens a little over the gap beside it so the status names can be read
-  **(assumed: tried, not yet confirmed)**. Dropping on a status sends the card there with
+  a strip widens into the gap beside it, and no further, so the status names can be read
+  **(assumed: tried, not yet confirmed)**. It does not widen over a column, because the
+  columns are drop targets too. Dropping on a status sends the card there with
   its priority kept, at the top of that priority.
 - A card held from the backlog can still be placed in the backlog. Its status filters grow
   into targets for changing status. The closed zone is ordered by time, so cards are sent to
