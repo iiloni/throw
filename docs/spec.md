@@ -246,7 +246,7 @@ motion.
   it and never placed in it.
 - The board has no title row. The project's name is in the expanded navigation rail, and in
   a tooltip on the project's icon when the rail is collapsed.
-- A list of cards fades and blurs out over its last few pixels at the top or bottom while
+- A list of cards fades out over its last few pixels at the top or bottom while
   there is more that way. No card is cut off in a straight line, and the fade is what says
   the list scrolls.
 - Where cards are scrolled out of a column, the visible area's corners take the card radius

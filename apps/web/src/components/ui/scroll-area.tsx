@@ -35,7 +35,7 @@ function useEdges(enabled: boolean) {
 
 /**
  * Catch's overlay scrollbars: a thin rounded thumb drawn over the content, never beside it.
- * With `edges`, content fades and blurs out at the top or bottom while there is more that
+ * With `edges`, content fades out at the top or bottom while there is more that
  * way, so the area says it scrolls without showing a bar.
  */
 function ScrollArea({
