@@ -8,7 +8,7 @@ Catch at `/home/iiloni/Development/personal/catch` was inspected read-only.
 The owner chose `org.iloni.throwtasks` / Throw, `.dev` / Throw Dev and `.preview` /
 Throw Preview. The Capacitor 8 Android shell uses Catch's Gradle wrapper/toolchain, channel
 flavours, bundled/live-reload development workflow, keyboard-insets plugin and system-bar
-styling. App supplies native back navigation; Network and Capacitor SQLite are registered
+styling. App supplies native back navigation with Catch's overlay handler; Network and Capacitor SQLite are registered
 by `cap sync`. The existing TanStack native SQLite adapter, IndexedDB outbox, native bearer
 session storage and server-URL setup path were already present and are reused unchanged.
 There are no server, shared schema or collection/persistence changes in this port.
@@ -29,9 +29,11 @@ system splash slots use mechanically rendered channel icons without wordmarks.
 
 ## Checks
 
-- `./scripts/dev.sh check`: passed (asset integrity, lint, typechecks, 124 unit tests and
+- `./scripts/dev.sh check`: passed (asset integrity, lint, typechecks, 125 unit tests and
   production builds). Three new keyboard tests cover inset hydration/focus dismissal,
-  late-current-response ordering and delayed listener cleanup after unmount.
+  late-current-response ordering and delayed listener cleanup after unmount. An additional
+  back-handler test covers overlay priority, updated callbacks, dismissal cleanup and
+  history/minimize fallback.
 - `./scripts/dev.sh e2e --workers=1`: full local suite passed, 16 passed / 4 expected
   layout skips, against this checkout's stack.
 - `E2E_FIREFOX=1 ./scripts/dev.sh e2e e2e/auth.spec.ts e2e/projects.spec.ts --project=firefox
@@ -41,7 +43,7 @@ system splash slots use mechanically rendered channel icons without wordmarks.
   `assemblePreviewDebug`, with JDK 21, SDK 36 and Gradle 8.14.3. All final builds passed.
 - APK inspection confirms each name/ID, the matching bundled channel, dev-only HTTP/mixed
   content support, and the reduced merged permission list. Stable/preview retain HTTPS
-  server setup with cleartext and mixed content disabled.
+  server setup with the dev cleartext/mixed-content overrides disabled.
 - CI compiles all three matching debug builds on one runner with Gradle caching and no
   emulator, release artifacts or signing secrets. The required `validation` job fails
   closed when a code change's native build is skipped/failed/cancelled. Its unit tests and
@@ -69,24 +71,39 @@ and editing were driven through the real WebView UI over its adb-forwarded DevTo
 
 The final debug APKs were rebuilt after adding App/back navigation and removing inherited
 biometric permissions. Final Throw Dev and Throw Preview APKs also installed successfully.
-Throw Dev was returned to the foreground and its server forwarding restored.
+After the owner unlocked the phone, preview's ordinary setup stored the worktree's adb
+loopback URL and returned to sign-in. Preview signed in through that flow, independently
+of the dev app's pinned server/session. A real tap opened the keyboard; `--keyboard` rose
+above 200 CSS px while the WebView height stayed at 960 CSS px. Android Back hid the
+keyboard, reset the inset to zero and released field focus.
+
+The physical back check found that an open project sheet navigated away with the default
+App handler. Catch's `backButton.ts` and sheet registration were ported to fix it. On the
+rebuilt preview APK, the first Back hid the keyboard and kept the sheet open; the second
+closed the sheet without changing the project URL. Back from Settings returned to that
+project. The form case was rerun in Chromium desktop/mobile and Firefox: all three passed.
+Dev/stable were also rebuilt with the fix, and final Dev was installed. Throw Dev was
+returned to the foreground and its server forwarding restored.
 
 [Online WebView](screenshots/android/dev-online.png),
 [offline rename WebView](screenshots/android/dev-offline-edit.png) and
 [reconnected physical screen](screenshots/android/dev-synced.png) are actual phone captures.
 The first two capture the WebView; the third includes the OS bars. The board itself is
-still Throw's existing placeholder.
+still Throw's existing placeholder. [Preview setup field](screenshots/android/preview-setup-focused.png),
+[preview signed in](screenshots/android/preview-signed-in.png) and
+[preview sheet above the native keyboard](screenshots/android/preview-sheet-keyboard.png)
+record the follow-up checks; the last includes the actual Android keyboard.
 
 ## Coverage limits and release work
 
 The network outage was **server unreachability**, not OS airplane mode or a native Network
 connectivity event: switching off Wi-Fi would disconnect the wireless adb test transport.
-No emulator or other Android/WebView version was tested. The phone subsequently locked;
-additional preview first-run UI, physical back/keyboard-animation, launcher masking,
-themed-icon and painted system-splash checks could not be completed. Preview's native
-install, channel/config, name, ID and resource packaging were verified, but a preview/stable
-sign-in against a deployed HTTPS instance was not. The final rebuild's back handler is
-covered by compilation, not a physical back gesture test. No update/signing test was run.
+No emulator or other Android/WebView version was tested. Launcher masking/themed icons
+and painted system splash remain unverified. Preview setup/sign-in used an HTTP adb-loopback
+server accepted by this WebView; sign-in against a deployed HTTPS instance was not tested.
+Stable's install/sign-in was not tested, though its matching build/config/resources were.
+No update/signing test was run. The tests used adb Back key events rather than an edge-swipe
+predictive-back gesture; the keyboard and sheet dismissals were verified on the real OS.
 
 The release step still needs permanent signing keys, monotonic versionCode/version
 metadata, distribution and web/Android update prompts, plus an explicit device upgrade

@@ -320,7 +320,8 @@ ids. Do not add a dependency on Catch's repository; the two release independentl
   The root sets `--keyboard` through browser viewport/VirtualKeyboard tracking; the shell
   uses `--dock-*` for the phone dock. Catch's native KeyboardInsets plugin owns system
   insets and keyboard animations on Android;
-  Capacitor SystemBars inset handling is disabled to avoid competing owners.
+  Capacitor SystemBars inset handling is disabled to avoid competing owners. Android Back
+  dismisses open sheets through `lib/backButton.ts` before navigating history.
 - TanStack DB is pre-1.0. Keep its usage inside `src/lib/collections.ts`, `src/lib/localStore.ts`
   and route files so upgrades stay contained.
 - Bump a collection's `schemaVersion` in `collections.ts` whenever the columns its shape syncs

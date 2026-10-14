@@ -3,6 +3,7 @@ import { MotionConfig } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useBackButton } from '@/lib/backButton';
 import { useKeyboardTracking } from '@/lib/keyboard';
 import { useSystemBarsStyle } from '@/lib/systemBars';
 import { useApplyTheme } from '@/lib/theme';
@@ -29,6 +30,7 @@ const toastOffset = { top: 'calc(var(--safe-top) + 0.5rem)' };
 
 function Root() {
   useApplyTheme();
+  useBackButton();
   useSystemBarsStyle();
   useKeyboardTracking();
   return (

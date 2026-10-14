@@ -109,7 +109,8 @@ artwork, while the web build chooses its own channel assets/config. All three de
 compile in CI, without an emulator. CI's Playwright `android` project is Chromium with a
 phone viewport, **not** a native Android test. Native icons and splash are generated from
 Throw's canonical artwork with `pnpm brand:generate`; see [branding](docs/branding.md).
-The App plugin supplies native back navigation; Network and Capacitor SQLite provide
+The App plugin supplies native back navigation, with Catch's handler dismissing open sheets
+before navigating history; Network and Capacitor SQLite provide
 connectivity and collection storage. System-bar styling follows the selected application
 theme and Catch's local keyboard-insets plugin keeps the WebView full size.
 Android 7 (API 24) is the minimum OS; the WebView must support the app's modern browser APIs.
