@@ -8,5 +8,6 @@ export * from './protocol';
 export * from './releases';
 export * from './statuses';
 export * from './sync';
+export * from './tags';
 export * from './tasks';
 export * from './workspaces';

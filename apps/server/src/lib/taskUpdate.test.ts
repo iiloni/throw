@@ -17,6 +17,7 @@ const context: UpdateContext = { statuses, parentAllowed: true };
 
 const current: TaskState = {
   title: 'Server title',
+  primaryTagId: null,
   descriptionVersion: id(20),
   statusId: BACKLOG,
   priority: 3,
@@ -198,4 +199,35 @@ describe('the conflict rule', () => {
     expect(first.refused).toEqual([{ field: 'title', reason: 'stale' }]);
     expect(second.refused).toEqual([{ field: 'title', reason: 'stale' }]);
   });
+});
+
+it('primary tags compare before values, snapshot names, and refuse missing tags without substitution', () => {
+  const tags = new Map([
+    [id(30), { name: 'Mobile' }],
+    [id(31), { name: 'Desktop' }],
+  ]);
+  const state = { ...current, primaryTagId: id(30) };
+  const changed = planTaskUpdate(
+    state,
+    { primaryTagId: { before: id(30), after: id(31) } },
+    { ...context, tags },
+  );
+  expect(changed.set).toEqual({ primaryTagId: id(31) });
+  expect(changed.items[0]).toMatchObject({
+    previousName: 'Mobile',
+    requestedName: 'Desktop',
+    applied: true,
+  });
+  expect(
+    planTaskUpdate(state, { primaryTagId: { before: null, after: id(90) } }, { ...context, tags })
+      .refused,
+  ).toEqual([{ field: 'primaryTagId', reason: 'stale' }]);
+  expect(
+    planTaskUpdate(state, { primaryTagId: { before: id(30), after: id(90) } }, { ...context, tags })
+      .refused,
+  ).toEqual([{ field: 'primaryTagId', reason: 'invalid' }]);
+  expect(
+    planTaskUpdate(state, { primaryTagId: { before: id(30), after: null } }, { ...context, tags })
+      .set,
+  ).toEqual({ primaryTagId: null });
 });

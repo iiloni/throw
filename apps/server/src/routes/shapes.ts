@@ -38,6 +38,16 @@ const SHAPES: Record<string, { table: string; columns: string[]; where: string }
     columns: ['id', 'workspace_id', 'project_id', 'name', 'category', 'position', 'is_default'],
     where: `workspace_id IN (${MEMBER_WORKSPACES})`,
   },
+  tags: {
+    table: 'tags',
+    columns: ['id', 'workspace_id', 'project_id', 'name', 'parent_id', 'icon', 'color'],
+    where: `workspace_id IN (${MEMBER_WORKSPACES})`,
+  },
+  'task-tags': {
+    table: 'task_tags',
+    columns: ['task_id', 'tag_id', 'workspace_id', 'project_id'],
+    where: `workspace_id IN (${MEMBER_WORKSPACES})`,
+  },
   // Every task the user can reach, in the trash and closed ones included, so both can be
   // shown offline.
   tasks: {
@@ -54,6 +64,7 @@ const SHAPES: Record<string, { table: string; columns: string[]; where: string }
       'priority',
       'position',
       'parent_id',
+      'primary_tag_id',
       'closed_at',
       'deleted_at',
       'created_at',

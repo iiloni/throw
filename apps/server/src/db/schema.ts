@@ -2,10 +2,12 @@ import type {
   ActivityChange,
   ActivityKind,
   CommentBody,
+  Color,
   Description,
   Priority,
   PriorityNames,
   StatusCategory,
+  TagIconName,
   WorkspaceRole,
 } from '@throw/shared';
 import { sql } from 'drizzle-orm';
@@ -181,6 +183,29 @@ export const statuses = pgTable(
   ],
 );
 
+/** Project-owned, unbounded tag tree (Catch ADR 0016 adapted in data-model.md). */
+export const tags = pgTable(
+  'tags',
+  {
+    id: uuid().primaryKey(),
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    projectId: uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    name: text().notNull(),
+    parentId: uuid().references((): AnyPgColumn => tags.id, { onDelete: 'cascade' }),
+    icon: text().$type<TagIconName>(),
+    color: text().$type<Color>(),
+  },
+  (table) => [
+    index().on(table.workspaceId),
+    index().on(table.projectId, table.parentId),
+    uniqueIndex().on(table.projectId, table.color).where(sql`${table.color} IS NOT NULL`),
+  ],
+);
+
 export const tasks = pgTable(
   'tasks',
   {
@@ -205,6 +230,7 @@ export const tasks = pgTable(
     priority: smallint().$type<Priority>().notNull(),
     position: text().notNull(),
     parentId: uuid().references((): AnyPgColumn => tasks.id, { onDelete: 'cascade' }),
+    primaryTagId: uuid().references(() => tags.id, { onDelete: 'set null' }),
     closedAt: timestamp({ withTimezone: true }),
     deletedAt: timestamp({ withTimezone: true }),
     createdAt: createdAt(),
@@ -215,6 +241,7 @@ export const tasks = pgTable(
     uniqueIndex().on(table.projectId, table.number),
     index().on(table.statusId),
     index().on(table.parentId),
+    index().on(table.primaryTagId),
   ],
 );
 
@@ -272,4 +299,29 @@ export const comments = pgTable(
     editedAt: timestamp({ withTimezone: true }),
   },
   (table) => [index().on(table.workspaceId), index().on(table.taskId)],
+);
+
+/** One independent assignment per task and secondary tag. */
+export const taskTags = pgTable(
+  'task_tags',
+  {
+    taskId: uuid()
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    tagId: uuid()
+      .notNull()
+      .references(() => tags.id, { onDelete: 'cascade' }),
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    projectId: uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.taskId, table.tagId] }),
+    index().on(table.workspaceId),
+    index().on(table.projectId),
+    index().on(table.tagId),
+  ],
 );

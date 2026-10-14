@@ -16,7 +16,9 @@ shell owns workspace and project management, a desktop navigation rail, a phone 
 remembered navigation. Its project/backlog and cross-project board bodies are placeholders.
 Task actions live in `apps/web/src/lib/tasks.ts` and `statuses.ts`. The activity log syncs
 to devices and comments are built (`lib/comments.ts`), with a timeline query in
-`collections.ts` but no timeline view. Tags and the board itself are not built yet.
+`collections.ts` but no timeline view. Tags have their data layer and reusable controls in
+`components/Tag*`, with a real-data `/prototype/tags` workshop in development only. The
+board colour helper is `taskTagColor` in `@throw/shared`. The board itself is not built yet.
 
 The board's interaction was worked out in a prototype on mock data: `/prototype/board`, in
 development builds only, with its components in `apps/web/src/components/Board`. It has no

@@ -1,8 +1,9 @@
 # Task data model
 
 Status: agreed with the owner on 2026-10-13. Projects, statuses, priorities, keys, tasks,
-subtasks, the trash, the conflict rule, the log's sync and comments are built; tags are
-not, and the timeline has a data layer but no view. Decisions taken while building it are under [Implementation notes](#implementation-notes).
+subtasks, tags, the trash, the conflict rule, the log's sync and comments are built; the
+timeline has a data layer but no view. Decisions taken while building it are under
+[Implementation notes](#implementation-notes).
 
 This states the model behind tasks precisely enough to implement: the entities, their
 fields, who assigns each value, how rows are ordered and what the server does with each
@@ -104,8 +105,7 @@ A subtask is a task with a parent. There is one table.
 | `createdAt` | Server | |
 
 Secondary tags are separate rows, one per task and tag, so adding or removing one tag
-never conflicts with another device doing the same to a different tag. The tag tree itself
-follows Catch's ADR 0016 per project and is specified when tags are built.
+never conflicts with another device doing the same to a different tag. See [Tag tree](#tag-tree).
 
 **Identifier.** Shown as the project's key, a hyphen and the number. The server takes the
 next number from the project's counter in the transaction that creates the task, holding a
@@ -136,6 +136,86 @@ deletes it, its subtasks, comments, log entries and tag rows for good.
   position orders it within its parent, and the view that shows subtasks as cards on the
   board reuses the same value.
 - The closed zone is sorted by `closedAt`, newest first.
+
+## Tag tree
+
+Adapted from Catch ADR 0016. Tags belong to a project and its workspace, never a user.
+Every member who can write tasks can manage that project's tags **(default)**; there is
+no separate tag-owner or administrator role.
+
+| Field | Who sets it | Notes |
+| --- | --- | --- |
+| `id` | Client | UUIDv7. |
+| `workspaceId` | Server, fixed | From the project. |
+| `projectId` | Client, fixed | Validated through workspace membership; never moved across projects. |
+| `name` | Client | Trimmed, 1–100 characters, as in Catch. |
+| `parentId` | Client | Nullable; a tag of the same project. No depth limit. |
+| `color` | Client | Nullable palette color, roots only. Descendants inherit. |
+| `icon` | Client | Nullable bundled Lucide name, roots only. Descendants inherit. |
+
+- Siblings sort alphabetically by name, then id for equal names **(default tie-break)**.
+  There is no manual position. Renaming immediately changes that order. Names need not be
+  unique, including among siblings, as in Catch; ids identify tags and full paths provide context.
+- A non-null color belongs to at most one root **per project**, as in Catch per user.
+  Null means no color and may occur on many roots. The primary tag's root determines a
+  task's color; without a complete valid root path, the color helper returns null.
+  Moving a branch or recoloring a root changes derived colors without rewriting tasks.
+- Creation validates the parent, root appearance and color uniqueness. An existing id in
+  the same project is a replay and answers `{ txid: null }`; an id elsewhere answers 409.
+- Rename, recolor, change icon and reparent apply only the fields sent, in server arrival
+  order **(default)**, like statuses. There is no task-style before-value check or log for
+  tree edits. Unchanged edits skip the UPDATE and answer `{ txid: null }`.
+- Moving under self or any descendant is refused with 409. A missing or foreign-project
+  parent is refused. Moving a colored/icon-bearing root under another tag must explicitly
+  clear its color and icon in that write, as in Catch. Promoting a child to root starts
+  with no color/icon unless supplied. Parent and project never silently fall back.
+- A delete removes the entire current branch, including children added by another member
+  before the delete arrives, as in Catch. It never deletes tasks. Primaries in the branch
+  become null and secondary rows for that branch disappear, including on closed/trashed
+  tasks, atomically. Unrelated assignments survive. Deleting an absent/inaccessible id is
+  an idempotent no-op. Each affected task gets a server-written updated activity entry
+  with old tag names and the clearing/removals **(default)**. These entries get server-made
+  UUIDv7 ids, since no task update supplied a change id. The tree edit itself has no log.
+- Hierarchy edits and assignment writes serialize per project with a transaction advisory
+  lock, taken before task locks, so concurrent moves cannot create cycles and assignments
+  cannot race a branch deletion. Purges retain their existing row-lock behavior.
+
+### Secondary task tags
+
+`task_tags` has `taskId` and `tagId` as its composite primary key (no separate UUID), plus
+server-set, fixed `workspaceId` and `projectId` from the task. Task and tag must belong to
+the same project. Task/project/workspace purges and tag deletion cascade these rows.
+
+Creates accept `primaryTagId` and `secondaryTagIds`; absent fields mean null/empty. Updates
+accept a before/after `primaryTagId` and a list of `{ tagId, present }` secondary operations.
+A request may mention each secondary tag only once. Different secondary tags never interfere;
+adds/removes of the same tag apply on arrival, with already-present/absent operations doing
+nothing. Change-id replay protects these operations from being applied again after another
+write. A missing tag is recorded as invalid, even for a remove; creates leave it off.
+
+Unlike Catch's array normalization, secondary ancestors and descendants can coexist
+**(default)**. The same tag may be both primary and secondary **(default)**; badges show it
+once, primary first, but both roles are retained. This preserves the agreed independent
+per-tag conflict rule: selecting or moving one tag never silently removes another member's
+assignment. Picking a primary does not mutate secondary rows.
+
+Activity items use `primaryTagId` and `secondaryTags`. Each secondary operation has its own
+item, with additive `tagId`, previous/requested equal to the tag id or null, and names for
+both values. Invalid create tags are recorded with `applied: false, reason: invalid`.
+Primary changes follow ADR 0005 (including stale before invalid). Tag names are snapshots;
+renames and deletion never rewrite history. This is an additive extension of the entry format.
+
+Task write responses keep `txid` for the tasks shape only, and add `secondaryTagsTxid` only
+when secondary rows changed. Tag-delete responses similarly add `tasksTxid` and
+`secondaryTagsTxid` only for affected shapes. This avoids waiting for a transaction on a
+shape that will never stream it. Tags and secondary rows always sync and persist, even
+without a tag screen open. Tasks' shape schemaVersion is 2; both new collections start at 1.
+
+No plain-color adoption or note-color fallback is ported: Throw tasks have no stored color.
+Protocol remains 1 before the first release (ADR 0003). Old clients work with the new server;
+new tag routes/shapes need the new server, with no old-server fallback. Existing queued task
+writes keep their format and receive null/empty tag defaults; device rows are resynced after
+the task shape version bump, and no outbox is cleared.
 
 ## Task writes
 

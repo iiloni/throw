@@ -5,6 +5,8 @@ import {
   projectCreateRequest,
   projectUpdateRequest,
   statusUpdateRequest,
+  tagCreateRequest,
+  taskCreateRequest,
   taskUpdateRequest,
 } from './writeRequests';
 
@@ -116,6 +118,7 @@ describe('task updates', () => {
     projectId: id(1),
     number: 4,
     title: 'Paint',
+    primaryTagId: null,
     description: null,
     descriptionVersion: null,
     statusId: id(10),
@@ -126,6 +129,16 @@ describe('task updates', () => {
     deletedAt: null,
     createdAt: '2026-10-14T10:00:00.000Z',
   };
+
+  it('carries a task create queued before tags existed without changing its other fields', () => {
+    const { primaryTagId: _primaryTagId, ...legacy } = task;
+    expect(taskCreateRequest(legacy as Task)).toMatchObject({
+      id: task.id,
+      title: task.title,
+      primaryTagId: null,
+      secondaryTagIds: [],
+    });
+  });
 
   it('sends nothing for server values and unchanged fields', () => {
     expect(
@@ -138,5 +151,26 @@ describe('task updates', () => {
     expect(() =>
       taskUpdateRequest(task, { ...task, description: [] }, { description: [] }, id(9)),
     ).toThrow(/version/);
+  });
+});
+
+it('sends client-set tag fields without the device workspace column', () => {
+  expect(
+    tagCreateRequest({
+      id: id(1),
+      workspaceId: id(2),
+      projectId: id(3),
+      name: 'Work',
+      parentId: null,
+      color: 'teal',
+      icon: null,
+    }),
+  ).toEqual({
+    id: id(1),
+    projectId: id(3),
+    name: 'Work',
+    parentId: null,
+    color: 'teal',
+    icon: null,
   });
 });

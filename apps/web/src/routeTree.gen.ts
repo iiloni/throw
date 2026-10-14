@@ -15,6 +15,7 @@ import { Route as SetupRouteImport } from './routes/setup'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as PrototypeBoardRouteImport } from './routes/prototype.board'
+import { Route as PrototypeTagsRouteImport } from './routes/prototype.tags'
 import { Route as AppWWorkspaceIdIndexRouteImport } from './routes/_app/w.$workspaceId.index'
 import { Route as AppWWorkspaceIdBoardRouteImport } from './routes/_app/w.$workspaceId.board'
 import { Route as AppWWorkspaceIdPProjectIdRouteImport } from './routes/_app/w.$workspaceId.p.$projectId'
@@ -48,6 +49,11 @@ const PrototypeBoardRoute = PrototypeBoardRouteImport.update({
   path: '/prototype/board',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrototypeTagsRoute = PrototypeTagsRouteImport.update({
+  id: '/prototype/tags',
+  path: '/prototype/tags',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppWWorkspaceIdIndexRoute = AppWWorkspaceIdIndexRouteImport.update({
   id: '/w/$workspaceId/',
   path: '/w/$workspaceId/',
@@ -71,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/setup': typeof SetupRoute
   '/settings': typeof AppSettingsRoute
   '/prototype/board': typeof PrototypeBoardRoute
+  '/prototype/tags': typeof PrototypeTagsRoute
   '/w/$workspaceId/board': typeof AppWWorkspaceIdBoardRoute
   '/w/$workspaceId/': typeof AppWWorkspaceIdIndexRoute
   '/w/$workspaceId/p/$projectId': typeof AppWWorkspaceIdPProjectIdRoute
@@ -80,6 +87,7 @@ export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
   '/settings': typeof AppSettingsRoute
   '/prototype/board': typeof PrototypeBoardRoute
+  '/prototype/tags': typeof PrototypeTagsRoute
   '/': typeof AppIndexRoute
   '/w/$workspaceId/board': typeof AppWWorkspaceIdBoardRoute
   '/w/$workspaceId': typeof AppWWorkspaceIdIndexRoute
@@ -92,6 +100,7 @@ export interface FileRoutesById {
   '/setup': typeof SetupRoute
   '/_app/settings': typeof AppSettingsRoute
   '/prototype/board': typeof PrototypeBoardRoute
+  '/prototype/tags': typeof PrototypeTagsRoute
   '/_app/': typeof AppIndexRoute
   '/_app/w/$workspaceId/board': typeof AppWWorkspaceIdBoardRoute
   '/_app/w/$workspaceId/': typeof AppWWorkspaceIdIndexRoute
@@ -105,6 +114,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/settings'
     | '/prototype/board'
+    | '/prototype/tags'
     | '/w/$workspaceId/board'
     | '/w/$workspaceId/'
     | '/w/$workspaceId/p/$projectId'
@@ -114,6 +124,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/settings'
     | '/prototype/board'
+    | '/prototype/tags'
     | '/'
     | '/w/$workspaceId/board'
     | '/w/$workspaceId'
@@ -125,6 +136,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/_app/settings'
     | '/prototype/board'
+    | '/prototype/tags'
     | '/_app/'
     | '/_app/w/$workspaceId/board'
     | '/_app/w/$workspaceId/'
@@ -136,6 +148,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   SetupRoute: typeof SetupRoute
   PrototypeBoardRoute: typeof PrototypeBoardRoute
+  PrototypeTagsRoute: typeof PrototypeTagsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -180,6 +193,13 @@ declare module '@tanstack/react-router' {
       path: '/prototype/board'
       fullPath: '/prototype/board'
       preLoaderRoute: typeof PrototypeBoardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/prototype/tags': {
+      id: '/prototype/tags'
+      path: '/prototype/tags'
+      fullPath: '/prototype/tags'
+      preLoaderRoute: typeof PrototypeTagsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/w/$workspaceId/': {
@@ -229,6 +249,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   SetupRoute: SetupRoute,
   PrototypeBoardRoute: PrototypeBoardRoute,
+  PrototypeTagsRoute: PrototypeTagsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

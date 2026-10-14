@@ -17,6 +17,8 @@ import { taskFieldSchema } from './tasks';
  */
 export const activityChangeSchema = z.object({
   field: taskFieldSchema,
+  /** Identifies one independent secondary-tag operation. */
+  tagId: z.uuid().optional(),
   previous: z.unknown(),
   requested: z.unknown(),
   previousName: z.string().nullable().optional(),

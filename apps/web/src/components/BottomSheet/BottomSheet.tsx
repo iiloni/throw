@@ -1,7 +1,7 @@
 import { X } from 'lucide-react';
 import { AnimatePresence, motion, useDragControls, useReducedMotion } from 'motion/react';
 import { Dialog } from 'radix-ui';
-import { type ReactNode, useRef } from 'react';
+import { type ReactNode, type RefObject, useRef } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { useBackHandler } from '@/lib/backButton';
 import { useMedia } from '@/lib/media';
@@ -13,11 +13,13 @@ export function BottomSheet({
   onOpenChange,
   title,
   children,
+  initialFocusRef,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   children: ReactNode;
+  initialFocusRef?: RefObject<HTMLElement | null>;
 }) {
   useBackHandler(open, () => onOpenChange(false));
   const opener = useRef<HTMLElement | null>(null);
@@ -41,7 +43,7 @@ export function BottomSheet({
             <Dialog.Content
               asChild
               forceMount
-              onOpenAutoFocus={() => {
+              onOpenAutoFocus={(event) => {
                 const active = document.activeElement;
                 opener.current =
                   active instanceof HTMLElement &&
@@ -49,6 +51,10 @@ export function BottomSheet({
                   !active.closest('[role=menu]')
                     ? active
                     : document.querySelector<HTMLElement>('[data-shell-menu]');
+                if (initialFocusRef?.current) {
+                  event.preventDefault();
+                  initialFocusRef.current.focus();
+                }
               }}
               onCloseAutoFocus={(event) => {
                 event.preventDefault();

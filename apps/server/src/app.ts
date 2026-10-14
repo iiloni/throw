@@ -13,6 +13,7 @@ import { commentRoutes } from './routes/comments';
 import { projectRoutes } from './routes/projects';
 import { shapeRoutes } from './routes/shapes';
 import { statusRoutes } from './routes/statuses';
+import { tagRoutes } from './routes/tags';
 import { taskRoutes } from './routes/tasks';
 import { workspaceRoutes } from './routes/workspaces';
 
@@ -88,6 +89,7 @@ export function createApp() {
     .route('/statuses', statusRoutes)
     .route('/tasks', taskRoutes)
     .route('/comments', commentRoutes)
+    .route('/tags', tagRoutes)
     .route('/shapes', shapeRoutes);
 
   return api;

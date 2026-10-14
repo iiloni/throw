@@ -5,12 +5,14 @@ import {
   type CreateTask,
   createCommentSchema,
   createProjectSchema,
+  createTagSchema,
   createTaskSchema,
   deriveProjectKey,
   type Project,
   positionBetween,
   STARTER_STATUSES,
   type Status,
+  type Tag,
   type Task,
   type TaskChanges,
   type UpdateComment,
@@ -103,7 +105,7 @@ export function commentUpdateRequest(changes: Partial<Comment>): UpdateComment |
   return 'body' in changes ? updateCommentSchema.parse({ body: changes.body }) : null;
 }
 
-export function taskCreateRequest(task: Task): CreateTask {
+export function taskCreateRequest(task: Task, secondaryTagIds: string[] = []): CreateTask {
   return createTaskSchema.parse({
     id: task.id,
     projectId: task.projectId,
@@ -114,6 +116,8 @@ export function taskCreateRequest(task: Task): CreateTask {
     priority: task.priority,
     position: task.position,
     parentId: task.parentId,
+    primaryTagId: task.primaryTagId ?? null,
+    secondaryTagIds,
   });
 }
 
@@ -134,6 +138,8 @@ export function taskUpdateRequest(
   if (changed('title')) wire.title = { before: original.title, after: modified.title };
   if (changed('priority')) wire.priority = { before: original.priority, after: modified.priority };
   if (changed('statusId')) wire.statusId = { before: original.statusId, after: modified.statusId };
+  if (changed('primaryTagId'))
+    wire.primaryTagId = { before: original.primaryTagId ?? null, after: modified.primaryTagId };
   if (changed('parentId')) wire.parentId = { before: original.parentId, after: modified.parentId };
   if ('deletedAt' in changes && (original.deletedAt === null) !== (modified.deletedAt === null))
     wire.trashed = { before: original.deletedAt !== null, after: modified.deletedAt !== null };
@@ -201,4 +207,10 @@ export function derivedId(seed: string, name: string) {
  */
 export function changeIdFor(idempotencyKey: string, taskId: string) {
   return derivedId(idempotencyKey, taskId);
+}
+
+/** Only client-set tag fields travel; workspace ownership is assigned by the server. */
+export function tagCreateRequest(tag: Tag) {
+  const { workspaceId: _workspaceId, ...body } = tag;
+  return createTagSchema.parse(body);
 }

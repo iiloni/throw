@@ -29,9 +29,15 @@ import {
   projectSchema,
   type Status,
   statusSchema,
+  type Tag,
+  type TagWriteResponse,
   type Task,
-  type TxidResponse,
+  type TaskTag,
+  tagSchema,
   taskSchema,
+  taskTagKey,
+  taskTagSchema,
+  updateTagSchema,
   updateWorkspaceSchema,
   workspaceSchema,
 } from '@throw/shared';
@@ -60,6 +66,7 @@ import {
   projectCreateRequest,
   projectUpdateRequest,
   statusUpdateRequest,
+  tagCreateRequest,
   taskCreateRequest,
   taskUpdateRequest,
 } from './writeRequests';
@@ -168,6 +175,32 @@ export const tasksCollection = createCollection(
       getKey: (task) => task.id,
       shapeOptions: shapeOptions('tasks'),
     }),
+    2,
+  ),
+);
+
+/** The complete tree and assignments are available before going offline. */
+export const tagsCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      ...alwaysSynced,
+      id: 'tags',
+      schema: tagSchema,
+      getKey: (tag) => tag.id,
+      shapeOptions: shapeOptions('tags'),
+    }),
+    1,
+  ),
+);
+export const taskTagsCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      ...alwaysSynced,
+      id: 'task-tags',
+      schema: taskTagSchema,
+      getKey: taskTagKey,
+      shapeOptions: shapeOptions('task-tags'),
+    }),
     1,
   ),
 );
@@ -209,6 +242,8 @@ const writableCollections = {
   statuses: statusesCollection,
   tasks: tasksCollection,
   comments: commentsCollection,
+  tags: tagsCollection,
+  taskTags: taskTagsCollection,
 };
 
 type WritableCollection = (typeof writableCollections)[keyof typeof writableCollections];
@@ -234,6 +269,10 @@ async function pushWrites({
       if (!sent) continue;
       const response = await sent.request;
       if (response.txid !== null) waits.push({ collections: sent.waitOn, txid: response.txid });
+      if (response.tasksTxid !== undefined)
+        waits.push({ collections: [tasksCollection], txid: response.tasksTxid });
+      if (response.secondaryTagsTxid !== undefined)
+        waits.push({ collections: [taskTagsCollection], txid: response.secondaryTagsTxid });
     }
   } catch (error) {
     const classified = classifyWriteError(error);
@@ -254,11 +293,11 @@ async function pushWrites({
 
 /** One mutation's request, and the collections whose shapes will stream its transaction. */
 interface Sent {
-  request: Promise<TxidResponse>;
+  request: Promise<TagWriteResponse>;
   waitOn: WritableCollection[];
 }
 
-const sending = (request: Promise<TxidResponse>, ...waitOn: WritableCollection[]): Sent => ({
+const sending = (request: Promise<TagWriteResponse>, ...waitOn: WritableCollection[]): Sent => ({
   request,
   waitOn,
 });
@@ -279,6 +318,11 @@ function send(
   idempotencyKey: string,
 ): Sent | null {
   const key = String(mutation.key);
+  const deletedTags = new Set(
+    mutations
+      .filter((other) => other.collection.id === tagsCollection.id && other.type === 'delete')
+      .map((other) => String(other.key)),
+  );
   if (mutation.collection.id === workspacesCollection.id) {
     switch (mutation.type) {
       case 'insert':
@@ -369,14 +413,72 @@ function send(
           : sending(api.deleteStatus(key), statusesCollection);
     }
   }
+  if (mutation.collection.id === tagsCollection.id) {
+    const tag = (mutation.type === 'delete' ? mutation.original : mutation.modified) as Tag;
+    if (deletedInWrite(mutations, projectsCollection.id, tag.projectId)) return null;
+    switch (mutation.type) {
+      case 'insert':
+        return sending(api.createTag(tagCreateRequest(mutation.modified as Tag)), tagsCollection);
+      case 'update':
+        return sending(api.updateTag(key, updateTagSchema.parse(mutation.changes)), tagsCollection);
+      case 'delete':
+        return tag.parentId && deletedInWrite(mutations, tagsCollection.id, tag.parentId)
+          ? null
+          : sending(api.deleteTag(key), tagsCollection);
+    }
+  }
+  if (mutation.collection.id === taskTagsCollection.id) {
+    const row = (mutation.type === 'delete' ? mutation.original : mutation.modified) as TaskTag;
+    const task = mutations.find(
+      (other) => other.collection.id === tasksCollection.id && String(other.key) === row.taskId,
+    );
+    // Creates carry initial secondaries. Branch deletion/purges derive cleanup on the server.
+    if (
+      deletedTags.has(row.tagId) ||
+      (task && (task.type === 'insert' || task.type === 'delete')) ||
+      deletedInWrite(mutations, projectsCollection.id, row.projectId)
+    )
+      return null;
+    return sending(
+      api
+        .updateTask(row.taskId, {
+          changeId: changeIdFor(idempotencyKey, key),
+          changes: { secondaryTags: [{ tagId: row.tagId, present: mutation.type !== 'delete' }] },
+        })
+        .then((response) => {
+          reportRefusedChanges(row.taskId, response.refused);
+          return response;
+        }),
+      tasksCollection,
+    );
+  }
   if (mutation.collection.id === tasksCollection.id) {
     switch (mutation.type) {
       case 'insert':
         return sending(
-          api.createTask(taskCreateRequest(mutation.modified as Task)),
+          api.createTask(
+            taskCreateRequest(
+              mutation.modified as Task,
+              mutations.flatMap((other) =>
+                other.type === 'insert' &&
+                other.collection.id === taskTagsCollection.id &&
+                (other.modified as TaskTag).taskId === key
+                  ? [(other.modified as TaskTag).tagId]
+                  : [],
+              ),
+            ),
+          ),
           tasksCollection,
         );
       case 'update': {
+        // A deleted branch clears current server assignments atomically.
+        const original = mutation.original as Task;
+        if (
+          original.primaryTagId &&
+          deletedTags.has(original.primaryTagId) &&
+          Object.keys(mutation.changes).every((field) => field === 'primaryTagId')
+        )
+          return null;
         const body = taskUpdateRequest(
           mutation.original as Task,
           mutation.modified as Task,
@@ -581,4 +683,13 @@ export function useTaskTimeline(taskId: string) {
     timeline: taskTimeline(entries.data ?? [], comments.data ?? []),
     isLoading: entries.isLoading || comments.isLoading,
   };
+}
+
+export function useTags(projectId: string) {
+  const { data = [], isLoading } = useLiveQuery((q) => q.from({ tag: tagsCollection }));
+  return { tags: data.filter((tag) => tag.projectId === projectId), isLoading };
+}
+export function useTaskTags(taskId: string) {
+  const { data = [], isLoading } = useLiveQuery((q) => q.from({ assignment: taskTagsCollection }));
+  return { taskTags: data.filter((row) => row.taskId === taskId), isLoading };
 }
