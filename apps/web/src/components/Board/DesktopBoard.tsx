@@ -96,6 +96,33 @@ export function DesktopBoard() {
     rowWidth - STRIP_WIDTH - ZONE_GAP * 2 - (dragging ? TILES_WIDTH : 0),
   );
 
+  // A wheel turned where nothing scrolls up and down (the page, a rail's strip, a column
+  // short enough to fit) moves the board sideways instead of doing nothing.
+  useEffect(() => {
+    const element = row.current;
+    if (!element) return;
+    const onWheel = (event: WheelEvent) => {
+      if (event.ctrlKey || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
+      for (
+        let node = event.target instanceof Element ? event.target : null;
+        node && node !== element;
+        node = node.parentElement
+      ) {
+        if (node.scrollHeight <= node.clientHeight + 1) continue;
+        const overflow = getComputedStyle(node).overflowY;
+        if (overflow === 'auto' || overflow === 'scroll') return;
+      }
+      const scroller = element.querySelector<HTMLElement>('[data-autoscroll-x]');
+      if (!scroller || scroller.scrollWidth <= scroller.clientWidth) return;
+      event.preventDefault();
+      // Firefox reports a mouse wheel in lines.
+      scroller.scrollLeft += event.deltaY * (event.deltaMode === 1 ? 32 : 1);
+    };
+    // Not passive: the wheel is taken from the page only when the board uses it.
+    element.addEventListener('wheel', onWheel, { passive: false });
+    return () => element.removeEventListener('wheel', onWheel);
+  }, [row]);
+
   const backlogWidth = zoneWidth(state.backlog, fullWidth);
   const closedWidth = zoneWidth(state.closed, fullWidth);
 
