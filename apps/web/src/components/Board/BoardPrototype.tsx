@@ -7,7 +7,7 @@ import { DragOverlay } from './DragOverlay';
 import { configureDrag, drag } from './drag';
 import { PhoneBoard } from './PhoneBoard';
 import { board, current, update, useBoardSettings } from './state';
-import { TaskSheet } from './TaskView';
+import { TaskScreen } from './TaskView';
 
 /**
  * The project board on mock data.
@@ -42,7 +42,7 @@ export function BoardPrototype() {
     <>
       {phone ? <PhoneBoard /> : <DesktopBoard />}
       <AnimatePresence>
-        {phone && openTask && <TaskSheet key="task" task={openTask} />}
+        {phone && openTask && <TaskScreen key="task" task={openTask} />}
       </AnimatePresence>
       <DragOverlay />
       <p aria-live="assertive" className="sr-only">

@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { ArrowLeft, X } from 'lucide-react';
 import { motion, useDragControls, useReducedMotion } from 'motion/react';
 import { type PointerEvent, useRef, useState } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
@@ -14,7 +14,7 @@ const chip =
   'flex h-8 items-center gap-1.5 rounded-full bg-foreground/[0.07] px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60';
 
 /** A stand-in for the task view: enough of a task to judge how the board makes room for it. */
-function TaskBody({ task }: { task: Task }) {
+function TaskBody({ task, underDock = false }: { task: Task; underDock?: boolean }) {
   const { project, tasks } = current(board.use());
   const status = statusById(project, task.statusId);
   const parent = tasks.find((item) => item.id === task.parentId);
@@ -25,7 +25,12 @@ function TaskBody({ task }: { task: Task }) {
   return (
     <ScrollArea className="flex-1 [--scrollbar-inset:1rem]">
       <ScrollAreaViewport>
-        <div className="px-8 pb-12">
+        <div
+          className={cn(
+            'px-8',
+            underDock ? 'pb-[calc(var(--dock-height)+var(--dock-bottom)+2.5rem)]' : 'pb-12',
+          )}
+        >
           {parent && (
             <button
               type="button"
@@ -208,49 +213,97 @@ export function SplitHandle({
   );
 }
 
-/** Small screens: the task rises over the board and is pulled down to dismiss. */
-export function TaskSheet({ task }: { task: Task }) {
+/** The part of the screen a card covers, as a clip of a surface that fills the screen. */
+function clipTo(taskId: string) {
+  const rect = document
+    .querySelector(`[data-card-id="${CSS.escape(taskId)}"]:not([data-overlay])`)
+    ?.getBoundingClientRect();
+  if (!rect || rect.bottom < 0 || rect.top > window.innerHeight) return null;
+  const right = window.innerWidth - rect.right;
+  const bottom = window.innerHeight - rect.bottom;
+  return `inset(${rect.top}px ${right}px ${bottom}px ${rect.left}px round 16px)`;
+}
+
+const UNCLIPPED = 'inset(0px 0px 0px 0px round 0px)';
+
+/**
+ * Small screens: the task takes the whole screen, as a note does in Catch. It opens out of
+ * its card and closes back into it, on the card's own color, and its actions sit in the
+ * dock's place. Pulling it down from the top closes it too.
+ */
+export function TaskScreen({ task }: { task: Task }) {
   const { project } = current(board.use());
+  const status = statusById(project, task.statusId);
   const controls = useDragControls();
   const reduced = useReducedMotion();
+  // Read on every render, so closing goes to where the card is now.
+  const clip = reduced ? null : clipTo(task.id);
+  const closed = clip ? { clipPath: clip, opacity: 1 } : { clipPath: UNCLIPPED, opacity: 0 };
+  const close = () => update({ openTaskId: null });
   return (
-    <>
+    <motion.section
+      aria-label="Task"
+      data-drop-block=""
+      data-color={taskColor(project, task) ?? undefined}
+      className="fixed inset-0 z-40 flex flex-col bg-[var(--tint,var(--card))]"
+      initial={closed}
+      animate={{ clipPath: UNCLIPPED, opacity: 1 }}
+      exit={closed}
+      transition={springs.smooth}
+      drag="y"
+      dragControls={controls}
+      dragListener={false}
+      dragConstraints={{ top: 0, bottom: 0 }}
+      dragElastic={{ top: 0, bottom: 0.6 }}
+      onDragEnd={(_, info) => {
+        if (info.offset.y > 120 || info.velocity.y > 500) close();
+      }}
+    >
       <motion.div
-        aria-hidden
-        className="fixed inset-0 z-40 bg-black/30"
+        className="flex min-h-0 flex-1 flex-col"
         initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={() => update({ openTaskId: null })}
-      />
-      <motion.section
-        aria-label="Task"
-        data-drop-block=""
-        data-color={taskColor(project, task) ?? undefined}
-        className="fixed inset-x-0 top-[calc(var(--safe-top)+0.75rem)] bottom-0 z-40 flex flex-col rounded-t-[28px] bg-[var(--tint,var(--card))] shadow-2xl"
-        initial={{ y: reduced ? 0 : '100%', opacity: reduced ? 0 : 1 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: reduced ? 0 : '100%', opacity: reduced ? 0 : 1 }}
-        transition={springs.smooth}
-        drag="y"
-        dragControls={controls}
-        dragListener={false}
-        dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={{ top: 0, bottom: 0.7 }}
-        onDragEnd={(_, info) => {
-          if (info.offset.y > 120 || info.velocity.y > 500) update({ openTaskId: null });
-        }}
+        animate={{ opacity: 1, transition: { delay: 0.12, duration: 0.2 } }}
+        exit={{ opacity: 0, transition: { duration: 0.1 } }}
       >
         <div
-          aria-hidden
-          className="flex touch-none justify-center pt-2.5"
+          className="flex h-[calc(var(--safe-top)+3.5rem)] shrink-0 touch-none items-end px-8 pb-2"
           onPointerDown={(event) => controls.start(event)}
         >
-          <span className="h-1 w-9 rounded-full bg-foreground/25" />
+          <span className="font-medium text-foreground/60 text-sm tabular-nums">
+            {identifier(project, task)}
+          </span>
         </div>
-        <TaskHeader task={task} />
-        <TaskBody key={task.id} task={task} />
-      </motion.section>
-    </>
+        <TaskBody key={task.id} task={task} underDock />
+      </motion.div>
+      <div className="pointer-events-none absolute inset-x-0 bottom-[var(--dock-bottom)] flex items-center gap-2 px-3">
+        <div className="glass pointer-events-auto flex rounded-[var(--dock-radius)] p-1">
+          <IconButton
+            label="Back to the board"
+            onClick={close}
+            className="size-[calc(var(--dock-height)-0.5rem)] rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-6"
+          >
+            <ArrowLeft />
+          </IconButton>
+        </div>
+        <span className="flex-1" />
+        {status && (
+          <div className="glass pointer-events-auto flex rounded-[var(--dock-radius)] p-1">
+            <StatusMenu
+              project={project}
+              value={status.id}
+              onSelect={(statusId) => sendTasks([task.id], statusId)}
+            >
+              <button
+                type="button"
+                className="flex h-[calc(var(--dock-height)-0.5rem)] items-center gap-2 rounded-[calc(var(--dock-radius)-0.25rem)] px-4 font-medium text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
+              >
+                <StatusGlyph category={status.category} className="size-4" />
+                {status.name}
+              </button>
+            </StatusMenu>
+          </div>
+        )}
+      </div>
+    </motion.section>
   );
 }

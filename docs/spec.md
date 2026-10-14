@@ -364,7 +364,9 @@ view), comments and activity.
 
 - On wide screens it opens as a split view on the right. It takes width from the board and
   has a drag handle to adjust the split.
-- On small screens it opens as a pop-up over the board, like the note editor in Catch.
+- On small screens it takes the whole screen, like a note in Catch, and is not a bottom
+  drawer. It opens out of its card and closes back into it, on the card's color. Pulling it
+  down from the top closes it too.
 - While a task is open on a phone, the dock holds that task's actions, as it does for a note
   in Catch.
 
