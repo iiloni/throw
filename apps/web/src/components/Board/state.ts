@@ -30,8 +30,8 @@ export const boardSettingsSchema = z.object({
    */
   heldColumn: z.enum(['compact', 'full']).default('compact'),
   /**
-   * Still being decided, not a setting: an open backlog or closed rail is the page with a
-   * border, or glass the columns show through as they scroll beneath it.
+   * Still being decided, not a setting: a backlog or closed rail is the page itself,
+   * flat, or glass the columns show through as they scroll beneath it.
    */
   railSurface: z.enum(['plain', 'glass']).default('plain'),
 });

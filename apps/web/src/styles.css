@@ -434,7 +434,7 @@
 
 /*
  * The backlog and closed rails lie over the ends of the columns' scroller. Plain, a rail is
- * the page itself and an open one draws a border; as glass, columns show through it.
+ * the page itself with no edge of its own; as glass, columns show through it.
  */
 .board-rail {
   background-color: var(--background);
@@ -449,11 +449,9 @@
       backdrop-filter: none;
     }
   }
-  &[data-open][data-side="start"],
   &[data-surface="glass"][data-side="start"] {
     border-right-width: 1px;
   }
-  &[data-open][data-side="end"],
   &[data-surface="glass"][data-side="end"] {
     border-left-width: 1px;
   }

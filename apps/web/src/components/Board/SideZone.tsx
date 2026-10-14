@@ -76,7 +76,6 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
       data-status-home={statuses.map((status) => status.id).join(' ')}
       data-side={zone === 'backlog' ? 'start' : 'end'}
       data-surface={settings.railSurface}
-      data-open={view === 'strip' ? undefined : ''}
       className="board-rail relative z-20 flex min-h-0 shrink-0 flex-col overflow-hidden"
       initial={false}
       animate={{ width }}

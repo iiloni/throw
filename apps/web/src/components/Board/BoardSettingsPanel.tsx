@@ -166,7 +166,7 @@ export function BoardSettingsPanel({ side = 'right' }: { side?: 'right' | 'botto
               label="Backlog and closed"
               value={settings.railSurface}
               options={[
-                ['plain', 'Border'],
+                ['plain', 'Flat'],
                 ['glass', 'Glass'],
               ]}
               onChange={(value) => set('railSurface', value)}
