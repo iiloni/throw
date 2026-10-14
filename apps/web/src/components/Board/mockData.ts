@@ -91,6 +91,8 @@ const throwApp = () =>
       ['Building', 'active', true],
       ['In review', 'active'],
       ['Testing', 'active'],
+      ['Staging', 'active'],
+      ['Releasing', 'active'],
       ['Shipped', 'done', true],
       ["Won't do", 'cancelled', true],
       ['Duplicate', 'cancelled'],
@@ -253,6 +255,14 @@ const throwApp = () =>
       { title: 'List view', status: "Won't do", priority: 3, tag: 'Board', closed: 5 },
       { title: 'GitHub issue import', status: "Won't do", priority: 4, tag: 'Infra', closed: 9 },
       { title: 'Per-project accent color', status: 'Duplicate', tag: 'Design', closed: 7 },
+      // Appended, so the numbers of the tasks above stay as they were.
+      { title: 'Service worker update prompt', status: 'Staging', priority: 1, tag: 'Infra' },
+      { title: 'Rail tooltip for project names', status: 'Staging', tag: 'Design' },
+      { title: 'Keyboard move announcements', status: 'Staging', tag: 'Drag' },
+      { title: 'Shape proxy column allowlist', status: 'Staging', priority: 3, tag: 'Shapes' },
+      { title: 'Protocol version gate', status: 'Releasing', priority: 1, tag: 'Sync' },
+      { title: 'Safe-area padding for the dock', status: 'Releasing', tag: 'Phone' },
+      { title: 'Changelog for the first release', status: 'Releasing', priority: 3, tag: 'Docs' },
     ],
   );
 
