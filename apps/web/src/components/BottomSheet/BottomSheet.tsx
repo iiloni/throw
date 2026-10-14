@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useDragControls, useReducedMotion } from 'moti
 import { Dialog } from 'radix-ui';
 import { type ReactNode, useRef } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
+import { useBackHandler } from '@/lib/backButton';
 import { useMedia } from '@/lib/media';
 import { springs } from '@/lib/motion';
 
@@ -18,6 +19,7 @@ export function BottomSheet({
   title: string;
   children: ReactNode;
 }) {
+  useBackHandler(open, () => onOpenChange(false));
   const opener = useRef<HTMLElement | null>(null);
   const controls = useDragControls();
   const desktop = useMedia('(min-width: 768px)');

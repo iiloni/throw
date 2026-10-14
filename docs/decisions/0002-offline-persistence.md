@@ -4,7 +4,7 @@ Status: accepted (2026-10-13)
 
 ## Context
 
-The app has to show and change its data without a connection, on the web and later on
+The app has to show and change its data without a connection, on the web and
 Android. Catch solved this; Throw takes the same approach.
 
 ## Decisions

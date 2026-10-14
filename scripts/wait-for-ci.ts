@@ -24,7 +24,7 @@ const jobsSchema = z.object({
     z.object({ name: z.string(), status: z.string(), conclusion: z.string().nullable() }),
   ),
 });
-const requiredJobs = ['check', 'e2e (desktop)', 'e2e (android)'];
+const requiredJobs = ['check', 'android build', 'e2e (desktop)', 'e2e (android)'];
 
 type ReadJobs = (runId: number) => Promise<unknown>;
 
@@ -105,7 +105,7 @@ export async function waitForCi(
     if (passed) return passed;
     const runs = matchingRuns(sha, input);
     const finished = runs.length > 0 && runs.every((run) => run.status === 'completed');
-    // A green run without all three jobs is a documentation-only push, which skips E2E
+    // A green run without all required jobs is a documentation-only push, which skips E2E
     // (scripts/change-scope.ts). It is no failure and no proof either, so the commit is
     // tested on its tag like one that never had a run.
     const untested = finished && runs.every((run) => run.conclusion === 'success');

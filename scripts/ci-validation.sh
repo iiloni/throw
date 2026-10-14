@@ -42,6 +42,9 @@ fi
 
 [[ "${RUN_CHECKS:-}" == true ]] || fail 'CI setup did not produce a valid test plan.'
 [[ "${CHECK_RESULT:-}" == success ]] || fail 'Lint, type checks, unit tests and build must all pass.'
+if [[ "${DOCS_ONLY:-}" != true ]]; then
+    [[ "${NATIVE_RESULT:-}" == success ]] || fail 'Native Android builds must pass; skipped or cancelled builds do not count.'
+fi
 if [[ "$e2e_exempt" == true ]]; then
     passed='Checks passed; E2E is not required for a documentation-only change'
 else

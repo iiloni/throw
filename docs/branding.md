@@ -93,31 +93,26 @@ Catch and its active PR #112 were inspected read-only. That PR's optional app-ic
 native launcher aliases and selectable manifests are a separate feature; Throw keeps its
 existing build-based channel selection and adds no preference setting.
 
-## Prepared Android resources
+## Android resources
 
-Android project creation is deferred. `branding/android/app/src/` is a resource staging
-tree, **not an Android project or a shipped APK**. No Gradle files, application ID, native
-flavors, signing, distribution or Capacitor settings are introduced or changed here.
+`apps/web/android/app/src/` is the live native output tree. The platform generator writes
+stable artwork to `main/res` and preview/dev artwork to their channel source sets. Native
+identity is `org.iloni.throwtasks` (Throw), `.preview` (Throw Preview), `.dev` (Throw Dev).
 
-- `main/res` supplies stable legacy/adaptive artwork and the shared monochrome layer.
-- `preview/res` and `dev/res` supply channel legacy icons and both adaptive color layers.
 - Each source set has mdpi, hdpi, xhdpi, xxhdpi and xxxhdpi PNGs.
 - Legacy icons use the small source for their 48 dp display size at every density.
 - Adaptive layers map the complete supplied 1024 canvas to 108 dp (108/162/216/324/432 px).
   The supplied foreground transform is preserved with no extra inset or rounded mask.
 - Shared adaptive XML is in `mipmap-anydpi-v26`; Android 13's `mipmap-anydpi-v33` also
   references the shared alpha-only monochrome PNG. Android applies masking and tinting.
+- The launcher and round launcher both use `@mipmap/ic_launcher`, resolved by source set.
+- System splash PNGs use the primary channel icon alone, rendered at the 288 dp slot's
+  density sizes without a wordmark, on warm light/dark theme backgrounds. The launch theme
+  wires `windowSplashScreenAnimatedIcon` to `@drawable/splash`.
 
-When the Android project and its channel source sets are established, copy this tree's
-resources into the matching `apps/web/android/app/src/` directories and change the
-generator's native output root to that live tree. Wire the manifest launcher icon to
-`@mipmap/ic_launcher` (including `roundIcon` if present). Use icon-only artwork in Android
-system splash slots; wordmarks belong on the existing WebView setup/sign-in surfaces or
-an explicitly designed app-controlled splash. Sync the matching web channel before each
-native build. Preserve the established application identity and distribution policy.
-
-Raster/alpha tests verify the favicon frames, opaque maskable surfaces, adaptive safe
-zone and monochrome project-detail knockouts. Resource proofs cannot establish launcher
-behavior, themed-icon rendering, system splash behavior or APK packaging. Those require
-the future Android project and emulator/physical-device validation. Installed PWA icon
-refresh also remains browser-controlled.
+Sync the matching web channel before each native build (`THROW_CHANNEL=preview pnpm
+--filter @throw/web android:sync`, then `assemblePreviewDebug`). Do not edit generated
+resources. Release signing/distribution and selectable launcher icons remain deferred.
+Raster/alpha tests verify favicon frames, opaque maskable surfaces, adaptive safe zones
+and monochrome knockouts; APK and physical-device validation are documented separately
+in [Android validation](android-validation.md).

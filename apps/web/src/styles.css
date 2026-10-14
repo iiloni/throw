@@ -58,8 +58,8 @@
 
   /*
    * Height of the on-screen keyboard. On Android the page is not resized for the keyboard,
-   * so anything pinned to the bottom must clear it. Nothing sets this yet: Catch's keyboard
-   * tracking has not been ported.
+   * so anything pinned to the bottom must clear it. Native keyboard animations and browser
+   * viewport tracking both set this inset.
    */
   --keyboard: 0px;
 

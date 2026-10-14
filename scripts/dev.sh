@@ -166,6 +166,53 @@ case "$command" in
         E2E_BASE_URL="http://localhost:$(env_value THROW_PORT)" \
             pnpm --dir "$repo_root" exec playwright test "$@"
         ;;
+    android)
+        # Runs on the host (adb, JDK, SDK). Both modes install the separate Throw Dev app.
+        static=false
+        usb=false
+        cap_args=()
+        for argument in "$@"; do
+            case "$argument" in
+                --static) static=true ;;
+                --usb) usb=true ;;
+                *) cap_args+=("$argument") ;;
+            esac
+        done
+        command -v adb >/dev/null || { echo "adb not found; install Android platform-tools." >&2; exit 1; }
+        if ! adb devices | awk 'NR > 1 && $2 == "device" { found = 1 } END { exit !found }'; then
+            echo "No Android device connected. Plug in over USB or run 'adb connect <ip>:<port>'." >&2
+            exit 1
+        fi
+        "$repo_root/scripts/dev.sh" up
+        port=$(env_value THROW_PORT)
+        host=$(env_value THROW_PUBLIC_HOST)
+        forward=()
+        if $usb; then
+            # Reach the dev server through adb instead of Tailscale.
+            host=localhost
+            forward=(--forwardPorts "$port:$port")
+        fi
+        # The directory alone says nothing: Docker creates an empty one on the host for each
+        # node_modules volume it mounts.
+        [[ -x "$repo_root/apps/web/node_modules/.bin/cap" ]] || pnpm --dir "$repo_root" install
+        # Always the dev app, whatever the caller's environment says: a debug-signed build under
+        # a released id makes the installer uninstall that app, along with its unsynced changes.
+        export THROW_CHANNEL=dev
+        if $static; then
+            # Always rebuild: the bundled app cannot pick up later source changes.
+            export THROW_DEV_SERVER_URL="http://$host:$port"
+            pnpm --dir "$repo_root/apps/web" build
+            echo "Installing bundled Throw Dev without live reload, using $THROW_DEV_SERVER_URL for the API."
+            pnpm --dir "$repo_root/apps/web" exec cap run android "${forward[@]}" "${cap_args[@]}" --flavor dev
+        else
+            unset THROW_DEV_SERVER_URL
+            # Live reload ignores the copied assets, so any web build will do.
+            [[ -f "$repo_root/apps/web/dist/index.html" ]] || pnpm --dir "$repo_root/apps/web" build
+            echo "Live reload from http://$host:$port. Keep this running; Ctrl+C restores the Capacitor config."
+            pnpm --dir "$repo_root/apps/web" exec cap run android \
+                --live-reload --host "$host" --port "$port" "${forward[@]}" "${cap_args[@]}" --flavor dev
+        fi
+        ;;
     shell)
         "${compose[@]}" exec app bash
         ;;
@@ -207,6 +254,11 @@ Usage: ./scripts/dev.sh <command>
   test [args]         Unit tests (in the container)
   build [channel]     Build all packages (in the container; dev by default, or stable, preview)
   e2e [args]          Playwright tests from the host
+  android [--static] [--usb] [--target <id>]
+                      Install Throw Dev on a connected device (host adb, JDK 21, SDK 36)
+                      Default: live reload; --static: bundled code for offline testing
+                      --usb: forward this worktree's port through adb (USB or wireless adb)
+                      Other options pass to cap run; the channel is always dev
   shell               Open a shell in the app container
   psql [args]         Open psql against this worktree's database
   fix-permissions     Return ownership of generated files to the host user

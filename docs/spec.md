@@ -460,6 +460,10 @@ dock interactions arrive with the board feature; search and the command palette 
 - The stack follows Catch: a Vite and React client with TanStack DB, a Hono server with
   Better Auth and Drizzle on Postgres, Electric for sync behind an auth proxy, an outbox for
   queued writes and Capacitor for Android.
+- Android uses `org.iloni.throwtasks` (Throw), `.preview` (Throw Preview) and `.dev`
+  (Throw Dev), with separate device data and channel artwork. Bundled code works offline;
+  stable/preview ask for the self-hosted server URL. Signing, distribution and updates are
+  deferred to the release work.
 - Shapes are filtered by workspace and project membership, not by user ID as in Catch.
 
 ### Offline changes and conflicts
@@ -483,21 +487,19 @@ little as possible; it is not the normal way to use the app (ADR 0005).
 
 ## Open questions
 
-1. **Android application ID.** `throw` is a Java keyword, so it cannot be
-   `org.iloni.throw`. The Capacitor config uses `org.iloni.throwtasks` as a placeholder.
-2. **Search scope.** Presumably the current workspace with a project filter. It does not
+1. **Search scope.** Presumably the current workspace with a project filter. It does not
    affect the task schema: a workspace's tasks are on the device, so search can run there.
-3. **Membership.** Whether a future member joins a whole workspace, a single project, or
+2. **Membership.** Whether a future member joins a whole workspace, a single project, or
    either. Tasks and the rows under them carry both a workspace and a project, so either
    answer can filter them without a migration.
-4. **Single sign-on.** Accepting an external OIDC provider in both apps would give shared
+3. **Single sign-on.** Accepting an external OIDC provider in both apps would give shared
    login without coupling them. Not decided.
-5. **Deployment.** How one Compose stack runs either or both apps when they live in
+4. **Deployment.** How one Compose stack runs either or both apps when they live in
    separate repositories.
-6. **Refused changes.** How the app tells the user that a change made offline was not
+5. **Refused changes.** How the app tells the user that a change made offline was not
    applied, beyond the entry in the task's log.
-7. **Reordering the full-width backlog.** The gallery lays cards out in several columns per
+6. **Reordering the full-width backlog.** The gallery lays cards out in several columns per
    priority. Whether cards can be reordered there, and how a drop position reads in a
    masonry layout, is not designed.
-8. **The card and the task view.** The board prototype settled how cards move, not what a
+7. **The card and the task view.** The board prototype settled how cards move, not what a
    card or the full task view contains beyond what this spec already lists.
