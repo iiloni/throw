@@ -69,6 +69,20 @@ describe('project requests', () => {
     });
   });
 
+  it('gives a create queued before statuses existed the starter set, the same on every resend', () => {
+    const legacy = { ...project, proposedKey: undefined } as Project;
+    const first = projectCreateRequest(legacy, []);
+    expect(first.statuses.map((status) => [status.category, status.isDefault])).toEqual([
+      ['backlog', true],
+      ['active', true],
+      ['done', true],
+      ['cancelled', true],
+    ]);
+    expect(first.key).toBe('KIT');
+    expect(projectCreateRequest(legacy, []).statuses).toEqual(first.statuses);
+    for (const status of first.statuses) expect(status.id).toMatch(UUID_V7);
+  });
+
   it('sends the trash state and a changed key, and nothing that is the device’s own', () => {
     const synced = { ...project, key: 'KIT', proposedKey: undefined };
     const trashed = { ...synced, deletedAt: '2026-10-14T10:00:00.000Z' };

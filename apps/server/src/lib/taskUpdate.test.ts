@@ -67,6 +67,16 @@ describe('the conflict rule', () => {
     );
     expect(plan.set).toEqual({});
     expect(plan.refused).toEqual([]);
+    expect(plan.items).toEqual([
+      {
+        field: 'statusId',
+        previous: DONE,
+        requested: DONE,
+        previousName: 'Done',
+        requestedName: 'Done',
+        applied: true,
+      },
+    ]);
   });
 
   it('refuses a status that was deleted, and never substitutes one', () => {

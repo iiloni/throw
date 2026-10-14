@@ -280,8 +280,22 @@ function send(
         );
         return body ? sending(api.updateProject(key, body), projectsCollection) : null;
       }
-      case 'delete':
-        return sending(api.purgeProject(key), projectsCollection);
+      case 'delete': {
+        // A delete queued before projects had a trash meant "delete"; it now trashes.
+        if ((mutation.original as Partial<Project>).deletedAt == null)
+          return sending(api.updateProject(key, { trashed: true }), projectsCollection);
+        // The purge removes the project's statuses and tasks too, which the device deleted in
+        // the same write. Wait for them as well, but only on shapes that will stream it.
+        const tasksGo = mutations.some(
+          (other) =>
+            other.type === 'delete' &&
+            other.collection.id === tasksCollection.id &&
+            (other.original as Task).projectId === key,
+        );
+        return tasksGo
+          ? sending(api.purgeProject(key), projectsCollection, statusesCollection, tasksCollection)
+          : sending(api.purgeProject(key), projectsCollection, statusesCollection);
+      }
     }
   }
   if (mutation.collection.id === statusesCollection.id) {

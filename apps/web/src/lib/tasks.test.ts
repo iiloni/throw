@@ -189,6 +189,24 @@ describe('editing a task offline', () => {
   });
 });
 
+describe('sending a task to a status', () => {
+  it('puts a task at the top of its priority, and leaves a subtask in its place', () => {
+    const active = statusIn(projectId, 'active');
+    tasks.createTask(projectId, { title: 'Already there', statusId: active.id });
+    const parent = tasks.createTask(projectId, { title: 'Parent' });
+    const child = tasks.createTask(projectId, { title: 'Child', parentId: parent });
+    tasks.sendTask(child, active.id);
+    expect(lastUpdateRequest()?.changes).toEqual({
+      statusId: { before: statusIn(projectId, 'backlog').id, after: active.id },
+    });
+    tasks.sendTask(parent, active.id);
+    expect(lastUpdateRequest()?.changes.position).toMatchObject({
+      statusId: active.id,
+      parentId: null,
+    });
+  });
+});
+
 describe('the trash', () => {
   it('lists what was trashed on its own and empties it in one write', () => {
     const parent = tasks.createTask(projectId, { title: 'Parent' });

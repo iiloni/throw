@@ -195,14 +195,19 @@ export function moveTask(
   updateTask(id, place);
 }
 
-/** Sends a task to a status at the top of its priority, as a drop on a status target does. */
+/**
+ * Sends a task to a status at the top of its priority, as a drop on a status target does. A
+ * subtask keeps its place among its parent's subtasks.
+ */
 export function sendTask(id: string, statusId: string) {
   const task = tasksCollection.get(id);
   if (!task) throw new Error('Task not found');
-  updateTask(id, {
-    statusId,
-    position: positionAtTop(tasksCollection.values(), statusId, task.priority),
-  });
+  updateTask(
+    id,
+    task.parentId === null
+      ? { statusId, position: positionAtTop(tasksCollection.values(), statusId, task.priority) }
+      : { statusId },
+  );
 }
 
 /**

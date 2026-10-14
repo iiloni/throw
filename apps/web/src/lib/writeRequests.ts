@@ -5,6 +5,8 @@ import {
   createTaskSchema,
   deriveProjectKey,
   type Project,
+  positionBetween,
+  STARTER_STATUSES,
   type Status,
   type Task,
   type TaskChanges,
@@ -25,6 +27,17 @@ import {
  * the device's proposal; the server settles it (ADR 0007).
  */
 export function projectCreateRequest(project: Project, statuses: readonly Status[]): CreateProject {
+  // A create queued before projects had statuses carries none. It gets the starter set, with
+  // ids that are the same on every resend.
+  const sent: Pick<Status, 'id' | 'name' | 'category' | 'position' | 'isDefault'>[] =
+    statuses.length > 0
+      ? [...statuses]
+      : STARTER_STATUSES.map((status) => ({
+          ...status,
+          id: derivedId(project.id, status.category),
+          position: positionBetween(null, null),
+          isDefault: true,
+        }));
   return createProjectSchema.parse({
     id: project.id,
     workspaceId: project.workspaceId,
@@ -34,7 +47,7 @@ export function projectCreateRequest(project: Project, statuses: readonly Status
     position: project.position,
     key: project.proposedKey ?? deriveProjectKey(project.name),
     priorityNames: project.priorityNames,
-    statuses: statuses.map(({ id, name, category, position, isDefault }) => ({
+    statuses: sent.map(({ id, name, category, position, isDefault }) => ({
       id,
       name,
       category,
@@ -147,16 +160,13 @@ function hash(text: string, seed: number) {
 }
 
 /**
- * The change id of a task update: a UUIDv7 that is the same every time the outbox sends the
- * same write, so the server recognises a resend (ADR 0006). The outbox does not keep a
- * mutation's metadata, so it is derived from what it does keep: the write's idempotency key
- * (a UUIDv7, whose time it takes) and the task. One write changes a task at most once,
- * because changes to one row within a write are merged.
+ * A UUIDv7 that is the same every time it is derived from the same `seed` and `name`, taking
+ * its time from `seed` when that is a UUIDv7.
  */
-export function changeIdFor(idempotencyKey: string, taskId: string) {
-  const source = `${idempotencyKey}/${taskId}`;
-  const keyTime = idempotencyKey.replaceAll('-', '').slice(0, 12);
-  const time = /^[0-9a-f]{12}$/i.test(keyTime) ? keyTime.toLowerCase() : hash(source, 3).slice(2);
+export function derivedId(seed: string, name: string) {
+  const source = `${seed}/${name}`;
+  const seedTime = seed.replaceAll('-', '').slice(0, 12);
+  const time = /^[0-9a-f]{12}$/i.test(seedTime) ? seedTime.toLowerCase() : hash(source, 3).slice(2);
   const random = hash(source, 1) + hash(source, 2);
   const variant = ((Number.parseInt(random[3]!, 16) & 0x3) | 0x8).toString(16);
   return [
@@ -166,4 +176,15 @@ export function changeIdFor(idempotencyKey: string, taskId: string) {
     `${variant}${random.slice(4, 7)}`,
     random.slice(7, 19),
   ].join('-');
+}
+
+/**
+ * The change id of a task update: the same every time the outbox sends the same write, so the
+ * server recognises a resend (ADR 0006). The outbox does not keep a mutation's metadata, so it
+ * is derived from what it does keep: the write's idempotency key (a UUIDv7, whose time it
+ * takes) and the task. One write changes a task at most once, because changes to one row
+ * within a write are merged.
+ */
+export function changeIdFor(idempotencyKey: string, taskId: string) {
+  return derivedId(idempotencyKey, taskId);
 }

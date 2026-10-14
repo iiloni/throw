@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /** Five fixed ranks, 1 the most urgent. Projects can rename them, not add or remove any. */
 export const PRIORITIES = [1, 2, 3, 4, 5] as const;
-export const prioritySchema = z.number().int().min(1).max(5);
+export const prioritySchema = z.union(PRIORITIES.map((rank) => z.literal(rank)));
 export type Priority = z.infer<typeof prioritySchema>;
 
 /** The rank a new task gets. */

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { Priority } from './priorities';
 import {
   closedAtAfter,
   compareClosedTasks,
@@ -21,7 +22,7 @@ describe('task identifiers', () => {
 
 describe('ordering', () => {
   it('sorts a column by priority, then position, then id', () => {
-    const tasks = [
+    const tasks: { id: string; priority: Priority; position: string }[] = [
       { id: id(3), priority: 3, position: 'a0' },
       { id: id(2), priority: 1, position: 'a1' },
       { id: id(1), priority: 3, position: 'a0' },
@@ -32,7 +33,7 @@ describe('ordering', () => {
 
   it('compares positions by code unit, not locale', () => {
     // 'Z' sorts before 'a' by code unit; a locale comparison folds case and would not.
-    const tasks = [
+    const tasks: { id: string; priority: Priority; position: string }[] = [
       { id: id(1), priority: 3, position: 'a0' },
       { id: id(2), priority: 3, position: 'Zz' },
     ];

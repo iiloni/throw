@@ -78,7 +78,7 @@ test('create, edit and confirm deletion of a project from the shell', async ({
     .poll(async () =>
       (await shapeRows(page.request, 'projects', headers)).map(({ name, deleted_at }) => ({
         name,
-        trashed: deleted_at !== null,
+        trashed: typeof deleted_at === 'string',
       })),
     )
     .toEqual([{ name: 'New kitchen', trashed: true }]);

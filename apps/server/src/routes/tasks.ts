@@ -9,7 +9,7 @@ import {
   updateTaskSchema,
 } from '@throw/shared';
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import { alias, type PgUpdateSetSource } from 'drizzle-orm/pg-core';
+import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppEnv } from '../context';
@@ -42,8 +42,6 @@ function refusedIn(changes: ActivityChange[]): RefusedField[] {
     return !change.applied && refused.success ? [refused.data] : [];
   });
 }
-
-const parentTask = alias(tasks, 'parent');
 
 export const taskRoutes = new Hono<AppEnv>()
   .use(requireUser)
@@ -182,12 +180,14 @@ export const taskRoutes = new Hono<AppEnv>()
         .where(eq(statuses.projectId, task.projectId));
       const statusById = new Map(projectStatuses.map((status) => [status.id, status]));
       if (changes.statusId && statusById.has(changes.statusId.after)) {
-        // Keeps the status from being deleted before this write commits.
-        await tx
+        // Keeps the status from being deleted before this write commits. One deleted since it
+        // was read is gone once the lock is granted, and so not a valid choice.
+        const [held] = await tx
           .select({ id: statuses.id })
           .from(statuses)
           .where(eq(statuses.id, changes.statusId.after))
           .for('key share');
+        if (!held) statusById.delete(changes.statusId.after);
       }
 
       let parentAllowed = false;
@@ -260,19 +260,24 @@ export const taskRoutes = new Hono<AppEnv>()
     const userId = c.get('user')!.id;
     const { id } = c.req.valid('param');
     const txid = await db.transaction(async (tx) => {
-      const [task] = await tx
-        .select({
-          deletedAt: tasks.deletedAt,
-          parentDeletedAt: parentTask.deletedAt,
-          projectDeletedAt: projects.deletedAt,
-        })
-        .from(tasks)
-        .innerJoin(projects, eq(projects.id, tasks.projectId))
-        .leftJoin(parentTask, eq(parentTask.id, tasks.parentId))
-        .where(and(eq(tasks.id, id), inArray(tasks.workspaceId, memberWorkspaces(tx, userId))))
-        .for('update', { of: tasks });
-      if (!task || (!task.deletedAt && !task.parentDeletedAt && !task.projectDeletedAt))
-        return null;
+      const task = await lockTask(tx, userId, id);
+      if (!task) return null;
+      // Holding the parent and project as well means a restore of either cannot commit between
+      // this check and the delete.
+      const [project] = await tx
+        .select({ deletedAt: projects.deletedAt })
+        .from(projects)
+        .where(eq(projects.id, task.projectId))
+        .for('share');
+      const [parent] =
+        task.parentId === null
+          ? []
+          : await tx
+              .select({ deletedAt: tasks.deletedAt })
+              .from(tasks)
+              .where(eq(tasks.id, task.parentId))
+              .for('share');
+      if (!task.deletedAt && !parent?.deletedAt && !project?.deletedAt) return null;
       await tx.delete(tasks).where(eq(tasks.id, id));
       return currentTxid(tx);
     });

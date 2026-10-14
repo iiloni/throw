@@ -117,8 +117,13 @@ export const projectRoutes = new Hono<AppEnv>()
           : { deletedAt: trashed ? sql`coalesce(${projects.deletedAt}, now())` : null }),
       };
       if (Object.keys(set).length === 0) return null;
-      await tx.update(projects).set(set).where(member);
-      return currentTxid(tx);
+      // A purge on another device may have removed it since it was read.
+      const updated = await tx
+        .update(projects)
+        .set(set)
+        .where(member)
+        .returning({ id: projects.id });
+      return updated.length === 0 ? 'not-found' : currentTxid(tx);
     });
     if (result === 'not-found') return c.json({ error: 'Project not found' }, 404);
     if (result === 'key-taken') return c.json({ error: 'Another project has this key' }, 409);

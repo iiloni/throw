@@ -289,6 +289,14 @@ The owner has not reviewed these yet.
 - **Change ids are derived.** The outbox keeps a mutation's row before and after, but not
   its metadata, so the change id is derived from the queued write's idempotency key (a
   UUIDv7, whose time it keeps) and the task id. It is the same on every resend.
+- **Writes queued by the previous client are carried over.** A project create queued before
+  projects had statuses is sent with the starter statuses, under ids derived from the
+  project's, so a resend sends the same ones. A project delete queued before the trash
+  existed moves the project to the trash.
+- **A create resent after its row was deleted elsewhere recreates it.** Creates are
+  recognised as resends while their row exists; a status deleted, or a task or project
+  purged, between a create and the resend of its lost response comes back. This holds for
+  every table, as in the scaffold. Closing it needs a record of deleted ids.
 - **Titles may be empty**, up to 500 characters, so a create is never refused for its title.
   A description is a BlockNote document or null; its version is null until the first save.
 
