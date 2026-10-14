@@ -304,8 +304,9 @@ and dropping a card on another to make it a subtask.
 
 A column is sorted by priority, with manual order inside each priority.
 
-At rest a column does not mark its priority zones: cards of different priorities are set
-apart by a little space and nothing else. A [setting](#board-settings) labels each zone.
+At rest a column does not mark its priority zones: cards of every priority are spaced
+alike, and the order alone carries the priority. A [setting](#board-settings) labels each
+zone.
 
 While a card is held over a column, the zones always show, in one of two ways the user
 chooses:

@@ -18,9 +18,10 @@ builds only) was used to find a model that stays predictable while that happens.
 **A drop sets status, priority and position together.** Placing a card is one move. There
 is no separate step for priority.
 
-**At rest a column does not mark its zones.** Priorities are set apart by space alone.
-Labels at rest are a setting, off by default. Edge marks, always-on dividers and a priority
-glyph on every card were tried and added noise for something the order already says.
+**At rest a column does not mark its zones.** Cards of every priority are spaced alike, and
+the order alone carries the priority. Labels at rest are a setting, off by default. Edge
+marks, always-on dividers, a wider space between priorities and a priority glyph on every
+card were tried and added noise for something the order already says.
 
 **Under a held card a column is Compact or Full, and the user chooses.**
 

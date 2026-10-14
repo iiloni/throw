@@ -70,7 +70,7 @@ export function CardList({ listId, header, showStatus, endSpace, surface, classN
             className="flex flex-1 flex-col px-3.5 pt-1 pb-1"
             style={endSpace ? { paddingBottom: endSpace } : undefined}
           >
-            {groups.map(({ priority, tasks: zone }, groupIndex) => {
+            {groups.map(({ priority, tasks: zone }) => {
               const headerMode = mode(priority, zone.length);
               const folded = stretch && priority !== open;
               const accepts = stretch ? priority === open : inPlace;
@@ -85,14 +85,6 @@ export function CardList({ listId, header, showStatus, endSpace, surface, classN
                     data-current={place?.priority === priority ? '' : undefined}
                     data-charging={
                       held?.rail?.listId === listId && held.rail.priority === priority
-                        ? ''
-                        : undefined
-                    }
-                    // A little air between zones when no label separates them.
-                    data-breath={
-                      !settings.zoneLabels &&
-                      zone.length > 0 &&
-                      groups.slice(0, groupIndex).some((group) => group.tasks.length > 0)
                         ? ''
                         : undefined
                     }
