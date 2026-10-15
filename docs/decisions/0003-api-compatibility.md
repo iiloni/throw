@@ -16,7 +16,7 @@ carries `X-Throw-Protocol`. The server answers 426 with its supported range when
 version is outside it. `GET /api/compatibility` returns the range without a header, so a
 client can check before sending anything.
 
-**Bootstrap requests are never gated.** Health, compatibility and auth routes work for any
+**Bootstrap requests are never gated.** Health, compatibility, authenticated version/release discovery and auth routes work for any
 client, so an incompatible one can still tell the user what to update.
 
 **An incompatible client waits.** Its writes stay in the outbox and its shapes stay idle
@@ -35,3 +35,6 @@ and the server's maximum, with tests at the boundaries and a documented upgrade 
 - New data routes are gated by default; a new exemption is a decision to record here.
 - Shared TypeScript types check one build against itself. A contract change still needs
   thinking through old client with new server, and new client with old server.
+
+- Backup downloads are the one read-only data exception: plain browser links use an expiring
+  signed ticket and a current server-admin check instead of protocol/auth headers (ADR 0010).

@@ -1,0 +1,100 @@
+# Copy this directory into an operator-owned deployment directory. See docs/deployment.md.
+name: catch-throw
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    command: postgres -c wal_level=logical -c max_replication_slots=20 -c max_wal_senders=20
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set cluster administration password}
+      CATCH_DATABASE_PASSWORD: ${CATCH_DATABASE_PASSWORD:?Set Catch database password}
+      THROW_DATABASE_PASSWORD: ${THROW_DATABASE_PASSWORD:?Set Throw database password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-databases.sh:/docker-entrypoint-initdb.d/10-apps.sh:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d postgres']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  catch:
+    profiles: [catch]
+    image: ${CATCH_IMAGE:-ghcr.io/iiloni/catch:stable}
+    restart: unless-stopped
+    ports: ['${BIND_ADDRESS:-127.0.0.1}:${CATCH_PORT:-3000}:3000']
+    environment:
+      DATABASE_URL: postgres://catch:${CATCH_DATABASE_PASSWORD}@postgres:5432/catch
+      ELECTRIC_URL: http://catch-electric:3000
+      ELECTRIC_SECRET: ${CATCH_ELECTRIC_SECRET:?Set Catch Electric secret}
+      BETTER_AUTH_URL: ${CATCH_URL:?Set Catch public URL}
+      BETTER_AUTH_SECRET: ${CATCH_AUTH_SECRET:?Set Catch auth secret}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      ATTACHMENTS_DIR: /data/attachments
+      BACKUPS_DIR: /data/backups
+    volumes:
+      - catch_attachments:/data/attachments
+      - ${CATCH_BACKUPS_MOUNT:-catch_backups}:/data/backups
+    healthcheck: &health
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+    depends_on:
+      postgres: { condition: service_healthy }
+      catch-electric: { condition: service_started }
+
+  catch-electric:
+    profiles: [catch]
+    image: electricsql/electric:1.8.1
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://catch:${CATCH_DATABASE_PASSWORD}@postgres:5432/catch?sslmode=disable
+      ELECTRIC_SECRET: ${CATCH_ELECTRIC_SECRET}
+      ELECTRIC_REPLICATION_STREAM_ID: catch
+    volumes: [catch_electric:/app/persistent]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  throw:
+    profiles: [throw]
+    image: ${THROW_IMAGE:-ghcr.io/iiloni/throw:stable}
+    restart: unless-stopped
+    ports: ['${BIND_ADDRESS:-127.0.0.1}:${THROW_PORT:-3100}:3000']
+    environment:
+      DATABASE_URL: postgres://throw:${THROW_DATABASE_PASSWORD}@postgres:5432/throw
+      ELECTRIC_URL: http://throw-electric:3000
+      ELECTRIC_SECRET: ${THROW_ELECTRIC_SECRET:?Set Throw Electric secret}
+      BETTER_AUTH_URL: ${THROW_URL:?Set Throw public URL}
+      BETTER_AUTH_SECRET: ${THROW_AUTH_SECRET:?Set Throw auth secret}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      BACKUPS_DIR: /data/backups
+      UPDATE_BACKUPS: ${THROW_UPDATE_BACKUPS:-true}
+      UPDATE_BACKUPS_KEPT: ${THROW_UPDATE_BACKUPS_KEPT:-10}
+    volumes:
+      - ${THROW_BACKUPS_MOUNT:-throw_backups}:/data/backups
+    healthcheck: *health
+    depends_on:
+      postgres: { condition: service_healthy }
+      throw-electric: { condition: service_started }
+
+  throw-electric:
+    profiles: [throw]
+    image: electricsql/electric:1.8.1
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://throw:${THROW_DATABASE_PASSWORD}@postgres:5432/throw?sslmode=disable
+      ELECTRIC_SECRET: ${THROW_ELECTRIC_SECRET}
+      ELECTRIC_REPLICATION_STREAM_ID: throw
+    volumes: [throw_electric:/app/persistent]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+volumes:
+  postgres_data:
+  catch_attachments:
+  catch_backups:
+  catch_electric:
+  throw_backups:
+  throw_electric:

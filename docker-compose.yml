@@ -1,6 +1,6 @@
 # Self-hosted deployment. Copy .env.example to .env and set BETTER_AUTH_SECRET,
 # BETTER_AUTH_URL (your public URL), POSTGRES_PASSWORD and ELECTRIC_SECRET first.
-# No image is published yet, so add docker-compose.build.yml to build this checkout.
+# Published images follow docs/releases.md; add docker-compose.build.yml to build a checkout.
 # Development uses this file plus docker-compose.dev.yml through scripts/dev.sh.
 name: throw
 
@@ -19,7 +19,12 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET}
       AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-true}
       REGISTRATION: ${REGISTRATION:-closed}
+      BACKUPS_DIR: /data/backups
+      UPDATE_BACKUPS: ${UPDATE_BACKUPS:-true}
+      UPDATE_BACKUPS_KEPT: ${UPDATE_BACKUPS_KEPT:-10}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+    volumes:
+      - ${THROW_BACKUPS_MOUNT:-backup_data}:/data/backups
     healthcheck:
       test:
         - CMD
@@ -66,5 +71,6 @@ services:
         condition: service_healthy
 
 volumes:
+  backup_data:
   postgres_data:
   electric_data:

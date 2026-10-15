@@ -11,8 +11,10 @@ declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: { url: string; revision: string | null }[];
 };
 
-// The app's code is precached so pages open without a connection. A new build waits until
-// every tab of the old one has closed; there is no update prompt yet.
+// Activate only after a page has saved its work and the user accepts its update.
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') void self.skipWaiting();
+});
 clientsClaim();
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);

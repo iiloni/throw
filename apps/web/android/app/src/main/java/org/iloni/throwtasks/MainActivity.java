@@ -7,6 +7,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(KeyboardInsetsPlugin.class);
+        registerPlugin(AppUpdatesPlugin.class);
         super.onCreate(savedInstanceState);
         // Nested CSS scrollers own the page's scrollbars.
         getBridge().getWebView().setVerticalScrollBarEnabled(false);

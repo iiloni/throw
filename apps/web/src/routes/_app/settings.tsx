@@ -1,5 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { AppUpdate } from '@/components/AppUpdate/AppUpdate';
+import { ServerBackups } from '@/components/ServerBackups/ServerBackups';
 import { Button } from '@/components/ui/button';
 import { authClient, clearAuthToken, getSignedInUser } from '@/lib/auth';
 import { clearLocalData } from '@/lib/collections';
@@ -10,6 +12,11 @@ import { cn } from '@/lib/utils';
 export const Route = createFileRoute('/_app/settings')({ component: Settings });
 function Settings() {
   const user = getSignedInUser();
+  const [admin, setAdmin] = useState(false);
+  const accessDenied = useCallback(() => setAdmin(false), []);
+  useEffect(() => {
+    void authClient.getSession().then(({ data }) => setAdmin(data?.user?.role === 'admin'));
+  }, []);
   const { pending } = useSyncStatus();
   const [leaving, setLeaving] = useState(false);
   const [theme, setTheme] = useThemePreference();
@@ -45,6 +52,10 @@ function Settings() {
           ))}
         </div>
       </fieldset>
+      <section id="updates">
+        <AppUpdate />
+      </section>
+      {admin && <ServerBackups onAccessDenied={accessDenied} />}
       <section className="border-t pt-6">
         <h2 className="font-semibold">Account</h2>
         <p className="mt-2 break-all text-muted-foreground text-sm">{user?.name || user?.email}</p>

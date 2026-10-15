@@ -48,6 +48,8 @@ checkout's stack. Never hard-code container or project names.
   `--static` for bundled code and offline testing. Host JDK 21, SDK 36 and adb are required.
 - `./scripts/dev.sh generate`: create a migration after editing `apps/server/src/db/schema.ts`.
   Commit the generated SQL and journal.
+- `./scripts/dev.sh backup <command>`: server backups for this worktree. See `docs/backups.md`.
+- `./scripts/dev.sh production-smoke`: disposable production boot/migration/backup/restore check.
 - `./scripts/dev.sh logs app`, `psql`, `shell`, `seed`, `reset -y`: see `./scripts/dev.sh help`.
 - `pnpm format` (host): apply Biome formatting and import sorting.
 
@@ -344,8 +346,9 @@ ids. Do not add a dependency on Catch's repository; the two release independentl
   needs the server); pages wait with `useAwaitingSync`, not `isLoading`.
 - The dev server has no service worker, so a page cannot load code offline in development.
   E2E tests for offline behavior block `/api` instead (see `e2e/projects.spec.ts`).
-- A production build registers a service worker that precaches the app. There is no update
-  prompt yet: a new build takes over once every tab of the old one has closed.
+- A production build precaches the app and checks uncached build metadata. Update prompts
+  wait for drafts to close and writes to reach durable storage before activating/reloading.
+  Editors must acquire `lib/useUpdateReloadBlocked.ts` while holding unsaved drafts.
 - E2E setup goes through `e2e/helpers.ts`: `signUp` makes the account through the API and
   stores its session as the app does.
 - An E2E test that only uses `request` is tagged `@api` and runs once in the `api` project
@@ -357,3 +360,12 @@ ids. Do not add a dependency on Catch's repository; the two release independentl
   development and is blocked in production until the policy allows it.
 - Traces slow every E2E test, so only the rerun of a failed test records one
   (`playwright.config.ts`). A test that passes on its rerun is reported as flaky, which fails CI.
+
+## Shipping and operating
+
+Read `docs/releases.md`, `docs/deployment.md` and `docs/backups.md` before changing releases
+or production operations. The owner chose an operator-owned combined Compose directory
+with separate app databases/Electric instances and decoupled image updates. Never remove
+the shared Postgres volume to roll back Throw. Publishing releases, pushing tags, creating
+repository secrets and changing repository settings each require specific owner approval.
+Collect credentials only through private secret entry, never chat; never commit signing keys.

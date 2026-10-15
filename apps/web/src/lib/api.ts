@@ -3,12 +3,14 @@ import type {
   CreateStatus,
   CreateTask,
   CreateWorkspace,
+  ReleasesResponse,
   TxidResponse,
   UpdateProject,
   UpdateStatus,
   UpdateTask,
   UpdateTaskResponse,
   UpdateWorkspace,
+  VersionInfo,
 } from '@throw/shared';
 import { getAuthToken } from './auth';
 import { compatibleFetch } from './compatibility';
@@ -37,7 +39,19 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+// Version discovery remains available while the protocol gate pauses data requests.
+async function bootstrap<T>(path: string): Promise<T> {
+  const response = await fetch(`${getServerUrl()}/api${path}`, {
+    cache: 'no-store',
+    headers: { Authorization: `Bearer ${getAuthToken() ?? ''}` },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) throw new ApiError(response.status, await response.text());
+  return response.json() as Promise<T>;
+}
 export const api = {
+  versionInfo: () => bootstrap<VersionInfo>('/updates'),
+  releases: () => bootstrap<ReleasesResponse>('/updates/releases'),
   createWorkspace: (body: CreateWorkspace) =>
     request<TxidResponse>('/workspaces', { method: 'POST', body: JSON.stringify(body) }),
   updateWorkspace: (id: string, body: UpdateWorkspace) =>

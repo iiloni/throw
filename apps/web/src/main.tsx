@@ -1,3 +1,4 @@
+import { initializeWebUpdates } from './lib/webUpdates';
 import '@fontsource-variable/bricolage-grotesque/standard.css';
 import '@fontsource-variable/figtree';
 import { Capacitor } from '@capacitor/core';
@@ -17,13 +18,7 @@ declare module '@tanstack/react-router' {
   }
 }
 
-// The service worker keeps the app's code for offline use. The dev server has none, and the
-// Android app bundles its code.
-if (import.meta.env.PROD && !Capacitor.isNativePlatform() && 'serviceWorker' in navigator) {
-  void navigator.serviceWorker.register('/sw.js').catch((error: unknown) => {
-    console.warn('The app will not load offline: its service worker did not register.', error);
-  });
-}
+initializeWebUpdates();
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing #root element');

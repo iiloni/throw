@@ -12,11 +12,13 @@ import {
   type ShellState,
   viewSchema,
 } from '@/components/AppShell/shell';
+import { AppUpdatePrompt } from '@/components/AppUpdatePrompt/AppUpdatePrompt';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { Dock } from '@/components/Dock/Dock';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { type ShellForm, ShellForms } from '@/components/ShellForms/ShellForms';
+import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
 import { getSignedInUser } from '@/lib/auth';
 import { useProjects, useWorkspaces } from '@/lib/collections';
 import { useMedia } from '@/lib/media';
@@ -24,6 +26,8 @@ import { springs } from '@/lib/motion';
 import { projectsIn } from '@/lib/projects';
 import { usePersistentState } from '@/lib/storage';
 import { useAwaitingSync } from '@/lib/syncStatus';
+import { watchUpdates } from '@/lib/updates';
+import { updateReloadBlocked } from '@/lib/useUpdateReloadBlocked';
 import { cn } from '@/lib/utils';
 
 const railSchema = z.boolean().nullable();
@@ -34,6 +38,7 @@ const paramsSchema = z.object({
 
 export function AppShell() {
   const navigate = useNavigate();
+  useEffect(watchUpdates, []);
   const rawParams = useRouterState({ select: (state) => state.matches.at(-1)?.params });
   const params = paramsSchema.parse(rawParams ?? {});
   const location = useRouterState({ select: (state) => state.location });
@@ -52,6 +57,10 @@ export function AppShell() {
   const expanded = railChoice ?? wide;
   const reduced = useReducedMotion();
   const [form, setForm] = useState<ShellForm | null>(null);
+  useEffect(() => {
+    updateReloadBlocked.set(form !== null);
+    return () => updateReloadBlocked.set(false);
+  }, [form]);
   const workspaces = [...allWorkspaces].sort((a, b) => comparePositions(a.position, b.position));
   const preferredWorkspace = workspaces.find((item) => item.id === remembered.workspaceId);
   const workspace = params.workspaceId
@@ -249,6 +258,8 @@ export function AppShell() {
         </div>
       </div>
       {!desktop && <Dock />}
+      <AppUpdatePrompt />
+      <WebUpdatePrompt />
       <ShellForms form={form} onClose={() => setForm(null)} />
     </ShellContext.Provider>
   );
