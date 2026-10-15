@@ -1,15 +1,20 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { Folder, Search } from 'lucide-react';
+import { z } from 'zod';
 import { useShell, viewSchema } from '@/components/AppShell/shell';
 import { ProjectBoard } from '@/components/Board/ProjectBoard';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { useMedia } from '@/lib/media';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/p/$projectId')({
-  validateSearch: (search) => ({ view: viewSchema.catch('board').parse(search.view) }),
+  validateSearch: (search): { view: z.infer<typeof viewSchema>; task?: string } => ({
+    view: viewSchema.catch('board').parse(search.view),
+    task: z.uuid().optional().catch(undefined).parse(search.task),
+  }),
   component: ProjectPage,
 });
 function ProjectPage() {
+  const { task } = Route.useSearch();
   const shell = useShell();
   const desktop = useMedia('(min-width: 768px)');
   if (shell.awaitingWorkspaces || shell.awaitingProjects)
@@ -30,5 +35,5 @@ function ProjectPage() {
         Search will help you find work across this workspace.
       </EmptyState>
     );
-  return <ProjectBoard key={shell.project.id} project={shell.project} />;
+  return <ProjectBoard key={shell.project.id} project={shell.project} initialTaskId={task} />;
 }

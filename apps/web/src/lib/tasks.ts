@@ -30,6 +30,11 @@ import { requireTag } from './tags';
 // clock here, so a change shows at once; the synced row brings the server's.
 const now = () => new Date().toISOString();
 
+/** The current optimistic row, including changes that arrived after a component rendered. */
+export function getTask(id: string) {
+  return tasksCollection.get(id);
+}
+
 /**
  * A position at the top of a priority in a status column: where a new task or a task sent to
  * a status lands. Trashed tasks are left out.
@@ -235,14 +240,20 @@ export function sendTask(id: string, statusId: string) {
  * Saves a description under a new version. The server compares versions, so a save made on
  * an older version than the server's is kept in the log instead of applied (ADR 0005).
  */
-export function saveDescription(id: string, document: Description) {
+export function saveDescription(id: string, document: Description, baseVersion: string | null) {
   const valid = descriptionSchema.parse(document);
-  write(() =>
+  const task = tasksCollection.get(id);
+  if (!task) throw new Error('Task not found');
+  // Never attach a draft to a version it was not written against.
+  if (task.descriptionVersion !== baseVersion) return null;
+  const version = uuidv7();
+  const transaction = write(() =>
     tasksCollection.update(id, (task) => {
       task.description = valid;
-      task.descriptionVersion = uuidv7();
+      task.descriptionVersion = version;
     }),
   );
+  return { version, transaction };
 }
 
 /**

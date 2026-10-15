@@ -412,7 +412,18 @@ The owner has not reviewed these yet.
 - **Statuses and tasks always sync**, whether or not anything on screen reads them, so a
   device has them before it goes offline.
 - **Refused fields** reach the client through `onRefusedChanges` in
-  `apps/web/src/lib/refusedChanges.ts`. Nothing listens yet (spec, open question 5).
+  `apps/web/src/lib/refusedChanges.ts`. Descriptions also retain a recovery draft on the
+  sending device when their outbox response reports a refusal; other field notices remain
+  open (spec, open question 5).
+- **Description editing** uses an explicit Save with the version the editor opened on.
+  `saveDescription` requires that version and queues nothing if the local row has changed.
+  A read-only description refreshes on sync; an open draft keeps its content and selection.
+  Remote changes require reviewing the latest description, then explicitly choosing it or
+  applying the draft against that reviewed version. A further change requires a new review.
+  Drafts and pending saves are kept in localStorage, scoped to server, account and task, and
+  survive closing and reloading. The outbox response retains refused text even with the pane
+  closed; an acknowledgement only clears the matching pending save. The server also keeps
+  refused text in its activity entry. Sign-out clears the account's device drafts.
 - **Deleting a project in the shell** now moves it to the trash. There is no trash view yet.
 
 ### The log and comments

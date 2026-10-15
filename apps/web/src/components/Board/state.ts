@@ -119,11 +119,12 @@ export function receiveBoard(data: BoardData, actions: BoardActions, awaitingTas
     board.set({ ...initialBoard([data]), actions, awaitingTasks });
   } else {
     const exists = (id: string) => data.tasks.some((task) => task.id === id);
+    const canOpen = (id: string) => exists(id) || data.hiddenTasks?.some((task) => task.id === id);
     update({
       boards: [data],
       actions,
       awaitingTasks,
-      openTaskId: before.openTaskId && exists(before.openTaskId) ? before.openTaskId : null,
+      openTaskId: before.openTaskId && canOpen(before.openTaskId) ? before.openTaskId : null,
       expanded: before.expanded.filter(exists),
       selection: before.selection.filter(exists),
     });

@@ -2,7 +2,7 @@ import type { Project, Status, Tag, Task } from '@throw/shared';
 import { describe, expect, it } from 'vitest';
 import { compareClosed, compareTasks, identifier, subtasksOf, taskColor } from './model';
 import { projectBoardData } from './selection';
-import { initialBoard, listTasks } from './state';
+import { board, initialBoard, listTasks, receiveBoard, update } from './state';
 
 const project: Project = {
   id: 'project',
@@ -94,6 +94,20 @@ describe('synced project board selection', () => {
     expect(
       projectBoardData({ ...project, deletedAt: '2026-10-14T12:00:00Z' }, statuses, rows).tasks,
     ).toEqual([]);
+  });
+  it('keeps a trashed task open for restoring without putting it on the board, and closes a purged task', () => {
+    const actions = { create: () => '', rename: () => {}, send: () => {} };
+    receiveBoard(projectBoardData(project, statuses, [task('open')]), actions);
+    update({ openTaskId: 'open' });
+    const data = projectBoardData(project, statuses, [
+      task('open', { deletedAt: '2026-10-15T00:00:00Z' }),
+    ]);
+    receiveBoard(data, actions);
+    expect(board.get().openTaskId).toBe('open');
+    expect(listTasks(board.get(), 'status:build')).toEqual([]);
+    expect(data.hiddenTasks?.map((task) => task.id)).toEqual(['open']);
+    receiveBoard(projectBoardData(project, statuses, []), actions);
+    expect(board.get().openTaskId).toBeNull();
   });
   it('orders statuses by category, position and id, leaving active columns in project order', () => {
     const data = projectBoardData(

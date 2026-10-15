@@ -171,9 +171,9 @@ describe('editing a task offline', () => {
 
   it('sends a description save with the version it replaces', () => {
     const id = tasks.createTask(projectId, { title: 'Notes' });
-    tasks.saveDescription(id, [{ type: 'paragraph' }]);
+    tasks.saveDescription(id, [{ type: 'paragraph' }], null);
     const first = tasksCollection.get(id)!.descriptionVersion;
-    tasks.saveDescription(id, [{ type: 'paragraph', content: 'more' }]);
+    tasks.saveDescription(id, [{ type: 'paragraph', content: 'more' }], first);
     const request = lastUpdateRequest();
     expect(request?.changes.description).toEqual({
       before: first,
@@ -182,6 +182,20 @@ describe('editing a task offline', () => {
         document: [{ type: 'paragraph', content: 'more' }],
       },
     });
+  });
+
+  it('does not queue a draft against a description that changed while it was edited', () => {
+    const id = tasks.createTask(projectId);
+    const saved = tasks.saveDescription(id, [{ type: 'paragraph', content: 'New version' }], null)!;
+    const count = fake.written.length;
+    expect(
+      tasks.saveDescription(id, [{ type: 'paragraph', content: 'Stale draft' }], null),
+    ).toBeNull();
+    expect(fake.written).toHaveLength(count);
+    expect(tasksCollection.get(id)?.descriptionVersion).toBe(saved.version);
+    expect(tasksCollection.get(id)?.description).toEqual([
+      { type: 'paragraph', content: 'New version' },
+    ]);
   });
 
   it('sends the trash state, not the device’s time', () => {

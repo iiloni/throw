@@ -47,6 +47,7 @@ import { z } from 'zod';
 import { ApiError, api } from './api';
 import { getAuthToken, resolveSignedInUser } from './auth';
 import { CompatibilityError } from './compatibility';
+import { clearDescriptionDrafts, settleDescriptionDraft } from './descriptionDrafts';
 import {
   createOnlineDetector,
   createOutboxStorage,
@@ -483,6 +484,18 @@ function send(
         if (!body) return null;
         return sending(
           api.updateTask(key, body).then((response) => {
+            if (body.changes.description) {
+              try {
+                settleDescriptionDraft(
+                  key,
+                  body.changes.description.after,
+                  response.refused.some((field) => field.field === 'description'),
+                );
+              } catch {
+                // A recovery draft must not turn an acknowledged write into a retry.
+                toast.error('Description recovery could not be stored on this device');
+              }
+            }
             reportRefusedChanges(key, response.refused, body.changeId);
             return response;
           }),
@@ -646,6 +659,7 @@ export async function clearLocalData() {
   executor.dispose();
   await database?.destroy();
   if (user) deleteOutbox(user.id);
+  clearDescriptionDrafts();
 }
 
 /** The signed-in user's workspaces, unordered, and whether they are still loading. */

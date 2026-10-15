@@ -1,7 +1,7 @@
 import { ArrowLeft, X } from 'lucide-react';
 import { motion, useDragControls, useReducedMotion } from 'motion/react';
 import { Dialog } from 'radix-ui';
-import { type PointerEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { type PointerEvent, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
@@ -11,12 +11,13 @@ import { PriorityGlyph, StatusGlyph } from './glyphs';
 import { identifier, priorityName, statusById, subtasksOf, type Task, taskColor } from './model';
 import { StatusMenu } from './StatusMenu';
 import { board, current, renameTask, sendTasks, update } from './state';
+import { TaskContentContext } from './taskContent';
 
 const chip =
   'flex h-8 items-center gap-1.5 rounded-full bg-foreground/[0.07] px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60';
 
 /** The title, written in place. A task just created starts here with its title selected. */
-function TaskTitle({ task }: { task: Task }) {
+export function TaskTitle({ task }: { task: Task }) {
   const fresh = board.use().newTaskId === task.id;
   const ref = useRef<HTMLTextAreaElement>(null);
   useLayoutEffect(() => {
@@ -74,6 +75,7 @@ function TaskTitle({ task }: { task: Task }) {
 
 /** A stand-in for the task view: enough of a task to judge how the board makes room for it. */
 function TaskBody({ task, underDock = false }: { task: Task; underDock?: boolean }) {
+  const content = useContext(TaskContentContext);
   const state = board.use();
   const { project, tasks } = current(state);
   const status = statusById(project, task.statusId);
@@ -82,6 +84,22 @@ function TaskBody({ task, underDock = false }: { task: Task; underDock?: boolean
   const tags = [task.primaryTagId, ...task.secondaryTagIds]
     .map((id) => project.tags.find((tag) => tag.id === id))
     .filter((tag) => tag !== undefined);
+  if (content)
+    return (
+      <ScrollArea className="min-h-0 flex-1 [--scrollbar-inset:1rem]">
+        <ScrollAreaViewport>
+          <div
+            className={cn(
+              'px-6 sm:px-8',
+              underDock ? 'pb-[calc(var(--dock-height)+var(--dock-bottom)+2.5rem)]' : 'pb-12',
+            )}
+          >
+            {content.body(task.id)}
+          </div>
+        </ScrollAreaViewport>
+        <ScrollBar />
+      </ScrollArea>
+    );
   return (
     <ScrollArea className="flex-1 [--scrollbar-inset:1rem]">
       <ScrollAreaViewport>
@@ -180,15 +198,19 @@ function TaskBody({ task, underDock = false }: { task: Task; underDock?: boolean
 }
 
 function TaskHeader({ task }: { task: Task }) {
+  const content = useContext(TaskContentContext);
   const { project } = current(board.use());
   return (
     <div className="flex h-14 shrink-0 items-center justify-between pr-4 pl-8">
       <span className="font-medium text-foreground/60 text-sm tabular-nums">
         {identifier(project, task) ?? 'Pending'}
       </span>
-      <IconButton label="Close task" onClick={() => update({ openTaskId: null })}>
-        <X />
-      </IconButton>
+      <div className="flex items-center gap-1">
+        {content?.actions(task.id)}
+        <IconButton label="Close task" onClick={() => update({ openTaskId: null })}>
+          <X />
+        </IconButton>
+      </div>
     </div>
   );
 }
@@ -302,6 +324,7 @@ const UNCLIPPED = 'inset(0px 0px 0px 0px round 0px)';
  * dock's place. Pulling it down from the top closes it too.
  */
 export function TaskScreen({ task }: { task: Task }) {
+  const content = useContext(TaskContentContext);
   const { project } = current(board.use());
   const status = statusById(project, task.statusId);
   const controls = useDragControls();
@@ -396,6 +419,11 @@ export function TaskScreen({ task }: { task: Task }) {
               </IconButton>
             </div>
             <span className="flex-1" />
+            {content && (
+              <div className="glass pointer-events-auto flex rounded-[var(--dock-radius)] p-1">
+                {content.actions(task.id)}
+              </div>
+            )}
             {status && (
               <div className="glass pointer-events-auto flex rounded-[var(--dock-radius)] p-1">
                 <StatusMenu

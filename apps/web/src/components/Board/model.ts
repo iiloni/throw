@@ -205,4 +205,4 @@ export function groupByPriority(tasks: Task[]): PriorityGroup[] {
   }));
 }
 
-export type BoardData = { project: Project; tasks: Task[] };
+export type BoardData = { project: Project; tasks: Task[]; hiddenTasks?: Task[] };
