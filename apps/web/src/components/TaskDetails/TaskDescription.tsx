@@ -16,6 +16,7 @@ export function TaskDescription({ task }: { task: Task }) {
   const [reviewedVersion, setReviewedVersion] = useState<string | null | undefined>(undefined);
   const [reviewing, setReviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [storageFailed, setStorageFailed] = useState(false);
   const editing = draft && draft.status !== 'pending';
   const stale =
     draft && (draft.status === 'conflict' || descriptionIsStale(draft, task.descriptionVersion));
@@ -122,7 +123,9 @@ export function TaskDescription({ task }: { task: Task }) {
                 >
                   Use latest description
                 </Button>
-                <Button onClick={() => save(true)}>Apply my version</Button>
+                <Button disabled={storageFailed} onClick={() => save(true)}>
+                  Apply my version
+                </Button>
               </div>
             </div>
           )}
@@ -136,7 +139,9 @@ export function TaskDescription({ task }: { task: Task }) {
           if (!editing) return;
           try {
             storeDescriptionDraft(task.id, { ...draft, document });
+            setStorageFailed(false);
           } catch {
+            setStorageFailed(true);
             setError(
               'This device could not store your draft. Keep this pane open and copy your text.',
             );
@@ -145,7 +150,7 @@ export function TaskDescription({ task }: { task: Task }) {
       />
       {editing ? (
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Button disabled={!!stale} onClick={() => save()}>
+          <Button disabled={!!stale || storageFailed} onClick={() => save()}>
             Save description
           </Button>
           <Button

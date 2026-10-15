@@ -131,3 +131,19 @@ it('lets the user explicitly replace a reviewed version or discard their draft',
   fireEvent.click(screen.getByRole('button', { name: 'Use latest description' }));
   expect(readDescriptionDraft('task')).toBeNull();
 });
+
+it('does not save an older draft when the device cannot store the latest keystrokes', () => {
+  render(<TaskDescription task={row} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Edit description' }));
+  const storage = vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+    throw new DOMException('Quota exceeded', 'QuotaExceededError');
+  });
+  fireEvent.change(screen.getByLabelText('Draft text'), {
+    target: { value: 'Text still in the editor' },
+  });
+  expect(screen.getByLabelText('Draft text')).toHaveValue('Text still in the editor');
+  expect(screen.getByRole('button', { name: 'Save description' })).toBeDisabled();
+  expect(screen.getByRole('alert')).toHaveTextContent('copy your text');
+  expect(fake.save).not.toHaveBeenCalled();
+  storage.mockRestore();
+});
