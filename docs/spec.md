@@ -264,8 +264,9 @@ How a held card behaves, and why, is recorded in
 
 ### Board settings
 
-The settings page has a section for how the board looks and behaves. These are kept on the
-device.
+The settings page has a section for how the board looks and behaves. The board settings
+button opens the same options in the [drawer](#the-drawer) at full height on a phone, and in
+a panel from the rail on desktop, sized to the window. These are kept on the device.
 
 | Setting | Default | Effect |
 | --- | --- | --- |
@@ -342,16 +343,17 @@ own way in and out, so the board is not a row of identical pages.
   under the title: one segment per column in board order, the columns behind the current
   one filled in. Above the track are the current column's name and count, and the next
   column's name, which turns to it. The board opens on the first active column.
-- The backlog is a glass tray at the bottom with three heights:
-  - **Closed**, it is the dock: the backlog's handle (a small stack of cards, its name and
-    count) beside Search and the create button.
+- The backlog lives in the [drawer](#the-drawer), at its three heights:
+  - **Collapsed**, the drawer's header is the dock: the backlog's handle (a small stack of
+    cards, its name and count) beside Search and the create button.
   - **Half open**, it is a supply of work with the board still above it. Lifting a card
-    sinks the tray out of sight, so the whole screen is board to place the card on. Its
-    cards are not reordered at this height. The tray comes back to half open after the drop.
+    sinks the drawer out of sight, so the whole screen is board to place the card on. Its
+    cards are not reordered at this height. The drawer comes back to half open after the drop.
   - **Full**, the backlog is groomed: its cards are reordered in place, and the status
     filters are dropzones for its own cards.
 
-  The tray is pulled between heights by its top, and tapping the handle opens or closes it.
+  The drawer is pulled between heights by its header, and tapping the handle opens or
+  closes it.
 - While a card is held, the pages beside the current one peek in at the edges as bare
   rounded surfaces, without their cards: targets that turn the board, kept quiet. The current
   page draws its cards in from the edges to leave room for them. At rest a page fills the
@@ -359,13 +361,15 @@ own way in and out, so the board is not a row of identical pages.
 - Past the last column there is a done pocket instead of a page: a card dropped there moves
   to the project's default done status. The card flies into the header's done count, which
   counts tasks done in the last seven days, and the count bumps.
-- The done count opens the closed tasks as a sheet: grouped by when they were closed (today,
+- The done count opens the closed tasks in the drawer at full height: grouped by when they
+  were closed (today,
   yesterday, this week, earlier) and filtered by closed status. A card held there reopens
   through the move drawer.
 - A long press without movement selects a card. Moving after the press drags it. A touch
   that moves before the press completes scrolls.
-- While a card is held, from the board, the tray or the closed sheet, a glass move drawer
-  sits at the bottom edge. It opens into a grid of status dropzones under a label for each
+- While a card is held, from the board, the backlog or the closed tasks, the drawer's
+  content sinks and its header becomes the move drawer at the bottom edge. It opens into a
+  grid of status dropzones under a label for each
   category (Backlog, Active, Closed) when the card is brought onto it, and closes when the
   card leaves. This is how a board card goes back to the backlog, and how any card reaches
   any status without scrolling the board. Above the drawer the column scrolls under the held
@@ -400,10 +404,11 @@ view), comments and activity.
 - On small screens it takes the whole screen, like a note in Catch, and is not a bottom
   drawer. It opens out of its card and closes back into it, on the card's color. Pulling it
   down from the top closes it too.
-- While a task is open on a phone, the dock holds that task's actions, as it does for a note
-  in Catch.
+- While a task is open on a phone, the dock (the collapsed [drawer](#the-drawer)) holds
+  that task's actions, as it does for a note in Catch. The task's pickers open in the
+  drawer.
 - The phone dock's create button adds a task at the top of the current column's default
-  priority (the backlog's default status while the backlog tray is open) and opens it with
+  priority (the backlog's default status while the backlog is open) and opens it with
   its title selected.
 
 ## Navigation
@@ -425,9 +430,10 @@ also covers jumping between projects.
 
 ### Phone
 
-A bottom dock with Search and a create button, as in Catch. On a project board the dock is
-the closed backlog tray, with the backlog's handle beside them. There are no Backlog and
-Board tabs: the backlog is the tray, so a Board tab had nothing to switch to.
+A bottom dock with Search and a create button, as in Catch. The dock is the header of the
+collapsed [drawer](#the-drawer); on a project board the backlog's handle sits beside them.
+There are no Backlog and Board tabs: the backlog is the drawer, so a Board tab had nothing
+to switch to.
 Project switching and the cross-project board live in the header's title menu. The shell's
 three-tab dock is replaced on the project board.
 
@@ -436,10 +442,21 @@ workspaces, and opens settings. The project dock remains on project and cross-pr
 boards; settings and an empty workspace use the title menu alone. On the cross-project
 board, Search shows the workspace search placeholder.
 
+### The drawer
+
+The drawer is to Throw what the dock is to Catch: a core part of the interface on a phone,
+not a component each feature draws. It is one glass surface along the bottom edge, and
+every sheet on a phone is the drawer showing that content: the backlog, the closed tasks,
+board settings, search and capture, the move targets, forms, the tag manager and pickers.
+Collapsed, its header is the dock, on boards and open tasks only; elsewhere it stays out of
+sight until something opens in it. Opening something replaces what it shows, and closing
+returns it to what it showed before. Desktop has no drawer. The rules are in
+[ADR 0009](decisions/0009-the-drawer.md).
+
 ### Shell routes and remembered selection
 
 - `/w/:workspaceId/p/:projectId?view=board` is a project. `view=backlog` opens its
-  phone board with the backlog tray half open and `view=search` selects the search placeholder. Search is a view of
+  phone board with the backlog half open and `view=search` selects the search placeholder. Search is a view of
   the current context, not a separate search page.
 - `/w/:workspaceId/board` is the cross-project board for that workspace; `view=search`
   shows its search placeholder.
@@ -456,7 +473,9 @@ from navigation opens its board; the shell remembers the last project separately
 workspace. Projects append by position. Deleting a project requires confirmation and moves
 it to the trash (see [Project](#project)); the trash has no view yet.
 
-The project board uses synced tasks and statuses, with the backlog tray on a phone. The
+The project board uses synced tasks and statuses, with the backlog in the drawer on a
+phone. The drawer is not yet one shared component: the backlog tray, closed sheet, move
+drawer and `BottomSheet` are still separate surfaces. The
 cross-project board, search and the command palette remain placeholders. Task panes have a
 title and a placeholder body; their content comes later. Dragging, phone long-press
 selection and keyboard reordering remain in the development prototype until the drag step wires them to
