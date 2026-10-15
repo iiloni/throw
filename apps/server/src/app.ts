@@ -5,14 +5,17 @@ import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { auth } from './auth';
+import { isRestoring } from './backups/service';
 import type { AppEnv } from './context';
 import { env, NATIVE_APP_ORIGINS } from './env';
 import { CLIENT_IP_HEADER, clientIp, proxyList } from './lib/clientIp';
 import { requireCompatibleProtocol } from './lib/protocol';
+import { backupDownloadRoutes, backupRoutes } from './routes/backups';
 import { projectRoutes } from './routes/projects';
 import { shapeRoutes } from './routes/shapes';
 import { statusRoutes } from './routes/statuses';
 import { taskRoutes } from './routes/tasks';
+import { updateRoutes } from './routes/updates';
 import { workspaceRoutes } from './routes/workspaces';
 
 /** JSON bodies are read into memory whole. */
@@ -62,8 +65,18 @@ export function createApp() {
     }),
   );
 
+  app.use('/api/*', async (c, next) => {
+    if (isRestoring() && c.req.path !== '/api/health') {
+      c.header('Retry-After', '3');
+      return c.json({ error: 'The server is restoring a backup.' }, 503);
+    }
+    await next();
+  });
+  app.route('/api/admin/backups', backupDownloadRoutes);
   app.use('/api/*', requireCompatibleProtocol);
-  app.use('/api/*', jsonBodyLimit);
+  app.use('/api/*', (c, next) =>
+    c.req.path === '/api/admin/backups/upload' ? next() : jsonBodyLimit(c, next),
+  );
 
   app.get('/api/compatibility', (c) => {
     c.header('Cache-Control', 'no-store');
@@ -82,6 +95,8 @@ export function createApp() {
   const api = app
     .basePath('/api')
     .get('/health', (c) => c.json({ ok: true }))
+    .route('/updates', updateRoutes)
+    .route('/admin/backups', backupRoutes)
     .route('/workspaces', workspaceRoutes)
     .route('/projects', projectRoutes)
     .route('/statuses', statusRoutes)

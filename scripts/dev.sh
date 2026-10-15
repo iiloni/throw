@@ -149,6 +149,10 @@ case "$command" in
         wait_for_turn check
         "${compose[@]}" exec -T app pnpm check
         ;;
+    production-smoke)
+        wait_for_turn production-smoke
+        node "$repo_root/scripts/production-smoke.mjs"
+        ;;
     test)
         wait_for_turn test
         "${compose[@]}" exec -T app pnpm test "$@"
@@ -216,6 +220,9 @@ case "$command" in
     shell)
         "${compose[@]}" exec app bash
         ;;
+    backup)
+        "${compose[@]}" exec -T app pnpm --silent --filter @throw/server backup "$@"
+        ;;
     psql)
         "${compose[@]}" exec postgres psql -U throw -d throw "$@"
         ;;
@@ -251,6 +258,7 @@ Usage: ./scripts/dev.sh <command>
   seed [demo|basic]   Re-run idempotent seeding
   check               Lint, typecheck, unit tests and build (in the container)
                       check, test, build and e2e take turns across worktrees
+  production-smoke    Disposable production boot, backup and restore check
   test [args]         Unit tests (in the container)
   build [channel]     Build all packages (in the container; dev by default, or stable, preview)
   e2e [args]          Playwright tests from the host
@@ -260,6 +268,7 @@ Usage: ./scripts/dev.sh <command>
                       --usb: forward this worktree's port through adb (USB or wireless adb)
                       Other options pass to cap run; the channel is always dev
   shell               Open a shell in the app container
+  backup [args]       Server backup CLI for this worktree
   psql [args]         Open psql against this worktree's database
   fix-permissions     Return ownership of generated files to the host user
   reset [-y]          Delete this worktree's volumes and start fresh

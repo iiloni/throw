@@ -25,9 +25,9 @@ Nothing reads Catch's database, and there is no shared auth.
 
 **Port features when needed.** The scaffold was followed by the responsive shell and the
 Capacitor Android project, including native SQLite, keyboard/system-bar handling and the
-stable/preview/dev source sets. Split view, the BlockNote editor, attachments, server backups,
-invites and admin pages, multiple accounts on a device, update prompts and release/signing
-scripts stay in Catch until a feature needs them. No sharing, reminders, media or widgets
+stable/preview/dev source sets. Split view, the BlockNote editor, attachments, invites and account-management admin pages and multiple accounts on a device stay in Catch
+until a feature needs them. Release/signing, update prompts and server backups were ported
+in ADRs 0009–0010. No sharing, reminders, media or widgets
 are ported with the Android shell.
 
 ## Consequences
@@ -40,5 +40,5 @@ are ported with the Android shell.
   independent of the UI tokens (see [branding](../branding.md)).
 - Development ports and Compose project names differ from Catch's so both run on one
   machine. The production Compose file defaults to port 3100 for the same reason.
-- Running both apps from one Compose stack against one Postgres container is intended
-  (docs/spec.md) but not set up: each repository's Compose file starts its own Postgres.
+- Each repository keeps its standalone Compose stack; ADR 0009 adds a combined example
+  for an operator-owned directory with one Postgres container and separate databases.

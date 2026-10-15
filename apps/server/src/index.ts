@@ -4,6 +4,7 @@ import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { createApp } from './app';
+import { startBackupSchedule } from './backups/service';
 import { env } from './env';
 import { appContentSecurityPolicy, securityHeaders } from './lib/securityHeaders';
 
@@ -32,6 +33,8 @@ if (webDist && indexHtml !== null) {
   // Client-side routes fall back to the SPA shell.
   app.get('*', (c) => (c.req.path.startsWith('/api/') ? c.notFound() : c.html(indexHtml)));
 }
+
+startBackupSchedule();
 
 serve({ fetch: app.fetch, port: env.PORT }, (info) => {
   console.log(`Throw server listening on http://localhost:${info.port}`);

@@ -47,7 +47,13 @@ import { orderQueuedWrites } from './orderQueuedWrites';
 import { reportRefusedChanges } from './refusedChanges';
 import { getServerUrl } from './serverUrl';
 import { shapeFetch } from './shapeFetch';
-import { addPendingWrite, getSyncStatus, settlePendingWrite, updateSyncStatus } from './syncStatus';
+import {
+  addPendingWrite,
+  getPendingWriteIds,
+  getSyncStatus,
+  settlePendingWrite,
+  updateSyncStatus,
+} from './syncStatus';
 import {
   changeIdFor,
   projectCreateRequest,
@@ -496,4 +502,17 @@ export function useStatuses() {
 export function useTasks() {
   const { data = [], isLoading } = useLiveQuery((q) => q.from({ task: tasksCollection }));
   return { tasks: data, isLoading };
+}
+
+/** A reload must wait for in-flight writes to reach durable storage or the server. */
+export async function waitForPendingWritesStored(): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  while (getPendingWriteIds().length) {
+    const queued = new Set((await executor.peekOutbox()).map((write) => write.id));
+    if (getPendingWriteIds().every((id) => queued.has(id))) return;
+    if (Date.now() >= deadline) {
+      throw new Error('Changes are still being saved. Wait a moment and try reloading again.');
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
 }

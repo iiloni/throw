@@ -46,6 +46,10 @@ integrations.
   tokens, scripts). Shared packages are extracted only once duplication hurts.
 - A self-hoster can run either app or both. The intended shape is one Postgres container
   with a separate database per app; each app needs its own Electric and replication slot.
+- Deployment lives in an operator-owned directory, with a combined Compose example in Throw
+  ([deployment guide](deployment.md), ADR 0009). Each app pins and updates its own image.
+- Server admins can make, schedule, download and restore whole-server database backups
+  ([backup guide](backups.md), ADR 0010).
 - Build starts after Catch reaches maturity.
 
 ## First version
@@ -461,8 +465,8 @@ dock interactions arrive with the board feature; search and the command palette 
   queued writes and Capacitor for Android.
 - Android uses `org.iloni.throwtasks` (Throw), `.preview` (Throw Preview) and `.dev`
   (Throw Dev), with separate device data and channel artwork. Bundled code works offline;
-  stable/preview ask for the self-hosted server URL. Signing, distribution and updates are
-  deferred to the release work.
+  stable/preview ask for the self-hosted server URL. Signed releases and web/Android update
+  prompts follow [the release guide](releases.md).
 - Shapes are filtered by workspace and project membership, not by user ID as in Catch.
 
 ### Offline changes and conflicts
@@ -493,8 +497,6 @@ little as possible; it is not the normal way to use the app (ADR 0005).
    answer can filter them without a migration.
 3. **Single sign-on.** Accepting an external OIDC provider in both apps would give shared
    login without coupling them. Not decided.
-4. **Deployment.** How one Compose stack runs either or both apps when they live in
-   separate repositories.
 5. **Refused changes.** How the app tells the user that a change made offline was not
    applied, beyond the entry in the task's log.
 6. **Reordering the full-width backlog.** The gallery lays cards out in several columns per

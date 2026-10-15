@@ -1,4 +1,5 @@
 export * from './activity';
+export * from './backups';
 export * from './colors';
 export * from './position';
 export * from './priorities';
