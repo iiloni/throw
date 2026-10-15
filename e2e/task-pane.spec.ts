@@ -168,7 +168,21 @@ test('task fields, actions, subtasks and task links work in the split pane and p
   );
   await pane.getByRole('button', { name: 'Task actions' }).click();
   await page.getByRole('menuitem', { name: 'Copy task link' }).click();
-  const href = await pane.getByRole('textbox', { name: 'Task link' }).inputValue();
+  const linkDialog = page.getByRole('dialog', { name: 'Task link', exact: true });
+  const linkInput = linkDialog.getByRole('textbox', { name: 'Task link' });
+  await expect(linkInput).toBeInViewport();
+  await expect(linkInput).toBeFocused();
+  const href = await linkInput.inputValue();
+  expect(
+    await linkInput.evaluate((input: HTMLInputElement) => [
+      input.selectionStart,
+      input.selectionEnd,
+    ]),
+  ).toEqual([0, href.length]);
+  await page.keyboard.press('Escape');
+  await expect(linkDialog).toHaveCount(0);
+  await expect(pane).toBeVisible();
+  await expect(pane.getByRole('button', { name: 'Task actions' })).toBeFocused();
   await page.goto(href);
   await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue(
     'A plan ready to share',
