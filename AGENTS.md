@@ -15,12 +15,16 @@ and ADR 0005's conflict rule; see `docs/data-model.md`), and the responsive app 
 shell owns workspace and project management, a desktop navigation rail, a phone dock and
 remembered navigation. Its project board uses the shared Board components on synced tasks
 and statuses; the cross-project board body is a placeholder.
-Task actions live in `apps/web/src/lib/tasks.ts` and `statuses.ts`. The activity log syncs
-to devices and comments are built (`lib/comments.ts`), with a timeline query in
-`collections.ts` but no timeline view. Tags have their data layer and reusable controls in
-`components/Tag*`, with a real-data `/prototype/tags` workshop in development only. The
-board colour helper is `taskTagColor` in `@throw/shared`. The task pane content is a separate
-step. Real-board dragging and keyboard moves are not wired yet.
+Task actions live in `apps/web/src/lib/tasks.ts` and `statuses.ts`. The task pane edits
+fields and text-only BlockNote descriptions, keeps recoverable description drafts, and
+opens subtasks through the board's existing `openTaskId`. Its real content is supplied by
+`TaskContentContext` at the project-board boundary; the prototype keeps its mock content.
+The activity log syncs to devices and comments are built (`lib/comments.ts`), with a
+timeline query in `collections.ts` but no timeline view yet. Tags have their data layer and
+reusable controls in `components/Tag*`, with a real-data `/prototype/tags` workshop in
+development only. The board colour helper is `taskTagColor` in `@throw/shared`. Tags and
+the timeline in the task pane are separate integration steps. Real-board dragging and
+keyboard moves are not wired yet.
 
 The board's interaction was worked out in a prototype on mock data: `/prototype/board`, in
 development builds only, with its components in `apps/web/src/components/Board`. It keeps
