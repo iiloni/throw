@@ -13,6 +13,12 @@ import { memberWorkspaces } from '../lib/workspaces';
 
 const idParam = zValidator('param', z.object({ id: z.uuid() }));
 
+/**
+ * When a write was applied, read under its lock. `now()` is when the transaction started, so
+ * a write that waited for another would be dated before it.
+ */
+const appliedAt = sql`clock_timestamp()`;
+
 /** The comment, locked, if the user can reach it. */
 async function lockComment(tx: Transaction, userId: string, id: string) {
   const [comment] = await tx
@@ -48,7 +54,9 @@ export const commentRoutes = new Hono<AppEnv>()
         .from(comments)
         .where(eq(comments.id, body.id));
       if (existing) return existing.taskId === body.taskId ? 'replayed' : 'taken';
-      await tx.insert(comments).values({ ...body, ...task, userId });
+      // Timed once the task is held, so a comment that waited for a task update is dated
+      // after that update's entry, as the timeline shows them.
+      await tx.insert(comments).values({ ...body, ...task, userId, createdAt: appliedAt });
       return currentTxid(tx);
     });
     // Also a task purged while the comment waited in an outbox: it is dropped with a notice.
@@ -68,7 +76,7 @@ export const commentRoutes = new Hono<AppEnv>()
       // A resent edit, or one that changes nothing: Electric would stream an update anyway,
       // and `editedAt` would move for nothing.
       if (isDeepStrictEqual(comment.body, body)) return null;
-      await tx.update(comments).set({ body, editedAt: sql`now()` }).where(eq(comments.id, id));
+      await tx.update(comments).set({ body, editedAt: appliedAt }).where(eq(comments.id, id));
       return currentTxid(tx);
     });
     if (result === 'not-found') return c.json({ error: 'Comment not found' }, 404);

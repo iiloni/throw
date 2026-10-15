@@ -346,9 +346,10 @@ these yet.
   `created` and `updated` entries. (Electric's `where` cannot test a `jsonb` value, so the
   shape cannot filter on an empty `changes` list.) The migration gave existing entries with
   an empty list that kind.
-- **An entry is timed under its task's lock** (`clock_timestamp()`, not the transaction's
-  start time), so when one write waits for another on the same task, the log still lists
-  them in the order they were applied.
+- **Entries and comments are timed under their locks** (`clock_timestamp()`, not the
+  transaction's start time): an entry and a comment's `createdAt` once the task is held, a
+  comment's `editedAt` once the comment is. When one write waits for another, the timeline
+  still lists them in the order they were applied.
 - **No task event was missing an entry.** Trashing and restoring a task are updates, logged
   as `trashed` items. A purge deletes the task's log with it. Trashing or restoring a
   project or a parent writes no entry on the tasks under it, as it writes nothing to their

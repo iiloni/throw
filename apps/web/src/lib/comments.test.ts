@@ -80,6 +80,10 @@ describe('writing a comment offline', () => {
     expect(commentsCollection.get(commentId)?.editedAt).toEqual(expect.any(String));
     const writes = fake.written.length;
     comments.editComment(commentId, text('Final'));
+    // The same document with its keys in another order, as `jsonb` returns a synced body.
+    comments.editComment(commentId, [
+      { content: [{ text: 'Final', type: 'text' }], type: 'paragraph' },
+    ]);
     expect(fake.written).toHaveLength(writes);
   });
 

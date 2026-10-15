@@ -190,8 +190,18 @@ test('comments and task edits made offline join the timeline in the server’s o
   // The device ends with the server's rows and times.
   const serverComments = await shapeRows(page.request, 'comments', account.headers);
   const serverEntries = await shapeRows(page.request, 'task_activity', account.headers);
-  expect(serverComments.map((row) => row.id).sort()).toEqual(
-    [kept, elsewhere, offline.first, offline.second].sort(),
+  const parse = (value: unknown) => (typeof value === 'string' ? JSON.parse(value) : value);
+  expect(
+    serverComments
+      .map((row) => ({ id: row.id, body: parse(row.body), edited: row.edited_at !== null }))
+      .sort((a, b) => String(a.id).localeCompare(String(b.id))),
+  ).toEqual(
+    [
+      { id: kept, body: text('Kept, edited offline'), edited: true },
+      { id: elsewhere, body: text('From another device'), edited: false },
+      { id: offline.first, body: text('Written offline'), edited: false },
+      { id: offline.second, body: text('Written and edited offline'), edited: true },
+    ].sort((a, b) => a.id.localeCompare(b.id)),
   );
   expect(serverEntries).toHaveLength(3);
   const timeline = await localTimeline(page, taskId);

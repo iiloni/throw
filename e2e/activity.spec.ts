@@ -250,17 +250,23 @@ test('each kind of task write produces its entry, and reorders stay on the serve
     statusId: { before: active, after: randomUUID() },
     description: { before: randomUUID(), after: { version: randomUUID(), document: text('Lost') } },
   });
-  // Only a reorder: kept for its change id, which a resend is still recognised by.
-  const reorder = await updateTask(request, owner, id, {
-    position: { after: 'a7', statusId: active, priority: 1, parentId: null },
+  // Only a reorder: kept for its change id, so a resend arriving after a later reorder is
+  // recognised and does not move the task back.
+  const reorder = { position: { after: 'a7', statusId: active, priority: 1, parentId: null } };
+  const reorderId = await updateTask(request, owner, id, reorder);
+  await updateTask(request, owner, id, {
+    position: { after: 'a9', statusId: active, priority: 1, parentId: null },
   });
-  await updateTask(
-    request,
-    owner,
-    id,
-    { position: { after: 'a7', statusId: active, priority: 1, parentId: null } },
-    reorder,
-  );
+  const resent = await request.patch(`/api/tasks/${id}`, {
+    headers: { ...json, ...owner.headers },
+    data: { changeId: reorderId, changes: reorder },
+  });
+  expect(await resent.json()).toEqual({ txid: null, refused: [] });
+  await expect
+    .poll(async () =>
+      (await shapeRows(request, 'tasks', owner.headers)).find((row) => row.id === id),
+    )
+    .toMatchObject({ position: 'a9' });
   const moves = await updateTask(request, owner, id, {
     parentId: { before: null, after: parent },
     statusId: { before: active, after: done },

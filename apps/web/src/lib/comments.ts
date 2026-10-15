@@ -2,7 +2,22 @@ import { type CommentBody, commentBodySchema } from '@throw/shared';
 import { uuidv7 } from 'uuidv7';
 import { commentsCollection, signedInUserId, tasksCollection, write } from './collections';
 
-const sameBody = (a: CommentBody, b: CommentBody) => JSON.stringify(a) === JSON.stringify(b);
+/** A JSON value with its object keys sorted, so equal documents serialize alike. */
+function sortedKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortedKeys);
+  if (value !== null && typeof value === 'object')
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [key, sortedKeys((value as Record<string, unknown>)[key])]),
+    );
+  return value;
+}
+
+// A synced body comes back from `jsonb` with its keys reordered; the server compares
+// structurally, so the device must too, or it shows an edit the server will not record.
+const sameBody = (a: CommentBody, b: CommentBody) =>
+  JSON.stringify(sortedKeys(a)) === JSON.stringify(sortedKeys(b));
 
 function requireOwnComment(id: string) {
   const comment = commentsCollection.get(id);
