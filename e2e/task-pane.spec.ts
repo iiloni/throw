@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { type Browser, expect, type Locator, type Page, test } from '@playwright/test';
-import { APP_LOAD_TIMEOUT, shapeRows, signUp } from './helpers';
+import { APP_LOAD_TIMEOUT, shapeRows, signUp, waitForCachedProject } from './helpers';
 
 async function fixture(page: Page) {
   const account = await signUp(page);
@@ -198,6 +198,11 @@ test('offline field edits and a description save survive reload and sync', async
   const { pane } = account;
   // Load the editor before blocking API calls; dev code itself stays online.
   await editDescription(pane, 'Written on the train.');
+  await waitForCachedProject(
+    page,
+    account.projectId,
+    account.statuses.map((row) => row.id),
+  );
   await page.route('**/api/**', (route) => route.abort('connectionfailed'));
   await pane.getByRole('textbox', { name: 'Task title' }).fill('Plan written offline');
   await pane.getByRole('textbox', { name: 'Task title' }).press('Enter');
@@ -280,6 +285,11 @@ test('a refused offline description stays recoverable after closing and reloadin
     await other.goto(`${account.path}&task=${account.taskId}`);
     const otherPane = other.getByLabel('Task', { exact: true });
     await editDescription(pane, 'Offline text that must not disappear.');
+    await waitForCachedProject(
+      page,
+      account.projectId,
+      account.statuses.map((row) => row.id),
+    );
     await page.route('**/api/**', (route) => route.abort('connectionfailed'));
     await pane.getByRole('button', { name: 'Save description' }).click();
     await expect(pane).toContainText('Queued for sync');

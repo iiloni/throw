@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect, type Locator, type Page, test } from '@playwright/test';
-import { APP_LOAD_TIMEOUT, shapeRows, signUp } from './helpers';
+import { APP_LOAD_TIMEOUT, shapeRows, signUp, waitForCachedProject } from './helpers';
 import { newTag, tagTaskUpdate } from './tag-helpers';
 
 async function fixture(page: Page, empty = false) {
@@ -302,6 +302,7 @@ test('a task created offline appears immediately, survives reload and gains its 
     )
     .toBe(true);
   await expect(page.locator('[aria-busy="false"]')).toBeVisible();
+  await waitForCachedProject(page, account.projectId, [account.status('Build')]);
   await page.route('**/api/**', (route) => route.abort('connectionfailed'));
   await page
     .getByRole('button', { name: isMobile ? 'New task' : 'Add task to Build', exact: true })
