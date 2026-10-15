@@ -1,4 +1,4 @@
-import { compareStatuses, PRIORITIES, type Status, type Task } from '@throw/shared';
+import type { Status, Task } from '@throw/shared';
 import { ChevronDown, Flag, MoreHorizontal } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
@@ -10,11 +10,17 @@ import { IconButton } from '@/components/IconButton/IconButton';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
 import { springs } from '@/lib/motion';
-import { sendTask, updateTask } from '@/lib/tasks';
 import { cn } from '@/lib/utils';
 import { TaskActions } from './TaskActions';
+import { PriorityPicker, StatusPicker } from './TaskPickers';
 
 type Panel = 'status' | 'priority' | 'more';
+
+/**
+ * The task's own bottom surface until the shell's drawer lands (ADR 0009). It owns the
+ * chrome, gestures, Escape and Back; the pickers and actions it shows are content that moves
+ * into the shell drawer unchanged.
+ */
 
 export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] }) {
   const [panel, setPanel] = useState<Panel | null>(null);
@@ -137,68 +143,10 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
             <ScrollArea className="min-h-0 flex-1">
               <ScrollAreaViewport>
                 {panel === 'status' && (
-                  <div role="radiogroup" aria-label="Status" className="px-3 pb-3">
-                    {(['backlog', 'active', 'done', 'cancelled'] as const).map((category) => (
-                      <div key={category}>
-                        <p className="px-3 pt-3 pb-1 text-muted-foreground text-xs">
-                          {
-                            {
-                              backlog: 'Backlog',
-                              active: 'Active',
-                              done: 'Done',
-                              cancelled: 'Cancelled',
-                            }[category]
-                          }
-                        </p>
-                        {statuses
-                          .filter((row) => row.category === category)
-                          .sort(compareStatuses)
-                          .map((row) => (
-                            <label
-                              key={row.id}
-                              className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl px-3 text-sm hover:bg-foreground/[0.06] has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/60"
-                            >
-                              <input
-                                className="order-last size-4 shrink-0 accent-brand"
-                                type="radio"
-                                name={`${id}-status`}
-                                checked={task.statusId === row.id}
-                                onChange={() => {
-                                  sendTask(task.id, row.id);
-                                  collapse();
-                                }}
-                              />
-                              <StatusGlyph category={row.category} />
-                              <span className="flex-1">{row.name}</span>
-                            </label>
-                          ))}
-                      </div>
-                    ))}
-                  </div>
+                  <StatusPicker task={task} statuses={statuses} onPicked={collapse} />
                 )}
                 {panel === 'priority' && (
-                  <div role="radiogroup" aria-label="Priority" className="px-3 pb-3">
-                    {PRIORITIES.map((priority) => (
-                      <label
-                        key={priority}
-                        className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl px-3 text-sm hover:bg-foreground/[0.06] has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/60"
-                      >
-                        <input
-                          className="order-last size-4 shrink-0 accent-brand"
-                          aria-label={priorityName(project, priority)}
-                          type="radio"
-                          name={`${id}-priority`}
-                          checked={task.priority === priority}
-                          onChange={() => {
-                            updateTask(task.id, { priority });
-                            collapse();
-                          }}
-                        />
-                        <PriorityGlyph priority={priority} name={priorityName(project, priority)} />
-                        <span className="flex-1">{priorityName(project, priority)}</span>
-                      </label>
-                    ))}
-                  </div>
+                  <PriorityPicker task={task} project={project} onPicked={collapse} />
                 )}
                 {panel === 'more' && (
                   <TaskActions task={task} statuses={statuses} returnFocus={more} />

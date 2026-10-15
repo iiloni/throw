@@ -15,7 +15,7 @@ export function TaskActions({
 }: {
   task: Task;
   statuses: Status[];
-  returnFocus: RefObject<HTMLButtonElement | null>;
+  returnFocus: RefObject<HTMLElement | null>;
 }) {
   const [link, setLink] = useState<string | null>(null);
   const linkRef = useRef<HTMLInputElement>(null);
