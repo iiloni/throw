@@ -30,6 +30,8 @@ export function TaskDescription({ task }: { task: Task }) {
         submittedVersion: null,
         status: 'editing',
       });
+      setStorageFailed(false);
+      setError(null);
     } catch {
       setError('This device could not store a draft. Free some storage and try again.');
     }
@@ -140,6 +142,7 @@ export function TaskDescription({ task }: { task: Task }) {
           try {
             storeDescriptionDraft(task.id, { ...draft, document });
             setStorageFailed(false);
+            setError(null);
           } catch {
             setStorageFailed(true);
             setError(
