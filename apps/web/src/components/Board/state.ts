@@ -15,6 +15,7 @@ import {
   sendToStatus,
   type Task,
 } from './model';
+import { rememberTaskOrigin } from './taskTransition';
 
 /**
  * How the board looks and behaves, as the person using it prefers. Kept on the device.
@@ -103,10 +104,22 @@ export const board = createStore<BoardState>(initialBoard());
 
 export function update(change: Partial<BoardState> | ((state: BoardState) => Partial<BoardState>)) {
   const state = board.get();
-  board.set({ ...state, ...(typeof change === 'function' ? change(state) : change) });
+  const next = typeof change === 'function' ? change(state) : change;
+  if (
+    state.openTaskId &&
+    'openTaskId' in next &&
+    next.openTaskId !== state.openTaskId &&
+    state.actions?.beforeLeave?.(state.openTaskId) === false
+  )
+    return;
+  if (next.openTaskId && next.openTaskId !== state.openTaskId && innerWidth < 768)
+    rememberTaskOrigin(next.openTaskId);
+  board.set({ ...state, ...next });
 }
 
 export type BoardActions = {
+  /** Flush device-local editor text before closing or opening another task. */
+  beforeLeave?(taskId: string): boolean;
   create(statusId?: string): string;
   rename(taskId: string, title: string): void;
   send(taskIds: string[], statusId: string): void;

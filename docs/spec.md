@@ -411,6 +411,16 @@ view), comments and activity.
 - While a task is open on a phone, the dock (the collapsed [drawer](#the-drawer)) holds
   that task's actions, as it does for a note in Catch. The task's pickers open in the
   drawer.
+- The description is a directly editable, text-only BlockNote document. Changes commit
+  when the task view closes or switches tasks; drafts survive reloads and conflicts.
+- The top toolbars follow Catch: back and the parent/task identifier breadcrumb on the
+  left, trash/restore on the right.
+- Subtasks sit on the task pane as a board column of the same task cards, with status
+  controls and an add action. A subtask opens in the same view, with its parent in the
+  breadcrumb.
+- Phone opening/closing uses Catch's card-to-note container transform and timing: the
+  surface grows from its card and shrinks into its current position, with a fade when no
+  card is visible. Desktop panes slide in from the side, as in Catch.
 - The phone dock's create button adds a task at the top of the current column's default
   priority (the backlog's default status while the backlog is open) and opens it with
   its title selected.

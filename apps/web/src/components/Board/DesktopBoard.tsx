@@ -307,7 +307,7 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
                 initial={{ width: 0, opacity: 0 }}
                 animate={{ width: paneWidth + HANDLE_WIDTH + PANE_MARGIN, opacity: 1 }}
                 exit={{ width: 0, opacity: 0 }}
-                transition={resizing ? { duration: 0 } : springs.smooth}
+                transition={resizing ? { duration: 0 } : springs.pane}
               >
                 <SplitHandle
                   width={paneWidth}

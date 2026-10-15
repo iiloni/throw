@@ -6,10 +6,10 @@ import { ShellMenu } from '@/components/AppShell/ShellMenu';
 import { useShell } from '@/components/AppShell/shell';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
-import { TaskActions } from '@/components/TaskDetails/TaskActions';
 import { TaskDetails } from '@/components/TaskDetails/TaskDetails';
 import { Button } from '@/components/ui/button';
 import { useStatuses, useTags, useTasks } from '@/lib/collections';
+import { flushTaskDescription } from '@/lib/descriptionEditing';
 import { useMedia } from '@/lib/media';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { createTask, sendTask, updateTask } from '@/lib/tasks';
@@ -43,6 +43,7 @@ export function ProjectBoard({
   const awaitingTasks = useAwaitingSync(loadingTasks, data.tasks.length);
   const actions = useMemo(
     () => ({
+      beforeLeave: flushTaskDescription,
       create: (statusId?: string) => createTask(project.id, { statusId, title: 'New task' }),
       rename: (id: string, title: string) => updateTask(id, { title }),
       send: (ids: string[], statusId: string) => {
@@ -106,18 +107,6 @@ export function ProjectBoard({
         )
       );
     },
-    actions: (id: string) => {
-      const task = tasks.find((row) => row.id === id);
-      return (
-        task && (
-          <TaskActions
-            key={id}
-            task={task}
-            statuses={statuses.filter((row) => row.projectId === project.id)}
-          />
-        )
-      );
-    },
   };
   return (
     <TaskContentContext.Provider value={taskContent}>
@@ -161,7 +150,7 @@ export function ProjectBoard({
           <DesktopBoard />
         )}
         <AnimatePresence>
-          {phone && openTask && <TaskScreen key="task" task={openTask} />}
+          {phone && openTask && <TaskScreen key={openTask.id} task={openTask} />}
         </AnimatePresence>
       </div>
     </TaskContentContext.Provider>

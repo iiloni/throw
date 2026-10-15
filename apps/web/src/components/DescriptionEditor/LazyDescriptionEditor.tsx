@@ -1,4 +1,6 @@
-import { type ComponentProps, lazy, memo, Suspense } from 'react';
+import { type ComponentProps, lazy, memo, Suspense, useContext } from 'react';
+import { TaskEditorReadyContext } from '@/components/Board/taskMotionContext';
+import { DescriptionPreview } from './DescriptionPreview';
 
 const Editor = memo(
   lazy(() =>
@@ -7,8 +9,11 @@ const Editor = memo(
 );
 
 export function LazyDescriptionEditor(props: ComponentProps<typeof Editor>) {
+  const ready = useContext(TaskEditorReadyContext);
+  const preview = <DescriptionPreview document={props.initialContent} />;
+  if (!ready) return preview;
   return (
-    <Suspense fallback={<p className="py-4 text-muted-foreground text-sm">Loading description…</p>}>
+    <Suspense fallback={preview}>
       <Editor {...props} />
     </Suspense>
   );

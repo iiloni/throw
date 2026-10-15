@@ -415,11 +415,16 @@ The owner has not reviewed these yet.
   `apps/web/src/lib/refusedChanges.ts`. Descriptions also retain a recovery draft on the
   sending device when their outbox response reports a refusal; other field notices remain
   open (spec, open question 5).
-- **Description editing** uses an explicit Save with the version the editor opened on.
-  `saveDescription` requires that version and queues nothing if the local row has changed.
-  A read-only description refreshes on sync; an open draft keeps its content and selection.
-  Remote changes require reviewing the latest description, then explicitly choosing it or
-  applying the draft against that reviewed version. A further change requires a new review.
+- **Descriptions are directly editable**, without an edit mode or a Save button. Typing
+  keeps a device-local draft; closing the task or opening another task queues it with the
+  version editing began from. Route changes also flush the draft. The board still opens
+  tasks through `openTaskId`; its optional `beforeLeave` action flushes before a close or
+  switch, and can keep the task open if the latest text cannot be stored locally.
+  `saveDescription` requires the captured version and queues nothing if the local row has
+  changed. An untouched editor follows sync; a draft keeps its content and caret. Remote
+  changes require reviewing the latest description, then choosing it or keeping the draft
+  against that reviewed version for the next close. A further change requires a new review.
+  Closing with an unresolved conflict leaves the draft for the next visit.
   Drafts and pending saves are kept in localStorage, scoped to server, account and task, and
   survive closing and reloading. The outbox response retains refused text even with the pane
   closed; an acknowledgement only clears the matching pending save. The server also keeps

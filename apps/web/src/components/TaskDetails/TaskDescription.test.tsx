@@ -3,6 +3,7 @@ import type { Description, Task } from '@throw/shared';
 import { useState } from 'react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { readDescriptionDraft, settleDescriptionDraft } from '@/lib/descriptionDrafts';
+import { flushTaskDescription } from '@/lib/descriptionEditing';
 import { TaskDescription } from './TaskDescription';
 
 const fake = vi.hoisted(() => ({ task: undefined as Task | undefined, save: vi.fn() }));
@@ -10,8 +11,7 @@ vi.mock('@/lib/auth', () => ({ getSignedInUser: () => ({ id: 'user' }) }));
 vi.mock('@/lib/serverUrl', () => ({ getServerUrl: () => 'https://throw.example' }));
 vi.mock('@/lib/tasks', () => ({ getTask: () => fake.task, saveDescription: fake.save }));
 vi.mock('@/components/DescriptionEditor/LazyDescriptionEditor', () => ({
-  // Like BlockNote, this reads initial content once, allowing tests to detect accidental
-  // remounts that would replace the text and selection during an edit.
+  // BlockNote owns its mounted content, so this detects unwanted caret-destroying remounts.
   LazyDescriptionEditor: function Editor({
     initialContent,
     editable,
@@ -35,7 +35,6 @@ vi.mock('@/components/DescriptionEditor/LazyDescriptionEditor', () => ({
     );
   },
 }));
-
 const row: Task = {
   id: 'task',
   workspaceId: 'workspace',
@@ -56,32 +55,34 @@ beforeEach(() => {
   localStorage.clear();
   fake.task = { ...row };
   fake.save.mockReset();
-  fake.save.mockReturnValue({
-    version: 'new',
-    transaction: { isPersisted: { promise: new Promise(() => {}) } },
+  fake.save.mockImplementation((_id: string, document: Description) => {
+    fake.task = { ...fake.task!, description: document, descriptionVersion: 'new' };
+    return { version: 'new', transaction: { isPersisted: { promise: new Promise(() => {}) } } };
   });
 });
 
-it('updates a read-only description when a remote version arrives', () => {
+it('starts editable without buttons and follows a remote revision before typing', () => {
   const view = render(<TaskDescription task={row} />);
+  expect(screen.queryByRole('button')).toBeNull();
   view.rerender(
     <TaskDescription
       task={{ ...row, descriptionVersion: 'remote', description: [{ content: 'Remote text' }] }}
     />,
   );
-  expect(screen.getByLabelText('Saved text')).toHaveValue('[{"content":"Remote text"}]');
+  expect(screen.getByLabelText('Draft text')).toHaveValue('[{"content":"Remote text"}]');
+  view.unmount();
+  expect(fake.save).not.toHaveBeenCalled();
 });
 
-it('keeps a draft on close and reopens it with the version it was based on', () => {
+it('stores typing locally, then queues one save with its captured version when leaving', () => {
   const view = render(<TaskDescription task={row} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Edit description' }));
   fireEvent.change(screen.getByLabelText('Draft text'), { target: { value: 'My draft' } });
+  expect(fake.save).not.toHaveBeenCalled();
+  act(() => {
+    expect(flushTaskDescription('task')).toBe(true);
+  });
   view.unmount();
-  render(<TaskDescription task={row} />);
-  expect(screen.getByLabelText('Draft text')).toHaveValue(
-    '[{"type":"paragraph","content":"My draft"}]',
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Save description' }));
+  expect(fake.save).toHaveBeenCalledTimes(1);
   expect(fake.save).toHaveBeenCalledWith(
     'task',
     [{ type: 'paragraph', content: 'My draft' }],
@@ -91,33 +92,51 @@ it('keeps a draft on close and reopens it with the version it was based on', () 
     status: 'pending',
     submittedVersion: 'new',
   });
+  render(<TaskDescription task={fake.task!} />);
+  expect(screen.getByLabelText('Draft text')).toHaveValue(
+    '[{"type":"paragraph","content":"My draft"}]',
+  );
 });
 
-it('preserves the mounted draft during remote edits and guards replacement against another unseen change', () => {
+it('flushes on route unmount as well as the board close path', () => {
   const view = render(<TaskDescription task={row} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Edit description' }));
+  fireEvent.change(screen.getByLabelText('Draft text'), {
+    target: { value: 'Leave through navigation' },
+  });
+  view.unmount();
+  expect(fake.save).toHaveBeenCalledWith(
+    'task',
+    [{ type: 'paragraph', content: 'Leave through navigation' }],
+    'base',
+  );
+});
+
+it('preserves mounted draft text during remote edits and guards against an unreviewed replacement', () => {
+  const view = render(<TaskDescription task={row} />);
   fireEvent.change(screen.getByLabelText('Draft text'), { target: { value: 'Keep my selection' } });
   const remote = { ...row, descriptionVersion: 'remote', description: [{ content: 'Remote' }] };
   fake.task = remote;
   view.rerender(<TaskDescription task={remote} />);
   expect(screen.getByLabelText('Draft text')).toHaveValue('Keep my selection');
-  expect(screen.getByRole('button', { name: 'Save description' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Review latest description' }));
   fake.task = { ...remote, descriptionVersion: 'another' };
-  fireEvent.click(screen.getByRole('button', { name: 'Apply my version' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Keep my version' }));
   expect(fake.save).not.toHaveBeenCalled();
   expect(screen.getByRole('alert')).toHaveTextContent('changed again');
 });
 
-it('lets the user explicitly replace a reviewed version or discard their draft', () => {
+it('can keep a reviewed draft for the next close, or use the latest after a refusal', () => {
   const view = render(<TaskDescription task={row} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Edit description' }));
   fireEvent.change(screen.getByLabelText('Draft text'), { target: { value: 'My version' } });
   const remote = { ...row, descriptionVersion: 'remote' };
   fake.task = remote;
   view.rerender(<TaskDescription task={remote} />);
   fireEvent.click(screen.getByRole('button', { name: 'Review latest description' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Apply my version' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Keep my version' }));
+  expect(fake.save).not.toHaveBeenCalled();
+  act(() => {
+    flushTaskDescription('task');
+  });
   expect(fake.save).toHaveBeenCalledWith(
     'task',
     [{ type: 'paragraph', content: 'My version' }],
@@ -132,18 +151,26 @@ it('lets the user explicitly replace a reviewed version or discard their draft',
   expect(readDescriptionDraft('task')).toBeNull();
 });
 
-it('does not save an older draft when the device cannot store the latest keystrokes', () => {
+it('keeps the task open if the latest text cannot be stored and retries that exact text', () => {
   render(<TaskDescription task={row} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Edit description' }));
-  const storage = vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+  const storage = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
     throw new DOMException('Quota exceeded', 'QuotaExceededError');
   });
   fireEvent.change(screen.getByLabelText('Draft text'), {
     target: { value: 'Text still in the editor' },
   });
+  act(() => {
+    expect(flushTaskDescription('task')).toBe(false);
+  });
   expect(screen.getByLabelText('Draft text')).toHaveValue('Text still in the editor');
-  expect(screen.getByRole('button', { name: 'Save description' })).toBeDisabled();
-  expect(screen.getByRole('alert')).toHaveTextContent('copy your text');
   expect(fake.save).not.toHaveBeenCalled();
   storage.mockRestore();
+  act(() => {
+    expect(flushTaskDescription('task')).toBe(true);
+  });
+  expect(fake.save).toHaveBeenCalledWith(
+    'task',
+    [{ type: 'paragraph', content: 'Text still in the editor' }],
+    'base',
+  );
 });

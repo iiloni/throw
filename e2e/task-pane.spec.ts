@@ -66,16 +66,29 @@ async function fixture(page: Page) {
   await card.click();
   const pane = page.getByLabel('Task', { exact: true });
   await expect(pane).toBeVisible();
-  await expect(pane.getByRole('button', { name: 'Edit description' })).toBeVisible();
+  await expect(pane.locator('.bn-editor[contenteditable="true"]')).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
+  await expect(pane.getByRole('button', { name: 'Edit description' })).toHaveCount(0);
   return { ...account, projectId, taskId, workspaceId, statuses, status, path, pane };
 }
 
 async function editDescription(pane: Locator, text: string) {
-  await pane.getByRole('button', { name: 'Edit description' }).click();
   const editor = pane.locator('.bn-editor[contenteditable="true"]');
   await expect(editor).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
   await editor.fill(text);
   return editor;
+}
+
+async function closeTask(pane: Locator) {
+  await pane.getByRole('button', { name: 'Back to the board', exact: true }).click();
+  await expect(pane).toHaveCount(0);
+  await expect(pane.page().locator('[data-task-screen]')).toHaveCount(0);
+}
+
+async function openMore(pane: Locator) {
+  const button = pane.getByRole('button', { name: 'More task actions', exact: true });
+  if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click();
 }
 
 async function taskRow(page: Page, account: { headers: Record<string, string>; taskId: string }) {
@@ -113,12 +126,12 @@ test('task fields, actions, subtasks and task links work in the split pane and p
   await pane.getByRole('textbox', { name: 'Task title' }).fill('A plan ready to share');
   await pane.getByRole('textbox', { name: 'Task title' }).press('Enter');
   await pane.getByRole('button', { name: 'Status: Working. Change', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'backlog', exact: true }).click();
+  await pane.getByRole('radio', { name: 'backlog', exact: true }).click();
   await pane.getByRole('button', { name: 'Priority: Default. Change' }).click();
-  await page.getByRole('menuitemradio', { name: 'Urgent', exact: true }).click();
+  await pane.getByRole('radio', { name: 'Urgent', exact: true }).click();
   await editDescription(pane, 'Prepare the launch checklist.');
-  await pane.getByRole('button', { name: 'Bold', exact: true }).click();
-  await pane.getByRole('button', { name: 'Save description' }).click();
+  expect((await taskRow(page, account))?.description).toBeNull();
+  await closeTask(pane);
   await expect
     .poll(async () => {
       const row = await taskRow(page, account);
@@ -131,6 +144,7 @@ test('task fields, actions, subtasks and task links work in the split pane and p
     })
     .toEqual(['A plan ready to share', account.status('backlog'), '1', true]);
 
+  await page.goto(`${account.path}&task=${account.taskId}`);
   await pane.getByRole('button', { name: 'Add subtask', exact: true }).click();
   await pane.getByRole('textbox', { name: 'Subtask title' }).fill('Draft the announcement');
   await pane.getByRole('button', { name: 'Add subtask', exact: true }).click();
@@ -138,36 +152,37 @@ test('task fields, actions, subtasks and task links work in the split pane and p
     .getByRole('button', { name: 'Status of Draft the announcement: backlog. Change' })
     .click();
   await page.getByRole('menuitem', { name: 'Working', exact: true }).click();
-  await pane.getByRole('button', { name: /^Draft the announcement.*Working/ }).click();
+  await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue(
+    'A plan ready to share',
+  );
+  await pane.getByRole('article', { name: /^TASK-\d+ Draft the announcement$/ }).click();
   await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue(
     'Draft the announcement',
   );
   await expect(pane.getByRole('button', { name: 'Add subtask', exact: true })).toHaveCount(0);
-  await pane.getByRole('button', { name: 'TASK-1 A plan ready to share' }).click();
+  await pane.getByRole('button', { name: 'Open parent TASK-1' }).click();
 
-  await pane.getByRole('button', { name: 'Task actions' }).click();
-  await page.getByRole('menuitem', { name: 'Close task', exact: true }).click();
+  await openMore(pane);
+  await pane.getByRole('button', { name: 'Close task', exact: true }).click();
   await expect(
     pane.getByRole('button', { name: 'Status: done. Change', exact: true }),
   ).toBeVisible();
-  await pane.getByRole('button', { name: 'Task actions' }).click();
-  await page.getByRole('menuitem', { name: 'Reopen task', exact: true }).click();
+  await openMore(pane);
+  await pane.getByRole('button', { name: 'Reopen task', exact: true }).click();
   await expect(
     pane.getByRole('button', { name: 'Status: backlog. Change', exact: true }),
   ).toBeVisible();
-  await pane.getByRole('button', { name: 'Task actions' }).click();
-  await page.getByRole('menuitem', { name: 'Move to trash' }).click();
+  await pane.getByRole('button', { name: 'Move to trash' }).click();
   await expect(pane).toContainText('This task is in the trash.');
-  await pane.getByRole('button', { name: 'Task actions' }).click();
-  await page.getByRole('menuitem', { name: 'Restore task' }).click();
+  await pane.getByRole('button', { name: 'Restore task' }).click();
   await expect(pane).not.toContainText('This task is in the trash.');
 
   // HTTP on a LAN and denied clipboard permission both need a selectable fallback.
   await page.evaluate(() =>
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined }),
   );
-  await pane.getByRole('button', { name: 'Task actions' }).click();
-  await page.getByRole('menuitem', { name: 'Copy task link' }).click();
+  await openMore(pane);
+  await pane.getByRole('button', { name: 'Copy task link' }).click();
   const linkDialog = page.getByRole('dialog', { name: 'Task link', exact: true });
   const linkInput = linkDialog.getByRole('textbox', { name: 'Task link' });
   await expect(linkInput).toBeInViewport();
@@ -182,14 +197,19 @@ test('task fields, actions, subtasks and task links work in the split pane and p
   await page.keyboard.press('Escape');
   await expect(linkDialog).toHaveCount(0);
   await expect(pane).toBeVisible();
-  await expect(pane.getByRole('button', { name: 'Task actions' })).toBeFocused();
+  await expect(pane.getByRole('button', { name: 'More task actions' })).toBeFocused();
   await page.goto(href);
   await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue(
     'A plan ready to share',
     { timeout: APP_LOAD_TIMEOUT },
   );
-  await page.keyboard.press('Escape');
+  const title = pane.getByRole('textbox', { name: 'Task title' });
+  await title.fill('A title committed on Escape');
+  await title.press('Escape');
   await expect(pane).toHaveCount(0);
+  await expect
+    .poll(async () => (await taskRow(page, account))?.title)
+    .toBe('A title committed on Escape');
 });
 
 test('offline field edits and a description save survive reload and sync', async ({ page }) => {
@@ -207,11 +227,10 @@ test('offline field edits and a description save survive reload and sync', async
   await pane.getByRole('textbox', { name: 'Task title' }).fill('Plan written offline');
   await pane.getByRole('textbox', { name: 'Task title' }).press('Enter');
   await pane.getByRole('button', { name: 'Priority: Default. Change' }).click();
-  await page.getByRole('menuitemradio', { name: 'Someday', exact: true }).click();
+  await pane.getByRole('radio', { name: 'Someday', exact: true }).click();
   await pane.getByRole('button', { name: 'Status: Working. Change', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'backlog', exact: true }).click();
-  await pane.getByRole('button', { name: 'Save description' }).click();
-  await expect(pane).toContainText('Queued for sync');
+  await pane.getByRole('radio', { name: 'backlog', exact: true }).click();
+  await closeTask(pane);
   // The phone's task dialog makes the board's sync indicator inert to assistive tech.
   await expect(page.getByRole('status', { includeHidden: true })).toContainText('unsaved', {
     timeout: 40_000,
@@ -237,7 +256,6 @@ test('offline field edits and a description save survive reload and sync', async
       { timeout: 60_000 },
     )
     .toEqual(['Plan written offline', '5', account.status('backlog'), true]);
-  await expect(pane).not.toContainText('Queued for sync');
 });
 
 test('a remote description preserves an active draft and requires review before replacement', async ({
@@ -253,18 +271,20 @@ test('a remote description preserves an active draft and requires review before 
     await other.goto(`${account.path}&task=${account.taskId}`);
     const otherPane = other.getByLabel('Task', { exact: true });
     await editDescription(otherPane, 'A description from the other device.');
-    await otherPane.getByRole('button', { name: 'Save description' }).click();
+    await closeTask(otherPane);
     await expect(pane).toContainText('The description changed on another device.');
     await expect(pane.locator('.bn-editor[contenteditable="true"]')).toContainText(
       'My unsaved launch details.',
     );
-    await expect(pane.getByRole('button', { name: 'Save description' })).toBeDisabled();
+    await expect(pane.getByRole('button', { name: 'Save description' })).toHaveCount(0);
     await pane.getByRole('button', { name: 'Review latest description' }).click();
     await expect(pane).toContainText('A description from the other device.');
-    await pane.getByRole('button', { name: 'Apply my version' }).click();
+    await pane.getByRole('button', { name: 'Keep my version' }).click();
+    await closeTask(pane);
     await expect
       .poll(async () => String((await taskRow(page, account))?.description))
       .toContain('My unsaved launch details.');
+    await other.goto(`${account.path}&task=${account.taskId}`);
     await expect(otherPane).toContainText('My unsaved launch details.');
   } finally {
     await context.close();
@@ -291,12 +311,9 @@ test('a refused offline description stays recoverable after closing and reloadin
       account.statuses.map((row) => row.id),
     );
     await page.route('**/api/**', (route) => route.abort('connectionfailed'));
-    await pane.getByRole('button', { name: 'Save description' }).click();
-    await expect(pane).toContainText('Queued for sync');
-    await page.keyboard.press('Escape');
-    await expect(pane).toHaveCount(0);
+    await closeTask(pane);
     await editDescription(otherPane, 'The server keeps this version.');
-    await otherPane.getByRole('button', { name: 'Save description' }).click();
+    await closeTask(otherPane);
     await expect
       .poll(async () => String((await taskRow(other, account))?.description))
       .toContain('The server keeps this version.');
@@ -334,7 +351,7 @@ test('a refused offline description stays recoverable after closing and reloadin
   }
 });
 
-test('reduced motion keeps the pane, keyboard controls and an unsaved draft usable in both themes', async ({
+test('reduced motion keeps the drawer, keyboard controls and close-to-save editor usable in both themes', async ({
   page,
 }, testInfo) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -342,20 +359,127 @@ test('reduced motion keeps the pane, keyboard controls and an unsaved draft usab
   await editDescription(pane, 'A focused plan for the launch, with room for the details.');
   await pane.getByRole('button', { name: 'Priority: Default. Change' }).focus();
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('menu')).toBeVisible();
+  await expect(pane.getByRole('region', { name: 'Priority', exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(pane).toBeVisible();
-  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(pane.getByRole('region', { name: 'Priority', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(pane).toHaveCount(0);
   await page.getByRole('article', { name: 'TASK-1 Write the launch plan', exact: true }).click();
   await expect(pane.locator('.bn-editor[contenteditable="true"]')).toContainText(
     'A focused plan for the launch',
   );
+  // Native Android keeps the layout viewport while the keyboard takes its lower area.
+  const editor = pane.locator('.bn-editor[contenteditable="true"]');
+  await page.evaluate(() => document.documentElement.style.setProperty('--keyboard', '300px'));
+  await editor.fill(
+    Array.from({ length: 24 }, (_, index) => `Line ${index + 1} of the plan.`).join('\n'),
+  );
+  await editor.press('Control+End');
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const selection = getSelection();
+        if (!selection?.rangeCount) return false;
+        const range = selection.getRangeAt(0);
+        let caret = range.getBoundingClientRect();
+        if (!caret.height) {
+          const node = selection.focusNode;
+          const element = node instanceof Element ? node : node?.parentElement;
+          const block = element?.closest('[data-content-type]');
+          if (!block) return false;
+          caret = block.getBoundingClientRect();
+        }
+        const drawer = document.querySelector('[data-task-drawer]')!.getBoundingClientRect();
+        return caret.bottom > 0 && caret.bottom <= drawer.top;
+      }),
+    )
+    .toBe(true);
+  await page.evaluate(() => document.documentElement.style.setProperty('--keyboard', '0px'));
+  await editor.fill('A focused plan for the launch, with room for the details.');
+  await pane.getByRole('button', { name: 'Back to the board' }).focus();
   for (const colorScheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme });
     const path = testInfo.outputPath(`task-pane-${colorScheme}-reduced.png`);
     await page.screenshot({ path });
     await testInfo.attach(`${colorScheme} with reduced motion`, { path, contentType: 'image/png' });
   }
+});
+
+test('the phone surface grows from its card without scaling text and lands back in it', async ({
+  page,
+  isMobile,
+  browserName,
+}) => {
+  test.skip(
+    !isMobile && browserName !== 'firefox',
+    'Phone morph; Firefox exercises the same phone viewport.',
+  );
+  if (!isMobile) await page.setViewportSize({ width: 412, height: 915 });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const account = await fixture(page);
+  await closeTask(account.pane);
+  const card = page.getByRole('article', { name: 'TASK-1 Write the launch plan', exact: true });
+  const source = (await card.boundingBox())!;
+  function sample(direction: 'opening' | 'closing') {
+    return page.evaluate(async (direction) => {
+      const samples: Array<{ width: number; textWidth: number; clip: string }> = [];
+      const start = performance.now();
+      await new Promise<void>((resolve) => {
+        const frame = () => {
+          const surface = document.querySelector('[data-task-surface]');
+          if (surface) {
+            const box = surface.getBoundingClientRect();
+            samples.push({
+              width: box.width,
+              textWidth: surface.firstElementChild!.getBoundingClientRect().width,
+              clip: getComputedStyle(surface).clipPath,
+            });
+            if (
+              direction === 'opening' &&
+              samples.length > 2 &&
+              Math.abs(box.width - innerWidth) < 0.5
+            ) {
+              resolve();
+              return;
+            }
+          } else if (direction === 'closing' && samples.length) {
+            resolve();
+            return;
+          }
+          if (performance.now() - start > 5000) {
+            resolve();
+            return;
+          }
+          requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
+      });
+      return samples;
+    }, direction);
+  }
+  const opening = sample('opening');
+  await card.click();
+  const arrived = await opening;
+  expect(
+    arrived.some(
+      (frame) => frame.width > source.width + 2 && frame.width < page.viewportSize()!.width - 2,
+    ),
+  ).toBe(true);
+  expect(
+    arrived.every(
+      (frame) =>
+        Math.abs(frame.textWidth - page.viewportSize()!.width) < 1 && frame.clip === 'none',
+    ),
+  ).toBe(true);
+  await expect(account.pane.getByRole('textbox', { name: 'Task title' })).toBeVisible();
+  const closing = sample('closing');
+  await account.pane.getByRole('button', { name: 'Back to the board' }).click();
+  const left = await closing;
+  expect(
+    left.some(
+      (frame) => frame.width > source.width + 2 && frame.width < page.viewportSize()!.width - 2,
+    ),
+  ).toBe(true);
+  await expect(card).toBeVisible();
 });

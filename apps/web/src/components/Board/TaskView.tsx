@@ -1,5 +1,5 @@
 import { ArrowLeft, X } from 'lucide-react';
-import { motion, useDragControls, useReducedMotion } from 'motion/react';
+import { motion, useDragControls, useIsPresent, useReducedMotion } from 'motion/react';
 import { Dialog } from 'radix-ui';
 import { type PointerEvent, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
@@ -11,6 +11,7 @@ import { PriorityGlyph, StatusGlyph } from './glyphs';
 import { identifier, priorityName, statusById, subtasksOf, type Task, taskColor } from './model';
 import { StatusMenu } from './StatusMenu';
 import { board, current, renameTask, sendTasks, update } from './state';
+import { TaskScreenSurface } from './TaskScreenSurface';
 import { TaskContentContext } from './taskContent';
 
 const chip =
@@ -63,6 +64,7 @@ export function TaskTitle({ task }: { task: Task }) {
         if (title !== task.title) renameTask(task.id, title);
       }}
       onKeyDown={(event) => {
+        if (event.key === 'Escape') event.currentTarget.blur();
         if (event.key === 'Enter') {
           event.preventDefault();
           event.currentTarget.blur();
@@ -75,7 +77,6 @@ export function TaskTitle({ task }: { task: Task }) {
 
 /** A stand-in for the task view: enough of a task to judge how the board makes room for it. */
 function TaskBody({ task, underDock = false }: { task: Task; underDock?: boolean }) {
-  const content = useContext(TaskContentContext);
   const state = board.use();
   const { project, tasks } = current(state);
   const status = statusById(project, task.statusId);
@@ -84,22 +85,6 @@ function TaskBody({ task, underDock = false }: { task: Task; underDock?: boolean
   const tags = [task.primaryTagId, ...task.secondaryTagIds]
     .map((id) => project.tags.find((tag) => tag.id === id))
     .filter((tag) => tag !== undefined);
-  if (content)
-    return (
-      <ScrollArea className="min-h-0 flex-1 [--scrollbar-inset:1rem]">
-        <ScrollAreaViewport>
-          <div
-            className={cn(
-              'px-6 sm:px-8',
-              underDock ? 'pb-[calc(var(--dock-height)+var(--dock-bottom)+2.5rem)]' : 'pb-12',
-            )}
-          >
-            {content.body(task.id)}
-          </div>
-        </ScrollAreaViewport>
-        <ScrollBar />
-      </ScrollArea>
-    );
   return (
     <ScrollArea className="flex-1 [--scrollbar-inset:1rem]">
       <ScrollAreaViewport>
@@ -198,7 +183,6 @@ function TaskBody({ task, underDock = false }: { task: Task; underDock?: boolean
 }
 
 function TaskHeader({ task }: { task: Task }) {
-  const content = useContext(TaskContentContext);
   const { project } = current(board.use());
   return (
     <div className="flex h-14 shrink-0 items-center justify-between pr-4 pl-8">
@@ -206,7 +190,6 @@ function TaskHeader({ task }: { task: Task }) {
         {identifier(project, task) ?? 'Pending'}
       </span>
       <div className="flex items-center gap-1">
-        {content?.actions(task.id)}
         <IconButton label="Close task" onClick={() => update({ openTaskId: null })}>
           <X />
         </IconButton>
@@ -219,17 +202,34 @@ export const PANE_MIN = 340;
 
 /** Wide screens: the task beside the board, on the card's own color. */
 export function TaskPane({ task }: { task: Task }) {
+  const present = useIsPresent();
+  const content = useContext(TaskContentContext);
   useBackHandler(true, () => update({ openTaskId: null }));
   const { project } = current(board.use());
   return (
     <motion.section
       aria-label="Task"
+      inert={!present}
       data-color={taskColor(project, task) ?? undefined}
-      className="flex h-full min-w-0 flex-col rounded-3xl bg-[var(--tint,var(--card))] shadow-[0_1px_2px_oklch(0_0_0/0.06)]"
+      className="flex h-full min-w-0 flex-col overflow-hidden rounded-3xl bg-[var(--tint,var(--card))] shadow-[0_1px_2px_oklch(0_0_0/0.06)]"
       style={{ minWidth: PANE_MIN }}
     >
-      <TaskHeader task={task} />
-      <TaskBody key={task.id} task={task} />
+      {content ? (
+        <motion.div
+          key={task.id}
+          className="flex min-h-0 flex-1 flex-col"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25, ease: 'easeOut' }}
+        >
+          {content.body(task.id)}
+        </motion.div>
+      ) : (
+        <>
+          <TaskHeader task={task} />
+          <TaskBody key={task.id} task={task} />
+        </>
+      )}
     </motion.section>
   );
 }
@@ -325,6 +325,10 @@ const UNCLIPPED = 'inset(0px 0px 0px 0px round 0px)';
  */
 export function TaskScreen({ task }: { task: Task }) {
   const content = useContext(TaskContentContext);
+  return content ? <TaskScreenSurface task={task} /> : <PrototypeTaskScreen task={task} />;
+}
+
+function PrototypeTaskScreen({ task }: { task: Task }) {
   const { project } = current(board.use());
   const status = statusById(project, task.statusId);
   const controls = useDragControls();
@@ -419,11 +423,6 @@ export function TaskScreen({ task }: { task: Task }) {
               </IconButton>
             </div>
             <span className="flex-1" />
-            {content && (
-              <div className="glass pointer-events-auto flex rounded-[var(--dock-radius)] p-1">
-                {content.actions(task.id)}
-              </div>
-            )}
             {status && (
               <div className="glass pointer-events-auto flex rounded-[var(--dock-radius)] p-1">
                 <StatusMenu

@@ -252,9 +252,7 @@ test('subtasks change status in place and tasks open beside the board or full sc
   const viewport = page.viewportSize()!;
   if (isMobile) expect(box.width).toBe(viewport.width);
   else expect(box.width).toBeLessThan(viewport.width * 0.65);
-  await page
-    .getByRole('button', { name: isMobile ? 'Back to the board' : 'Close task', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Back to the board', exact: true }).click();
   await expect(pane).toHaveCount(0);
   await page.getByRole('article', { name: /Board parent$/ }).focus();
   await page.keyboard.press('Enter');
@@ -313,9 +311,7 @@ test('a task created offline appears immediately, survives reload and gains its 
   await title.fill('Written without a connection');
   await title.press('Enter');
   await expect(pane).toContainText('Pending');
-  await page
-    .getByRole('button', { name: isMobile ? 'Back to the board' : 'Close task', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Back to the board', exact: true }).click();
   const card = page.getByRole('article', {
     name: 'Pending Written without a connection',
     exact: true,
@@ -614,9 +610,7 @@ test('creating from a filtered backlog uses its default status and reveals the n
   const title = pane.getByRole('textbox', { name: 'Task title' });
   await title.fill('New backlog task');
   await title.press('Enter');
-  await page
-    .getByRole('button', { name: isMobile ? 'Back to the board' : 'Close task', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Back to the board', exact: true }).click();
   await expect(backlog.getByRole('button', { name: 'All', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',

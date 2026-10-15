@@ -4,9 +4,7 @@ import { en } from '@blocknote/core/locales';
 import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/shadcn';
 import type { Description } from '@throw/shared';
-import { Bold, Italic, List, ListChecks, ListOrdered } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { IconButton } from '@/components/IconButton/IconButton';
+import { useEffect } from 'react';
 import { useResolvedTheme } from '@/lib/theme';
 
 // Catch's editor, narrowed to text blocks. No file nodes, upload handlers or embeds.
@@ -46,12 +44,6 @@ export function DescriptionEditor({
       placeholders: { ...en.placeholders, default: 'Describe the work…' },
     },
   });
-  const [styles, setStyles] = useState(() => editor.getActiveStyles());
-  useEffect(() => {
-    if (!editable) return;
-    return editor.onSelectionChange(() => setStyles(editor.getActiveStyles()));
-  }, [editor, editable]);
-
   // Catch keeps the caret above its native keyboard and dock. Throw owns the same inset
   // as a CSS token, so observe it rather than installing a second keyboard tracker.
   useEffect(() => {
@@ -70,7 +62,7 @@ export function DescriptionEditor({
         const area = view.dom.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
         if (!area) return;
         const caret = view.coordsAtPos(view.state.selection.head);
-        const bottom = Math.min(area.getBoundingClientRect().bottom, innerHeight - keyboard - 96);
+        const bottom = area.getBoundingClientRect().bottom - 16;
         if (caret.bottom > bottom) area.scrollTop += caret.bottom - bottom + 12;
       });
     }
@@ -88,72 +80,10 @@ export function DescriptionEditor({
 
   return (
     <div className="description-editor">
-      {editable && (
-        <fieldset aria-label="Text formatting" className="mb-3 flex flex-wrap items-center gap-1">
-          <select
-            aria-label="Text style"
-            className="h-10 rounded-lg bg-foreground/[0.06] px-2 text-sm"
-            defaultValue="paragraph"
-            onChange={(event) => {
-              const type = event.currentTarget.value;
-              const block = editor.getTextCursorPosition().block;
-              if (type === 'heading') editor.updateBlock(block, { type, props: { level: 3 } });
-              else if (type === 'paragraph' || type === 'quote' || type === 'codeBlock')
-                editor.updateBlock(block, { type });
-              editor.focus();
-            }}
-          >
-            <option value="paragraph">Text</option>
-            <option value="heading">Heading</option>
-            <option value="quote">Quote</option>
-            <option value="codeBlock">Code</option>
-          </select>
-          {(['bold', 'italic'] as const).map((style) => (
-            <IconButton
-              key={style}
-              label={style === 'bold' ? 'Bold' : 'Italic'}
-              className="size-10"
-              aria-pressed={!!styles[style]}
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={() => {
-                editor.toggleStyles({ [style]: true });
-                setStyles(editor.getActiveStyles());
-                editor.focus();
-              }}
-            >
-              {style === 'bold' ? <Bold /> : <Italic />}
-            </IconButton>
-          ))}
-          {(
-            [
-              ['bulletListItem', 'Bullet list', List],
-              ['numberedListItem', 'Numbered list', ListOrdered],
-              ['checkListItem', 'Checklist', ListChecks],
-            ] as const
-          ).map(([type, label, Icon]) => (
-            <IconButton
-              key={type}
-              label={label}
-              className="size-10"
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={() => {
-                const block = editor.getTextCursorPosition().block;
-                editor.updateBlock(block, { type: block.type === type ? 'paragraph' : type });
-                editor.focus();
-              }}
-            >
-              <Icon />
-            </IconButton>
-          ))}
-        </fieldset>
-      )}
       <BlockNoteView
         editor={editor}
         editable={editable}
         theme={theme}
-        formattingToolbar={false}
-        sideMenu={false}
-        slashMenu={false}
         filePanel={false}
         onChange={() => onChange?.(editor.document as Description)}
         className="task-editor"

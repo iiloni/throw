@@ -1,5 +1,5 @@
 import type { Project, Status, Tag, Task } from '@throw/shared';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { compareClosed, compareTasks, identifier, subtasksOf, taskColor } from './model';
 import { projectBoardData } from './selection';
 import { board, initialBoard, listTasks, receiveBoard, update } from './state';
@@ -107,6 +107,26 @@ describe('synced project board selection', () => {
     expect(listTasks(board.get(), 'status:build')).toEqual([]);
     expect(data.hiddenTasks?.map((task) => task.id)).toEqual(['open']);
     receiveBoard(projectBoardData(project, statuses, []), actions);
+    expect(board.get().openTaskId).toBeNull();
+  });
+  it('flushes the open task before close or switch and keeps it open on a local save failure', () => {
+    board.set(view([task('first'), task('second')]));
+    const beforeLeave = vi.fn(() => false);
+    receiveBoard(projectBoardData(project, statuses, [task('first'), task('second')]), {
+      create: () => '',
+      rename: () => {},
+      send: () => {},
+      beforeLeave,
+    });
+    update({ openTaskId: 'first' });
+    update({ openTaskId: 'second' });
+    expect(beforeLeave).toHaveBeenCalledWith('first');
+    expect(board.get().openTaskId).toBe('first');
+    beforeLeave.mockReturnValue(true);
+    update({ openTaskId: 'second' });
+    expect(board.get().openTaskId).toBe('second');
+    update({ openTaskId: null });
+    expect(beforeLeave).toHaveBeenLastCalledWith('second');
     expect(board.get().openTaskId).toBeNull();
   });
   it('orders statuses by category, position and id, leaving active columns in project order', () => {

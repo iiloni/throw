@@ -1,101 +1,89 @@
 import type { Task } from '@throw/shared';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { uuidv7 } from 'uuidv7';
 import { LazyDescriptionEditor } from '@/components/DescriptionEditor/LazyDescriptionEditor';
 import { Button } from '@/components/ui/button';
 import {
+  type DescriptionDraft,
   descriptionIsStale,
   readDescriptionDraft,
   storeDescriptionDraft,
   useDescriptionDraft,
 } from '@/lib/descriptionDrafts';
-import { getTask, saveDescription } from '@/lib/tasks';
+import { commitDescriptionDraft, registerDescriptionEditor } from '@/lib/descriptionEditing';
+import { getTask } from '@/lib/tasks';
 
 export function TaskDescription({ task }: { task: Task }) {
   const draft = useDescriptionDraft(task.id);
-  const [reviewedVersion, setReviewedVersion] = useState<string | null | undefined>(undefined);
+  const editing = draft && draft.status !== 'pending';
+  const [session, setSession] = useState(() => ({
+    document: editing ? draft.document : task.description,
+    baseVersion: editing ? draft.baseVersion : task.descriptionVersion,
+    key: editing ? draft.editorKey : uuidv7(),
+  }));
+  const [reviewedVersion, setReviewedVersion] = useState<string | null | undefined>();
   const [reviewing, setReviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [storageFailed, setStorageFailed] = useState(false);
-  const editing = draft && draft.status !== 'pending';
+  const unstored = useRef<DescriptionDraft | null>(null);
   const stale =
     draft && (draft.status === 'conflict' || descriptionIsStale(draft, task.descriptionVersion));
 
-  function begin() {
-    try {
-      storeDescriptionDraft(task.id, {
+  useEffect(() => {
+    // Only an untouched editor follows remote revisions. Typing owns its content and caret.
+    if (!editing && !unstored.current && session.baseVersion !== task.descriptionVersion)
+      setSession({
         document: task.description,
         baseVersion: task.descriptionVersion,
-        editorKey: uuidv7(),
-        submittedVersion: null,
-        status: 'editing',
+        key: uuidv7(),
       });
-      setStorageFailed(false);
-      setError(null);
-    } catch {
-      setError('This device could not store a draft. Free some storage and try again.');
-    }
-  }
+  }, [editing, session.baseVersion, task.description, task.descriptionVersion]);
 
-  function save(replace = false) {
-    if (!draft) return;
-    const current = getTask(task.id);
-    if (!current) return;
-    if (replace && reviewedVersion !== current.descriptionVersion) {
-      setError('The description changed again. Review the latest version before applying yours.');
-      setReviewing(false);
-      return;
-    }
-    try {
-      const saved = saveDescription(
-        task.id,
-        draft.document,
-        replace ? (reviewedVersion ?? null) : draft.baseVersion,
-      );
-      if (!saved) {
-        storeDescriptionDraft(task.id, { ...draft, status: 'conflict' });
-        return;
+  useEffect(() => {
+    function flush() {
+      try {
+        if (unstored.current) {
+          storeDescriptionDraft(task.id, unstored.current);
+          unstored.current = null;
+        }
+        const result = commitDescriptionDraft(task.id);
+        if (result === 'failed') throw new Error('Could not store description');
+        if (result === 'conflict')
+          toast.info('Description changed elsewhere. Your draft is kept for review.');
+        return true;
+      } catch {
+        toast.error('Could not save your description. Keep the task open and copy your text.');
+        return false;
       }
-      storeDescriptionDraft(task.id, {
-        ...draft,
-        baseVersion: saved.version,
-        submittedVersion: saved.version,
-        status: 'pending',
-      });
-      setReviewing(false);
-      setError(null);
-      void saved.transaction.isPersisted.promise.catch(() => {
-        const pending = readDescriptionDraft(task.id);
-        // A failed older write must never replace text written after it was queued.
-        if (pending?.status === 'pending' && pending.submittedVersion === saved.version)
-          storeDescriptionDraft(task.id, { ...draft, status: 'editing' });
-        setError('The description could not be saved. Your draft is still on this device.');
-      });
-    } catch {
-      setError('The description could not be saved. Keep this pane open and copy your text.');
     }
+    const unregister = registerDescriptionEditor(task.id, flush);
+    return () => {
+      unregister();
+      // Route changes also leave the task; the board guard handles its own close/switch paths.
+      flush();
+    };
+  }, [task.id]);
+
+  function useLatest() {
+    storeDescriptionDraft(task.id, null);
+    unstored.current = null;
+    setSession({ document: task.description, baseVersion: task.descriptionVersion, key: uuidv7() });
+    setReviewing(false);
+    setError(null);
   }
 
   return (
-    <section aria-label="Description" className="mt-8">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="font-semibold text-sm">Description</h2>
-        {!editing && (
-          <Button variant="ghost" size="sm" onClick={begin}>
-            Edit description
-          </Button>
-        )}
-      </div>
+    <section aria-label="Description" className="mt-5 min-h-24">
       {error && (
         <p role="alert" className="mb-3 text-destructive text-sm">
           {error}
         </p>
       )}
       {stale && (
-        <div className="mb-4 rounded-xl bg-foreground/[0.06] p-4 text-sm">
+        <div className="mb-5 rounded-2xl bg-foreground/[0.06] p-4 text-sm">
           <p role="status">
             {draft.status === 'conflict'
-              ? 'Your description was not applied. Your text is kept here; the server’s version stands.'
+              ? 'Your description was not applied. Your draft is kept here.'
               : 'The description changed on another device. Your draft is kept here.'}
           </p>
           <Button
@@ -110,23 +98,42 @@ export function TaskDescription({ task }: { task: Task }) {
           </Button>
           {reviewing && (
             <div className="mt-3 border-border border-t pt-3">
-              <h3 className="mb-2 font-medium">Latest description</h3>
+              <h2 className="mb-2 font-medium">Latest description</h2>
               <LazyDescriptionEditor
                 key={`latest:${task.descriptionVersion}`}
                 initialContent={task.description}
               />
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    storeDescriptionDraft(task.id, null);
-                    setReviewing(false);
-                  }}
-                >
+                <Button variant="secondary" onClick={useLatest}>
                   Use latest description
                 </Button>
-                <Button disabled={storageFailed} onClick={() => save(true)}>
-                  Apply my version
+                <Button
+                  onClick={() => {
+                    if (unstored.current) {
+                      setError(
+                        'This device could not store your text. Keep the task open and copy it.',
+                      );
+                      return;
+                    }
+                    const current = getTask(task.id);
+                    if (!current || reviewedVersion !== current.descriptionVersion) {
+                      setError(
+                        'The description changed again. Review the latest version before keeping yours.',
+                      );
+                      setReviewing(false);
+                      return;
+                    }
+                    storeDescriptionDraft(task.id, {
+                      ...draft,
+                      baseVersion: reviewedVersion ?? null,
+                      submittedVersion: null,
+                      status: 'editing',
+                    });
+                    setReviewing(false);
+                    setError(null);
+                  }}
+                >
+                  Keep my version
                 </Button>
               </div>
             </div>
@@ -134,42 +141,33 @@ export function TaskDescription({ task }: { task: Task }) {
         </div>
       )}
       <LazyDescriptionEditor
-        key={editing ? draft.editorKey : `read:${task.descriptionVersion}`}
-        initialContent={editing ? draft.document : task.description}
-        editable={!!editing}
+        key={session.key}
+        initialContent={session.document}
+        editable
         onChange={(document) => {
-          if (!editing) return;
+          const existing = readDescriptionDraft(task.id);
+          const next: DescriptionDraft = {
+            document,
+            baseVersion:
+              existing?.status === 'editing' || existing?.status === 'conflict'
+                ? existing.baseVersion
+                : session.baseVersion,
+            editorKey: session.key,
+            submittedVersion: existing?.status === 'conflict' ? existing.submittedVersion : null,
+            status: existing?.status === 'conflict' ? 'conflict' : 'editing',
+          };
           try {
-            storeDescriptionDraft(task.id, { ...draft, document });
-            setStorageFailed(false);
+            storeDescriptionDraft(task.id, next);
+            unstored.current = null;
             setError(null);
           } catch {
-            setStorageFailed(true);
+            unstored.current = next;
             setError(
-              'This device could not store your draft. Keep this pane open and copy your text.',
+              'This device could not store your draft. Keep this task open and copy your text.',
             );
           }
         }}
       />
-      {editing ? (
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Button disabled={!!stale || storageFailed} onClick={() => save()}>
-            Save description
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              storeDescriptionDraft(task.id, null);
-              setReviewing(false);
-            }}
-          >
-            Cancel
-          </Button>
-          <span className="text-muted-foreground text-xs">Draft kept on this device</span>
-        </div>
-      ) : draft?.status === 'pending' ? (
-        <p className="mt-2 text-muted-foreground text-xs">Queued for sync</p>
-      ) : null}
     </section>
   );
 }
