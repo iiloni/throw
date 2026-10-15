@@ -25,6 +25,7 @@ export function TagBadge({
   const path = tagPath(tags, tag.id);
   const root = path[0] ?? tag;
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const reducedMotion = useReducedMotion();
   const width = useMotionValue<number | 'auto'>('auto');
   const measureRef = useRef<HTMLSpanElement>(null);
@@ -112,6 +113,7 @@ export function TagBadge({
       }}
     >
       <motion.button
+        ref={triggerRef}
         type="button"
         data-color={root.color ?? undefined}
         className={cn(
@@ -168,6 +170,12 @@ export function TagBadge({
           root.color ? 'border-tint-accent!' : 'border-foreground/20!',
         )}
         onEscapeKeyDown={(event) => event.stopPropagation()}
+        onPointerDownOutside={(event) => {
+          // A second tap must reach the toggle without Radix first dismissing it.
+          const target = event.detail.originalEvent.target;
+          if (target instanceof Node && triggerRef.current?.contains(target))
+            event.preventDefault();
+        }}
       >
         {label}
       </TooltipContent>

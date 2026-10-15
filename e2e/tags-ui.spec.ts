@@ -3,6 +3,7 @@ import { APP_LOAD_TIMEOUT, shapeRows, signUp } from './helpers';
 
 test('tag workshop manages a real tree and both task roles with touch and keyboard controls', async ({
   page,
+  isMobile,
 }) => {
   test.setTimeout(120_000);
   const account = await signUp(page);
@@ -15,7 +16,26 @@ test('tag workshop manages a real tree and both task roles with touch and keyboa
   await expect(
     picker.getByRole('checkbox', { name: 'Secondary: Research', exact: true }),
   ).toBeChecked();
-  await picker.getByRole('checkbox', { name: 'Secondary: Product', exact: true }).check();
+  const badge = page
+    .getByRole('button', { name: 'Product / Features / Mobile', exact: true })
+    .first();
+  if (isMobile) {
+    await badge.tap();
+    await expect(page.getByRole('tooltip')).toHaveText('Product / Features / Mobile');
+    // Observe past Radix's 300 ms pointer-leave grace period after a real finger lifts.
+    await page.waitForTimeout(500);
+    await expect(page.getByRole('tooltip')).toBeVisible();
+    await badge.tap();
+    await expect(page.getByRole('tooltip')).toHaveCount(0);
+    await picker.getByRole('checkbox', { name: 'Secondary: Product', exact: true }).tap();
+  } else {
+    await page.keyboard.press('Tab');
+    await badge.focus();
+    await expect(page.getByRole('tooltip')).toHaveText('Product / Features / Mobile');
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('tooltip')).toHaveCount(0);
+    await picker.getByRole('checkbox', { name: 'Secondary: Product', exact: true }).check();
+  }
   await picker.getByRole('radio', { name: 'Primary: Research', exact: true }).check();
   // A primary may be secondary too; both roles survive independently.
   await expect(

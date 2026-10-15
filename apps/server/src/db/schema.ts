@@ -1,8 +1,8 @@
 import type {
   ActivityChange,
   ActivityKind,
-  CommentBody,
   Color,
+  CommentBody,
   Description,
   Priority,
   PriorityNames,
@@ -202,6 +202,7 @@ export const tags = pgTable(
   (table) => [
     index().on(table.workspaceId),
     index().on(table.projectId, table.parentId),
+    index().on(table.parentId),
     uniqueIndex().on(table.projectId, table.color).where(sql`${table.color} IS NOT NULL`),
   ],
 );

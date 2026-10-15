@@ -9,7 +9,12 @@ import {
   updateTaskSchema,
 } from '@throw/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { changeIdFor, taskCreateRequest, taskUpdateRequest } from './writeRequests';
+import {
+  changeIdFor,
+  taskCreateFromWrite,
+  taskCreateRequest,
+  taskUpdateRequest,
+} from './writeRequests';
 
 // The actions run against real TanStack DB collections, kept in memory, and writes that are
 // never sent: as on a device that is offline. Each write's mutations then go through the same
@@ -254,7 +259,7 @@ describe('offline tag actions', () => {
       'task-tags',
       'task-tags',
     ]);
-    expect(taskCreateRequest(tasksCollection.get(taskId)!, [parent, child])).toMatchObject({
+    expect(taskCreateFromWrite(tasksCollection.get(taskId)!, mutations)).toMatchObject({
       primaryTagId: child,
       secondaryTagIds: [parent, child],
     });

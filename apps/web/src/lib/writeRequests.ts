@@ -15,6 +15,7 @@ import {
   type Tag,
   type Task,
   type TaskChanges,
+  taskTagSchema,
   type UpdateComment,
   type UpdateProject,
   type UpdateStatus,
@@ -103,6 +104,19 @@ export function commentCreateRequest(comment: Comment): CreateComment {
 /** A comment edit, or null when the body did not change. The server stamps `editedAt`. */
 export function commentUpdateRequest(changes: Partial<Comment>): UpdateComment | null {
   return 'body' in changes ? updateCommentSchema.parse({ body: changes.body }) : null;
+}
+
+/** Bundles assignments from the queued transaction, including after an outbox reload. */
+export function taskCreateFromWrite(
+  task: Task,
+  mutations: readonly { type: string; collection: { id: string }; modified: object }[],
+): CreateTask {
+  const secondaryTagIds = mutations.flatMap((mutation) => {
+    if (mutation.type !== 'insert' || mutation.collection.id !== 'task-tags') return [];
+    const assignment = taskTagSchema.parse(mutation.modified);
+    return assignment.taskId === task.id ? [assignment.tagId] : [];
+  });
+  return taskCreateRequest(task, secondaryTagIds);
 }
 
 export function taskCreateRequest(task: Task, secondaryTagIds: string[] = []): CreateTask {

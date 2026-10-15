@@ -5,7 +5,9 @@ import { memberWorkspaces } from './workspaces';
 
 /** Always acquire before task/project row locks, including creates and purges. */
 export async function lockTagTree(tx: Transaction, projectId: string) {
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`tags/${projectId}`}, 0))`);
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${`tags/${projectId.toLowerCase()}`}, 0))`,
+  );
 }
 export function projectTags(tx: Transaction, userId: string, projectId: string) {
   return tx

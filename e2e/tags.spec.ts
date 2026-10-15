@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
+import { z } from 'zod';
 import { API_PROTOCOL_HEADER, API_PROTOCOL_VERSION } from '../packages/shared/src';
 import { createAccount, shapeRows } from './helpers';
 import { newTag, taggedTask, tagProject, tagTaskUpdate } from './tag-helpers';
@@ -25,14 +26,15 @@ test('tags and assignments isolate membership and project references @api', asyn
   for (const shape of ['tags', 'task-tags']) {
     await expect.poll(async () => (await shapeRows(request, shape, owner.headers)).length).toBe(1);
     expect(await shapeRows(request, shape, stranger.headers)).toEqual([]);
-    expect(
-      (
-        await request.get(`/api/shapes/${shape}`, {
-          params: { offset: '-1', where: 'true', 'params[1]': owner.user.id, columns: '*' },
-          headers: stranger.headers,
-        })
-      ).status(),
-    ).toBe(200);
+    const forged = await request.get(`/api/shapes/${shape}`, {
+      params: { offset: '-1', where: 'true', 'params[1]': owner.user.id, columns: '*' },
+      headers: stranger.headers,
+    });
+    expect(forged.status()).toBe(200);
+    const messages = z
+      .array(z.object({ value: z.unknown().optional() }))
+      .parse(await forged.json());
+    expect(messages.filter((message) => message.value !== undefined)).toEqual([]);
     expect((await anonymous.get(`/api/shapes/${shape}?offset=-1`)).status()).toBe(401);
   }
   await anonymous.dispose();

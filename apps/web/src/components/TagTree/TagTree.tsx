@@ -65,7 +65,7 @@ export function TagTree({
               const renderRow = () => {
                 const path = index.pathFor(tag.id);
                 const hasChildren = index.hasChildren(tag.id);
-                const expanded = !collapsed.has(tag.id);
+                const expanded = !!query || !collapsed.has(tag.id);
                 return (
                   <div
                     className="relative flex min-h-11 items-center gap-1"
@@ -89,6 +89,7 @@ export function TagTree({
                         type="button"
                         aria-label={`${expanded ? 'Collapse' : 'Expand'} ${tag.name}`}
                         aria-expanded={expanded}
+                        disabled={!!query}
                         onClick={() =>
                           setCollapsed((current) => {
                             const next = new Set(current);

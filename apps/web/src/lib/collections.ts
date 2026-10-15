@@ -67,7 +67,7 @@ import {
   projectUpdateRequest,
   statusUpdateRequest,
   tagCreateRequest,
-  taskCreateRequest,
+  taskCreateFromWrite,
   taskUpdateRequest,
 } from './writeRequests';
 
@@ -372,15 +372,21 @@ function send(
           return sending(api.updateProject(key, { trashed: true }), projectsCollection);
         // The purge removes the project's statuses and tasks too, which the device deleted in
         // the same write. Wait for them as well, but only on shapes that will stream it.
-        const tasksGo = mutations.some(
-          (other) =>
-            other.type === 'delete' &&
-            other.collection.id === tasksCollection.id &&
-            (other.original as Task).projectId === key,
+        const dependents = [tasksCollection, tagsCollection, taskTagsCollection].filter(
+          (collection) =>
+            mutations.some(
+              (other) =>
+                other.type === 'delete' &&
+                other.collection.id === collection.id &&
+                (other.original as { projectId: string }).projectId === key,
+            ),
         );
-        return tasksGo
-          ? sending(api.purgeProject(key), projectsCollection, statusesCollection, tasksCollection)
-          : sending(api.purgeProject(key), projectsCollection, statusesCollection);
+        return sending(
+          api.purgeProject(key),
+          projectsCollection,
+          statusesCollection,
+          ...dependents,
+        );
       }
     }
   }
@@ -446,7 +452,7 @@ function send(
           changes: { secondaryTags: [{ tagId: row.tagId, present: mutation.type !== 'delete' }] },
         })
         .then((response) => {
-          reportRefusedChanges(row.taskId, response.refused);
+          reportRefusedChanges(row.taskId, response.refused, changeIdFor(idempotencyKey, key));
           return response;
         }),
       tasksCollection,
@@ -456,18 +462,7 @@ function send(
     switch (mutation.type) {
       case 'insert':
         return sending(
-          api.createTask(
-            taskCreateRequest(
-              mutation.modified as Task,
-              mutations.flatMap((other) =>
-                other.type === 'insert' &&
-                other.collection.id === taskTagsCollection.id &&
-                (other.modified as TaskTag).taskId === key
-                  ? [(other.modified as TaskTag).tagId]
-                  : [],
-              ),
-            ),
-          ),
+          api.createTask(taskCreateFromWrite(mutation.modified as Task, mutations)),
           tasksCollection,
         );
       case 'update': {
@@ -502,7 +497,27 @@ function send(
           (task.parentId !== null && deletedInWrite(mutations, tasksCollection.id, task.parentId))
         )
           return null;
-        return sending(api.purgeTask(key), tasksCollection);
+        const taskIds = new Set([
+          key,
+          ...mutations.flatMap((other) =>
+            other.type === 'delete' &&
+            other.collection.id === tasksCollection.id &&
+            (other.original as Task).parentId === key
+              ? [String(other.key)]
+              : [],
+          ),
+        ]);
+        const assignmentsGo = mutations.some(
+          (other) =>
+            other.type === 'delete' &&
+            other.collection.id === taskTagsCollection.id &&
+            taskIds.has((other.original as TaskTag).taskId),
+        );
+        return sending(
+          api.purgeTask(key),
+          tasksCollection,
+          ...(assignmentsGo ? [taskTagsCollection] : []),
+        );
       }
     }
   }

@@ -7,7 +7,7 @@ import {
   tagWriteIssue,
   updateTagSchema,
 } from '@throw/shared';
-import { and, eq, inArray, or } from 'drizzle-orm';
+import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { uuidv7 } from 'uuidv7';
 import { z } from 'zod';
@@ -66,7 +66,7 @@ export const tagRoutes = new Hono<AppEnv>()
       if (!project) throw new TagError('Project not found', 404);
       const rows = await projectTags(tx, userId, project.id);
       if (rows.some((tag) => tag.id === body.id)) return null;
-      const tag = { ...body, workspaceId: project.workspaceId };
+      const tag = { ...body, projectId: project.id, workspaceId: project.workspaceId };
       validate(tag, rows);
       const inserted = await tx
         .insert(tags)
@@ -167,6 +167,8 @@ export const tagRoutes = new Hono<AppEnv>()
           userId,
           kind: 'updated',
           changes,
+          // As with task writes, timestamp after taking the task's lock.
+          createdAt: sql`clock_timestamp()`,
         });
       }
       // Cleanup is derived from current server rows, never from the deleting device's snapshot.

@@ -67,8 +67,19 @@ it('searches full ancestry and lets users collapse and reopen branches', async (
   // Exiting rows are inert while their height animation finishes.
   expect(screen.queryByRole('radio', { name: 'Primary: Product / Mobile' })).toBeNull();
   fireEvent.change(screen.getByRole('textbox', { name: 'Find tags' }), {
-    target: { value: 'mobile' },
+    target: { value: 'product' },
   });
+  expect(
+    await screen.findByRole('radio', { name: 'Primary: Product / Mobile' }),
+  ).toBeInTheDocument();
+  const collapse = screen.getByRole('button', { name: 'Collapse Product' });
+  expect(collapse).toBeDisabled();
+  expect(collapse).toHaveAttribute('aria-expanded', 'true');
+  fireEvent.change(screen.getByRole('textbox', { name: 'Find tags' }), {
+    target: { value: '' },
+  });
+  expect(screen.queryByRole('radio', { name: 'Primary: Product / Mobile' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Expand Product' }));
   expect(
     await screen.findByRole('radio', { name: 'Primary: Product / Mobile' }),
   ).toBeInTheDocument();
