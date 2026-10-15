@@ -300,8 +300,8 @@ Folded, it shows one pip per subtask and a count. Unfolded, it lists the subtask
 ### Subtasks on the board
 
 By default subtasks live with their parent: their statuses are tracked but do not place them
-on the board. A view option shows subtasks as top-level cards, marked as subtasks, in their
-own status columns.
+on the board. A board settings option shows subtasks as top-level cards, marked as subtasks,
+in their own status columns.
 
 Two drag interactions are kept in mind for later: dragging a subtask out to make it a task,
 and dropping a card on another to make it a subtask.
@@ -415,7 +415,8 @@ at wider desktop widths it starts expanded. An explicit expand/collapse choice i
 on the device and takes precedence over window width:
 
 - Workspace switcher at the top.
-- One icon per project.
+- One icon per project. In the expanded rail, a pencil at the right of each project entry
+  appears on hover or keyboard focus and edits that project. It stays visible on touch screens.
 - The cross-project board.
 - Settings at the bottom.
 

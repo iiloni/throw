@@ -87,21 +87,43 @@ function Segmented<T extends string>({
 }
 
 /**
- * The board's look-and-feel settings, as they will appear on the settings page. Here they
- * open from the prototype's frame, with a reset for its mock data.
+ * Shared board preferences, opened from the shell rail, phone header or prototype frame.
  */
 export function BoardSettingsPanel({
   side = 'right',
   onReset,
+  expanded,
 }: {
   side?: 'right' | 'bottom';
   onReset?: () => void;
+  expanded?: boolean;
 }) {
   return (
     <Popover.Root>
       <Popover.Trigger asChild>
-        <IconButton label="Board settings" className="size-10">
-          <SlidersHorizontal />
+        <IconButton
+          label="Board settings"
+          className={cn(
+            'size-10',
+            expanded !== undefined &&
+              'h-12 w-full justify-start gap-3 rounded-2xl px-2 font-normal text-muted-foreground hover:bg-accent/60',
+          )}
+        >
+          {expanded === undefined ? (
+            <SlidersHorizontal />
+          ) : (
+            <>
+              <span className="flex size-10 shrink-0 items-center justify-center">
+                <SlidersHorizontal className="size-5" />
+              </span>
+              <span
+                aria-hidden={!expanded}
+                className={cn('truncate transition-opacity duration-150', !expanded && 'opacity-0')}
+              >
+                Board settings
+              </span>
+            </>
+          )}
         </IconButton>
       </Popover.Trigger>
       <Popover.Portal>

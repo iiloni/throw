@@ -204,6 +204,14 @@ test('a task created offline appears immediately, survives reload and gains its 
 }) => {
   test.setTimeout(120_000);
   const account = await fixture(page, true);
+  // The API-created fixture must finish caching before this test disconnects the device.
+  // The empty tasks shape can be ready before the project's initial snapshot commits.
+  await page.evaluate(async () => {
+    const { projectsCollection, statusesCollection } = await import(
+      /* @vite-ignore */ '/src/lib/collections.ts'
+    );
+    await Promise.all([projectsCollection.preload(), statusesCollection.preload()]);
+  });
   await expect(page.locator('[aria-busy="false"]')).toBeVisible();
   await page.route('**/api/**', (route) => route.abort('connectionfailed'));
   await page

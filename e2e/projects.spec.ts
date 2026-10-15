@@ -39,7 +39,17 @@ async function editProject(page: Page, isMobile: boolean) {
   if (isMobile) {
     await openMenu(page, true);
     await page.getByRole('menuitem', { name: 'Edit project', exact: true }).click();
-  } else await page.getByRole('button', { name: 'Edit project', exact: true }).click();
+  } else {
+    const rail = page.getByRole('complementary', { name: 'Navigation rail' });
+    if ((await rail.getAttribute('data-expanded')) !== 'true')
+      await page.getByRole('button', { name: 'Expand navigation' }).click();
+    const name = await page.getByRole('heading', { level: 1 }).textContent();
+    const link = page
+      .getByRole('navigation', { name: 'Projects', exact: true })
+      .getByRole('link', { name: name ?? '', exact: true });
+    await link.hover();
+    await page.getByRole('button', { name: `Edit ${name}`, exact: true }).click();
+  }
 }
 
 test('create, edit and confirm deletion of a project from the shell', async ({
@@ -59,7 +69,9 @@ test('create, edit and confirm deletion of a project from the shell', async ({
   await page.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('New kitchen');
   await expect(
-    page.locator(isMobile ? '[data-shell-title]' : 'button[aria-label="Edit project"]'),
+    isMobile
+      ? page.locator('[data-shell-title]')
+      : page.getByRole('button', { name: 'Edit New kitchen', exact: true }),
   ).toBeFocused();
   expect(page.url()).toBe(projectUrl);
   await expect
@@ -91,6 +103,47 @@ test('create, edit and confirm deletion of a project from the shell', async ({
       })),
     )
     .toEqual([{ name: 'New kitchen', trashed: true }]);
+});
+
+test('expanded rail edits another project without navigating and labels board settings', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Phone project editing stays in the title menu.');
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await signUp(page);
+  await addProject(page, 'Kitchen', false);
+  await addProject(page, 'Garden', false);
+  const gardenUrl = page.url();
+  const rail = page.getByRole('complementary', { name: 'Navigation rail' });
+  const kitchen = rail.getByRole('link', { name: 'Kitchen', exact: true });
+  const edit = rail.getByRole('button', { name: 'Edit Kitchen', exact: true });
+  await page.locator('main').hover({ position: { x: 500, y: 20 } });
+  await expect(edit).toHaveCSS('opacity', '0');
+  await kitchen.hover();
+  await expect(edit).toHaveCSS('opacity', '1');
+  await edit.click();
+  await expect(page.getByLabel('Project name', { exact: true })).toHaveValue('Kitchen');
+  await page.getByLabel('Project name', { exact: true }).fill('Kitchen refit');
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page).toHaveURL(gardenUrl);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Garden');
+  await expect(rail.getByRole('button', { name: 'Edit Kitchen refit', exact: true })).toBeFocused();
+  await page.locator('main').hover({ position: { x: 500, y: 20 } });
+  await rail.getByRole('link', { name: 'Kitchen refit', exact: true }).focus();
+  await page.keyboard.press('Tab');
+  await expect(rail.getByRole('button', { name: 'Edit Kitchen refit', exact: true })).toBeFocused();
+  await expect(rail.getByRole('button', { name: 'Edit Kitchen refit', exact: true })).toHaveCSS(
+    'opacity',
+    '1',
+  );
+  const boardSettings = rail.getByRole('button', { name: 'Board settings', exact: true });
+  await expect(boardSettings).toHaveText('Board settings');
+  await expect(rail.getByRole('button', { name: 'Show subtasks as cards' })).toHaveCount(0);
+  await boardSettings.click();
+  await expect(page.getByRole('switch', { name: 'Subtasks as cards', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(boardSettings).toBeFocused();
 });
 
 test('switch projects and workspaces; restore the last project on reload and first load', async ({
