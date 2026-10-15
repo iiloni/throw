@@ -7,6 +7,8 @@ test('tag workshop manages a real tree and both task roles with touch and keyboa
 }) => {
   test.setTimeout(120_000);
   const account = await signUp(page);
+  // The shell heading can paint before its initial workspace redirect finishes.
+  await expect(page).toHaveURL(/\/w\/[^/?]+$/, { timeout: APP_LOAD_TIMEOUT });
   await page.goto('/prototype/tags');
   await page.getByRole('button', { name: 'Create example project' }).click();
   const picker = page.getByRole('region', { name: 'Choose task tags' });

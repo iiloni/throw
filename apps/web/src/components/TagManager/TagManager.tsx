@@ -11,7 +11,11 @@ import { useTags } from '@/lib/collections';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { deleteTag } from '@/lib/tags';
 
-/** Catch's tag settings as an embeddable project manager; no settings screen is wired. */
+/**
+ * Catch's tag settings as an embeddable project manager; no settings screen is wired. Its
+ * editor and delete confirmation open in sheets for now; on phones they become drawer content
+ * that replaces the manager (ADR 0009), using `TagEditor` and `TagDeleteConfirm`.
+ */
 export function TagManager({ projectId }: { projectId: string }) {
   const { tags, isLoading } = useTags(projectId);
   const awaiting = useAwaitingSync(isLoading, tags.length);
@@ -93,28 +97,47 @@ export function TagManager({ projectId }: { projectId: string }) {
         }}
         title={`Delete ${deleting?.name ?? 'tag'}?`}
       >
-        <p className="mb-5 text-sm text-muted-foreground">
-          {deleting && tagSubtreeIds(tags, deleting.id).size > 1
-            ? 'This tag and all its children will be removed from every task.'
-            : 'This tag will be removed from every task.'}{' '}
-          Tasks are kept. This cannot be undone.
-        </p>
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" className="h-11 rounded-full" onClick={() => setDeleting(null)}>
-            Cancel
-          </Button>
-          <Button
-            variant="destructive"
-            className="h-11 rounded-full"
-            onClick={() => {
-              if (deleting) deleteTag(deleting.id);
-              setDeleting(null);
-            }}
-          >
-            Delete tag
-          </Button>
-        </div>
+        {deleting && (
+          <TagDeleteConfirm tag={deleting} tags={tags} onDone={() => setDeleting(null)} />
+        )}
       </BottomSheet>
     </section>
+  );
+}
+
+/** The delete confirmation's content, kept apart from its sheet like `TagEditor`. */
+export function TagDeleteConfirm({
+  tag,
+  tags,
+  onDone,
+}: {
+  tag: Tag;
+  tags: readonly Tag[];
+  onDone: () => void;
+}) {
+  return (
+    <>
+      <p className="mb-5 text-sm text-muted-foreground">
+        {tagSubtreeIds(tags, tag.id).size > 1
+          ? 'This tag and all its children will be removed from every task.'
+          : 'This tag will be removed from every task.'}{' '}
+        Tasks are kept. This cannot be undone.
+      </p>
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" className="h-11 rounded-full" onClick={onDone}>
+          Cancel
+        </Button>
+        <Button
+          variant="destructive"
+          className="h-11 rounded-full"
+          onClick={() => {
+            deleteTag(tag.id);
+            onDone();
+          }}
+        >
+          Delete tag
+        </Button>
+      </div>
+    </>
   );
 }
