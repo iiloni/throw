@@ -15,6 +15,13 @@
       "when": 1791998014977,
       "tag": "0001_certain_toro",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792015583115,
+      "tag": "0002_flowery_butterfly",
+      "breakpoints": true
     }
   ]
 }

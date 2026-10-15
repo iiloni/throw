@@ -1,5 +1,6 @@
 export * from './activity';
 export * from './colors';
+export * from './comments';
 export * from './position';
 export * from './priorities';
 export * from './projects';

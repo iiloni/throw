@@ -9,6 +9,7 @@ import type { AppEnv } from './context';
 import { env, NATIVE_APP_ORIGINS } from './env';
 import { CLIENT_IP_HEADER, clientIp, proxyList } from './lib/clientIp';
 import { requireCompatibleProtocol } from './lib/protocol';
+import { commentRoutes } from './routes/comments';
 import { projectRoutes } from './routes/projects';
 import { shapeRoutes } from './routes/shapes';
 import { statusRoutes } from './routes/statuses';
@@ -86,6 +87,7 @@ export function createApp() {
     .route('/projects', projectRoutes)
     .route('/statuses', statusRoutes)
     .route('/tasks', taskRoutes)
+    .route('/comments', commentRoutes)
     .route('/shapes', shapeRoutes);
 
   return api;

@@ -1,8 +1,8 @@
 # Task data model
 
 Status: agreed with the owner on 2026-10-13. Projects, statuses, priorities, keys, tasks,
-subtasks, the trash and the conflict rule are built; tags, comments and the log's sync are
-not. Decisions taken while building it are under [Implementation notes](#implementation-notes).
+subtasks, the trash, the conflict rule, the log's sync and comments are built; tags are
+not, and the timeline has a data layer but no view. Decisions taken while building it are under [Implementation notes](#implementation-notes).
 
 This states the model behind tasks precisely enough to implement: the entities, their
 fields, who assigns each value, how rows are ordered and what the server does with each
@@ -207,7 +207,7 @@ clients, which cannot write to it.
 | `taskId` | |
 | `userId` | The signed-in user who sent the write. |
 | `createdAt` | The server's time when it applied the write. |
-| `kind` | `created` or `updated`. |
+| `kind` | `created` or `updated`. An update that only moved a position is kept as `reordered`, on the server only (see [Implementation notes](#the-log-and-comments)). |
 | Changes | A list; one item per field the write touched, position excepted. |
 
 Each item in the list holds:
@@ -224,6 +224,16 @@ Each item in the list holds:
 
 A description item holds no text otherwise: it says the description changed.
 
+The list is open: a field joins the log by adding items, with no schema change (`changes` is
+a `jsonb` column, synced whole). A device shows an item whose field it does not know
+generically, or skips it; it never drops the entry. Tag items:
+
+- `primaryTagId`: as a status item, with the tags' names.
+- `secondaryTags`: one item per tag added or removed, with that tag's id in an additional
+  `tagId`. `previous` and `requested` are the tag's id or null (added: `null` → id;
+  removed: id → `null`), with names for both. A tag that no longer exists is recorded with
+  `applied: false` and `reason: invalid`, also on a `created` entry that left it off.
+
 The timeline orders entries and comments together by `createdAt`, then `id`. A device may
 show its own queued writes in the timeline as pending, under the ids they will have.
 
@@ -237,7 +247,7 @@ Created, edited and deleted by clients through the outbox, like projects are tod
 | `taskId` | Fixed | |
 | `userId` | Server | The author. |
 | `body` | Client | BlockNote JSON, text only, as the description **(default)**. |
-| `createdAt` | Server | When the server received it. |
+| `createdAt` | Server | When the server received it. Empty on the device until it syncs. |
 | `editedAt` | Server | Empty until the body is edited. |
 
 - Only the author edits or deletes a comment.
@@ -268,8 +278,8 @@ The owner has not reviewed these yet.
   followed by another device's change would let the resend undo that change. That record is
   the activity entry, so `task_activity` is created and each create and update writes its
   entry, with every field it touched, applied or not. An update that only moves a position
-  writes an entry with no changes, which the timeline should skip. The log is not synced
-  yet; its shape, collection and timeline come with comments.
+  writes an entry with no changes, kept on the server only (see
+  [The log and comments](#the-log-and-comments)).
 - **A `created` entry** lists the title, status, priority and, when set, the description
   version and parent, each with no previous value. When the status the device asked for no
   longer existed, the status item names the status the task took and carries the reason
@@ -324,4 +334,59 @@ The owner has not reviewed these yet.
 - **Refused fields** reach the client through `onRefusedChanges` in
   `apps/web/src/lib/refusedChanges.ts`. Nothing listens yet (spec, open question 5).
 - **Deleting a project in the shell** now moves it to the trash. There is no trash view yet.
+
+### The log and comments
+
+Decided while building the log's sync and comments (2026-10-14). The owner has not reviewed
+these yet.
+
+- **Updates that only move a position are kept on the server.** The log leaves reordering
+  out, but the entry is still the record of its change id, without which a resent reorder
+  could undo a later one. Such an entry has the kind `reordered`, and the shape syncs only
+  `created` and `updated` entries. (Electric's `where` cannot test a `jsonb` value, so the
+  shape cannot filter on an empty `changes` list.) The migration gave existing entries with
+  an empty list that kind.
+- **Entries and comments are timed under their locks** (`clock_timestamp()`, not the
+  transaction's start time): an entry and a comment's `createdAt` once the task is held, a
+  comment's `editedAt` once the comment is. When one write waits for another, the timeline
+  still lists them in the order they were applied.
+- **No task event was missing an entry.** Trashing and restoring a task are updates, logged
+  as `trashed` items. A purge deletes the task's log with it. Trashing or restoring a
+  project or a parent writes no entry on the tasks under it, as it writes nothing to their
+  rows; the timeline can show that state from the project and parent. Purging a subtask
+  writes nothing in its parent's log.
+- **A refused status that was deleted has no name.** The server no longer has the status, so
+  `requestedName` is null.
+- **The log and comments always sync**, like statuses and tasks, so a task's timeline reads
+  offline. Devices only read the log.
+- **The timeline** orders entries and comments by `createdAt`, then `id`. A comment the
+  server has not received yet has no `createdAt` on the device and goes last, in the order
+  it was written; it will be dated after everything the device has seen. Entries with an
+  empty list are skipped. Queued task changes are not shown as pending: their entries
+  appear when the server writes them. `readTaskTimeline` and `useTaskTimeline` in
+  `apps/web/src/lib/collections.ts` return it; the view is not built.
+- **Device times have millisecond precision**, so two writes to one task in the same
+  millisecond are ordered by id.
+- **Comment body** **(default)**: a BlockNote document like a description, but never empty
+  (at least one block). Text-only is not checked on the server, as for descriptions.
+- **Comment edits apply in arrival order** **(default)**. An edit that leaves the body as it
+  is (including a resend) changes nothing, keeps `editedAt` and answers `{ txid: null }`.
+- **Only the author** edits or deletes a comment; anyone else gets 403, and the outbox drops
+  the write with a notice. A comment whose author's account was deleted can no longer be
+  changed. Deleting a comment that is not there, or not reachable, answers `{ txid: null }`.
+- **A comment on a task in the trash** is accepted, as an update to it would be.
+- **On the device**, a new comment carries the signed-in user as its author, and an edit
+  stamps a placeholder `editedAt`, until the synced row arrives. Purging a task does not
+  delete its comments on the device; the server's cascade streams their removal.
+- **A refusal names its entry.** `onRefusedChanges` listeners also receive the update's
+  change id, which is the id of the entry recording the refused values (spec, open
+  question 5).
+- **Storage, measured** in Chromium's OPFS store (the web app's), 2026-10-14: 2,000 update
+  entries (status changes with names, renames, priority changes, and status with priority)
+  take **0.9 KB each** with the table's indexes, and comments of about 100 characters
+  **1.1 KB each**. Of an entry, about 465 bytes are the row's JSON and 250 the sync metadata
+  Electric stores with it. The persistence layer also keeps a replay log of up to 1,000
+  transactions per collection for a day, which after a large first sync can briefly hold
+  about as much again. ADR 0006 estimated 0.5 KB an entry; at the measured size, its busy
+  solo user adds about 33 MB a year and a team of five about 82 MB, under the 200 MB limit.
 

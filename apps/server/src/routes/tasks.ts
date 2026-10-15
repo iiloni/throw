@@ -35,6 +35,13 @@ async function lockTask(tx: Transaction, userId: string, id: string) {
   return task;
 }
 
+/**
+ * When an entry's write was applied. Writes to one task wait for its row lock, and `now()` is
+ * when a transaction started, which can put a write that waited before the one it waited for.
+ * The time it took is read under the lock, so the log's order is the order writes applied.
+ */
+const appliedAt = sql`clock_timestamp()`;
+
 /** The fields a recorded entry did not apply, for answering a resent update as the first time. */
 function refusedIn(changes: ActivityChange[]): RefusedField[] {
   return changes.flatMap((change) => {
@@ -141,6 +148,7 @@ export const taskRoutes = new Hono<AppEnv>()
         userId,
         kind: 'created',
         changes,
+        createdAt: appliedAt,
       });
       return currentTxid(tx);
     });
@@ -237,14 +245,16 @@ export const taskRoutes = new Hono<AppEnv>()
         txid = await currentTxid(tx);
       }
       // Written for every update, even one that changed nothing: it is how a resend is known.
+      // One that only moved a position is kept for that alone; the log leaves reordering out.
       await tx.insert(taskActivity).values({
         id: changeId,
         workspaceId: task.workspaceId,
         projectId: task.projectId,
         taskId: id,
         userId,
-        kind: 'updated',
+        kind: plan.items.length === 0 ? 'reordered' : 'updated',
         changes: plan.items,
+        createdAt: appliedAt,
       });
       return { txid, refused: plan.refused };
     });
