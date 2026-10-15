@@ -76,5 +76,8 @@ export function settleDescriptionDraft(
 }
 
 export function descriptionIsStale(draft: DescriptionDraft, currentVersion: string | null) {
-  return draft.baseVersion !== currentVersion && draft.submittedVersion !== currentVersion;
+  return (
+    draft.baseVersion !== currentVersion &&
+    (draft.submittedVersion === null || draft.submittedVersion !== currentVersion)
+  );
 }

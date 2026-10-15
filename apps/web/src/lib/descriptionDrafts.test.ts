@@ -41,6 +41,7 @@ describe('description recovery drafts', () => {
     expect(descriptionIsStale(draft, 'base')).toBe(false);
     expect(descriptionIsStale({ ...draft, submittedVersion: 'own' }, 'own')).toBe(false);
     expect(descriptionIsStale({ ...draft, baseVersion: null }, null)).toBe(false);
+    expect(descriptionIsStale(draft, null)).toBe(true);
   });
 
   it('only clears an acknowledged pending save, preserving a newer draft and later queued save', () => {
