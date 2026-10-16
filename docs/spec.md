@@ -474,8 +474,10 @@ workspace. Projects append by position. Deleting a project requires confirmation
 it to the trash (see [Project](#project)); the trash has no view yet.
 
 The project board uses synced tasks and statuses, with the backlog in the drawer on a
-phone. The drawer is not yet one shared component: the backlog tray, closed sheet, move
-drawer and `BottomSheet` are still separate surfaces. The
+phone. The drawer (`components/Drawer`) carries the backlog, the closed tasks and board
+settings; the board owns it for now. The move drawer is still its own panel until the drag
+step, and the shell's project forms still use `BottomSheet` until the drawer moves to the
+shell. The
 cross-project board, search and the command palette remain placeholders. Task panes have a
 title and a placeholder body; their content comes later. Dragging, phone long-press
 selection and keyboard reordering remain in the development prototype until the drag step wires them to

@@ -249,6 +249,61 @@ test('a task created offline appears immediately, survives reload and gains its 
     ]);
 });
 
+test('board settings opens in the drawer on a phone and in a panel held to the window on desktop', async ({
+  page,
+  isMobile,
+}) => {
+  const height = 568;
+  await page.setViewportSize({ width: isMobile ? 320 : 1024, height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await fixture(page, true);
+  const trigger = page.getByRole('button', { name: 'Board settings', exact: true });
+  const settings = page.getByRole('dialog', { name: 'Board settings', exact: true });
+  const theme = settings.getByRole('group', { name: 'Theme', exact: true });
+  if (isMobile) {
+    const backlog = page.getByRole('region', { name: 'Backlog', exact: true });
+    await backlog.getByRole('button', { name: /^Backlog \d+$/ }).click();
+    await expect(backlog).toHaveAttribute('data-detent', 'half');
+  }
+  await trigger.click();
+  await expect(settings).toBeVisible();
+  // The drawer takes focus itself, so its close button's tooltip does not take the first Escape.
+  if (isMobile) await expect(settings).toBeFocused();
+  const bounds = await settings.boundingBox();
+  if (!bounds) throw new Error('Board settings has no bounds');
+  expect(bounds.y).toBeGreaterThanOrEqual(0);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(height);
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(isMobile ? 320 : 1024);
+  if (isMobile) {
+    // The drawer, raised to full height in place of the backlog.
+    expect(bounds.y).toBeLessThan(24);
+    await expect(page.getByRole('region', { name: 'Backlog', exact: true })).toHaveCount(0);
+    await expect(settings).toHaveAttribute('data-page', 'settings');
+  }
+  for (const name of ['Dark', 'Light']) {
+    const option = theme.getByRole('button', { name, exact: true });
+    await option.scrollIntoViewIfNeeded();
+    await expect(option).toBeInViewport();
+    await option.click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', name.toLowerCase());
+  }
+  await page.keyboard.press('Escape');
+  await expect(settings).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  if (isMobile) {
+    // Closing a page returns the drawer to what it showed, at the height it was.
+    await expect(page.getByRole('region', { name: 'Backlog', exact: true })).toHaveAttribute(
+      'data-detent',
+      'half',
+    );
+    await trigger.click();
+    await settings.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(settings).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+  }
+});
+
 test('rails, galleries, board settings and the phone tray keep their distinct layouts', async ({
   page,
   isMobile,

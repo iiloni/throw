@@ -86,15 +86,34 @@ function Segmented<T extends string>({
   );
 }
 
+/** Board preferences and, in the prototype, the mock data reset. */
+export function BoardSettingsContent({ onReset }: { onReset?: () => void }) {
+  return (
+    <>
+      <BoardSettingsControls />
+      {onReset && (
+        <button
+          type="button"
+          onClick={onReset}
+          className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-foreground/[0.06] font-medium text-sm outline-none hover:bg-foreground/[0.1] focus-visible:ring-[3px] focus-visible:ring-ring/60"
+        >
+          <RotateCcw aria-hidden className="size-4" />
+          Reset the mock data
+        </button>
+      )}
+    </>
+  );
+}
+
 /**
- * Shared board preferences, opened from the shell rail, phone header or prototype frame.
+ * Board preferences on desktop, opened from the shell rail or the prototype frame. A phone
+ * opens them in the drawer instead (ADR 0009). The panel is held to the window and scrolls
+ * inside it, so a short window never cuts it off.
  */
 export function BoardSettingsPanel({
-  side = 'right',
   onReset,
   expanded,
 }: {
-  side?: 'right' | 'bottom';
   onReset?: () => void;
   expanded?: boolean;
 }) {
@@ -128,24 +147,15 @@ export function BoardSettingsPanel({
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
-          side={side}
+          side="right"
           align="end"
           sideOffset={10}
           collisionPadding={12}
-          className="shell-menu glass-thick z-50 max-h-[calc(100dvh-1.5rem)] w-[22rem] max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-3xl px-5 py-4 outline-none"
+          aria-label="Board settings"
+          className="shell-menu glass-thick z-50 max-h-[var(--radix-popover-content-available-height)] w-[22rem] max-w-[calc(100vw-1.5rem)] overflow-y-auto overscroll-contain rounded-3xl px-5 py-4 outline-none"
         >
           <h2 className="pb-1 font-display font-semibold text-lg tracking-[-0.01em]">Board</h2>
-          <BoardSettingsControls />
-          {onReset && (
-            <button
-              type="button"
-              onClick={onReset}
-              className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-foreground/[0.06] font-medium text-sm outline-none hover:bg-foreground/[0.1] focus-visible:ring-[3px] focus-visible:ring-ring/60"
-            >
-              <RotateCcw aria-hidden className="size-4" />
-              Reset the mock data
-            </button>
-          )}
+          <BoardSettingsContent onReset={onReset} />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
