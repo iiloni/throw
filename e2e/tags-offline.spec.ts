@@ -161,16 +161,19 @@ for (const mode of ['update', 'create'] as const) {
     await expect
       .poll(() =>
         page.evaluate(
-          async ({ taskId, goneId, keptId }) => {
+          async ({ taskId, projectId, goneId, keptId }) => {
             const c = await import(/* @vite-ignore */ '/src/lib/collections.ts');
+            // The offline create reads the project and its statuses, which stream separately.
             return (
+              c.projectsCollection.has(projectId) &&
+              [...c.statusesCollection.values()].some((status) => status.projectId === projectId) &&
               c.tasksCollection.has(taskId) &&
               c.tagsCollection.has(goneId) &&
               c.tagsCollection.has(keptId) &&
               c.taskTagsCollection.isReady()
             );
           },
-          { taskId: task.id, goneId: gone.id, keptId: kept.id },
+          { taskId: task.id, projectId: project.id, goneId: gone.id, keptId: kept.id },
         ),
       )
       .toBe(true);
