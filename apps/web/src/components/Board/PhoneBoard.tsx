@@ -414,6 +414,7 @@ function BoardDrawer({
 }) {
   const state = board.use();
   const held = drag.use();
+  const fingerDown = holding.use();
   const { project } = current(state);
   const statuses = zoneStatuses('backlog', project.statuses);
   const count = listTasks({ ...state, backlogFilter: null }, 'backlog').length;
@@ -503,6 +504,7 @@ function BoardDrawer({
       detent={detent}
       onDetent={goTo}
       sunk={sunk}
+      gesturesDisabled={held !== null || fingerDown}
       page={page ? pages[page] : null}
       onClosePage={onClosePage}
     >
@@ -664,7 +666,10 @@ function ClosedTasks() {
   return (
     <>
       <StatusFilter zone="closed" />
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3.5 pb-[calc(var(--safe-bottom)+1.5rem)] [scrollbar-width:none]">
+      <section
+        aria-label="Closed tasks"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3.5 pb-[calc(var(--safe-bottom)+1.5rem)] [scrollbar-width:none]"
+      >
         {groups.map((group) => (
           <section key={group.label}>
             <h3 className="px-1.5 pt-3 pb-2 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
@@ -682,7 +687,7 @@ function ClosedTasks() {
             {state.awaitingTasks ? 'Loading tasks…' : 'Nothing closed.'}
           </p>
         )}
-      </div>
+      </section>
     </>
   );
 }

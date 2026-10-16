@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 import { APP_LOAD_TIMEOUT, shapeRows, signUp } from './helpers';
 
 async function fixture(page: Page, empty = false) {
@@ -83,7 +83,7 @@ async function fixture(page: Page, empty = false) {
   });
   await expect(page.getByRole('region', { name: 'Build', exact: true })).toBeVisible();
   if (!empty) await expect(page.getByRole('article', { name: /Board parent$/ })).toBeVisible();
-  return { ...account, projectId, workspaceId, ids, status };
+  return { ...account, projectId, workspaceId, ids, status, add };
 }
 
 const cardIds = (page: Page, region: string) =>
@@ -104,6 +104,53 @@ async function openClosed(page: Page, isMobile: boolean) {
   await page
     .getByRole('button', { name: isMobile ? /done this week. Show closed tasks/ : /^Open closed,/ })
     .click();
+}
+
+async function pullFrom(page: Page, touch: boolean, target: Locator, dy: number) {
+  const box = (await target.boundingBox())!;
+  // Mouse cards belong to the prototype carry engine; pull the list's empty inset instead.
+  const button = await target.evaluate((element) => element instanceof HTMLButtonElement);
+  const x = box.x + (touch || button ? box.width / 2 : 3);
+  const y = box.y + Math.min(box.height / 2, 60);
+  if (touch) {
+    const session = await page.context().newCDPSession(page);
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x, y }],
+    });
+    for (let step = 1; step <= 12; step++) {
+      await session.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x, y: y + (dy * step) / 12 }],
+      });
+    }
+    await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await session.detach();
+  } else {
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x, y + dy, { steps: 12 });
+    await page.mouse.up();
+  }
+}
+
+async function atDetent(drawer: Locator, detent: 'full' | 'half' | 'closed') {
+  await expect(drawer).toHaveAttribute('data-detent', detent);
+  await expect
+    .poll(() =>
+      drawer.evaluate((element, value) => {
+        const top = parseFloat(getComputedStyle(element).top);
+        const header = element.children[1] as HTMLElement;
+        const offset =
+          value === 'full'
+            ? 0
+            : value === 'half'
+              ? Math.round(element.clientHeight * 0.42)
+              : element.clientHeight - header.offsetHeight;
+        return Math.abs(element.getBoundingClientRect().y - top - offset);
+      }, detent),
+    )
+    .toBeLessThan(3);
 }
 
 test('real tasks occupy their ordered columns, mixed backlog and closed rail or sheet', async ({
@@ -540,4 +587,105 @@ test('creating from a filtered backlog uses its default status and reveals the n
         )?.status_id,
     )
     .toBe(account.status('Ideas'));
+});
+
+test('drawer pulls start on filter pills and short lists without activating a filter or card', async ({
+  page,
+  isMobile,
+  browserName,
+}) => {
+  test.skip(!isMobile && browserName !== 'firefox', 'Phone drawer; Firefox checks pointer pulls.');
+  if (!isMobile) await page.setViewportSize({ width: 412, height: 915 });
+  await fixture(page);
+  const backlog = page.getByRole('region', { name: 'Backlog', exact: true });
+  await openBacklog(page, true);
+  await atDetent(backlog, 'half');
+  const ideas = backlog.getByRole('button', { name: 'Ideas', exact: true });
+  await pullFrom(page, isMobile, ideas, -340);
+  await atDetent(backlog, 'full');
+  await expect(ideas).toHaveAttribute('aria-pressed', 'false');
+  await ideas.click();
+  await expect(ideas).toHaveAttribute('aria-pressed', 'true');
+  await pullFrom(page, isMobile, backlog.getByRole('region', { name: 'Backlog tasks' }), 500);
+  await expect(backlog).not.toHaveAttribute('data-detent', 'full');
+  await expect(page.getByRole('dialog', { name: 'Task', exact: true })).toHaveCount(0);
+  // Return to half height, and preserve it when a closed-page pull dismisses that page.
+  const handle = backlog.getByRole('button', { name: /^Backlog \d+$/ });
+  await handle.focus();
+  await page.keyboard.press('ArrowUp');
+  if ((await backlog.getAttribute('data-detent')) === 'full')
+    await page.keyboard.press('ArrowDown');
+  await atDetent(backlog, 'half');
+  await openClosed(page, true);
+  const closed = page.getByRole('dialog', { name: 'Closed', exact: true });
+  await expect.poll(async () => (await closed.boundingBox())!.y).toBeLessThan(10);
+  const done = closed.getByRole('button', { name: 'Done', exact: true });
+  await pullFrom(page, isMobile, done, 220);
+  await expect(closed).toHaveCount(0);
+  await atDetent(backlog, 'half');
+  await openClosed(page, true);
+  await expect.poll(async () => (await closed.boundingBox())!.y).toBeLessThan(10);
+  await expect(done).toHaveAttribute('aria-pressed', 'false');
+  await done.click();
+  await expect(done).toHaveAttribute('aria-pressed', 'true');
+  await pullFrom(page, isMobile, closed.getByRole('region', { name: 'Closed tasks' }), 220);
+  await expect(closed).toHaveCount(0);
+  await atDetent(backlog, 'half');
+});
+
+test('drawer content scrolls first and hands pulls over at its top and bottom edges', async ({
+  page,
+  isMobile,
+  browserName,
+}) => {
+  test.skip(
+    !isMobile && browserName !== 'firefox',
+    'Phone scrolling; Firefox checks edge arbitration with a pointer.',
+  );
+  await page.setViewportSize({ width: 412, height: 730 });
+  const account = await fixture(page);
+  const { positionsBetween } = await import('../packages/shared/src/position');
+  const positions = positionsBetween(null, null, 12);
+  for (const status of ['Ideas', 'Done']) {
+    for (let index = 0; index < 12; index++)
+      await account.add(`${status} scroll ${index}`, status, 3, positions[index]!);
+  }
+  await openBacklog(page, true);
+  const backlog = page.getByRole('region', { name: 'Backlog', exact: true });
+  const list = backlog.getByRole('region', { name: 'Backlog tasks' });
+  await expect(list.getByRole('article')).toHaveCount(14);
+  await atDetent(backlog, 'half');
+  const scroller = list.locator('[data-slot="scroll-area-viewport"]');
+  // An upward pull from the top scrolls the list, leaving the half-open drawer alone.
+  await pullFrom(page, isMobile, scroller, -100);
+  await atDetent(backlog, 'half');
+  if (isMobile)
+    await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await scroller.evaluate((element) => element.scrollTo(0, element.scrollHeight));
+  await pullFrom(page, isMobile, scroller, -330);
+  await atDetent(backlog, 'full');
+  // There is content above: pulling down scrolls instead of collapsing the drawer.
+  await scroller.evaluate((element) => element.scrollTo(0, 240));
+  await pullFrom(page, isMobile, scroller, 100);
+  await atDetent(backlog, 'full');
+  if (isMobile)
+    await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeLessThan(240);
+  // A continuous touch may reach the top mid-gesture and then pull the drawer down.
+  await scroller.evaluate((element, top) => element.scrollTo(0, top), isMobile ? 30 : 0);
+  await pullFrom(page, isMobile, scroller, 340);
+  await expect(backlog).not.toHaveAttribute('data-detent', 'full');
+  await openClosed(page, true);
+  const closed = page.getByRole('dialog', { name: 'Closed', exact: true });
+  await expect.poll(async () => (await closed.boundingBox())!.y).toBeLessThan(10);
+  await expect(closed.getByRole('article')).toHaveCount(14);
+  const history = closed.getByRole('region', { name: 'Closed tasks', exact: true });
+  await history.evaluate((element) => element.scrollTo(0, 240));
+  await pullFrom(page, isMobile, history, 100);
+  await expect(closed).toBeVisible();
+  await expect.poll(async () => (await closed.boundingBox())!.y).toBeLessThan(10);
+  if (isMobile)
+    await expect.poll(() => history.evaluate((element) => element.scrollTop)).toBeLessThan(240);
+  await history.evaluate((element, top) => element.scrollTo(0, top), isMobile ? 30 : 0);
+  await pullFrom(page, isMobile, history, 220);
+  await expect(closed).toHaveCount(0);
 });

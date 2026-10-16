@@ -12,6 +12,7 @@ import { IconButton } from '@/components/IconButton/IconButton';
 import { useBackHandler } from '@/lib/backButton';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
+import { useDrawerGesture } from './useDrawerGesture';
 
 export type Detent = 'closed' | 'half' | 'full';
 
@@ -42,6 +43,7 @@ export function Drawer({
   page,
   onClosePage,
   origin,
+  gesturesDisabled = false,
 }: {
   label: string;
   /** The header at rest: the dock when collapsed. */
@@ -53,13 +55,14 @@ export function Drawer({
   page: DrawerPage | null;
   onClosePage: () => void;
   origin?: string;
+  /** A held card owns its touch, even while grooming the fully open backlog. */
+  gesturesDisabled?: boolean;
 }) {
   const surface = useRef<HTMLElement>(null);
   const head = useRef<HTMLDivElement>(null);
   const safe = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion();
   const y = useMotionValue(0);
-  const panFrom = useRef(0);
   const opener = useRef<HTMLElement | null>(null);
   // What the drawer leaves off screen at half height, kept clear at the end of its list.
   const [hidden, setHidden] = useState(0);
@@ -74,6 +77,28 @@ export function Drawer({
     if (next === detent) animate(y, offsets()[next], reduced ? { duration: 0 } : springs.smooth);
     else onDetent(next);
   }
+
+  useDrawerGesture(surface, {
+    disabled: sunk || gesturesDisabled,
+    onMove: (dy) => {
+      y.stop();
+      y.set(Math.min(offsets().closed, Math.max(0, y.get() + dy)));
+    },
+    onEnd: (offset, velocity) => {
+      const at = offsets();
+      if (paged) {
+        if (offset > 100 || velocity > 500) onClosePage();
+        else animate(y, at.full, reduced ? { duration: 0 } : springs.smooth);
+        return;
+      }
+      const aim = y.get() + velocity * 0.15;
+      const nearest = (['full', 'half', 'closed'] as const).reduce((best, next) =>
+        Math.abs(at[next] - aim) < Math.abs(at[best] - aim) ? next : best,
+      );
+      settle(nearest);
+    },
+    onCancel: () => animate(y, restingAt(offsets()), reduced ? { duration: 0 } : springs.smooth),
+  });
 
   useBackHandler(detent !== 'closed' && !paged, () => onDetent('closed'));
   useBackHandler(paged, onClosePage);
@@ -156,33 +181,13 @@ export function Drawer({
           aria-hidden
           className="pointer-events-none absolute h-[var(--safe-bottom)]"
         />
-        <motion.div
+        <div
           ref={head}
           className={cn(
             'shrink-0 touch-none select-none px-3 pt-2',
             // The dock sits a little higher off the bottom edge than the header of an open drawer.
             detent === 'closed' && !paged ? 'pb-4' : 'pb-2',
           )}
-          onPanStart={() => {
-            panFrom.current = y.get();
-          }}
-          onPan={(_, info) => {
-            const at = offsets();
-            y.set(Math.min(at.closed, Math.max(0, panFrom.current + info.offset.y)));
-          }}
-          onPanEnd={(_, info) => {
-            const at = offsets();
-            if (paged) {
-              if (info.offset.y > 100 || info.velocity.y > 500) onClosePage();
-              else animate(y, at.full, reduced ? { duration: 0 } : springs.smooth);
-              return;
-            }
-            const aim = y.get() + info.velocity.y * 0.15;
-            const nearest = (['full', 'half', 'closed'] as const).reduce((best, next) =>
-              Math.abs(at[next] - aim) < Math.abs(at[best] - aim) ? next : best,
-            );
-            settle(nearest);
-          }}
         >
           <div aria-hidden className="mx-auto mb-2 h-1 w-9 rounded-full bg-foreground/20" />
           {page ? (
@@ -197,7 +202,7 @@ export function Drawer({
           ) : (
             dock
           )}
-        </motion.div>
+        </div>
         <div
           className="flex min-h-0 flex-1 flex-col"
           style={{ '--drawer-hidden': `${hidden}px` } as CSSProperties}
