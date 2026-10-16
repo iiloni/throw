@@ -46,9 +46,10 @@ All actions use `write()` and the outbox. Do not mutate collections from compone
   slot. Ported from Catch, including ancestry guides, reduced-motion-aware row transitions
   and deferred offscreen contents for large trees. Indentation is visually capped, not depth.
 
-When the shell drawer from ADR 0009 lands, phone tag management and picking move into that
-single drawer. The container owns replacement/restoration, modality, gestures, Back and
-focus on the drawer itself. On desktop, management uses a centred dialog and picking a
+When the shell drawer from [ADR 0009](https://github.com/iiloni/throw/blob/8fb8c58/docs/decisions/0009-the-drawer.md)
+lands, phone tag management and picking move into that single drawer. The ADR currently
+lives on the board branch, ahead of `main`. The container owns replacement/restoration,
+modality, gestures, Back and focus on the drawer itself. On desktop, management uses a centred dialog and picking a
 popover constrained to the window. The current sheet wrappers are temporary until those
 screens wire the shared content into their containers.
 

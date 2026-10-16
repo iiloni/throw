@@ -166,7 +166,12 @@ for (const mode of ['update', 'create'] as const) {
             // The offline create reads the project and its statuses, which stream separately.
             return (
               c.projectsCollection.has(projectId) &&
-              [...c.statusesCollection.values()].some((status) => status.projectId === projectId) &&
+              [...c.statusesCollection.values()].some(
+                (status) =>
+                  status.projectId === projectId &&
+                  status.category === 'backlog' &&
+                  status.isDefault,
+              ) &&
               c.tasksCollection.has(taskId) &&
               c.tagsCollection.has(goneId) &&
               c.tagsCollection.has(keptId) &&
