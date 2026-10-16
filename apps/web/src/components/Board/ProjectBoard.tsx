@@ -1,11 +1,12 @@
 import type { Project } from '@throw/shared';
 import { Search } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
-import { useEffect, useLayoutEffect, useMemo } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { ShellMenu } from '@/components/AppShell/ShellMenu';
 import { useShell } from '@/components/AppShell/shell';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
+import { type TaskPanel, taskDrawerContent } from '@/components/TaskDetails/TaskControls';
 import { TaskDetails } from '@/components/TaskDetails/TaskDetails';
 import { Button } from '@/components/ui/button';
 import { useStatuses, useTags, useTasks } from '@/lib/collections';
@@ -41,6 +42,9 @@ export function ProjectBoard({
   );
   const awaiting = useAwaitingSync(loadingStatuses, data.project.statuses.length);
   const awaitingTasks = useAwaitingSync(loadingTasks, data.tasks.length);
+  // The open task's page in the phone drawer belongs to that task alone.
+  const [taskPage, setTaskPage] = useState<{ taskId: string; panel: TaskPanel } | null>(null);
+  if (taskPage && taskPage.taskId !== state.openTaskId) setTaskPage(null);
   const actions = useMemo(
     () => ({
       beforeLeave: flushTaskDescription,
@@ -92,7 +96,17 @@ export function ProjectBoard({
   const openTask = [...data.tasks, ...(data.hiddenTasks ?? [])].find(
     (task) => task.id === state.openTaskId,
   );
+  const openRow = phone ? tasks.find((row) => row.id === openTask?.id) : undefined;
   const taskContent = {
+    drawer:
+      openRow &&
+      taskDrawerContent({
+        task: openRow,
+        statuses: statuses.filter((row) => row.projectId === project.id),
+        project: data.project,
+        page: taskPage?.panel ?? null,
+        onPage: (panel) => setTaskPage(panel && { taskId: openRow.id, panel }),
+      }),
     body: (id: string) => {
       const task = tasks.find((row) => row.id === id);
       return (
@@ -103,6 +117,7 @@ export function ProjectBoard({
             project={project}
             statuses={statuses.filter((row) => row.projectId === project.id)}
             tasks={tasks.filter((row) => row.projectId === project.id)}
+            phone={phone}
           />
         )
       );

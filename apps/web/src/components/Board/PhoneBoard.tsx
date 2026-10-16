@@ -8,9 +8,9 @@ import {
   SlidersHorizontal,
   X,
 } from 'lucide-react';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
-import { type ReactNode, useCallback, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useContext, useRef, useState } from 'react';
 import { type Detent, Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
@@ -33,6 +33,7 @@ import {
   update,
 } from './state';
 import { TaskCard } from './TaskCard';
+import { TaskContentContext } from './taskContent';
 
 /** Clear space at the end of a column, for the collapsed drawer resting over it. */
 const DOCK_SPACE = 'calc(var(--dock-height) + var(--safe-bottom) + 3rem)';
@@ -76,6 +77,8 @@ export function PhoneBoard({
   const [drawerPage, setDrawerPage] = useState<BoardPage | null>(null);
   const closePage = useCallback(() => setDrawerPage(null), []);
   const paged = drawerPage !== null;
+  // An open task covers the board; the drawer above it is the task's (ADR 0009).
+  const covered = paged || state.openTaskId !== null;
 
   function turnTo(index: number, behavior: ScrollBehavior = 'smooth') {
     const element = pager.current;
@@ -87,7 +90,7 @@ export function PhoneBoard({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <header className="shrink-0 pt-[var(--safe-top)]" inert={paged}>
+      <header className="shrink-0 pt-[var(--safe-top)]" inert={covered}>
         <div className="flex h-16 items-center gap-2 pr-3 pl-5">
           {projectMenu ?? (
             <DropdownMenu.Root>
@@ -143,11 +146,11 @@ export function PhoneBoard({
       </header>
 
       {searchContent ? (
-        <div className="min-h-0 flex-1 pb-[var(--dock-space)]" inert={paged}>
+        <div className="min-h-0 flex-1 pb-[var(--dock-space)]" inert={covered}>
           {searchContent}
         </div>
       ) : (
-        <div className="relative flex min-h-0 flex-1" inert={paged}>
+        <div className="relative flex min-h-0 flex-1" inert={covered}>
           <div
             ref={pager}
             data-pager=""
@@ -421,6 +424,8 @@ function BoardDrawer({
   const [detent, setDetent] = useState<Detent>(initialOpen ? 'half' : 'closed');
   // Grooming keeps the backlog where it is; anything else held wants the board.
   const sunk = held !== null && (page !== null || detent !== 'full');
+  // While a task is open, the collapsed drawer is its dock; the backlog waits at its height.
+  const task = useContext(TaskContentContext)?.drawer;
 
   function goTo(next: Detent) {
     setDetent(next);
@@ -498,17 +503,26 @@ function BoardDrawer({
 
   return (
     <Drawer
-      label="Backlog"
+      label={task ? 'Task drawer' : 'Backlog'}
       origin="backlog"
-      dock={dock}
-      detent={detent}
+      dock={
+        <AnimatePresence mode="popLayout" initial={false}>
+          <DockFace key={task ? 'task' : 'board'}>{task ? task.dock : dock}</DockFace>
+        </AnimatePresence>
+      }
+      detent={task ? 'closed' : detent}
+      detents={task ? ['closed'] : undefined}
       onDetent={goTo}
-      sunk={sunk}
+      sunk={!task && sunk}
       gesturesDisabled={held !== null || fingerDown}
-      page={page ? pages[page] : null}
-      onClosePage={onClosePage}
+      page={task ? task.page : page ? pages[page] : null}
+      onClosePage={task ? task.closePage : onClosePage}
+      raised={!!task}
     >
-      <div className="flex min-h-0 flex-1 flex-col" inert={detent === 'closed' && !held}>
+      <div
+        className="flex min-h-0 flex-1 flex-col"
+        inert={!!task || (detent === 'closed' && !held)}
+      >
         <StatusFilter zone="backlog" className="px-4 pt-1" />
         <CardList
           listId="backlog"
@@ -518,6 +532,24 @@ function BoardDrawer({
         />
       </div>
     </Drawer>
+  );
+}
+
+/** The board's dock and an open task's trade places, as Catch's dock does for a note. */
+function DockFace({ children }: { children: ReactNode }) {
+  const present = useIsPresent();
+  const reduced = useReducedMotion();
+  return (
+    <motion.div
+      aria-hidden={!present || undefined}
+      inert={!present}
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 12 }}
+      transition={reduced ? { duration: 0 } : springs.snappy}
+    >
+      {children}
+    </motion.div>
   );
 }
 

@@ -19,6 +19,8 @@ Task actions live in `apps/web/src/lib/tasks.ts` and `statuses.ts`. The task pan
 fields and text-only BlockNote descriptions, keeps recoverable description drafts, and
 opens subtasks through the board's existing `openTaskId`. Its real content is supplied by
 `TaskContentContext` at the project-board boundary; the prototype keeps its mock content.
+On a phone the same boundary hands the board's drawer the open task's dock and pickers
+(`TaskDetails/TaskControls.tsx`); the desktop pane hosts them in its own `TaskDrawer`.
 The activity log syncs to devices and comments are built (`lib/comments.ts`), with a
 timeline query in `collections.ts` but no timeline view yet. Tags have their data layer and
 reusable controls in `components/Tag*`, with a real-data `/prototype/tags` workshop in

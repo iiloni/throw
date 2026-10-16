@@ -45,7 +45,8 @@ export function DescriptionEditor({
     },
   });
   // Catch keeps the caret above its native keyboard and dock. Throw owns the same inset
-  // as a CSS token, so observe it rather than installing a second keyboard tracker.
+  // as a CSS token, so observe it rather than installing a second keyboard tracker. A dock
+  // resting over the scroll area declares itself as the area's bottom scroll padding.
   useEffect(() => {
     if (!editable) return;
     let frame = 0;
@@ -57,12 +58,13 @@ export function DescriptionEditor({
           Number.parseFloat(
             getComputedStyle(document.documentElement).getPropertyValue('--keyboard'),
           ) || 0;
-        if (keyboard <= 0) return;
         const view = editor.prosemirrorView;
         const area = view.dom.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
         if (!area) return;
+        const covered = Number.parseFloat(getComputedStyle(area).scrollPaddingBottom) || 0;
+        if (keyboard <= 0 && covered <= 0) return;
         const caret = view.coordsAtPos(view.state.selection.head);
-        const bottom = area.getBoundingClientRect().bottom - 16;
+        const bottom = area.getBoundingClientRect().bottom - covered - 16;
         if (caret.bottom > bottom) area.scrollTop += caret.bottom - bottom + 12;
       });
     }

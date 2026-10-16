@@ -1,5 +1,4 @@
 import { motion, useMotionValue, usePresence, useReducedMotion, useTransform } from 'motion/react';
-import { Dialog } from 'radix-ui';
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useBackHandler } from '@/lib/backButton';
 import { afterPaint, animateSteady, curves, stopSteady } from '@/lib/motion';
@@ -114,81 +113,72 @@ export function TaskScreenSurface({ task }: { task: Task }) {
 
   useEffect(() => () => setTaskCardHidden(task.id, false), [task.id]);
 
+  // Not a Radix modal: the board's drawer sits above the screen as the task's dock, and the
+  // board behind it is inert instead. Focus moves in on opening and back out after closing.
+  useEffect(() => {
+    const screen = document.querySelector<HTMLElement>(`[data-task-screen="${task.id}"]`);
+    // A new task's title has already taken focus to be named.
+    if (!screen?.contains(document.activeElement)) screen?.focus({ preventScroll: true });
+    return () => {
+      if (board.get().openTaskId) return;
+      // After the board's inert layer lifts and the landing card is shown again.
+      requestAnimationFrame(() => {
+        const target =
+          opener.current?.isConnected && opener.current !== document.body
+            ? opener.current
+            : document.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(task.id)}"]`);
+        target?.focus({ preventScroll: true });
+      });
+    };
+  }, [task.id]);
+
   return (
-    <Dialog.Root
-      open
-      onOpenChange={(open) => {
-        if (!open) close();
-      }}
-    >
+    <>
       <motion.div
         aria-hidden
         className="pointer-events-none fixed inset-0 z-40 bg-black"
         style={{ opacity: backdrop }}
       />
-      <Dialog.Content
-        asChild
-        aria-labelledby={undefined}
-        aria-describedby={undefined}
-        onOpenAutoFocus={(event) => {
-          event.preventDefault();
-          document
-            .querySelector<HTMLElement>(`[data-task-screen="${task.id}"]`)
-            ?.focus({ preventScroll: true });
-        }}
-        onCloseAutoFocus={(event) => {
-          event.preventDefault();
-          if (board.get().openTaskId) return;
-          const target =
-            opener.current?.isConnected && opener.current !== document.body
-              ? opener.current
-              : document.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(task.id)}"]`);
-          target?.focus({ preventScroll: true });
+      <section
+        role="dialog"
+        aria-label={isPresent ? 'Task' : 'Closing task'}
+        data-task-screen={task.id}
+        data-drop-block=""
+        tabIndex={-1}
+        inert={!isPresent || !!content.drawer?.page}
+        className="pointer-events-none fixed inset-0 z-40 outline-none"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && !event.defaultPrevented) {
+            event.preventDefault();
+            close();
+          }
         }}
       >
-        <section
-          role="dialog"
-          aria-modal="true"
-          aria-label={isPresent ? 'Task' : 'Closing task'}
-          data-task-screen={task.id}
-          data-drop-block=""
-          tabIndex={-1}
-          inert={!isPresent}
-          className="pointer-events-none fixed inset-0 z-40 outline-none"
-          onKeyDown={(event) => {
-            if (event.key === 'Escape' && !event.defaultPrevented) {
-              event.preventDefault();
-              close();
-            }
-          }}
+        <motion.div
+          data-task-surface=""
+          data-color={taskColor(project, task) ?? undefined}
+          className="pointer-events-auto absolute top-0 left-0 overflow-hidden bg-[var(--tint,var(--card))] shadow-xl"
+          style={{ x, y, width, height, borderRadius, scale, opacity, transformOrigin: 'center' }}
         >
-          <Dialog.Title className="sr-only">Task</Dialog.Title>
           <motion.div
-            data-task-surface=""
-            data-color={taskColor(project, task) ?? undefined}
-            className="pointer-events-auto absolute top-0 left-0 overflow-hidden bg-[var(--tint,var(--card))] shadow-xl"
-            style={{ x, y, width, height, borderRadius, scale, opacity, transformOrigin: 'center' }}
+            className="flex flex-col"
+            style={{ width: pageWidth, height: pageHeight, opacity: textOpacity }}
           >
-            <motion.div
-              className="flex flex-col"
-              style={{ width: pageWidth, height: pageHeight, opacity: textOpacity }}
-            >
-              <TaskScrollContext.Provider value={attachScroll}>
-                <TaskEditorReadyContext.Provider value={settled}>
-                  {content.body(task.id)}
-                </TaskEditorReadyContext.Provider>
-              </TaskScrollContext.Provider>
-            </motion.div>
-            <motion.div
-              aria-hidden
-              className="pointer-events-none absolute top-0 left-0"
-              style={{ width: faceWidth, opacity: faceOpacity }}
-            >
-              <TaskCardFace project={project} task={task} showStatus />
-            </motion.div>
+            <TaskScrollContext.Provider value={attachScroll}>
+              <TaskEditorReadyContext.Provider value={settled}>
+                {content.body(task.id)}
+              </TaskEditorReadyContext.Provider>
+            </TaskScrollContext.Provider>
           </motion.div>
-        </section>
-      </Dialog.Content>
-    </Dialog.Root>
+          <motion.div
+            aria-hidden
+            className="pointer-events-none absolute top-0 left-0"
+            style={{ width: faceWidth, opacity: faceOpacity }}
+          >
+            <TaskCardFace project={project} task={task} showStatus />
+          </motion.div>
+        </motion.div>
+      </section>
+    </>
   );
 }

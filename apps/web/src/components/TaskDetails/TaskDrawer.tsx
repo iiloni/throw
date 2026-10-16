@@ -1,9 +1,7 @@
 import type { Status, Task } from '@throw/shared';
-import { ChevronDown, Flag, MoreHorizontal } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { PriorityGlyph, StatusGlyph } from '@/components/Board/glyphs';
-import { priorityName } from '@/components/Board/model';
 import { board, current } from '@/components/Board/state';
 import { TrayGrip, traySurface } from '@/components/Board/TraySurface';
 import { IconButton } from '@/components/IconButton/IconButton';
@@ -11,26 +9,20 @@ import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scrol
 import { useBackHandler } from '@/lib/backButton';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
-import { TaskActions } from './TaskActions';
-import { PriorityPicker, StatusPicker } from './TaskPickers';
-
-type Panel = 'status' | 'priority' | 'more';
+import { panelTitle, TaskControls, type TaskPanel, TaskPanelContent } from './TaskControls';
 
 /**
- * The task's own bottom surface until the shell's drawer lands (ADR 0009). It owns the
- * chrome, gestures, Escape and Back; the pickers and actions it shows are content that moves
- * into the shell drawer unchanged.
+ * The task pane's own drawer on desktop, where the shell has none (ADR 0009). It owns the
+ * chrome, gestures, Escape and Back around the same controls and panels a phone shows in the
+ * board's drawer.
  */
-
 export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] }) {
-  const [panel, setPanel] = useState<Panel | null>(null);
+  const [panel, setPanel] = useState<TaskPanel | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement | null>(null);
-  const more = useRef<HTMLButtonElement>(null);
   const id = useId();
   const reduced = useReducedMotion();
   const project = current(board.use()).project;
-  const status = statuses.find((row) => row.id === task.statusId);
   const collapse = useCallback(() => {
     setPanel(null);
     trigger.current?.focus({ preventScroll: true });
@@ -59,13 +51,10 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
       document.removeEventListener('pointerdown', outside, true);
     };
   }, [panel, collapse]);
-  function toggle(next: Panel, element: HTMLButtonElement) {
+  function toggle(next: TaskPanel, element: HTMLButtonElement) {
     trigger.current = element;
     setPanel(panel === next ? null : next);
   }
-  const label = panel === 'status' ? 'Status' : panel === 'priority' ? 'Priority' : 'More';
-  const control =
-    'h-[var(--dock-height)] flex-1 rounded-[var(--dock-radius)] bg-foreground/[0.06] [&_svg]:size-6';
   return (
     <div
       ref={root}
@@ -85,41 +74,16 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
         className="flex touch-none flex-col px-3 pt-2 pb-2"
       >
         <TrayGrip className="mb-2" />
-        <div className="flex h-[var(--dock-height)] w-full items-center justify-around gap-2">
-          <IconButton
-            label={`Status: ${status?.name ?? 'Pending'}. Change`}
-            className={control}
-            aria-expanded={panel === 'status'}
-            aria-controls={`${id}-status`}
-            onClick={(event) => toggle('status', event.currentTarget)}
-          >
-            <StatusGlyph category={status?.category ?? 'backlog'} />
-          </IconButton>
-          <IconButton
-            label={`Priority: ${priorityName(project, task.priority)}. Change`}
-            className={control}
-            aria-expanded={panel === 'priority'}
-            aria-controls={`${id}-priority`}
-            onClick={(event) => toggle('priority', event.currentTarget)}
-          >
-            {task.priority === 3 ? (
-              <Flag />
-            ) : (
-              <PriorityGlyph priority={task.priority} name={priorityName(project, task.priority)} />
-            )}
-          </IconButton>
-          {/* Tags: mount the Tags control and its panel here when PR #8 lands on main. */}
-          <IconButton
-            ref={more}
-            label="More task actions"
-            className={control}
-            aria-expanded={panel === 'more'}
-            aria-controls={`${id}-more`}
-            onClick={(event) => toggle('more', event.currentTarget)}
-          >
-            <MoreHorizontal />
-          </IconButton>
-        </div>
+        <TaskControls
+          task={task}
+          statuses={statuses}
+          project={project}
+          onOpen={toggle}
+          controlProps={(name) => ({
+            'aria-expanded': panel === name,
+            'aria-controls': `${id}-${name}`,
+          })}
+        />
       </motion.div>
       <AnimatePresence initial={false}>
         {panel && (
@@ -127,7 +91,7 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
             key={panel}
             id={`${id}-${panel}`}
             role="region"
-            aria-label={label}
+            aria-label={panelTitle[panel]}
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: panel === 'more' ? 176 : 304, opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
@@ -135,22 +99,20 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
             className="flex max-h-[min(50dvh,24rem)] flex-col overflow-hidden border-border border-t"
           >
             <div className="flex h-11 shrink-0 items-center justify-between px-5">
-              <h2 className="font-semibold text-sm">{label}</h2>
+              <h2 className="font-semibold text-sm">{panelTitle[panel]}</h2>
               <IconButton label="Collapse task drawer" onClick={collapse}>
                 <ChevronDown />
               </IconButton>
             </div>
             <ScrollArea className="min-h-0 flex-1">
               <ScrollAreaViewport>
-                {panel === 'status' && (
-                  <StatusPicker task={task} statuses={statuses} onPicked={collapse} />
-                )}
-                {panel === 'priority' && (
-                  <PriorityPicker task={task} project={project} onPicked={collapse} />
-                )}
-                {panel === 'more' && (
-                  <TaskActions task={task} statuses={statuses} returnFocus={more} />
-                )}
+                <TaskPanelContent
+                  panel={panel}
+                  task={task}
+                  statuses={statuses}
+                  project={project}
+                  onDone={collapse}
+                />
               </ScrollAreaViewport>
               <ScrollBar />
             </ScrollArea>

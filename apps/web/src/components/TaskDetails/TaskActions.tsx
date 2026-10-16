@@ -1,21 +1,25 @@
 import { isClosedCategory, type Status, type Task } from '@throw/shared';
 import { Check, Copy, RotateCcw } from 'lucide-react';
 import { Dialog } from 'radix-ui';
-import { type RefObject, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useBackHandler } from '@/lib/backButton';
 import { getServerUrl } from '@/lib/serverUrl';
 import { sendTask } from '@/lib/tasks';
 
+/**
+ * Close or reopen the task and copy its link. Content only: whatever hosts it closes it from
+ * `onDone` and returns focus to what opened it.
+ */
 export function TaskActions({
   task,
   statuses,
-  returnFocus,
+  onDone,
 }: {
   task: Task;
   statuses: Status[];
-  returnFocus: RefObject<HTMLElement | null>;
+  onDone(): void;
 }) {
   const [link, setLink] = useState<string | null>(null);
   const linkRef = useRef<HTMLInputElement>(null);
@@ -32,7 +36,10 @@ export function TaskActions({
           <Button
             variant="ghost"
             className="min-h-12 justify-start gap-3 rounded-xl"
-            onClick={() => sendTask(task.id, target.id)}
+            onClick={() => {
+              sendTask(task.id, target.id);
+              onDone();
+            }}
           >
             {closed ? <RotateCcw /> : <Check />}
             {closed ? 'Reopen task' : 'Close task'}
@@ -49,7 +56,10 @@ export function TaskActions({
             if (!navigator.clipboard) setLink(href);
             else
               void navigator.clipboard.writeText(href).then(
-                () => toast.success('Task link copied'),
+                () => {
+                  toast.success('Task link copied');
+                  onDone();
+                },
                 () => setLink(href),
               );
           }}
@@ -73,9 +83,10 @@ export function TaskActions({
               linkRef.current?.focus();
               linkRef.current?.select();
             }}
+            // Once the dialog has let go of focus, the host can return it to its opener.
             onCloseAutoFocus={(event) => {
               event.preventDefault();
-              returnFocus.current?.focus();
+              onDone();
             }}
           >
             <Dialog.Title className="font-display font-semibold text-xl">Task link</Dialog.Title>

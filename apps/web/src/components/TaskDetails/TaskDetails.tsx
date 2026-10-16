@@ -19,6 +19,7 @@ import { IconButton } from '@/components/IconButton/IconButton';
 import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { createTask, restoreTask, sendTask, trashTask } from '@/lib/tasks';
+import { cn } from '@/lib/utils';
 import { TaskDescription } from './TaskDescription';
 import { TaskDrawer } from './TaskDrawer';
 
@@ -37,11 +38,14 @@ export function TaskDetails({
   project,
   statuses,
   tasks,
+  phone = false,
 }: {
   task: Task;
   project: Project;
   statuses: Status[];
   tasks: Task[];
+  /** On a phone the task's controls are the board drawer's dock (ADR 0009), resting over it. */
+  phone?: boolean;
 }) {
   const attachScroll = useContext(TaskScrollContext);
   const parent = tasks.find((row) => row.id === task.parentId);
@@ -107,8 +111,17 @@ export function TaskDetails({
         </div>
       </header>
       <ScrollArea className="min-h-0 flex-1 [--scrollbar-inset:1rem]">
-        <ScrollAreaViewport ref={attachScroll ?? undefined}>
-          <div className="px-6 pt-5 pb-10 sm:px-8">
+        <ScrollAreaViewport
+          ref={attachScroll ?? undefined}
+          // The dock rests over the content's end; focus and the caret stay clear of it.
+          className={cn(phone && 'scroll-pb-[calc(var(--dock-height)+var(--safe-bottom)+2.5rem)]')}
+        >
+          <div
+            className={cn(
+              'px-6 pt-5 sm:px-8',
+              phone ? 'pb-[calc(var(--dock-height)+var(--safe-bottom)+3rem)]' : 'pb-10',
+            )}
+          >
             <TaskTitle task={boardTask(task)} />
             {task.deletedAt && (
               <p role="status" className="mt-4 text-muted-foreground text-sm">
@@ -228,7 +241,7 @@ export function TaskDetails({
         </ScrollAreaViewport>
         <ScrollBar />
       </ScrollArea>
-      <TaskDrawer task={task} statuses={statuses} />
+      {!phone && <TaskDrawer task={task} statuses={statuses} />}
     </div>
   );
 }

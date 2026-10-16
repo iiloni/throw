@@ -7,10 +7,12 @@ import { cn } from '@/lib/utils';
 type Props = React.ComponentProps<typeof Button> & {
   /** Accessible name, also shown as the tooltip in browsers. */
   label: string;
+  /** Docks go without: a tooltip left closing as the dock hides would take the next Escape. */
+  tooltip?: boolean;
 };
 
 /** Icon-only button. Stops clicks from reaching a clickable card. */
-export function IconButton({ label, className, onClick, ...props }: Props) {
+export function IconButton({ label, className, onClick, tooltip = true, ...props }: Props) {
   const button = (
     <Button
       variant="ghost"
@@ -25,7 +27,7 @@ export function IconButton({ label, className, onClick, ...props }: Props) {
     />
   );
 
-  if (Capacitor.getPlatform() === 'android') return button;
+  if (!tooltip || Capacitor.getPlatform() === 'android') return button;
 
   return (
     <Tooltip>
