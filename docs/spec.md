@@ -476,8 +476,10 @@ from navigation opens its board; the shell remembers the last project separately
 workspace. Projects append by position. Deleting a project requires confirmation and moves
 it to the trash (see [Project](#project)); the trash has no view yet.
 
-The project board uses synced tasks and statuses, with the backlog in the drawer on a
-phone. The drawer (`components/Drawer`) carries the backlog, the closed tasks and board
+The project board uses synced tasks, statuses and primary tags, with the backlog in the
+drawer on a phone. Cards resolve their primary tag's root colour with `taskTagColor` and
+show the tag's name; a partially synced tag tree leaves the card neutral. The drawer
+(`components/Drawer`) carries the backlog, the closed tasks and board
 settings; the board owns it for now. The move drawer is still its own panel until the drag
 step, and the shell's project forms still use `BottomSheet` until the drawer moves to the
 shell. The

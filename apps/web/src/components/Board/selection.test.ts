@@ -1,6 +1,6 @@
-import type { Project, Status, Task } from '@throw/shared';
+import type { Project, Status, Tag, Task } from '@throw/shared';
 import { describe, expect, it } from 'vitest';
-import { compareClosed, compareTasks, identifier, subtasksOf } from './model';
+import { compareClosed, compareTasks, identifier, subtasksOf, taskColor } from './model';
 import { projectBoardData } from './selection';
 import { initialBoard, listTasks } from './state';
 
@@ -44,6 +44,7 @@ const task = (id: string, edit: Partial<Task> = {}): Task => ({
   priority: 3,
   position: 'a0',
   parentId: null,
+  primaryTagId: null,
   closedAt: null,
   deletedAt: null,
   createdAt: '2026-10-14T12:00:00Z',
@@ -55,6 +56,30 @@ function view(tasks: Task[]) {
 }
 
 describe('synced project board selection', () => {
+  it('keeps primary tag names and resolves their root colour safely during partial sync', () => {
+    const root: Tag = {
+      id: 'root',
+      projectId: project.id,
+      workspaceId: project.workspaceId,
+      name: 'Area',
+      parentId: null,
+      color: 'teal',
+      icon: null,
+    };
+    const child: Tag = { ...root, id: 'child', name: 'Sync', parentId: root.id, color: null };
+    const tagged = task('tagged', { primaryTagId: child.id });
+    const data = projectBoardData(
+      project,
+      statuses,
+      [tagged],
+      [root, child, { ...root, id: 'foreign', projectId: 'other' }],
+    );
+    expect(data.project.tags.map((tag) => tag.name)).toEqual(['Area', 'Sync']);
+    expect(data.tasks[0]?.primaryTagId).toBe(child.id);
+    expect(taskColor(data.project, data.tasks[0]!)).toBe('teal');
+    const partial = projectBoardData(project, statuses, [tagged], [child]);
+    expect(taskColor(partial.project, partial.tasks[0]!)).toBeNull();
+  });
   it('isolates projects and excludes a trashed task, its children and trashed projects', () => {
     const rows = [
       task('visible'),

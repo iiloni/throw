@@ -700,9 +700,15 @@ export function useTaskTimeline(taskId: string) {
   };
 }
 
+const emptyTags: Tag[] = [];
+
 export function useTags(projectId: string) {
-  const { data = [], isLoading } = useLiveQuery((q) => q.from({ tag: tagsCollection }));
-  return { tags: data.filter((tag) => tag.projectId === projectId), isLoading };
+  const { data, isLoading } = useLiveQuery(
+    (q) => q.from({ tag: tagsCollection }).where(({ tag }) => eq(tag.projectId, projectId)),
+    [projectId],
+  );
+  // Keep the result stable between sync changes: the board adapts it in a layout effect.
+  return { tags: data ?? emptyTags, isLoading };
 }
 export function useTaskTags(taskId: string) {
   const { data = [], isLoading } = useLiveQuery((q) => q.from({ assignment: taskTagsCollection }));

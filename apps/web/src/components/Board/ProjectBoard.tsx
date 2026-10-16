@@ -7,7 +7,7 @@ import { useShell } from '@/components/AppShell/shell';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { Button } from '@/components/ui/button';
-import { useStatuses, useTasks } from '@/lib/collections';
+import { useStatuses, useTags, useTasks } from '@/lib/collections';
 import { useMedia } from '@/lib/media';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { createTask, sendTask, updateTask } from '@/lib/tasks';
@@ -22,12 +22,13 @@ export function ProjectBoard({ project }: { project: Project }) {
   const shell = useShell();
   const { statuses, isLoading: loadingStatuses } = useStatuses();
   const { tasks, isLoading: loadingTasks } = useTasks();
+  const { tags } = useTags(project.id);
   const phone = useMedia('(max-width: 767px)');
   const state = board.use();
   const [settings] = useBoardSettings();
   const data = useMemo(
-    () => projectBoardData(project, statuses, tasks),
-    [project, statuses, tasks],
+    () => projectBoardData(project, statuses, tasks, tags),
+    [project, statuses, tasks, tags],
   );
   const awaiting = useAwaitingSync(loadingStatuses, data.project.statuses.length);
   const awaitingTasks = useAwaitingSync(loadingTasks, data.tasks.length);

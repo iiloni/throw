@@ -41,6 +41,8 @@ export type Task = {
   priority: Priority;
   position: string;
   primaryTagId: string | null;
+  /** The synced adapter resolves this through the shared tag helper, including partial sync. */
+  primaryTagColor?: Color | null;
   secondaryTagIds: string[];
   parentId: string | null;
   /** When the task entered a done or cancelled status. */
@@ -75,6 +77,7 @@ export function statusById(project: Project, id: string) {
 
 /** The color a card takes: its primary tag's root. */
 export function taskColor(project: Project, task: Task): Color | null {
+  if (task.primaryTagColor !== undefined) return task.primaryTagColor;
   let tag = project.tags.find((item) => item.id === task.primaryTagId);
   while (tag?.parentId) {
     const parent = project.tags.find((item) => item.id === tag?.parentId);

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { APP_LOAD_TIMEOUT, shapeRows, signUp } from './helpers';
+import { newTag, tagTaskUpdate } from './tag-helpers';
 
 async function fixture(page: Page, empty = false) {
   const account = await signUp(page);
@@ -688,4 +689,34 @@ test('drawer content scrolls first and hands pulls over at its top and bottom ed
   await history.evaluate((element, top) => element.scrollTo(0, top), isMobile ? 30 : 0);
   await pullFrom(page, isMobile, history, 220);
   await expect(closed).toHaveCount(0);
+});
+
+test('synced primary tags show their quiet name and root colour on cards', async ({ page }) => {
+  const account = await fixture(page);
+  const card = page.getByRole('article', { name: /Board parent$/ });
+  await expect(card).not.toHaveAttribute('data-color');
+  const root = await newTag(page.request, account, account.projectId, {
+    name: 'Area',
+    color: 'teal',
+  });
+  const child = await newTag(page.request, account, account.projectId, {
+    name: 'Sync',
+    parentId: root.id,
+  });
+  await tagTaskUpdate(page.request, account, account.ids['Board parent']!, {
+    primaryTagId: { before: null, after: child.id },
+  });
+  await expect(card.getByText('Sync', { exact: true })).toBeVisible();
+  await expect(card).toHaveAttribute('data-color', 'teal');
+  const response = await page.request.patch(`/api/tags/${root.id}`, {
+    headers: account.headers,
+    data: { color: 'amber' },
+  });
+  expect(response.status()).toBe(200);
+  await expect(card).toHaveAttribute('data-color', 'amber');
+  await tagTaskUpdate(page.request, account, account.ids['Board parent']!, {
+    primaryTagId: { before: child.id, after: null },
+  });
+  await expect(card).not.toHaveAttribute('data-color');
+  await expect(card.getByText('Sync', { exact: true })).toHaveCount(0);
 });

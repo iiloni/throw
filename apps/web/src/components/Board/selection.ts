@@ -3,7 +3,9 @@ import {
   isTaskTrashed,
   type Project as ProjectRow,
   type Status as StatusRow,
+  type Tag,
   type Task as TaskRow,
+  taskTagColor,
 } from '@throw/shared';
 import type { BoardData } from './model';
 
@@ -12,8 +14,10 @@ export function projectBoardData(
   project: ProjectRow,
   statuses: StatusRow[],
   tasks: TaskRow[],
+  tags: Tag[] = [],
 ): BoardData {
   const parents = new Map(tasks.map((task) => [task.id, task]));
+  const projectTags = tags.filter((tag) => tag.projectId === project.id);
   return {
     project: {
       id: project.id,
@@ -23,8 +27,7 @@ export function projectBoardData(
       icon: project.icon,
       priorityNames: project.priorityNames,
       statuses: statuses.filter((status) => status.projectId === project.id).sort(compareStatuses),
-      // The tag step supplies the root-colour resolver here; cards already consume taskColor().
-      tags: [],
+      tags: projectTags.map((tag) => ({ ...tag, color: tag.color ?? undefined })),
     },
     tasks: tasks
       .filter(
@@ -35,7 +38,7 @@ export function projectBoardData(
       .map((task) => ({
         ...task,
         closedAt: task.closedAt === null ? null : Date.parse(task.closedAt),
-        primaryTagId: null,
+        primaryTagColor: taskTagColor(task, projectTags),
         secondaryTagIds: [],
         description: undefined,
       })),
