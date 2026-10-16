@@ -107,7 +107,13 @@ async function openClosed(page: Page, isMobile: boolean) {
     .click();
 }
 
-async function pullFrom(page: Page, touch: boolean, target: Locator, dy: number) {
+async function pullFrom(
+  page: Page,
+  touch: boolean,
+  target: Locator,
+  dy: number,
+  afterStart?: () => Promise<void>,
+) {
   const box = (await target.boundingBox())!;
   // Mouse cards belong to the prototype carry engine; pull the list's empty inset instead.
   const button = await target.evaluate((element) => element instanceof HTMLButtonElement);
@@ -119,6 +125,7 @@ async function pullFrom(page: Page, touch: boolean, target: Locator, dy: number)
       type: 'touchStart',
       touchPoints: [{ x, y }],
     });
+    await afterStart?.();
     for (let step = 1; step <= 12; step++) {
       await session.send('Input.dispatchTouchEvent', {
         type: 'touchMove',
@@ -127,9 +134,19 @@ async function pullFrom(page: Page, touch: boolean, target: Locator, dy: number)
     }
     await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await session.detach();
+  } else if (afterStart) {
+    // Firefox cannot synthesize native touch scrolling. Deliver just the pointer events
+    // around the simulated scroll, without a mouse's native selection/autoscroll.
+    const event = { pointerId: 1, pointerType: 'mouse', button: 0, clientX: x, clientY: y };
+    await target.dispatchEvent('pointerdown', event);
+    await afterStart();
+    for (let step = 1; step <= 12; step++)
+      await target.dispatchEvent('pointermove', { ...event, clientY: y + (dy * step) / 12 });
+    await target.dispatchEvent('pointerup', { ...event, clientY: y + dy });
   } else {
     await page.mouse.move(x, y);
     await page.mouse.down();
+    await afterStart?.();
     await page.mouse.move(x, y + dy, { steps: 12 });
     await page.mouse.up();
   }
@@ -634,7 +651,7 @@ test('drawer pulls start on filter pills and short lists without activating a fi
   await atDetent(backlog, 'half');
 });
 
-test('drawer content scrolls first and hands pulls over at its top and bottom edges', async ({
+test('drawer pulls require the scroll boundary at gesture start, including after fast scrolling', async ({
   page,
   isMobile,
   browserName,
@@ -662,7 +679,31 @@ test('drawer content scrolls first and hands pulls over at its top and bottom ed
   await atDetent(backlog, 'half');
   if (isMobile)
     await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-  await scroller.evaluate((element) => element.scrollTo(0, element.scrollHeight));
+  await scroller.evaluate((element) =>
+    element.scrollTo(0, element.scrollHeight - element.clientHeight - 30),
+  );
+  // Firefox has no native touch scrolling; advance it after pointerdown to check
+  // the same boundary change. Android reaches the edge through the touch itself.
+  await pullFrom(
+    page,
+    isMobile,
+    scroller,
+    -200,
+    isMobile
+      ? undefined
+      : async () => {
+          await scroller.evaluate((element) => element.scrollTo(0, element.scrollHeight));
+        },
+  );
+  await atDetent(backlog, 'half');
+  await expect
+    .poll(() =>
+      scroller.evaluate(
+        (element) => element.scrollHeight - element.clientHeight - element.scrollTop,
+      ),
+    )
+    .toBeLessThan(2);
+  // A new swipe starting at the bottom can raise the drawer.
   await pullFrom(page, isMobile, scroller, -330);
   await atDetent(backlog, 'full');
   // There is content above: pulling down scrolls instead of collapsing the drawer.
@@ -671,8 +712,21 @@ test('drawer content scrolls first and hands pulls over at its top and bottom ed
   await atDetent(backlog, 'full');
   if (isMobile)
     await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeLessThan(240);
-  // A continuous touch may reach the top mid-gesture and then pull the drawer down.
-  await scroller.evaluate((element, top) => element.scrollTo(0, top), isMobile ? 30 : 0);
+  await scroller.evaluate((element) => element.scrollTo(0, 30));
+  await pullFrom(
+    page,
+    isMobile,
+    scroller,
+    340,
+    isMobile
+      ? undefined
+      : async () => {
+          await scroller.evaluate((element) => element.scrollTo(0, 0));
+        },
+  );
+  await atDetent(backlog, 'full');
+  await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeLessThan(2);
+  // Reaching the top does not take over the scroll; lift and swipe again to pull.
   await pullFrom(page, isMobile, scroller, 340);
   await expect(backlog).not.toHaveAttribute('data-detent', 'full');
   await openClosed(page, true);
@@ -686,7 +740,21 @@ test('drawer content scrolls first and hands pulls over at its top and bottom ed
   await expect.poll(async () => (await closed.boundingBox())!.y).toBeLessThan(10);
   if (isMobile)
     await expect.poll(() => history.evaluate((element) => element.scrollTop)).toBeLessThan(240);
-  await history.evaluate((element, top) => element.scrollTo(0, top), isMobile ? 30 : 0);
+  await history.evaluate((element) => element.scrollTo(0, 30));
+  await pullFrom(
+    page,
+    isMobile,
+    history,
+    220,
+    isMobile
+      ? undefined
+      : async () => {
+          await history.evaluate((element) => element.scrollTo(0, 0));
+        },
+  );
+  await expect(closed).toBeVisible();
+  await expect.poll(async () => (await closed.boundingBox())!.y).toBeLessThan(10);
+  await expect.poll(() => history.evaluate((element) => element.scrollTop)).toBeLessThan(2);
   await pullFrom(page, isMobile, history, 220);
   await expect(closed).toHaveCount(0);
 });

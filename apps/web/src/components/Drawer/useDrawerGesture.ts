@@ -2,7 +2,8 @@ import { type RefObject, useEffect, useRef } from 'react';
 
 type Point = { x: number; y: number; time: number };
 type Pull = Point & {
-  target: HTMLElement;
+  canPullUp: boolean;
+  canPullDown: boolean;
   start: Point;
   vertical: boolean;
   dragging: boolean;
@@ -10,7 +11,7 @@ type Pull = Point & {
   velocity: number;
 };
 
-/** Native scrolling keeps the gesture until every scrollable ancestor reaches its edge. */
+/** A pull can start only when every scrollable ancestor is already at its edge. */
 function canScroll(target: HTMLElement, surface: HTMLElement, dy: number) {
   for (
     let element: HTMLElement | null = target;
@@ -54,14 +55,16 @@ export function useDrawerGesture(
 
     function start(target: EventTarget | null, point: Point) {
       suppressClickUntil = 0;
-      if (latest.current.disabled || !(target instanceof Element)) return;
+      if (!element || latest.current.disabled || !(target instanceof Element)) return;
       const origin = target instanceof HTMLElement ? target : target.parentElement;
       if (!origin) return;
       // Text selection and range controls own their gestures.
       if (origin.closest('input, textarea, [contenteditable="true"], [role="slider"]')) return;
       pull = {
         ...point,
-        target: origin,
+        // Snapshot before native scrolling moves anything; a scroll never becomes a pull.
+        canPullUp: !canScroll(origin, element, -1),
+        canPullDown: !canScroll(origin, element, 1),
         start: point,
         vertical: false,
         dragging: false,
@@ -85,9 +88,13 @@ export function useDrawerGesture(
           pull = null;
           return;
         }
+        if (!(totalY > 0 ? pull.canPullDown : pull.canPullUp)) {
+          pull = null;
+          return;
+        }
         pull.vertical = true;
       }
-      if (dy !== 0 && (pull.dragging || !canScroll(pull.target, element!, dy))) {
+      if (dy !== 0) {
         if (event.cancelable) event.preventDefault();
         pull.dragging = true;
         pull.offset += dy;

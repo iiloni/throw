@@ -354,9 +354,10 @@ own way in and out, so the board is not a row of identical pages.
 
   The drawer is pulled between heights by its header, and tapping the handle opens or
   closes it. Vertical pulls also work from the content, including the status filter pills,
-  when it cannot scroll further in that direction. Scrolling takes priority while there is
-  more content that way. A downward pull on the closed tasks returns to the previous drawer
-  content and height.
+  when it was already at the boundary in that direction when the swipe began. A swipe that
+  starts with room to scroll stays a scroll, even if it reaches the boundary; lifting and
+  swiping again can pull the drawer. A downward pull on the closed tasks returns to the
+  previous drawer content and height.
 - While a card is held, the pages beside the current one peek in at the edges as bare
   rounded surfaces, without their cards: targets that turn the board, kept quiet. The current
   page draws its cards in from the edges to leave room for them. At rest a page fills the
