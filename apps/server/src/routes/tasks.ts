@@ -14,8 +14,10 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { db, type Transaction } from '../db/client';
-import { projects, statuses, taskActivity, tasks } from '../db/schema';
+import { projects, statuses, taskActivity, tasks, taskTags } from '../db/schema';
 import { requireUser } from '../lib/requireUser';
+import { planSecondaryTags } from '../lib/secondaryTags';
+import { lockTagTree, projectTags } from '../lib/tagTree';
 import { planTaskUpdate } from '../lib/taskUpdate';
 import { currentTxid } from '../lib/txid';
 import { memberWorkspaces } from '../lib/workspaces';
@@ -58,8 +60,14 @@ export const taskRoutes = new Hono<AppEnv>()
    */
   .post('/', zValidator('json', createTaskSchema), async (c) => {
     const userId = c.get('user')!.id;
-    const { statusId: requestedStatusId, ...body } = c.req.valid('json');
+    const {
+      statusId: requestedStatusId,
+      primaryTagId: requestedPrimary,
+      secondaryTagIds,
+      ...body
+    } = c.req.valid('json');
     const result = await db.transaction(async (tx) => {
+      await lockTagTree(tx, body.projectId);
       // Holding the project numbers concurrent creates one after another.
       const [project] = await tx
         .select({ id: projects.id, workspaceId: projects.workspaceId })
@@ -101,6 +109,12 @@ export const taskRoutes = new Hono<AppEnv>()
         projectStatuses.find((status) => status.category === 'backlog' && status.isDefault);
       if (!status) throw new Error(`Project ${project.id} has no backlog default`);
 
+      const tagById = new Map(
+        (await projectTags(tx, userId, project.id)).map((tag) => [tag.id, tag]),
+      );
+      const primaryTagId =
+        requestedPrimary && tagById.has(requestedPrimary) ? requestedPrimary : null;
+      const validSecondary = secondaryTagIds.filter((tagId) => tagById.has(tagId));
       const [counter] = await tx
         .update(projects)
         .set({ taskCounter: sql`${projects.taskCounter} + 1` })
@@ -110,10 +124,20 @@ export const taskRoutes = new Hono<AppEnv>()
         ...body,
         workspaceId: project.workspaceId,
         number: counter!.number,
+        primaryTagId,
         statusId: status.id,
         closedAt: isClosedCategory(status.category) ? sql`now()` : null,
       });
 
+      if (validSecondary.length)
+        await tx.insert(taskTags).values(
+          validSecondary.map((tagId) => ({
+            taskId: body.id,
+            tagId,
+            workspaceId: project.workspaceId,
+            projectId: project.id,
+          })),
+        );
       const changes: ActivityChange[] = [
         { field: 'title', previous: null, requested: body.title, applied: true },
         {
@@ -140,6 +164,27 @@ export const taskRoutes = new Hono<AppEnv>()
           requested: body.parentId,
           applied: true,
         });
+      if (requestedPrimary)
+        changes.push({
+          field: 'primaryTagId',
+          previous: null,
+          requested: requestedPrimary,
+          previousName: null,
+          requestedName: tagById.get(requestedPrimary)?.name ?? null,
+          applied: primaryTagId !== null,
+          ...(primaryTagId === null ? { reason: 'invalid' as const } : {}),
+        });
+      for (const tagId of secondaryTagIds)
+        changes.push({
+          field: 'secondaryTags',
+          tagId,
+          previous: null,
+          requested: tagId,
+          previousName: null,
+          requestedName: tagById.get(tagId)?.name ?? null,
+          applied: tagById.has(tagId),
+          ...(!tagById.has(tagId) ? { reason: 'invalid' as const } : {}),
+        });
       await tx.insert(taskActivity).values({
         id: body.id,
         workspaceId: project.workspaceId,
@@ -150,14 +195,15 @@ export const taskRoutes = new Hono<AppEnv>()
         changes,
         createdAt: appliedAt,
       });
-      return currentTxid(tx);
+      const txid = await currentTxid(tx);
+      return { txid, ...(validSecondary.length ? { secondaryTagsTxid: txid } : {}) };
     });
     if (result === 'not-found') return c.json({ error: 'Project or parent not found' }, 404);
     if (result === 'bad-parent')
       return c.json({ error: 'A subtask needs a top-level parent in its project' }, 409);
     if (result === 'taken') return c.json({ error: 'Task id is in use' }, 409);
     if (result === 'replayed') return c.json({ txid: null });
-    return c.json({ txid: result }, 201);
+    return c.json(result, 201);
   })
   /**
    * Applies the fields of an update that still hold, per field, and records the write in the
@@ -168,6 +214,11 @@ export const taskRoutes = new Hono<AppEnv>()
     const { id } = c.req.valid('param');
     const { changeId, changes } = c.req.valid('json');
     const result = await db.transaction(async (tx): Promise<UpdateTaskResponse | string> => {
+      const [scope] = await tx
+        .select({ projectId: tasks.projectId })
+        .from(tasks)
+        .where(and(eq(tasks.id, id), inArray(tasks.workspaceId, memberWorkspaces(tx, userId))));
+      if (scope) await lockTagTree(tx, scope.projectId);
       const task = await lockTask(tx, userId, id);
       if (!task) return 'not-found';
       // A resent update is recognised by its change id and does nothing. Holding the task
@@ -215,9 +266,13 @@ export const taskRoutes = new Hono<AppEnv>()
           child === undefined;
       }
 
+      const tagById = new Map(
+        (await projectTags(tx, userId, task.projectId)).map((tag) => [tag.id, tag]),
+      );
       const plan = planTaskUpdate(
         {
           title: task.title,
+          primaryTagId: task.primaryTagId,
           descriptionVersion: task.descriptionVersion,
           statusId: task.statusId,
           priority: task.priority,
@@ -226,7 +281,7 @@ export const taskRoutes = new Hono<AppEnv>()
           trashed: task.deletedAt !== null,
         },
         changes,
-        { statuses: statusById, parentAllowed },
+        { statuses: statusById, parentAllowed, tags: tagById },
       );
 
       const set: PgUpdateSetSource<typeof tasks> = { ...plan.set };
@@ -244,6 +299,43 @@ export const taskRoutes = new Hono<AppEnv>()
         await tx.update(tasks).set(set).where(eq(tasks.id, id));
         txid = await currentTxid(tx);
       }
+      const secondaryRows = changes.secondaryTags
+        ? await tx
+            .select()
+            .from(taskTags)
+            .where(
+              and(
+                eq(taskTags.taskId, id),
+                inArray(taskTags.workspaceId, memberWorkspaces(tx, userId)),
+              ),
+            )
+        : [];
+      const secondary = planSecondaryTags(
+        new Set(secondaryRows.map((row) => row.tagId)),
+        changes.secondaryTags ?? [],
+        tagById,
+      );
+      plan.items.push(...secondary.items);
+      plan.refused.push(...secondary.refused);
+      for (const { tagId, present } of secondary.operations) {
+        if (present)
+          await tx.insert(taskTags).values({
+            taskId: id,
+            tagId,
+            projectId: task.projectId,
+            workspaceId: task.workspaceId,
+          });
+        else
+          await tx
+            .delete(taskTags)
+            .where(
+              and(
+                eq(taskTags.taskId, id),
+                eq(taskTags.tagId, tagId),
+                inArray(taskTags.workspaceId, memberWorkspaces(tx, userId)),
+              ),
+            );
+      }
       // Written for every update, even one that changed nothing: it is how a resend is known.
       // One that only moved a position is kept for that alone; the log leaves reordering out.
       await tx.insert(taskActivity).values({
@@ -256,7 +348,11 @@ export const taskRoutes = new Hono<AppEnv>()
         changes: plan.items,
         createdAt: appliedAt,
       });
-      return { txid, refused: plan.refused };
+      return {
+        txid,
+        refused: plan.refused,
+        ...(secondary.operations.length ? { secondaryTagsTxid: await currentTxid(tx) } : {}),
+      };
     });
     if (result === 'not-found') return c.json({ error: 'Task not found' }, 404);
     if (typeof result === 'string') return c.json({ error: 'Change id is in use' }, 409);
@@ -270,6 +366,11 @@ export const taskRoutes = new Hono<AppEnv>()
     const userId = c.get('user')!.id;
     const { id } = c.req.valid('param');
     const txid = await db.transaction(async (tx) => {
+      const [scope] = await tx
+        .select({ projectId: tasks.projectId })
+        .from(tasks)
+        .where(and(eq(tasks.id, id), inArray(tasks.workspaceId, memberWorkspaces(tx, userId))));
+      if (scope) await lockTagTree(tx, scope.projectId);
       const task = await lockTask(tx, userId, id);
       if (!task) return null;
       // Holding the parent and project as well means a restore of either cannot commit between
