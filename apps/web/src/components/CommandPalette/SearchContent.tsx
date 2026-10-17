@@ -1,6 +1,14 @@
 import { Plus, Search, SearchX, SlidersHorizontal, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  type KeyboardEvent,
+  type RefObject,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useShell } from '@/components/AppShell/shell';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
@@ -24,7 +32,9 @@ export type SearchState = ReturnType<typeof useSearch>;
 
 /**
  * Search's state and keyboard handling, apart from where it is drawn: the desktop palette
- * and the phone's drawer arrange the same field, results and scope list differently.
+ * and the phone's drawer arrange the same field, results and scope list differently. A
+ * project board searches that project alone; choosing among projects, and jumping to them,
+ * belong to the cross-project board.
  */
 export function useSearch({
   actions,
@@ -39,7 +49,9 @@ export function useSearch({
   const shell = useShell();
   const { tasks, isLoading } = useTasks();
   const [query, setQuery] = useState('');
-  const [projectFilter, setProjectFilter] = useState(shell.project?.id ?? '');
+  const board = shell.project;
+  const [chosenFilter, setProjectFilter] = useState('');
+  const projectFilter = board?.id ?? chosenFilter;
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [error, setError] = useState('');
@@ -57,10 +69,13 @@ export function useSearch({
       }),
     [indexed, query, projectFilter, shell.project?.id],
   );
-  const projects = useMemo(() => searchProjects(shell.projects, query), [shell.projects, query]);
+  const projects = useMemo(
+    () => (board ? [] : searchProjects(shell.projects, query)),
+    [board, shell.projects, query],
+  );
   const awaiting = useAwaitingSync(isLoading, indexed.length);
-  const scope = shell.projects.find((p) => p.id === projectFilter);
-  const destination = scope ?? shell.project;
+  const scope = board ? undefined : shell.projects.find((p) => p.id === projectFilter);
+  const destination = board ?? scope;
   const backlog = backlogOf(actions.statuses, destination?.id);
   const title = query.trim();
 
@@ -113,6 +128,8 @@ export function useSearch({
     projects,
     awaiting,
     scope,
+    /** Searching one project's board, with no other project to choose. */
+    scoped: !!board,
     destination,
     backlog,
     projectFilter,
@@ -181,37 +198,31 @@ function Highlighted({ segments }: { segments: Segment[] }) {
   );
 }
 
-/** The search input, as the desktop dock's glass field or the drawer header's field. */
+/** The search input, as Catch's glass dock field. */
 export function SearchField({
   search,
-  variant,
   disabled,
+  inputRef,
   onClose,
 }: {
   search: SearchState;
-  variant: 'dock' | 'header';
   disabled?: boolean;
+  inputRef?: RefObject<HTMLInputElement | null>;
   /** The dock field closes search from inside itself, as Catch's does. */
   onClose?: () => void;
 }) {
   const activeOption = search.activeKey ? `${search.id}-${search.activeKey}` : undefined;
   return (
-    <div
-      className={cn(
-        'relative flex min-w-0 flex-1 items-center gap-2',
-        variant === 'dock'
-          ? 'glass h-[var(--dock-height)] rounded-[var(--dock-radius)] pr-1.5 pl-4'
-          : 'h-12 rounded-2xl bg-foreground/[0.06] px-3.5 focus-within:ring-2 focus-within:ring-ring/70 focus-within:ring-inset',
-      )}
-    >
-      <Search className={cn('shrink-0', variant === 'dock' ? 'size-6' : 'size-5')} aria-hidden />
+    <div className="glass relative flex h-[var(--dock-height)] min-w-0 flex-1 items-center gap-2 rounded-[var(--dock-radius)] pr-1.5 pl-4">
+      <Search className="size-6 shrink-0" aria-hidden />
       <input
+        ref={inputRef}
         data-palette-input
         disabled={disabled}
         type="text"
         inputMode="search"
         role="combobox"
-        aria-label="Search tasks and projects"
+        aria-label={search.scoped ? 'Search tasks' : 'Search tasks and projects'}
         aria-expanded
         aria-autocomplete="list"
         aria-controls={`${search.id}-results`}
@@ -243,13 +254,7 @@ export function SearchField({
 }
 
 /** Catch's filter button: opens the project scope, with a dot while one applies. */
-export function FilterButton({
-  search,
-  variant,
-}: {
-  search: SearchState;
-  variant: 'dock' | 'header';
-}) {
+export function FilterButton({ search }: { search: SearchState }) {
   return (
     <motion.button
       type="button"
@@ -261,26 +266,13 @@ export function FilterButton({
       whileTap={{ scale: 0.88 }}
       transition={springs.snappy}
       className={cn(
-        'relative flex shrink-0 items-center justify-center outline-none transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ring/70',
-        variant === 'dock'
-          ? 'glass size-[var(--dock-height)] rounded-[var(--dock-radius)]'
-          : 'size-12 rounded-2xl bg-foreground/[0.06]',
+        'glass relative flex size-[var(--dock-height)] shrink-0 items-center justify-center rounded-[var(--dock-radius)] outline-none transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ring/70',
         search.filtersOpen || search.scope ? 'text-brand-link' : 'text-foreground',
       )}
     >
-      <SlidersHorizontal
-        className={variant === 'dock' ? 'size-7' : 'size-5'}
-        strokeWidth={2.25}
-        aria-hidden
-      />
+      <SlidersHorizontal className="size-7" strokeWidth={2.25} aria-hidden />
       {search.scope && (
-        <span
-          aria-hidden
-          className={cn(
-            'absolute size-1.5 rounded-full bg-brand',
-            variant === 'dock' ? 'top-3 right-3' : 'top-2 right-2',
-          )}
-        />
+        <span aria-hidden className="absolute top-3 right-3 size-1.5 rounded-full bg-brand" />
       )}
     </motion.button>
   );
@@ -408,13 +400,15 @@ export function SearchResults({ search }: { search: SearchState }) {
                               'Pending'
                             )}
                           </span>
-                          <span
-                            data-color={row.project.color}
-                            className="flex min-w-0 items-center gap-1 text-tint-accent"
-                          >
-                            <ProjectIcon name={row.project.icon} className="size-3.5" />
-                            <span className="truncate">{row.project.name}</span>
-                          </span>
+                          {!search.scoped && (
+                            <span
+                              data-color={row.project.color}
+                              className="flex min-w-0 items-center gap-1 text-tint-accent"
+                            >
+                              <ProjectIcon name={row.project.icon} className="size-3.5" />
+                              <span className="truncate">{row.project.name}</span>
+                            </span>
+                          )}
                           <span className="flex-1" />
                           <span className="shrink-0 rounded-full bg-foreground/[0.08] px-2 py-0.5 font-medium text-[0.6875rem] text-muted-foreground">
                             {row.status?.name ?? 'No status'}
@@ -431,7 +425,7 @@ export function SearchResults({ search }: { search: SearchState }) {
           projects.length === 0 && (
             <div className="pb-6">
               <EmptyState icon={SearchX} title="No matching tasks">
-                {scope
+                {scope && !search.scoped
                   ? 'Try fewer words, or search all projects.'
                   : 'Try fewer words, or type an identifier like 12.'}
               </EmptyState>
@@ -494,37 +488,34 @@ export function SearchResults({ search }: { search: SearchState }) {
 }
 
 /**
- * Search as the phone's drawer shows it at full height: a fixed header with the field, the
- * filter and close, the scope list under it while open, and results scrolling below. The
- * drawer owns the surface, its gestures, Back, keyboard insets and focus on open.
+ * Search as the phone's drawer shows it at full height: results above, and Catch's glass
+ * search field at the bottom, where the dock was, riding just above the keyboard. Choosing
+ * a project (on the cross-project board) opens above the field. The drawer owns the surface,
+ * its gestures, Back, keyboard insets and focus on open.
  */
 export function PhoneSearchContent({
   search,
+  inputRef,
   onClose,
 }: {
   search: SearchState;
+  /** The field the drawer focuses on open, so the keyboard rises with the page. */
+  inputRef?: RefObject<HTMLInputElement | null>;
   /** A close button of its own, for a surface without one; the drawer's title row has it. */
   onClose?: () => void;
 }) {
   const reduced = useReducedMotion();
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="flex shrink-0 items-center gap-2 px-3 pt-1 pb-2">
-        <SearchField search={search} variant="header" />
-        <FilterButton search={search} variant="header" />
-        {onClose && (
-          <motion.button
-            type="button"
-            aria-label="Close search"
-            onClick={onClose}
-            whileTap={{ scale: 0.88 }}
-            transition={springs.snappy}
-            className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-foreground/[0.06] outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
-          >
-            <X className="size-5" aria-hidden />
-          </motion.button>
-        )}
-      </header>
+      <div
+        ref={search.list}
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pt-2 pb-3"
+      >
+        {/* Few results sit by the field; more scroll from the best one down. */}
+        <div className="mt-auto">
+          <SearchResults search={search} />
+        </div>
+      </div>
       <AnimatePresence initial={false}>
         {search.filtersOpen && (
           <motion.div
@@ -535,17 +526,16 @@ export function PhoneSearchContent({
             exit={{ height: 0, opacity: 0 }}
             transition={reduced ? { duration: 0 } : springs.smooth}
           >
-            <div className="px-3 pb-3">
+            <div className="glass mx-3 mb-3 rounded-[var(--dock-radius)] p-3">
               <ScopeOptions search={search} />
             </div>
           </motion.div>
         )}
       </AnimatePresence>
-      <div
-        ref={search.list}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-2 pb-[calc(var(--safe-bottom)+1.5rem)]"
-      >
-        <SearchResults search={search} />
+      {/* Clear of the gesture bar with the keyboard down; just above the keyboard when up. */}
+      <div className="flex shrink-0 items-end gap-3 px-3 pt-1 pb-[max(0.5rem,calc(var(--safe-bottom)+0.75rem-var(--keyboard)))]">
+        <SearchField search={search} inputRef={inputRef} onClose={onClose} />
+        {!search.scoped && <FilterButton search={search} />}
       </div>
     </div>
   );

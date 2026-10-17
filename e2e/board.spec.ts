@@ -171,7 +171,7 @@ async function atDetent(drawer: Locator, detent: 'full' | 'half' | 'closed') {
     .toBeLessThan(3);
 }
 
-/** The title field of quick capture, which a phone's create button opens in the drawer. */
+/** The title of quick capture's card, which a phone's create button opens above the dock. */
 function captureTitle(page: Page) {
   return page
     .getByRole('dialog', { name: 'New task', exact: true })
@@ -313,9 +313,9 @@ test('a task created offline appears immediately, survives reload and gains its 
     .getByRole('button', { name: isMobile ? 'New task' : 'Add task to Build', exact: true })
     .click();
   if (isMobile) {
-    // The drawer takes focus itself when capture opens in it.
-    await expect(page.getByRole('dialog', { name: 'New task', exact: true })).toBeFocused();
+    // The card opens on its title, so the keyboard rises with it.
     const capture = captureTitle(page);
+    await expect(capture).toBeFocused();
     await capture.fill('Written without a connection');
     await capture.press('Enter');
   }
@@ -328,7 +328,6 @@ test('a task created offline appears immediately, survives reload and gains its 
   }
   await expect(pane).toContainText('Pending');
   await page.getByRole('button', { name: 'Back to the board', exact: true }).click();
-  if (isMobile) await openBacklog(page, true);
   const card = page.getByRole('article', {
     name: 'Pending Written without a connection',
     exact: true,
@@ -348,11 +347,7 @@ test('a task created offline appears immediately, survives reload and gains its 
       ),
     )
     .toEqual([
-      {
-        title: 'Written without a connection',
-        number: '1',
-        status_id: account.status(isMobile ? 'Ideas' : 'Build'),
-      },
+      { title: 'Written without a connection', number: '1', status_id: account.status('Build') },
     ]);
 });
 

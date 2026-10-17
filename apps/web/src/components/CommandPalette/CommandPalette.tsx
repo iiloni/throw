@@ -179,8 +179,8 @@ function DesktopSearch({ dismiss, onClose, onCaptureTitle, actions }: InnerProps
           animate={{ opacity: 1, y: 0 }}
           transition={reduced ? { duration: 0 } : springs.smooth}
         >
-          <SearchField search={search} variant="dock" disabled={!present} onClose={onClose} />
-          <FilterButton search={search} variant="dock" />
+          <SearchField search={search} disabled={!present} onClose={onClose} />
+          {!search.scoped && <FilterButton search={search} />}
         </motion.div>
       </div>
     </motion.div>
@@ -243,7 +243,7 @@ function DesktopCapture({ seed, dismiss, onClose, actions }: InnerProps) {
 
 /**
  * Interim phone surface where no drawer is mounted (the cross-project board, settings). On a
- * project board, search and capture are drawer pages (`PalettePages`); this goes once the
+ * project board, search and capture live in its drawer (`PhonePalette`); this goes once the
  * drawer moves to the shell. Kept deliberately plain.
  */
 function PhoneSurface({ mode, seed, dismiss, onClose, onCaptureTitle, actions }: InnerProps) {

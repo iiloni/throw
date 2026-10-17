@@ -104,3 +104,14 @@ it('assigns tags in both roles without closing', () => {
   fireEvent.click(screen.getByRole('checkbox', { name: 'Secondary: Work' }));
   expect(fake.secondary).toHaveBeenCalledWith('task', 'work', false);
 });
+
+it('closes on picking the current status or priority again, without writing', () => {
+  const onPicked = vi.fn();
+  render(<StatusPicker task={task} statuses={statuses} onPicked={onPicked} />);
+  fireEvent.click(screen.getByRole('radio', { name: 'To do' }));
+  render(<PriorityPicker task={task} project={project} onPicked={onPicked} />);
+  fireEvent.click(screen.getByRole('radio', { name: 'Default' }));
+  expect(onPicked).toHaveBeenCalledTimes(2);
+  expect(fake.send).not.toHaveBeenCalled();
+  expect(fake.update).not.toHaveBeenCalled();
+});

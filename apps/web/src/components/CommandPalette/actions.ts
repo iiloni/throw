@@ -3,7 +3,7 @@ import { type RefObject, useRef } from 'react';
 import { useShell } from '@/components/AppShell/shell';
 import { useStatuses } from '@/lib/collections';
 import { useAwaitingSync } from '@/lib/syncStatus';
-import { createTask } from '@/lib/tasks';
+import { createTask, type NewTask } from '@/lib/tasks';
 
 export const MAX_TITLE = 500;
 
@@ -16,8 +16,15 @@ export type Dismiss = RefObject<(() => boolean) | null>;
 export type PaletteActions = {
   openTask: (projectId: string, taskId: string, created?: boolean) => void;
   jump: (project: Project) => void;
-  /** Creates the task and opens it, or returns why it could not. */
-  create: (projectId: string | undefined, title: string) => string | null;
+  /**
+   * Creates the task and opens it, or returns why it could not. Without a status it lands in
+   * the backlog's default.
+   */
+  create: (
+    projectId: string | undefined,
+    title: string,
+    fields?: Pick<NewTask, 'statusId' | 'priority' | 'primaryTagId' | 'secondaryTagIds'>,
+  ) => string | null;
   statuses: Status[];
   awaitingStatuses: boolean;
 };
@@ -68,18 +75,18 @@ export function usePaletteActions({
       shell.selectProject(project.workspaceId, project.id);
       document.querySelector<HTMLElement>('#main-content')?.focus({ preventScroll: true });
     },
-    create(projectId, title) {
+    create(projectId, title, fields = {}) {
       if (taken.current) return null;
       const trimmed = title.trim();
       if (!trimmed) return null;
       if (trimmed.length > MAX_TITLE) return 'Use 500 characters or fewer.';
       if (!projectId) return 'Choose a project.';
-      if (!backlogOf(statuses, projectId))
+      if (!fields.statusId && !backlogOf(statuses, projectId))
         return awaitingStatuses
           ? 'Loading statuses…'
           : 'Connect to load this project’s backlog before capturing.';
       try {
-        const taskId = createTask(projectId, { title: trimmed });
+        const taskId = createTask(projectId, { ...fields, title: trimmed });
         openTask(projectId, taskId, true);
         return null;
       } catch (error) {

@@ -453,14 +453,15 @@ on the device and takes precedence over window width:
 - Settings at the bottom.
 
 Search is a command palette, opened from the rail or with Ctrl/⌘K. There is no search
-page. The palette also jumps between projects in the current workspace and captures tasks.
-It takes Catch's search and quick note as they are: a dock-shaped glass search field with
-results as cards above it, highlighted where they match, and a filter button beside the field
-that opens the project scope above it, shown as a removable chip while it applies.
+page. The palette also captures tasks. It takes Catch's search and quick note as they are: a
+dock-shaped glass search field with results as cards above it, highlighted where they match.
 
-The owner settled search scope on 2026-10-15: search defaults to the current project, with
-an optional choice of another project or all projects in the current workspace. From the
-workspace board, it starts with all projects. Open and closed tasks and subtasks are included;
+Search and capture belong to the board they are opened from (owner decision, 2026-10-17,
+replacing the scope settled on 2026-10-15). A project board searches and captures in that
+project alone, with no project filter, chooser or project jumps. Working across projects is
+the cross-project board's: there search covers every project in the current workspace, jumps
+to projects, and has a filter button beside the field that opens the project scope above it,
+shown as a removable chip while it applies. Open and closed tasks and subtasks are included;
 trash (including children of trashed parents and projects) is excluded. There is no
 cross-workspace search.
 
@@ -472,15 +473,15 @@ current project, then project name, title and task UUID. A bare number prefers t
 project when several projects have that number. Up to 30 tasks and eight project jumps are
 shown. Enter opens the selected result; arrows change the selection.
 
-Typing a title also offers Create; Ctrl/⌘Enter captures it directly into the project search
-is scoped to, otherwise the current project. With neither (the workspace board searching all
-projects), the title moves to the capture window, which opens on its project list. The capture
-window on desktop is Catch's quick note: a card-colored window with the title, a project chip that opens a
-searchable project list in place, the backlog status it lands in, and a create button. A new
-task uses default priority and the backlog's default status, appears optimistically with
-“Pending” until numbered, and opens in the existing task pane. No other fields are collected.
-Escape, Android Back or a tap outside first closes an open project list, then dismisses the
-palette without creating anything, and restores focus.
+Typing a title also offers Create; Ctrl/⌘Enter captures it directly into the board's
+project, or on the cross-project board the project search is filtered to. With neither, the
+title moves to the capture window, which opens on its project list. The capture window on
+desktop is Catch's quick note: a card-colored window with the title, the board's project (a
+chip that opens a searchable project list in place on the cross-project board), the backlog
+status it lands in, and a create button. A new task appears optimistically with “Pending”
+until numbered, and opens in the existing task pane. Escape, Android Back or a tap outside
+first closes an open list, then dismisses the palette without creating anything, and
+restores focus.
 
 ### Phone
 
@@ -494,13 +495,20 @@ three-tab dock is replaced on the project board.
 The phone layout applies below 768 CSS pixels. The title menu also switches and manages
 workspaces, and opens settings. The project dock remains on project and cross-project
 boards; settings and an empty workspace use the title menu alone. On the cross-project
-board, Search opens the workspace palette. On a phone, search and capture are pages of the
-drawer at full height (ADR 0009), opened from the dock's Search and create buttons: search
-has a fixed header with the field and the filter, and its results scroll below; capture is
-the quick-note content. The drawer owns their surface, title row and close, gestures, Back,
-keyboard insets and focus on open. Elsewhere on a phone (settings, an empty workspace,
-the cross-project board's dock) the palette uses its own full-height surface until the
-drawer moves to the shell.
+board, Search opens the workspace palette.
+
+On a phone's project board, search and capture live in the drawer (ADR 0009). The dock's
+Search button raises the drawer as a search page: results above, and Catch's glass search
+field at the bottom where the dock was, focused so the keyboard rises right under it. The
+create button opens Catch's quick note for a task: a card above the dock with the title,
+focused, and create. The task lands where a new card would, in the column on screen, or the
+backlog's default status while the backlog is open. While the card is up, the dock holds the
+new task's status, priority and (when the project has tags) tags, as an open task's dock
+does, and the create button turns into its close. Those controls put the keyboard away and
+open their pickers in the drawer beneath the dock, with the card riding above; picking
+returns to the title. Closing the card, Back, Escape or a tap outside creates nothing.
+Elsewhere on a phone (settings, an empty workspace, the cross-project board's dock) the
+palette uses its own full-height surface until the drawer moves to the shell.
 
 ### The drawer
 
@@ -511,7 +519,8 @@ board settings, search and capture, the move targets, forms, the tag manager and
 Collapsed, its header is the dock, on boards and open tasks only; elsewhere it stays out of
 sight until something opens in it. Opening something replaces what it shows, and closing
 returns it to what it showed before. Opened content sits above the on-screen keyboard, and
-Back or Escape first closes a list open inside it. Desktop has no drawer. The rules are in
+Back or Escape first closes a list open inside it. Quick capture's card floats above the
+dock rather than opening as a page. Desktop has no drawer. The rules are in
 [ADR 0009](decisions/0009-the-drawer.md).
 
 ### Shell routes and remembered selection
@@ -580,8 +589,9 @@ little as possible; it is not the normal way to use the app (ADR 0005).
 
 ## Open questions
 
-1. **Search scope — settled (2026-10-15).** Current project by default, with workspace
-   search available; see [Navigation](#navigation).
+1. **Search scope — settled (2026-10-17).** The board search is opened from: one project
+   on a project board, every project on the cross-project board; see
+   [Navigation](#navigation).
 2. **Membership.** Whether a future member joins a whole workspace, a single project, or
    either. Tasks and the rows under them carry both a workspace and a project, so either
    answer can filter them without a migration.

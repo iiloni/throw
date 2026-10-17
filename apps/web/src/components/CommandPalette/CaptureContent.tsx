@@ -14,9 +14,10 @@ import {
 import { ProjectBadge, ProjectOptions } from './ProjectOptions';
 
 /**
- * Catch's quick note for a task: the title, a project chip that opens a searchable list in
- * place, the backlog status it lands in and create. The surface around it (the desktop
- * window or the phone's drawer) owns its chrome, gestures, Back and focus on open.
+ * Catch's quick note for a task: the title, where it lands and create. A project board
+ * captures into its own backlog; on the cross-project board a project chip opens a
+ * searchable list in place. The surface around it owns its chrome, gestures, Back and focus
+ * on open.
  */
 export function CaptureContent({
   actions,
@@ -36,7 +37,8 @@ export function CaptureContent({
   const shell = useShell();
   const reduced = useReducedMotion();
   const [title, setTitle] = useState(seed);
-  const [projectId, setProjectId] = useState(shell.project?.id ?? '');
+  const board = shell.project;
+  const [projectId, setProjectId] = useState(board?.id ?? '');
   const [choosing, setChoosing] = useState(!!seed && !shell.project);
   const [error, setError] = useState('');
   const chosen = shell.projects.find((p) => p.id === projectId);
@@ -154,25 +156,32 @@ export function CaptureContent({
         </p>
       )}
       <footer className="flex shrink-0 items-center gap-1.5 px-3 pt-1 pb-3">
-        <motion.button
-          type="button"
-          aria-label="Choose capture project"
-          aria-expanded={choosing}
-          // Keeps the keyboard up, like Catch's quick-note tools.
-          onPointerDown={(event) => event.preventDefault()}
-          onClick={() => (choosing ? closePicker() : setChoosing(true))}
-          whileTap={{ scale: 0.94 }}
-          transition={springs.snappy}
-          className="flex h-9 min-w-0 items-center gap-2 rounded-xl bg-foreground/[0.07] pr-2 pl-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
-        >
-          {chosen ? (
-            <ProjectBadge color={chosen.color} icon={chosen.icon} />
-          ) : (
-            <span className="size-7 shrink-0" />
-          )}
-          <span className="min-w-0 truncate font-medium">{chosen?.name ?? 'Choose project'}</span>
-          <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-        </motion.button>
+        {board ? (
+          <span className="flex h-9 min-w-0 items-center gap-2 pl-1 text-sm">
+            <ProjectBadge color={board.color} icon={board.icon} />
+            <span className="min-w-0 truncate font-medium">{board.name}</span>
+          </span>
+        ) : (
+          <motion.button
+            type="button"
+            aria-label="Choose capture project"
+            aria-expanded={choosing}
+            // Keeps the keyboard up, like Catch's quick-note tools.
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={() => (choosing ? closePicker() : setChoosing(true))}
+            whileTap={{ scale: 0.94 }}
+            transition={springs.snappy}
+            className="flex h-9 min-w-0 items-center gap-2 rounded-xl bg-foreground/[0.07] pr-2 pl-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+          >
+            {chosen ? (
+              <ProjectBadge color={chosen.color} icon={chosen.icon} />
+            ) : (
+              <span className="size-7 shrink-0" />
+            )}
+            <span className="min-w-0 truncate font-medium">{chosen?.name ?? 'Choose project'}</span>
+            <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+          </motion.button>
+        )}
         {backlog && (
           <span className="min-w-0 truncate px-1.5 text-muted-foreground text-xs">
             {backlog.name}
