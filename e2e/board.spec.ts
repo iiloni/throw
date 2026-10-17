@@ -171,6 +171,13 @@ async function atDetent(drawer: Locator, detent: 'full' | 'half' | 'closed') {
     .toBeLessThan(3);
 }
 
+/** The title field of quick capture, which a phone's create button opens in the drawer. */
+function captureTitle(page: Page) {
+  return page
+    .getByRole('dialog', { name: 'New task', exact: true })
+    .getByRole('textbox', { name: 'Task title' });
+}
+
 test('real tasks occupy their ordered columns, mixed backlog and closed rail or sheet', async ({
   page,
   isMobile,
@@ -305,13 +312,23 @@ test('a task created offline appears immediately, survives reload and gains its 
   await page
     .getByRole('button', { name: isMobile ? 'New task' : 'Add task to Build', exact: true })
     .click();
+  if (isMobile) {
+    // The drawer takes focus itself when capture opens in it.
+    await expect(page.getByRole('dialog', { name: 'New task', exact: true })).toBeFocused();
+    const capture = captureTitle(page);
+    await capture.fill('Written without a connection');
+    await capture.press('Enter');
+  }
   const pane = page.getByRole(isMobile ? 'dialog' : 'region', { name: 'Task', exact: true });
   const title = pane.getByRole('textbox', { name: 'Task title' });
-  await expect(title).toBeFocused();
-  await title.fill('Written without a connection');
-  await title.press('Enter');
+  if (!isMobile) {
+    await expect(title).toBeFocused();
+    await title.fill('Written without a connection');
+    await title.press('Enter');
+  }
   await expect(pane).toContainText('Pending');
   await page.getByRole('button', { name: 'Back to the board', exact: true }).click();
+  if (isMobile) await openBacklog(page, true);
   const card = page.getByRole('article', {
     name: 'Pending Written without a connection',
     exact: true,
@@ -331,7 +348,11 @@ test('a task created offline appears immediately, survives reload and gains its 
       ),
     )
     .toEqual([
-      { title: 'Written without a connection', number: '1', status_id: account.status('Build') },
+      {
+        title: 'Written without a connection',
+        number: '1',
+        status_id: account.status(isMobile ? 'Ideas' : 'Build'),
+      },
     ]);
 });
 
@@ -427,6 +448,8 @@ test('rails, galleries, board settings and the phone tray keep their distinct la
     await page.keyboard.press('ArrowUp');
     await expect(tray).toHaveAttribute('data-detent', 'full');
     await page.getByRole('button', { name: 'New task in the backlog', exact: true }).click();
+    await captureTitle(page).fill('New tray task');
+    await captureTitle(page).press('Enter');
     await expect(
       page.getByRole(isMobile ? 'dialog' : 'region', { name: 'Task', exact: true }),
     ).toBeVisible();
@@ -607,9 +630,14 @@ test('creating from a filtered backlog uses its default status and reveals the n
   await backlog.getByRole('button', { name: 'Planned', exact: true }).click();
   await page.getByRole('button', { name: 'New task in the backlog', exact: true }).click();
   const pane = page.getByRole(isMobile ? 'dialog' : 'region', { name: 'Task', exact: true });
-  const title = pane.getByRole('textbox', { name: 'Task title' });
-  await title.fill('New backlog task');
-  await title.press('Enter');
+  if (isMobile) {
+    await captureTitle(page).fill('New backlog task');
+    await captureTitle(page).press('Enter');
+  } else {
+    const title = pane.getByRole('textbox', { name: 'Task title' });
+    await title.fill('New backlog task');
+    await title.press('Enter');
+  }
   await page.getByRole('button', { name: 'Back to the board', exact: true }).click();
   await expect(backlog.getByRole('button', { name: 'All', exact: true })).toHaveAttribute(
     'aria-pressed',

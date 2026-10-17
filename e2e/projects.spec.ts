@@ -252,8 +252,9 @@ test('cross-project board and settings are reachable from the shell', async ({
   if (isMobile) {
     const dock = page.getByRole('navigation', { name: 'Project views' });
     await dock.getByRole('link', { name: 'Search', exact: true }).click();
-    await expect(page.getByRole('heading', { level: 2 })).toHaveText('Search');
-    await expect(page).toHaveURL(/\/board\?view=search$/);
+    await expect(page.getByRole('dialog', { name: 'Search', exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/board(?:\?view=board)?$/);
+    await page.getByRole('button', { name: 'Close search' }).click();
     await dock.getByRole('link', { name: 'Backlog', exact: true }).click();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Kitchen');
     await expect(page.getByRole('region', { name: 'Backlog', exact: true })).toHaveAttribute(

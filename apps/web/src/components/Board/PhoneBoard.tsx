@@ -11,6 +11,8 @@ import {
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
 import { type ReactNode, useCallback, useContext, useRef, useState } from 'react';
+import type { PaletteMode } from '@/components/CommandPalette/CommandPalette';
+import { usePalettePages } from '@/components/CommandPalette/PalettePages';
 import { type Detent, Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
@@ -51,18 +53,17 @@ export function PhoneBoard({
   projectMenu,
   syncIndicator,
   initialBacklog = false,
-  onSearch,
+  palette = false,
   onReset,
-  searchContent,
   onBacklogChange,
   onReturnBoard,
 }: {
   projectMenu?: ReactNode;
   syncIndicator?: ReactNode;
   initialBacklog?: boolean;
-  onSearch?: () => void;
+  /** Search and quick capture open as drawer pages; without it, create adds a card in place. */
+  palette?: boolean;
   onReset?: () => void;
-  searchContent?: ReactNode;
   onBacklogChange?: (open: boolean) => void;
   onReturnBoard?: () => void;
 }) {
@@ -77,6 +78,7 @@ export function PhoneBoard({
   const [page, setPage] = useState(0);
   const [drawerPage, setDrawerPage] = useState<BoardPage | null>(null);
   const closePage = useCallback(() => setDrawerPage(null), []);
+  const palettePages = usePalettePages({ onClose: closePage, onOpen: setDrawerPage });
   const paged = drawerPage !== null;
   // An open task covers the board; the drawer above it is the task's (ADR 0009).
   const covered = paged || state.openTaskId !== null;
@@ -143,51 +145,44 @@ export function PhoneBoard({
         {syncIndicator && (
           <div className="px-5 text-muted-foreground empty:hidden">{syncIndicator}</div>
         )}
-        {!searchContent && <FlowTrack statuses={active} page={page} onTurn={turnTo} />}
+        <FlowTrack statuses={active} page={page} onTurn={turnTo} />
       </header>
 
-      {searchContent ? (
-        <div className="min-h-0 flex-1 pb-[var(--dock-space)]" inert={covered}>
-          {searchContent}
+      <div className="relative flex min-h-0 flex-1" inert={covered}>
+        <div
+          ref={pager}
+          data-pager=""
+          onScroll={(event) =>
+            setPage(Math.round(event.currentTarget.scrollLeft / pageStride(event.currentTarget)))
+          }
+          className="phone-pager flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
+        >
+          {active.map((status) => (
+            <div key={status.id} data-page="" data-origin="active" className={pageClass}>
+              <CardList
+                listId={`status:${status.id}`}
+                endSpace={DOCK_SPACE}
+                tight
+                className="flex-1"
+              />
+            </div>
+          ))}
         </div>
-      ) : (
-        <div className="relative flex min-h-0 flex-1" inert={covered}>
-          <div
-            ref={pager}
-            data-pager=""
-            onScroll={(event) =>
-              setPage(Math.round(event.currentTarget.scrollLeft / pageStride(event.currentTarget)))
-            }
-            className="phone-pager flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
-          >
-            {active.map((status) => (
-              <div key={status.id} data-page="" data-origin="active" className={pageClass}>
-                <CardList
-                  listId={`status:${status.id}`}
-                  endSpace={DOCK_SPACE}
-                  tight
-                  className="flex-1"
-                />
-              </div>
-            ))}
-          </div>
-          <PeekEdge side={-1} shown={page > 0} />
-          <PeekEdge side={1} shown={page < active.length - 1} />
-          {done && <DonePocket status={done} shown={page === active.length - 1} />}
-        </div>
-      )}
+        <PeekEdge side={-1} shown={page > 0} />
+        <PeekEdge side={1} shown={page < active.length - 1} />
+        {done && <DonePocket status={done} shown={page === active.length - 1} />}
+      </div>
 
       <BoardDrawer
         page={drawerPage}
         onClosePage={closePage}
         onReset={onReset}
         initialOpen={initialBacklog}
-        onSearch={() => {
-          setPage(0);
-          onSearch?.();
-        }}
+        palettePages={palettePages.pages}
+        onSearch={palette ? () => palettePages.open('search') : undefined}
         onChange={onBacklogChange}
         onCreate={(inBacklog) => {
+          if (palette) return palettePages.open('capture');
           onReturnBoard?.();
           createTask(inBacklog ? undefined : active[page]?.id);
         }}
@@ -387,7 +382,7 @@ function DonePocket({ status, shown }: { status: Status; shown: boolean }) {
   );
 }
 
-type BoardPage = 'closed' | 'settings';
+type BoardPage = 'closed' | 'settings' | PaletteMode;
 
 const dockButton =
   'relative flex size-[var(--dock-height)] shrink-0 items-center justify-center rounded-[var(--dock-radius)] outline-none focus-visible:ring-2 focus-visible:ring-ring/70';
@@ -405,6 +400,7 @@ function BoardDrawer({
   onReset,
   onCreate,
   initialOpen,
+  palettePages,
   onSearch,
   onChange,
 }: {
@@ -413,6 +409,7 @@ function BoardDrawer({
   onReset?: () => void;
   onCreate: (inBacklog: boolean) => void;
   initialOpen: boolean;
+  palettePages: Record<PaletteMode, DrawerPage>;
   onSearch?: () => void;
   onChange?: (open: boolean) => void;
 }) {
@@ -462,19 +459,18 @@ function BoardDrawer({
         <span className="font-bold font-display text-lg tracking-[-0.01em]">Backlog</span>
         <span className="text-muted-foreground text-sm tabular-nums">{count}</span>
       </button>
-      <motion.button
-        type="button"
-        aria-label="Search"
-        onClick={() => {
-          setDetent('closed');
-          onSearch?.();
-        }}
-        whileTap={{ scale: 0.88 }}
-        transition={springs.snappy}
-        className={cn(dockButton, 'bg-foreground/[0.06] text-foreground')}
-      >
-        <Search className="size-6" aria-hidden />
-      </motion.button>
+      {onSearch && (
+        <motion.button
+          type="button"
+          aria-label="Search"
+          onClick={onSearch}
+          whileTap={{ scale: 0.88 }}
+          transition={springs.snappy}
+          className={cn(dockButton, 'bg-foreground/[0.06] text-foreground')}
+        >
+          <Search className="size-6" aria-hidden />
+        </motion.button>
+      )}
       <motion.button
         type="button"
         aria-label={detent === 'closed' ? 'New task' : 'New task in the backlog'}
@@ -492,6 +488,7 @@ function BoardDrawer({
   );
 
   const pages: Record<BoardPage, DrawerPage> = {
+    ...palettePages,
     closed: { key: 'closed', title: 'Closed', origin: 'closed', content: <ClosedTasks /> },
     settings: {
       key: 'settings',

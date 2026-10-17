@@ -28,6 +28,11 @@ export type DrawerPage = {
   fit?: boolean;
   /** The dock stays as the page's header, its buttons acting as tabs over the content. */
   dock?: boolean;
+  /**
+   * Closes something open inside the page (a list or panel) before Back or Escape closes the
+   * page itself, returning whether it did.
+   */
+  dismiss?: () => boolean;
 };
 
 /**
@@ -37,7 +42,7 @@ export type DrawerPage = {
  * closing the page returns it to the height it was at. A docked page keeps the dock above it. A held card sinks it out of the way,
  * unless it is full and its own list is being reordered. Raised, it sits above a full-screen
  * view such as an open task, and its dock rides above the keyboard as a note's dock does in
- * Catch.
+ * Catch. Otherwise an open page ends above the keyboard, so its input stays in view.
  */
 export function Drawer({
   label,
@@ -120,7 +125,11 @@ export function Drawer({
   });
 
   useBackHandler(detent !== 'closed' && !paged, () => onDetent('closed'));
-  useBackHandler(paged, onClosePage);
+  const dismissPage = useRef(page?.dismiss);
+  dismissPage.current = page?.dismiss;
+  useBackHandler(paged, () => {
+    if (!dismissPage.current?.()) onClosePage();
+  });
 
   const placed = useRef(false);
   // biome-ignore lint/correctness/useExhaustiveDependencies: placement follows these inputs
@@ -148,11 +157,19 @@ export function Drawer({
   });
 
   // A page is modal: focus moves into the drawer and returns to what opened it. Focusing the
-  // close button would open its tooltip, which takes the first Escape.
+  // close button would open its tooltip, which takes the first Escape. A page hides the dock,
+  // which drops the focus of a dock button that opened it, so the opener is noted while
+  // rendering, before that commit.
+  const wasPaged = useRef(false);
+  if (paged !== wasPaged.current) {
+    wasPaged.current = paged;
+    if (paged) {
+      const active = document.activeElement;
+      opener.current = active instanceof HTMLElement ? active : null;
+    }
+  }
   useEffect(() => {
     if (!paged) return;
-    const active = document.activeElement;
-    opener.current = active instanceof HTMLElement ? active : null;
     surface.current?.focus({ preventScroll: true });
     return () => {
       // A docked page closed from its own tab leaves focus on that tab.
@@ -175,7 +192,7 @@ export function Drawer({
       if (event.key !== 'Escape' || event.defaultPrevented) return;
       if (document.querySelector('[role="menu"]')) return;
       event.preventDefault();
-      onClosePage();
+      if (!dismissPage.current?.()) onClosePage();
     }
     window.addEventListener('keydown', close);
     return () => window.removeEventListener('keydown', close);
@@ -209,8 +226,10 @@ export function Drawer({
         data-origin={page ? page.origin : origin}
         style={{ y }}
         className={cn(
-          'glass-thick fixed inset-x-0 top-[calc(var(--safe-top)+0.5rem)] bottom-0 mx-auto flex w-full max-w-md flex-col rounded-t-[1.75rem] outline-none',
-          raised ? 'z-[45] [translate:0_calc(var(--keyboard)*-1)]' : 'z-30',
+          'glass-thick fixed inset-x-0 top-[calc(var(--safe-top)+0.5rem)] mx-auto flex w-full max-w-md flex-col rounded-t-[1.75rem] outline-none',
+          raised
+            ? 'bottom-0 z-[45] [translate:0_calc(var(--keyboard)*-1)]'
+            : cn('z-30', paged ? 'bottom-[var(--keyboard)]' : 'bottom-0'),
         )}
       >
         <div

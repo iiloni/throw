@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { Columns3, Search } from 'lucide-react';
+import { Columns3 } from 'lucide-react';
 import { useShell, viewSchema } from '@/components/AppShell/shell';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 
@@ -11,12 +11,6 @@ export const Route = createFileRoute('/_app/w/$workspaceId/board')({
 });
 function CrossProjectBoard() {
   const shell = useShell();
-  if (shell.view === 'search' && shell.workspace)
-    return (
-      <EmptyState key="search" icon={Search} title="Search">
-        Search will help you find work across this workspace.
-      </EmptyState>
-    );
   return (
     <EmptyState
       icon={Columns3}

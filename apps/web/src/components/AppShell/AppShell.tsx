@@ -1,6 +1,14 @@
 import { Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { comparePositions } from '@throw/shared';
-import { Columns3, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Settings2 } from 'lucide-react';
+import {
+  Columns3,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Pencil,
+  Plus,
+  Search,
+  Settings2,
+} from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { z } from 'zod';
@@ -13,7 +21,9 @@ import {
   viewSchema,
 } from '@/components/AppShell/shell';
 import { BoardSettingsPanel } from '@/components/Board/BoardSettingsPanel';
+import { board, update } from '@/components/Board/state';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
+import { CommandPalette, type PaletteMode } from '@/components/CommandPalette/CommandPalette';
 import { Dock } from '@/components/Dock/Dock';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
@@ -53,6 +63,12 @@ export function AppShell() {
   const desktop = useMedia('(min-width: 768px)');
   const expanded = railChoice ?? wide;
   const reduced = useReducedMotion();
+  const [palette, setPalette] = useState<PaletteMode | null>(null);
+  const [pendingTask, setPendingTask] = useState<{
+    projectId: string;
+    taskId: string;
+    created?: boolean;
+  } | null>(null);
   const [form, setForm] = useState<ShellForm | null>(null);
   const workspaces = [...allWorkspaces].sort((a, b) => comparePositions(a.position, b.position));
   const preferredWorkspace = workspaces.find((item) => item.id === remembered.workspaceId);
@@ -71,7 +87,8 @@ export function AppShell() {
   );
   const view = viewSchema.catch('board').parse((location.search as { view?: unknown }).view);
   const crossBoard = location.pathname.endsWith('/board');
-  const projectBoard = !!project && (view !== 'search' || !desktop);
+  const projectBoard = !!project;
+  const boardState = board.use();
   const settings = location.pathname === '/settings';
 
   useEffect(() => {
@@ -115,6 +132,54 @@ export function AppShell() {
         search: { view: 'board' },
       });
   }
+  useEffect(() => {
+    function shortcut(event: KeyboardEvent) {
+      if (
+        event.key.toLowerCase() !== 'k' ||
+        !(event.metaKey || event.ctrlKey) ||
+        event.altKey ||
+        event.isComposing
+      )
+        return;
+      event.preventDefault();
+      if (!workspace || form || (document.querySelector('[role="dialog"]') && !palette)) return;
+      setPalette((before) => (before ? null : 'search'));
+    }
+    window.addEventListener('keydown', shortcut);
+    return () => window.removeEventListener('keydown', shortcut);
+  }, [workspace, form, palette]);
+  useEffect(() => {
+    if (!pendingTask || boardState.projectId !== pendingTask.projectId || !boardState.actions)
+      return;
+    if (
+      !boardState.boards.some((data) => data.tasks.some((task) => task.id === pendingTask.taskId))
+    )
+      return;
+    update({
+      openTaskId: pendingTask.taskId,
+      ...(pendingTask.created ? { backlogFilter: null } : {}),
+    });
+    setPendingTask(null);
+  }, [pendingTask, boardState]);
+  // Old shell links still open the palette without replacing the board with a search page.
+  useEffect(() => {
+    if (view !== 'search' || !workspace) return;
+    setPalette('search');
+    if (project)
+      void navigate({
+        to: '/w/$workspaceId/p/$projectId',
+        params: { workspaceId: workspace.id, projectId: project.id },
+        search: { view: 'board' },
+        replace: true,
+      });
+    else
+      void navigate({
+        to: '/w/$workspaceId/board',
+        params: { workspaceId: workspace.id },
+        search: { view: 'board' },
+        replace: true,
+      });
+  }, [view, workspace, project, navigate]);
   const context: ShellState = {
     workspaces,
     workspace,
@@ -130,6 +195,12 @@ export function AppShell() {
     selectWorkspace,
     openForm: setForm,
     goBoard,
+    openPalette: (mode = 'search') => setPalette(mode),
+    openTask: (projectId, taskId, created) => {
+      if (!workspace) return;
+      setPendingTask({ projectId, taskId, created });
+      if (project?.id !== projectId) selectProject(workspace.id, projectId);
+    },
     selectBoardView: (view) => {
       if (workspace)
         void navigate({
@@ -172,6 +243,13 @@ export function AppShell() {
             <div className="px-3">
               <ShellMenu expanded={expanded} />
             </div>
+            {workspace && (
+              <div className="mt-3 px-3">
+                <RailButton label="Search" expanded={expanded} onClick={() => setPalette('search')}>
+                  <Search className="size-5" aria-hidden />
+                </RailButton>
+              </div>
+            )}
             <nav
               aria-label="Projects"
               className="mt-5 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden px-3"
@@ -275,6 +353,13 @@ export function AppShell() {
         </div>
       </div>
       {!desktop && !projectBoard && <Dock />}
+      <CommandPalette
+        key={workspace?.id ?? 'none'}
+        mode={palette}
+        onClose={() => setPalette(null)}
+        onModeChange={setPalette}
+        onOpenTask={context.openTask}
+      />
       <ShellForms form={form} onClose={() => setForm(null)} />
     </ShellContext.Provider>
   );

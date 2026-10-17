@@ -446,14 +446,41 @@ A left-mounted navigation rail, not a bottom dock. Below 1200 CSS pixels it star
 at wider desktop widths it starts expanded. An explicit expand/collapse choice is remembered
 on the device and takes precedence over window width:
 
-- Workspace switcher at the top.
+- Workspace switcher at the top, followed by Search (Ctrl/⌘K).
 - One icon per project. In the expanded rail, a pencil at the right of each project entry
   appears on hover or keyboard focus and edits that project. It stays visible on touch screens.
 - The cross-project board.
 - Settings at the bottom.
 
-Search is a command palette or an integrated input. There is no search page. The palette
-also covers jumping between projects.
+Search is a command palette, opened from the rail or with Ctrl/⌘K. There is no search
+page. The palette also jumps between projects in the current workspace and captures tasks.
+It takes Catch's search and quick note as they are: a dock-shaped glass search field with
+results as cards above it, highlighted where they match, and a filter button beside the field
+that opens the project scope above it, shown as a removable chip while it applies.
+
+The owner settled search scope on 2026-10-15: search defaults to the current project, with
+an optional choice of another project or all projects in the current workspace. From the
+workspace board, it starts with all projects. Open and closed tasks and subtasks are included;
+trash (including children of trashed parents and projects) is excluded. There is no
+cross-workspace search.
+
+Search runs on synced device data, offline too. Every literal query word must appear across
+the title, current identifier or description text, ignoring case and accents. Assigned tag
+names join these fields when the tags integration lands. Exact identifiers rank first, then
+exact titles, title prefixes, all-title matches, and description/tag matches. Ties favor the
+current project, then project name, title and task UUID. A bare number prefers the current
+project when several projects have that number. Up to 30 tasks and eight project jumps are
+shown. Enter opens the selected result; arrows change the selection.
+
+Typing a title also offers Create; Ctrl/⌘Enter captures it directly into the project search
+is scoped to, otherwise the current project. With neither (the workspace board searching all
+projects), the title moves to the capture window, which opens on its project list. The capture
+window on desktop is Catch's quick note: a card-colored window with the title, a project chip that opens a
+searchable project list in place, the backlog status it lands in, and a create button. A new
+task uses default priority and the backlog's default status, appears optimistically with
+“Pending” until numbered, and opens in the existing task pane. No other fields are collected.
+Escape, Android Back or a tap outside first closes an open project list, then dismisses the
+palette without creating anything, and restores focus.
 
 ### Phone
 
@@ -467,7 +494,13 @@ three-tab dock is replaced on the project board.
 The phone layout applies below 768 CSS pixels. The title menu also switches and manages
 workspaces, and opens settings. The project dock remains on project and cross-project
 boards; settings and an empty workspace use the title menu alone. On the cross-project
-board, Search shows the workspace search placeholder.
+board, Search opens the workspace palette. On a phone, search and capture are pages of the
+drawer at full height (ADR 0009), opened from the dock's Search and create buttons: search
+has a fixed header with the field and the filter, and its results scroll below; capture is
+the quick-note content. The drawer owns their surface, title row and close, gestures, Back,
+keyboard insets and focus on open. Elsewhere on a phone (settings, an empty workspace,
+the cross-project board's dock) the palette uses its own full-height surface until the
+drawer moves to the shell.
 
 ### The drawer
 
@@ -477,16 +510,17 @@ every sheet on a phone is the drawer showing that content: the backlog, the clos
 board settings, search and capture, the move targets, forms, the tag manager and pickers.
 Collapsed, its header is the dock, on boards and open tasks only; elsewhere it stays out of
 sight until something opens in it. Opening something replaces what it shows, and closing
-returns it to what it showed before. Desktop has no drawer. The rules are in
+returns it to what it showed before. Opened content sits above the on-screen keyboard, and
+Back or Escape first closes a list open inside it. Desktop has no drawer. The rules are in
 [ADR 0009](decisions/0009-the-drawer.md).
 
 ### Shell routes and remembered selection
 
 - `/w/:workspaceId/p/:projectId?view=board` is a project. `view=backlog` opens its
-  phone board with the backlog half open and `view=search` selects the search placeholder. Search is a view of
-  the current context, not a separate search page.
+  phone board with the backlog half open. Legacy `view=search` links open the palette over
+  the board and replace the view with `board`. The palette has no route of its own.
 - `/w/:workspaceId/board` is the cross-project board for that workspace; `view=search`
-  shows its search placeholder.
+  opens the palette over it and replaces the view with `board`.
 - `/settings` holds account and appearance controls.
 - `/` restores the device's last workspace and project for the signed-in account.
   `/w/:workspaceId` restores that workspace's last project, otherwise its first project
@@ -503,11 +537,11 @@ it to the trash (see [Project](#project)); the trash has no view yet.
 The project board uses synced tasks, statuses and primary tags, with the backlog in the
 drawer on a phone. Cards resolve their primary tag's root colour with `taskTagColor` and
 show the tag's name; a partially synced tag tree leaves the card neutral. The drawer
-(`components/Drawer`) carries the backlog, the closed tasks and board
-settings; the board owns it for now. The move drawer is still its own panel until the drag
+(`components/Drawer`) carries the backlog, the closed tasks, board settings, and search and
+capture; the board owns it for now. The move drawer is still its own panel until the drag
 step, and the shell's project forms still use `BottomSheet` until the drawer moves to the
-shell. The
-cross-project board, search and the command palette remain placeholders. Task panes have a
+shell. The cross-project board remains a placeholder; search and quick capture use the
+command palette. Task panes have a
 title and a placeholder body; their content comes later. Dragging, phone long-press
 selection and keyboard reordering remain in the development prototype until the drag step wires them to
 task actions.
@@ -546,8 +580,8 @@ little as possible; it is not the normal way to use the app (ADR 0005).
 
 ## Open questions
 
-1. **Search scope.** Presumably the current workspace with a project filter. It does not
-   affect the task schema: a workspace's tasks are on the device, so search can run there.
+1. **Search scope — settled (2026-10-15).** Current project by default, with workspace
+   search available; see [Navigation](#navigation).
 2. **Membership.** Whether a future member joins a whole workspace, a single project, or
    either. Tasks and the rows under them carry both a workspace and a project, so either
    answer can filter them without a migration.
