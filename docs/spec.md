@@ -432,7 +432,8 @@ view), comments and activity.
   and a card's subtask underlay hides while its task is open and slides out from behind the
   card as the task lands. When
   a task opens, the board's dock crossfades into the task's controls as Catch's dock does
-  for a note. Desktop panes slide in from the side, as in Catch.
+  for a note, and back again as it closes; the drawer stays above the task until it has
+  landed. Desktop panes slide in from the side, as in Catch.
 - The phone dock's create button adds a task at the top of the current column's default
   priority (the backlog's default status while the backlog is open) and opens it with
   its title selected.

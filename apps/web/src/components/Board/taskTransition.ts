@@ -13,6 +13,8 @@ const origins = new Map<string, TaskRect>();
 const hidden = createStore<ReadonlySet<string>>(new Set());
 // Hidden cards whose task is about to land back in them.
 const landing = createStore<ReadonlySet<string>>(new Set());
+// Task surfaces on screen, counting one still closing after its task has left the board.
+const surfaces = createStore(0);
 
 /** Prefer a subtask card in the open pane over a second copy on the board behind it. */
 export function measureTaskCard(taskId: string): TaskRect | null {
@@ -79,4 +81,14 @@ export function useTaskCardLanding(taskId: string) {
 
 export function useTaskCardHidden(taskId: string) {
   return hidden.use().has(taskId);
+}
+
+/** Counts a task surface as on screen while it is mounted; returns the cleanup. */
+export function showTaskSurface() {
+  surfaces.set(surfaces.get() + 1);
+  return () => surfaces.set(surfaces.get() - 1);
+}
+
+export function useTaskSurfaceShown() {
+  return surfaces.use() > 0;
 }

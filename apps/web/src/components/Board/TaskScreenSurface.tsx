@@ -7,7 +7,13 @@ import { board, current, leaveTask } from './state';
 import { TaskCardFace } from './TaskCard';
 import { TaskContentContext } from './taskContent';
 import { TaskEditorReadyContext, TaskScrollContext } from './taskMotionContext';
-import { landTaskCard, measureTaskCard, setTaskCardHidden, takeTaskOrigin } from './taskTransition';
+import {
+  landTaskCard,
+  measureTaskCard,
+  setTaskCardHidden,
+  showTaskSurface,
+  takeTaskOrigin,
+} from './taskTransition';
 import { MAX_DRAG, useSwipeToDismiss } from './useSwipeToDismiss';
 
 const lerp = (from: number, to: number, progress: number) => from + (to - from) * progress;
@@ -130,6 +136,7 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
   }, [isPresent, reduced, origin, task.id, card, progress, dragY, fade, safeToRemove]);
 
   useEffect(() => () => setTaskCardHidden(task.id, false), [task.id]);
+  useEffect(showTaskSurface, []);
 
   // Not a Radix modal: the board's drawer sits above the screen as the task's dock, and the
   // board behind it is inert instead. Focus moves in on opening and back out after closing.

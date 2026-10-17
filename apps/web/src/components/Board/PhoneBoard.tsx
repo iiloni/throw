@@ -34,6 +34,7 @@ import {
 } from './state';
 import { TaskCard } from './TaskCard';
 import { TaskContentContext } from './taskContent';
+import { useTaskSurfaceShown } from './taskTransition';
 
 /** Clear space at the end of a column, for the collapsed drawer resting over it. */
 const DOCK_SPACE = 'calc(var(--dock-height) + var(--safe-bottom) + 3rem)';
@@ -426,6 +427,8 @@ function BoardDrawer({
   const sunk = held !== null && (page !== null || detent !== 'full');
   // While a task is open, the collapsed drawer is its dock; the backlog waits at its height.
   const task = useContext(TaskContentContext)?.drawer;
+  // A closing task shrinks beneath the drawer, as an opening one grows beneath it.
+  const raised = useTaskSurfaceShown();
 
   function goTo(next: Detent) {
     setDetent(next);
@@ -518,7 +521,7 @@ function BoardDrawer({
       gesturesDisabled={held !== null || fingerDown || (!!task && !task.page)}
       page={task ? task.page : page ? pages[page] : null}
       onClosePage={task ? task.closePage : onClosePage}
-      raised={!!task}
+      raised={!!task || raised}
     >
       <div
         className="flex min-h-0 flex-1 flex-col"
@@ -537,7 +540,6 @@ function BoardDrawer({
 }
 
 /** The board's dock and an open task's trade places, as Catch's dock does for a note. */
-/** Catch's dock swap for an opening note: the old face fades out of the way in place. */
 function DockFace({ children }: { children: ReactNode }) {
   const present = useIsPresent();
   const reduced = useReducedMotion();
