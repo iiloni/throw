@@ -400,10 +400,14 @@ test('rails, galleries, board settings and the phone tray keep their distinct la
   await page.getByRole('switch', { name: 'Priority labels', exact: true }).click();
   await page.getByRole('switch', { name: 'Priority on cards', exact: true }).click();
   await page.getByRole('switch', { name: 'Scrollbars', exact: true }).click();
-  await page
+  const backlogRail = page
     .getByRole('group', { name: 'Backlog', exact: true })
-    .getByRole('button', { name: 'With board' })
-    .click();
+    .getByRole('button', { name: 'With board' });
+  if (isMobile) {
+    // A phone has no columns or side rails for these to change.
+    await expect(backlogRail).toHaveCount(0);
+    await expect(page.getByRole('switch', { name: 'Column backgrounds' })).toHaveCount(0);
+  } else await backlogRail.click();
   await page.keyboard.press('Escape');
   await expect(page.locator('html')).not.toHaveAttribute('data-hide-scrollbars');
   await page.reload();
@@ -412,11 +416,7 @@ test('rails, galleries, board settings and the phone tray keep their distinct la
     'aria-checked',
     'true',
   );
-  await expect(
-    page
-      .getByRole('group', { name: 'Backlog', exact: true })
-      .getByRole('button', { name: 'With board' }),
-  ).toHaveAttribute('aria-pressed', 'true');
+  if (!isMobile) await expect(backlogRail).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.press('Escape');
   await openBacklog(page, isMobile);
   if (isMobile) {

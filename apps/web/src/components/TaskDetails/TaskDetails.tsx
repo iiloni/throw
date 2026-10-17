@@ -164,20 +164,12 @@ export function TaskDetails({
             <TaskTagList task={task} tags={tags} />
             <TaskDescription task={task} />
             {task.parentId === null && (
-              <section
-                aria-label="Subtasks"
-                className="-mx-3 mt-8 rounded-3xl bg-foreground/[0.035] p-3"
-              >
-                <div className="mb-2 flex min-h-11 items-center gap-2 px-2">
-                  <h2 className="font-display font-semibold text-lg tracking-[-0.01em]">
-                    Subtasks
-                  </h2>
-                  <span className="rounded-full bg-foreground/[0.06] px-2 text-muted-foreground text-xs tabular-nums">
-                    {done}/{children.length}
-                  </span>
-                  <span className="flex-1" />
-                </div>
-                <div className="flex flex-col gap-3">
+              // Flush with the task, as Catch lists a note's links below it.
+              <section aria-label="Subtasks" className="mt-8 flex flex-col gap-2">
+                <h2 className="px-1 font-medium text-muted-foreground text-xs tabular-nums">
+                  {children.length ? `Subtasks · ${done}/${children.length}` : 'Subtasks'}
+                </h2>
+                <div className="flex flex-col gap-2">
                   {children.map((child) => {
                     const childStatus = statuses.find((row) => row.id === child.statusId);
                     return (
@@ -211,7 +203,6 @@ export function TaskDetails({
                 </div>
                 {adding ? (
                   <form
-                    className="mt-3"
                     onSubmit={(event) => {
                       event.preventDefault();
                       if (!title.trim()) return;
@@ -255,7 +246,7 @@ export function TaskDetails({
                   <button
                     type="button"
                     onClick={() => setAdding(true)}
-                    className="mt-2 flex min-h-11 w-full items-center gap-1 rounded-xl px-3 text-muted-foreground text-sm outline-none hover:bg-foreground/[0.04] focus-visible:ring-[3px] focus-visible:ring-ring/60"
+                    className="flex min-h-11 w-full items-center gap-1 rounded-xl px-1 text-muted-foreground text-sm outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60"
                   >
                     <Plus className="size-3" />
                     Add subtask

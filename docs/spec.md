@@ -266,7 +266,8 @@ How a held card behaves, and why, is recorded in
 
 The settings page has a section for how the board looks and behaves. The board settings
 button opens the same options in the [drawer](#the-drawer) at full height on a phone, and in
-a panel from the rail on desktop, sized to the window. These are kept on the device.
+a panel from the rail on desktop, sized to the window. These are kept on the device. Column backgrounds and the
+rails' placement shape desktop columns, so a phone does not show them.
 
 | Setting | Default | Effect |
 | --- | --- | --- |
@@ -420,8 +421,8 @@ view), comments and activity.
   when the task view closes or switches tasks; drafts survive reloads and conflicts.
 - The top toolbars follow Catch: back and the parent/task identifier breadcrumb on the
   left, trash/restore on the right.
-- Subtasks sit on the task pane as a board column of the same task cards, with status
-  controls and an add action. A subtask opens in the same view, with its parent in the
+- Subtasks sit on the task pane as a flush list of the same task cards, as Catch lists a
+  note's links below it, with status controls and an add action. A subtask opens in the same view, with its parent in the
   breadcrumb. Opened from its parent's pane, it goes back there: Back, Escape, a pull and
   the breadcrumb return to the parent, and on a phone the subtask grows out of its card
   over the parent's pane and shrinks back into it.

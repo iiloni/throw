@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Popover } from 'radix-ui';
 import type { ReactNode } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
+import { useMedia } from '@/lib/media';
 import { springs } from '@/lib/motion';
 import { useThemePreference } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -166,6 +167,8 @@ export function BoardSettingsControls({ includeTheme = true }: { includeTheme?: 
   const state = board.use();
   const [settings, setSettings] = useBoardSettings();
   const [theme, setTheme] = useThemePreference();
+  // Columns and side rails are desktop layout; a phone has neither to change.
+  const phone = useMedia('(max-width: 767px)');
   const set = <K extends keyof BoardSettings>(key: K, value: BoardSettings[K]) =>
     setSettings({ ...settings, [key]: value });
   return (
@@ -191,13 +194,15 @@ export function BoardSettingsControls({ includeTheme = true }: { includeTheme?: 
           onChange={(value) => set('cardPriority', value)}
         />
       </Row>
-      <Row label="Column backgrounds">
-        <Switch
-          label="Column backgrounds"
-          checked={settings.surfaces}
-          onChange={(value) => set('surfaces', value)}
-        />
-      </Row>
+      {!phone && (
+        <Row label="Column backgrounds">
+          <Switch
+            label="Column backgrounds"
+            checked={settings.surfaces}
+            onChange={(value) => set('surfaces', value)}
+          />
+        </Row>
+      )}
       <Row label="Scrollbars" hint="Off, a faded edge shows where a list goes on.">
         <Switch
           label="Scrollbars"
@@ -219,28 +224,29 @@ export function BoardSettingsControls({ includeTheme = true }: { includeTheme?: 
           onChange={(value) => set('heldColumn', value)}
         />
       </Row>
-      {(
-        [
-          ['backlogRail', 'Backlog'],
-          ['closedRail', 'Closed'],
-        ] as const
-      ).map(([key, label]) => (
-        <Row
-          key={key}
-          label={label}
-          hint="Sticky stays at the window's edge. With board scrolls with the columns."
-        >
-          <Segmented
+      {!phone &&
+        (
+          [
+            ['backlogRail', 'Backlog'],
+            ['closedRail', 'Closed'],
+          ] as const
+        ).map(([key, label]) => (
+          <Row
+            key={key}
             label={label}
-            value={settings[key]}
-            options={[
-              ['sticky', 'Sticky'],
-              ['bound', 'With board'],
-            ]}
-            onChange={(value) => set(key, value)}
-          />
-        </Row>
-      ))}
+            hint="Sticky stays at the window's edge. With board scrolls with the columns."
+          >
+            <Segmented
+              label={label}
+              value={settings[key]}
+              options={[
+                ['sticky', 'Sticky'],
+                ['bound', 'With board'],
+              ]}
+              onChange={(value) => set(key, value)}
+            />
+          </Row>
+        ))}
       {includeTheme && (
         <Row label="Theme">
           <Segmented
