@@ -19,10 +19,10 @@ const titled = (title: string) => tasks.find((task) => task.title.startsWith(tit
 
 describe('placeTask', () => {
   it('reorders within a priority zone without touching the other cards', () => {
-    const peers = zone(tasks, 'Building', 2);
+    const peers = zone(tasks, 'Building', 3);
     const moved = peers[0]!;
-    const next = placeTask(project, tasks, moved.id, { priority: 2, index: 2, peers });
-    expect(zone(next, 'Building', 2).map((task) => task.id)).toEqual([
+    const next = placeTask(project, tasks, moved.id, { priority: 3, index: 2, peers });
+    expect(zone(next, 'Building', 3).map((task) => task.id)).toEqual([
       peers[1]!.id,
       peers[2]!.id,
       moved.id,
@@ -34,36 +34,36 @@ describe('placeTask', () => {
   });
 
   it('changes priority when placed in another zone', () => {
-    const moved = zone(tasks, 'Building', 2)[0]!;
-    const peers = zone(tasks, 'Building', 1);
-    const next = placeTask(project, tasks, moved.id, { priority: 1, index: peers.length, peers });
-    expect(zone(next, 'Building', 1).at(-1)?.id).toBe(moved.id);
+    const moved = zone(tasks, 'Building', 3)[0]!;
+    const peers = zone(tasks, 'Building', 2);
+    const next = placeTask(project, tasks, moved.id, { priority: 2, index: peers.length, peers });
+    expect(zone(next, 'Building', 2).at(-1)?.id).toBe(moved.id);
   });
 
   it('moves to another column at the chosen place', () => {
-    const moved = zone(tasks, 'Building', 2)[0]!;
-    const peers = zone(tasks, 'In review', 2);
+    const moved = zone(tasks, 'Building', 3)[0]!;
+    const peers = zone(tasks, 'In review', 3);
     const next = placeTask(project, tasks, moved.id, {
       statusId: status('In review'),
-      priority: 2,
+      priority: 3,
       index: 1,
       peers,
     });
-    expect(zone(next, 'In review', 2)[1]?.id).toBe(moved.id);
+    expect(zone(next, 'In review', 3)[1]?.id).toBe(moved.id);
   });
 });
 
 describe('sendToStatus', () => {
   it('keeps each priority and lands at the top of its zone, in the order given', () => {
-    const [first, second] = zone(tasks, 'Building', 2);
-    const high = zone(tasks, 'Building', 1)[0]!;
+    const [first, second] = zone(tasks, 'Building', 3);
+    const high = zone(tasks, 'Building', 2)[0]!;
     const next = sendToStatus(project, tasks, [first!.id, high.id, second!.id], status('Testing'));
     expect(
-      zone(next, 'Testing', 2)
+      zone(next, 'Testing', 3)
         .slice(0, 2)
         .map((task) => task.id),
     ).toEqual([first!.id, second!.id]);
-    expect(zone(next, 'Testing', 1)[0]?.id).toBe(high.id);
+    expect(zone(next, 'Testing', 2)[0]?.id).toBe(high.id);
   });
 
   it('stamps the close time on closing and clears it on reopening', () => {
@@ -80,7 +80,7 @@ describe('sendToStatus', () => {
 describe('groupByPriority', () => {
   it('returns all five zones in rank order, empty ones included', () => {
     const groups = groupByPriority(column(tasks, 'Testing'));
-    expect(groups.map((group) => group.priority)).toEqual([0, 1, 2, 3, 4]);
+    expect(groups.map((group) => group.priority)).toEqual([1, 2, 3, 4, 5]);
     expect(groups[0]?.tasks).toEqual([]);
   });
 });

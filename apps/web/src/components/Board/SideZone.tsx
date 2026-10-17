@@ -5,6 +5,7 @@ import {
   Minimize2,
   PanelLeftClose,
   PanelRightClose,
+  Plus,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { IconButton } from '@/components/IconButton/IconButton';
@@ -15,7 +16,7 @@ import { CardList } from './CardList';
 import { drag } from './drag';
 import { type Category, groupByPriority, priorityName, type Status } from './model';
 import { StatusTile } from './StatusTile';
-import { board, countIn, current, listTasks, update, type ZoneState } from './state';
+import { board, countIn, createTask, current, listTasks, update, type ZoneState } from './state';
 import { TaskCard } from './TaskCard';
 
 export const ZONES = {
@@ -145,6 +146,11 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
             <div className="flex h-14 shrink-0 items-center gap-2 pr-2.5 pl-5">
               <h2 className="font-display font-semibold text-lg tracking-[-0.01em]">{title}</h2>
               <span className="flex-1 text-muted-foreground text-sm tabular-nums">{count}</span>
+              {zone === 'backlog' && state.actions && (
+                <IconButton label="New task in the backlog" onClick={() => createTask()}>
+                  <Plus />
+                </IconButton>
+              )}
               <IconButton
                 label={view === 'full' ? 'Back to a column' : 'Open as a gallery'}
                 onClick={() => setView(view === 'full' ? 'panel' : 'full')}
@@ -168,6 +174,11 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
               <ScrollArea edges className="card-scroller flex-1 [--scrollbar-inset:0.5rem]">
                 <ScrollAreaViewport>
                   <div className="space-y-3 px-3.5 pt-1 pb-4">
+                    {listTasks(state, 'closed').length === 0 && (
+                      <p className="py-10 text-center text-muted-foreground text-sm">
+                        {state.awaitingTasks ? 'Loading tasks…' : 'Nothing closed.'}
+                      </p>
+                    )}
                     {listTasks(state, 'closed').map((task) => (
                       <TaskCard
                         key={task.id}
@@ -271,6 +282,11 @@ function Gallery({ zone }: { zone: Zone }) {
     <ScrollArea edges className="flex-1 [--scrollbar-inset:0.5rem]">
       <ScrollAreaViewport>
         <div className="px-5 pt-1 pb-5">
+          {tasks.length === 0 && (
+            <p className="py-10 text-center text-muted-foreground text-sm">
+              {state.awaitingTasks ? 'Loading tasks…' : 'Nothing here.'}
+            </p>
+          )}
           {bands.map((band) => (
             <section key={band.priority ?? 'all'}>
               {band.priority !== null && (

@@ -2,7 +2,7 @@ import { positionBetween } from '@throw/shared';
 import { z } from 'zod';
 import { usePersistentState } from '@/lib/storage';
 import { createStore } from '@/lib/store';
-import { type BoardData, mockBoards } from './mockData';
+import type { BoardData } from './model';
 import {
   type Category,
   compareClosed,
@@ -58,6 +58,9 @@ export type ZoneState = 'strip' | 'panel' | 'full';
 
 export type BoardState = {
   boards: BoardData[];
+  /** Null only in the mock prototype. The drag step will extend this boundary. */
+  actions: BoardActions | null;
+  awaitingTasks: boolean;
   projectId: string;
   backlog: ZoneState;
   closed: ZoneState;
@@ -76,11 +79,12 @@ export type BoardState = {
   newTaskId: string | null;
 };
 
-function initial(): BoardState {
-  const boards = mockBoards();
+export function initialBoard(boards: BoardData[] = []): BoardState {
   return {
     boards,
-    projectId: boards[0]!.project.id,
+    projectId: boards[0]?.project.id ?? '',
+    actions: null,
+    awaitingTasks: false,
     backlog: window.innerWidth >= 1180 ? 'panel' : 'strip',
     closed: 'strip',
     backlogFilter: null,
@@ -95,15 +99,35 @@ function initial(): BoardState {
   };
 }
 
-export const board = createStore<BoardState>(initial());
+export const board = createStore<BoardState>(initialBoard());
 
 export function update(change: Partial<BoardState> | ((state: BoardState) => Partial<BoardState>)) {
   const state = board.get();
   board.set({ ...state, ...(typeof change === 'function' ? change(state) : change) });
 }
 
-export function resetBoard() {
-  board.set(initial());
+export type BoardActions = {
+  create(statusId?: string): string;
+  rename(taskId: string, title: string): void;
+  send(taskIds: string[], statusId: string): void;
+};
+
+/** Sync replaces data only: open panes, filters and underlays remain device UI state. */
+export function receiveBoard(data: BoardData, actions: BoardActions, awaitingTasks = false) {
+  const before = board.get();
+  if (before.projectId !== data.project.id || before.actions === null) {
+    board.set({ ...initialBoard([data]), actions, awaitingTasks });
+  } else {
+    const exists = (id: string) => data.tasks.some((task) => task.id === id);
+    update({
+      boards: [data],
+      actions,
+      awaitingTasks,
+      openTaskId: before.openTaskId && exists(before.openTaskId) ? before.openTaskId : null,
+      expanded: before.expanded.filter(exists),
+      selection: before.selection.filter(exists),
+    });
+  }
 }
 
 export function current(state: BoardState = board.get()): BoardData {
@@ -177,6 +201,7 @@ export function placeInList(taskId: string, listId: ListId, priority: Priority, 
 }
 
 export function sendTasks(taskIds: string[], statusId: string) {
+  if (board.get().actions) return board.get().actions!.send(taskIds, statusId);
   const { project, tasks } = current();
   setTasks(sendToStatus(project, tasks, taskIds, statusId));
 }
@@ -190,6 +215,16 @@ export function setSubtaskStatus(taskId: string, statusId: string) {
  * default status, as the spec has it, or the column it was made from.
  */
 export function createTask(statusId?: string) {
+  const actions = board.get().actions;
+  if (actions) {
+    const id = actions.create(statusId);
+    update({
+      openTaskId: id,
+      newTaskId: id,
+      ...(statusId === undefined ? { backlogFilter: null } : {}),
+    });
+    return;
+  }
   const { project, tasks } = current();
   const status =
     project.statuses.find((item) => item.id === statusId) ??
@@ -198,7 +233,7 @@ export function createTask(statusId?: string) {
   const peers = tasks
     .filter((task) => task.statusId === status.id && task.priority === DEFAULT_PRIORITY)
     .sort(compareTasks);
-  const number = Math.max(0, ...tasks.map((task) => task.number)) + 1;
+  const number = Math.max(0, ...tasks.map((task) => task.number ?? 0)) + 1;
   const task: Task = {
     id: `${project.id}:task-${number}`,
     number,
@@ -216,6 +251,7 @@ export function createTask(statusId?: string) {
 }
 
 export function renameTask(taskId: string, title: string) {
+  if (board.get().actions) return board.get().actions!.rename(taskId, title);
   const { tasks } = current();
   setTasks(tasks.map((task) => (task.id === taskId ? { ...task, title } : task)));
 }

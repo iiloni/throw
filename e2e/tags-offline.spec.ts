@@ -63,7 +63,9 @@ test('offline tag creation and assignments survive reload and sync beside anothe
     },
     { projectId, online },
   );
-  await expect(page.getByRole('status')).toContainText('unsaved', { timeout: 40_000 });
+  await expect(page.getByRole('status').filter({ hasText: 'unsaved' })).toBeVisible({
+    timeout: 40_000,
+  });
   await page.reload();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Offline tags', {
     timeout: APP_LOAD_TIMEOUT,
@@ -199,7 +201,9 @@ for (const mode of ['update', 'create'] as const) {
       },
       { taskId: task.id, projectId: project.id, goneId: gone.id, keptId: kept.id, mode },
     );
-    await expect(page.getByRole('status')).toContainText('unsaved', { timeout: 40_000 });
+    await expect(page.getByRole('status').filter({ hasText: 'unsaved' })).toBeVisible({
+      timeout: 40_000,
+    });
     expect(
       (await page.request.delete(`/api/tags/${gone.id}`, { headers: account.headers })).status(),
     ).toBe(200);

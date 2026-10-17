@@ -3,6 +3,7 @@ import { DropdownMenu } from 'radix-ui';
 import type { ReactNode } from 'react';
 import { useShell } from '@/components/AppShell/shell';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
+import { cn } from '@/lib/utils';
 
 const itemClass =
   'flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-3 text-sm outline-none focus:bg-accent data-[highlighted]:bg-accent';
@@ -10,9 +11,11 @@ const itemClass =
 export function ShellMenu({
   expanded = true,
   phone = false,
+  titleClassName,
 }: {
   expanded?: boolean;
   phone?: boolean;
+  titleClassName?: string;
 }) {
   const shell = useShell();
   const title = phone
@@ -47,7 +50,10 @@ export function ShellMenu({
               <span
                 className={
                   phone
-                    ? 'truncate font-display font-extrabold text-[clamp(1.5rem,6vw,2.625rem)] leading-tight tracking-[-0.03em]'
+                    ? cn(
+                        'truncate font-display font-extrabold text-[clamp(1.5rem,6vw,2.625rem)] leading-tight tracking-[-0.03em]',
+                        titleClassName,
+                      )
                     : 'min-w-0 flex-1 truncate text-left font-semibold text-sm'
                 }
               >
@@ -127,6 +133,14 @@ export function ShellMenu({
                 <MenuItem onSelect={shell.goBoard}>
                   <Columns3 aria-hidden className="size-4" />
                   All projects
+                </MenuItem>
+              )}
+              {shell.project && (
+                <MenuItem
+                  onSelect={() => shell.openForm({ kind: 'edit-project', project: shell.project! })}
+                >
+                  <Pencil aria-hidden className="size-4" />
+                  Edit project
                 </MenuItem>
               )}
               <DropdownMenu.Separator className="my-2 border-t" />

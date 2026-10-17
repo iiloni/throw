@@ -90,7 +90,7 @@ function RailGap() {
  * The board on a wide screen: backlog, active columns and the closed zone in a row, with an
  * open task taking width from all three.
  */
-export function DesktopBoard() {
+export function DesktopBoard({ onReset }: { onReset?: () => void }) {
   const state = board.use();
   const held = drag.use();
   const { project, tasks } = current(state);
@@ -163,55 +163,57 @@ export function DesktopBoard() {
   const closedRail = <SideZone zone="closed" fullWidth={fullWidth} />;
 
   return (
-    <div className="flex h-dvh overflow-hidden">
+    <div className="flex h-full overflow-hidden">
       {/* Stands where the navigation rail will be. */}
-      <nav
-        aria-label="Projects"
-        className="flex w-[4.5rem] shrink-0 flex-col items-center gap-2 border-border/70 border-r pt-[calc(var(--safe-top)+1.25rem)] pb-6"
-      >
-        {state.boards.map(({ project: item }) => (
-          // The collapsed rail shows icons only; the name arrives on hover.
-          <Tooltip key={item.id}>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                data-color={item.color}
-                aria-label={item.name}
-                aria-current={item.id === project.id ? 'page' : undefined}
-                onClick={() => selectProject(item.id)}
-                className={cn(
-                  'flex size-11 items-center justify-center rounded-2xl outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/60',
-                  item.id === project.id
-                    ? 'bg-tint text-foreground'
-                    : 'text-muted-foreground hover:bg-foreground/[0.06]',
-                )}
-              >
-                <ProjectIcon name={item.icon} className="size-5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent
-              side="right"
-              sideOffset={10}
-              variant="glass"
-              className="rounded-xl px-3.5 py-2 font-display font-semibold text-base tracking-[-0.01em]"
-            >
-              {item.name}
-            </TooltipContent>
-          </Tooltip>
-        ))}
-        <span className="flex-1" />
-        <IconButton
-          label={
-            state.subtasksAsCards ? 'Keep subtasks with their parent' : 'Show subtasks as cards'
-          }
-          aria-pressed={state.subtasksAsCards}
-          onClick={() => update({ subtasksAsCards: !state.subtasksAsCards })}
-          className={cn('size-10', state.subtasksAsCards && 'bg-accent')}
+      {!state.actions && (
+        <nav
+          aria-label="Projects"
+          className="flex w-[4.5rem] shrink-0 flex-col items-center gap-2 border-border/70 border-r pt-[calc(var(--safe-top)+1.25rem)] pb-6"
         >
-          <ListTree />
-        </IconButton>
-        <BoardSettingsPanel />
-      </nav>
+          {state.boards.map(({ project: item }) => (
+            // The collapsed rail shows icons only; the name arrives on hover.
+            <Tooltip key={item.id}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  data-color={item.color}
+                  aria-label={item.name}
+                  aria-current={item.id === project.id ? 'page' : undefined}
+                  onClick={() => selectProject(item.id)}
+                  className={cn(
+                    'flex size-11 items-center justify-center rounded-2xl outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/60',
+                    item.id === project.id
+                      ? 'bg-tint text-foreground'
+                      : 'text-muted-foreground hover:bg-foreground/[0.06]',
+                  )}
+                >
+                  <ProjectIcon name={item.icon} className="size-5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent
+                side="right"
+                sideOffset={10}
+                variant="glass"
+                className="rounded-xl px-3.5 py-2 font-display font-semibold text-base tracking-[-0.01em]"
+              >
+                {item.name}
+              </TooltipContent>
+            </Tooltip>
+          ))}
+          <span className="flex-1" />
+          <IconButton
+            label={
+              state.subtasksAsCards ? 'Keep subtasks with their parent' : 'Show subtasks as cards'
+            }
+            aria-pressed={state.subtasksAsCards}
+            onClick={() => update({ subtasksAsCards: !state.subtasksAsCards })}
+            className={cn('size-10', state.subtasksAsCards && 'bg-accent')}
+          >
+            <ListTree />
+          </IconButton>
+          <BoardSettingsPanel onReset={onReset} />
+        </nav>
+      )}
 
       <div ref={frame} className="flex min-w-0 flex-1 flex-col">
         {/* No title row: the rail names the project, and the board keeps the height. */}

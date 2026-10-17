@@ -1,12 +1,22 @@
-import { Check, CheckCheck, ChevronDown, ChevronRight, Plus, Search, X } from 'lucide-react';
-import { AnimatePresence, animate, motion, useDragControls, useMotionValue } from 'motion/react';
+import {
+  Check,
+  CheckCheck,
+  ChevronDown,
+  ChevronRight,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  X,
+} from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useRef, useState } from 'react';
+import { type Detent, Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
-import { BoardSettingsPanel } from './BoardSettingsPanel';
+import { BoardSettingsContent } from './BoardSettingsPanel';
 import { CardList } from './CardList';
 import { drag, holding, pageStride } from './drag';
 import { type Category, isClosed, type Status, type Task } from './model';
@@ -24,106 +34,161 @@ import {
 } from './state';
 import { TaskCard } from './TaskCard';
 
-/** Clear space at the end of a column, for the backlog tray resting over it. */
-const TRAY_SPACE = 'calc(var(--dock-height) + var(--safe-bottom) + 3rem)';
+/** Clear space at the end of a column, for the collapsed drawer resting over it. */
+const DOCK_SPACE = 'calc(var(--dock-height) + var(--safe-bottom) + 3rem)';
 const DAY = 86_400_000;
 
 /**
- * The board on a phone. The columns are the board, one page at a time; the backlog is a tray
- * that rests at the bottom as the dock, and the closed tasks are a history behind the header's
- * done count. Neither is a column, so moving work in and out of them is its own gesture: pull
- * a card up out of the tray, or finish it into the done pocket past the last column.
+ * The board on a phone. The columns are the board, one page at a time; the backlog lives in
+ * the drawer, whose collapsed header is the dock, and the closed tasks are a history behind
+ * the header's done count. Neither is a column, so moving work in and out of them is its own
+ * gesture: pull a card up out of the drawer, or finish it into the done pocket past the last
+ * column.
  */
-export function PhoneBoard() {
+export function PhoneBoard({
+  projectMenu,
+  syncIndicator,
+  initialBacklog = false,
+  onSearch,
+  onReset,
+  searchContent,
+  onBacklogChange,
+  onReturnBoard,
+}: {
+  projectMenu?: ReactNode;
+  syncIndicator?: ReactNode;
+  initialBacklog?: boolean;
+  onSearch?: () => void;
+  onReset?: () => void;
+  searchContent?: ReactNode;
+  onBacklogChange?: (open: boolean) => void;
+  onReturnBoard?: () => void;
+}) {
   const state = board.use();
   const { project } = current(state);
   const active = project.statuses.filter((status) => status.category === 'active');
   const done =
     project.statuses.find((status) => status.category === 'done' && status.isDefault) ??
     project.statuses.find((status) => status.category === 'done');
+  const reduced = useReducedMotion();
   const pager = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(0);
-  const [history, setHistory] = useState(false);
+  const [drawerPage, setDrawerPage] = useState<BoardPage | null>(null);
+  const closePage = useCallback(() => setDrawerPage(null), []);
+  const paged = drawerPage !== null;
 
   function turnTo(index: number, behavior: ScrollBehavior = 'smooth') {
     const element = pager.current;
-    element?.scrollTo({ left: index * pageStride(element), behavior });
+    element?.scrollTo({
+      left: index * pageStride(element),
+      behavior: reduced ? 'instant' : behavior,
+    });
   }
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden">
-      <header className="shrink-0 pt-[var(--safe-top)]">
+    <div className="flex h-full flex-col overflow-hidden">
+      <header className="shrink-0 pt-[var(--safe-top)]" inert={paged}>
         <div className="flex h-16 items-center gap-2 pr-3 pl-5">
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger asChild>
-              <button
-                type="button"
-                aria-label="Switch project"
-                className="flex min-h-11 min-w-0 items-center gap-2 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <span className="truncate font-display font-extrabold text-[1.75rem] leading-tight tracking-[-0.03em]">
-                  {project.name}
-                </span>
-                <ChevronDown aria-hidden className="size-4 shrink-0 text-muted-foreground" />
-              </button>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content
-                align="start"
-                sideOffset={8}
-                className="shell-menu glass-thick z-50 w-64 rounded-3xl p-2"
-              >
-                {state.boards.map(({ project: item }) => (
-                  <DropdownMenu.Item
-                    key={item.id}
-                    onSelect={() => {
-                      selectProject(item.id);
-                      turnTo(0, 'instant');
-                    }}
-                    className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-3 text-sm outline-none data-[highlighted]:bg-accent"
-                  >
-                    <ProjectIcon name={item.icon} className="size-4 shrink-0" />
-                    {item.name}
-                  </DropdownMenu.Item>
-                ))}
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
+          {projectMenu ?? (
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <button
+                  type="button"
+                  aria-label="Switch project"
+                  className="flex min-h-11 min-w-0 items-center gap-2 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="truncate font-display font-extrabold text-[1.75rem] leading-tight tracking-[-0.03em]">
+                    {project.name}
+                  </span>
+                  <ChevronDown aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+                </button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                  align="start"
+                  sideOffset={8}
+                  className="shell-menu glass-thick z-50 w-64 rounded-3xl p-2"
+                >
+                  {state.boards.map(({ project: item }) => (
+                    <DropdownMenu.Item
+                      key={item.id}
+                      onSelect={() => {
+                        selectProject(item.id);
+                        turnTo(0, 'instant');
+                      }}
+                      className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-3 text-sm outline-none data-[highlighted]:bg-accent"
+                    >
+                      <ProjectIcon name={item.icon} className="size-4 shrink-0" />
+                      {item.name}
+                    </DropdownMenu.Item>
+                  ))}
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
+          )}
           <span className="flex-1" />
-          <DoneCount onOpen={() => setHistory(true)} />
-          <BoardSettingsPanel side="bottom" />
+          <DoneCount onOpen={() => setDrawerPage('closed')} />
+          <IconButton
+            label="Board settings"
+            className="size-10"
+            onClick={() => setDrawerPage('settings')}
+          >
+            <SlidersHorizontal />
+          </IconButton>
         </div>
-        <FlowTrack statuses={active} page={page} onTurn={turnTo} />
+        {syncIndicator && (
+          <div className="px-5 text-muted-foreground empty:hidden">{syncIndicator}</div>
+        )}
+        {!searchContent && <FlowTrack statuses={active} page={page} onTurn={turnTo} />}
       </header>
 
-      <div className="relative flex min-h-0 flex-1">
-        <div
-          ref={pager}
-          data-pager=""
-          onScroll={(event) =>
-            setPage(Math.round(event.currentTarget.scrollLeft / pageStride(event.currentTarget)))
-          }
-          className="phone-pager flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
-        >
-          {active.map((status) => (
-            <div key={status.id} data-page="" data-origin="active" className={pageClass}>
-              <CardList
-                listId={`status:${status.id}`}
-                endSpace={TRAY_SPACE}
-                tight
-                className="flex-1"
-              />
-            </div>
-          ))}
+      {searchContent ? (
+        <div className="min-h-0 flex-1 pb-[var(--dock-space)]" inert={paged}>
+          {searchContent}
         </div>
-        <PeekEdge side={-1} shown={page > 0} />
-        <PeekEdge side={1} shown={page < active.length - 1} />
-        {done && <DonePocket status={done} shown={page === active.length - 1} />}
-      </div>
+      ) : (
+        <div className="relative flex min-h-0 flex-1" inert={paged}>
+          <div
+            ref={pager}
+            data-pager=""
+            onScroll={(event) =>
+              setPage(Math.round(event.currentTarget.scrollLeft / pageStride(event.currentTarget)))
+            }
+            className="phone-pager flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
+          >
+            {active.map((status) => (
+              <div key={status.id} data-page="" data-origin="active" className={pageClass}>
+                <CardList
+                  listId={`status:${status.id}`}
+                  endSpace={DOCK_SPACE}
+                  tight
+                  className="flex-1"
+                />
+              </div>
+            ))}
+          </div>
+          <PeekEdge side={-1} shown={page > 0} />
+          <PeekEdge side={1} shown={page < active.length - 1} />
+          {done && <DonePocket status={done} shown={page === active.length - 1} />}
+        </div>
+      )}
 
-      <BacklogTray onCreate={(inBacklog) => createTask(inBacklog ? undefined : active[page]?.id)} />
+      <BoardDrawer
+        page={drawerPage}
+        onClosePage={closePage}
+        onReset={onReset}
+        initialOpen={initialBacklog}
+        onSearch={() => {
+          setPage(0);
+          onSearch?.();
+        }}
+        onChange={onBacklogChange}
+        onCreate={(inBacklog) => {
+          onReturnBoard?.();
+          createTask(inBacklog ? undefined : active[page]?.id);
+        }}
+      />
       <MoveDrawer />
-      <ClosedSheet open={history} onClose={() => setHistory(false)} />
     </div>
   );
 }
@@ -240,6 +305,7 @@ function DoneCount({ onOpen }: { onOpen: () => void }) {
   return (
     <button
       type="button"
+      data-closed-trigger=""
       data-status-home={closedIds.map(({ id }) => id).join(' ')}
       aria-label={`${count} done this week. Show closed tasks`}
       onClick={onOpen}
@@ -317,146 +383,142 @@ function DonePocket({ status, shown }: { status: Status; shown: boolean }) {
   );
 }
 
-type Detent = 'closed' | 'half' | 'full';
+type BoardPage = 'closed' | 'settings';
 
 const dockButton =
   'relative flex size-[var(--dock-height)] shrink-0 items-center justify-center rounded-[var(--dock-radius)] outline-none focus-visible:ring-2 focus-visible:ring-ring/70';
 
 /**
- * The backlog as a tray under the board. Closed, it is the dock: the backlog's handle beside
- * search and the create button. Half open, it is a supply to take work from, with the board
- * still above: lifting a card sinks the tray out of the way so the whole screen is board to
- * place it on. Full, it is the backlog to groom, and its cards are reordered in place.
+ * The backlog in the drawer (ADR 0009). Collapsed, its header is the dock: the backlog's
+ * handle beside search and the create button. Half open, it is a supply to take work from,
+ * with the board still above: lifting a card sinks it out of the way so the whole screen is
+ * board to place it on. Full, it is the backlog to groom, and its cards are reordered in
+ * place. The closed tasks and board settings open in it as pages.
  */
-function BacklogTray({ onCreate }: { onCreate: (inBacklog: boolean) => void }) {
+function BoardDrawer({
+  page,
+  onClosePage,
+  onReset,
+  onCreate,
+  initialOpen,
+  onSearch,
+  onChange,
+}: {
+  page: BoardPage | null;
+  onClosePage: () => void;
+  onReset?: () => void;
+  onCreate: (inBacklog: boolean) => void;
+  initialOpen: boolean;
+  onSearch?: () => void;
+  onChange?: (open: boolean) => void;
+}) {
   const state = board.use();
   const held = drag.use();
+  const fingerDown = holding.use();
   const { project } = current(state);
   const statuses = zoneStatuses('backlog', project.statuses);
   const count = listTasks({ ...state, backlogFilter: null }, 'backlog').length;
-  const [detent, setDetent] = useState<Detent>('closed');
-  // What the tray leaves off screen at half height, kept clear at the end of its list.
-  const [hidden, setHidden] = useState(0);
-  const tray = useRef<HTMLElement>(null);
-  const head = useRef<HTMLDivElement>(null);
-  const safe = useRef<HTMLDivElement>(null);
-  const y = useMotionValue(0);
-  const panFrom = useRef(0);
-  // Grooming keeps the tray where it is; anything else held wants the board.
-  const sunk = held !== null && detent !== 'full';
-
-  const offsets = () => trayOffsets(tray.current, head.current, safe.current);
+  const [detent, setDetent] = useState<Detent>(initialOpen ? 'half' : 'closed');
+  // Grooming keeps the backlog where it is; anything else held wants the board.
+  const sunk = held !== null && (page !== null || detent !== 'full');
 
   function goTo(next: Detent) {
     setDetent(next);
-    setHidden(next === 'half' ? offsets().half : 0);
-    // Let go at the height it was at: there is no new detent to move it.
-    if (next === detent) animate(y, offsets()[next], springs.smooth);
+    onChange?.(next !== 'closed');
   }
 
-  const placed = useRef(false);
-  useLayoutEffect(() => {
-    const at = trayOffsets(tray.current, head.current, safe.current);
-    const to = sunk ? at.sunk : at[detent];
-    if (placed.current) animate(y, to, springs.smooth);
-    else y.jump(to);
-    placed.current = true;
-  }, [sunk, detent, y]);
+  const dock = (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        aria-expanded={detent !== 'closed'}
+        aria-keyshortcuts="ArrowUp ArrowDown"
+        onKeyDown={(event) => {
+          const order: Detent[] = ['closed', 'half', 'full'];
+          if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+          event.preventDefault();
+          goTo(
+            order[
+              Math.max(0, Math.min(2, order.indexOf(detent) + (event.key === 'ArrowUp' ? 1 : -1)))
+            ]!,
+          );
+        }}
+        data-status-home={statuses.map(({ id }) => id).join(' ')}
+        onClick={() => goTo(detent === 'closed' ? 'half' : 'closed')}
+        className={cn(
+          'flex h-[var(--dock-height)] min-w-0 flex-1 items-center gap-3 rounded-[var(--dock-radius)] px-4 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/70',
+          detent === 'closed' && 'bg-foreground/[0.06]',
+        )}
+      >
+        <CardStack count={count} />
+        <span className="font-bold font-display text-lg tracking-[-0.01em]">Backlog</span>
+        <span className="text-muted-foreground text-sm tabular-nums">{count}</span>
+      </button>
+      <motion.button
+        type="button"
+        aria-label="Search"
+        onClick={() => {
+          setDetent('closed');
+          onSearch?.();
+        }}
+        whileTap={{ scale: 0.88 }}
+        transition={springs.snappy}
+        className={cn(dockButton, 'bg-foreground/[0.06] text-foreground')}
+      >
+        <Search className="size-6" aria-hidden />
+      </motion.button>
+      <motion.button
+        type="button"
+        aria-label={detent === 'closed' ? 'New task' : 'New task in the backlog'}
+        onClick={() => onCreate(detent !== 'closed')}
+        whileTap={{ scale: 0.88 }}
+        transition={springs.snappy}
+        className={cn(
+          dockButton,
+          'bg-brand text-brand-foreground shadow-[0_8px_24px_-6px_color-mix(in_oklab,var(--brand)_55%,transparent),inset_0_1px_0_rgb(255_255_255/0.45)]',
+        )}
+      >
+        <Plus className="size-7" strokeWidth={2.25} aria-hidden />
+      </motion.button>
+    </div>
+  );
 
-  useLayoutEffect(() => {
-    const onResize = () => y.jump(offsets()[detent]);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  });
+  const pages: Record<BoardPage, DrawerPage> = {
+    closed: { key: 'closed', title: 'Closed', origin: 'closed', content: <ClosedTasks /> },
+    settings: {
+      key: 'settings',
+      title: 'Board settings',
+      content: (
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[calc(var(--safe-bottom)+1.5rem)]">
+          <BoardSettingsContent onReset={onReset} />
+        </div>
+      ),
+    },
+  };
 
   return (
-    <motion.section
-      ref={tray}
-      aria-label="Backlog"
-      data-drop-block=""
-      data-origin="backlog"
-      style={{ y }}
-      className="glass-thick fixed inset-x-0 top-[calc(var(--safe-top)+0.5rem)] bottom-0 z-30 mx-auto flex w-full max-w-md flex-col rounded-t-[1.75rem]"
+    <Drawer
+      label="Backlog"
+      origin="backlog"
+      dock={dock}
+      detent={detent}
+      onDetent={goTo}
+      sunk={sunk}
+      gesturesDisabled={held !== null || fingerDown}
+      page={page ? pages[page] : null}
+      onClosePage={onClosePage}
     >
-      <div ref={safe} aria-hidden className="pointer-events-none absolute h-[var(--safe-bottom)]" />
-      <motion.div
-        ref={head}
-        className="shrink-0 touch-none select-none px-3 pt-2 pb-2"
-        onPanStart={() => {
-          panFrom.current = y.get();
-        }}
-        onPan={(_, info) => {
-          const at = offsets();
-          y.set(Math.min(at.closed, Math.max(0, panFrom.current + info.offset.y)));
-        }}
-        onPanEnd={(_, info) => {
-          const at = offsets();
-          const aim = y.get() + info.velocity.y * 0.15;
-          const order: Detent[] = ['full', 'half', 'closed'];
-          const nearest = order.reduce((best, next) =>
-            Math.abs(at[next] - aim) < Math.abs(at[best] - aim) ? next : best,
-          );
-          goTo(nearest);
-        }}
-      >
-        <div aria-hidden className="mx-auto mb-2 h-1 w-9 rounded-full bg-foreground/20" />
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            aria-expanded={detent !== 'closed'}
-            data-status-home={statuses.map(({ id }) => id).join(' ')}
-            onClick={() => goTo(detent === 'closed' ? 'half' : 'closed')}
-            className={cn(
-              'flex h-[var(--dock-height)] min-w-0 flex-1 items-center gap-3 rounded-[var(--dock-radius)] px-4 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/70',
-              detent === 'closed' && 'bg-foreground/[0.06]',
-            )}
-          >
-            <CardStack count={count} />
-            <span className="font-bold font-display text-lg tracking-[-0.01em]">Backlog</span>
-            <span className="text-muted-foreground text-sm tabular-nums">{count}</span>
-          </button>
-          <motion.button
-            type="button"
-            aria-label="Search"
-            whileTap={{ scale: 0.88 }}
-            transition={springs.snappy}
-            className={cn(dockButton, 'bg-foreground/[0.06] text-foreground')}
-          >
-            <Search className="size-6" aria-hidden />
-          </motion.button>
-          <motion.button
-            type="button"
-            aria-label={detent === 'closed' ? 'New task' : 'New task in the backlog'}
-            onClick={() => onCreate(detent !== 'closed')}
-            whileTap={{ scale: 0.88 }}
-            transition={springs.snappy}
-            className={cn(
-              dockButton,
-              'bg-brand text-brand-foreground shadow-[0_8px_24px_-6px_color-mix(in_oklab,var(--brand)_55%,transparent),inset_0_1px_0_rgb(255_255_255/0.45)]',
-            )}
-          >
-            <Plus className="size-7" strokeWidth={2.25} aria-hidden />
-          </motion.button>
-        </div>
-      </motion.div>
       <div className="flex min-h-0 flex-1 flex-col" inert={detent === 'closed' && !held}>
         <StatusFilter zone="backlog" className="px-4 pt-1" />
         <CardList
           listId="backlog"
           showStatus={state.backlogFilter === null}
-          endSpace={`calc(${hidden}px + var(--safe-bottom) + 1rem)`}
+          endSpace="calc(var(--drawer-hidden) + var(--safe-bottom) + 1rem)"
           className="flex-1"
         />
       </div>
-    </motion.section>
+    </Drawer>
   );
-}
-
-/** How far down the tray sits at each detent; `sunk` is out of sight, under a held card. */
-function trayOffsets(tray: HTMLElement | null, head: HTMLElement | null, safe: HTMLElement | null) {
-  const height = tray?.offsetHeight ?? window.innerHeight;
-  const peek = (head?.offsetHeight ?? 0) + (safe?.offsetHeight ?? 0);
-  return { full: 0, half: Math.round(height * 0.42), closed: height - peek, sunk: height };
 }
 
 /** The backlog's handle shows a stack of cards, as deep as the backlog, up to three. */
@@ -496,7 +558,7 @@ function byCategory(statuses: Status[]) {
 /**
  * Where a held card is sent anywhere, wherever it came from: a lip at the bottom edge that
  * opens into a grid of every status when the card is brought onto it. Selected cards open
- * it too. It lies over the tray, which sinks out of the way while a card is held.
+ * it too. It is where the drawer was, which sinks out of the way while a card is held.
  */
 function MoveDrawer() {
   const state = board.use();
@@ -598,63 +660,34 @@ function closedByDay(tasks: Task[]) {
  * Everything closed, as a history rather than a column: grouped by day, filtered to done or
  * cancelled. A card held here reopens through the move drawer.
  */
-function ClosedSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+function ClosedTasks() {
   const state = board.use();
-  const controls = useDragControls();
   const groups = closedByDay(listTasks(state, 'closed'));
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.section
-          aria-label="Closed"
-          data-origin="closed"
-          data-drop-block=""
-          className="fixed inset-x-0 top-[calc(var(--safe-top)+0.5rem)] bottom-0 z-40 mx-auto flex w-full max-w-md flex-col rounded-t-[1.75rem] bg-background shadow-[0_-12px_40px_-12px_oklch(0_0_0/0.35)]"
-          initial={{ y: '100%' }}
-          animate={{ y: 0 }}
-          exit={{ y: '100%' }}
-          transition={springs.smooth}
-          drag="y"
-          dragControls={controls}
-          dragListener={false}
-          dragConstraints={{ top: 0, bottom: 0 }}
-          dragElastic={{ top: 0, bottom: 0.6 }}
-          onDragEnd={(_, info) => {
-            if (info.offset.y > 120 || info.velocity.y > 500) onClose();
-          }}
-        >
-          <div
-            className="shrink-0 touch-none select-none"
-            onPointerDown={(event) => controls.start(event)}
-          >
-            <div aria-hidden className="mx-auto mt-2 h-1 w-9 rounded-full bg-foreground/20" />
-            <div className="flex h-14 items-center pr-2 pl-5">
-              <h2 className="flex-1 font-bold font-display text-xl tracking-[-0.01em]">Closed</h2>
-              <IconButton label="Close" onClick={onClose}>
-                <X />
-              </IconButton>
+    <>
+      <StatusFilter zone="closed" />
+      <section
+        aria-label="Closed tasks"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3.5 pb-[calc(var(--safe-bottom)+1.5rem)] [scrollbar-width:none]"
+      >
+        {groups.map((group) => (
+          <section key={group.label}>
+            <h3 className="px-1.5 pt-3 pb-2 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
+              {group.label}
+            </h3>
+            <div className="space-y-3">
+              {group.tasks.map((task) => (
+                <TaskCard key={task.id} task={task} showStatus={state.closedFilter === null} />
+              ))}
             </div>
-          </div>
-          <StatusFilter zone="closed" />
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3.5 pb-[calc(var(--safe-bottom)+1.5rem)] [scrollbar-width:none]">
-            {groups.map((group) => (
-              <section key={group.label}>
-                <h3 className="px-1.5 pt-3 pb-2 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
-                  {group.label}
-                </h3>
-                <div className="space-y-3">
-                  {group.tasks.map((task) => (
-                    <TaskCard key={task.id} task={task} showStatus={state.closedFilter === null} />
-                  ))}
-                </div>
-              </section>
-            ))}
-            {groups.length === 0 && (
-              <p className="py-10 text-center text-muted-foreground text-sm">Nothing closed.</p>
-            )}
-          </div>
-        </motion.section>
-      )}
-    </AnimatePresence>
+          </section>
+        ))}
+        {groups.length === 0 && (
+          <p className="py-10 text-center text-muted-foreground text-sm">
+            {state.awaitingTasks ? 'Loading tasks…' : 'Nothing closed.'}
+          </p>
+        )}
+      </section>
+    </>
   );
 }

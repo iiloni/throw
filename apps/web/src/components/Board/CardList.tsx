@@ -3,7 +3,7 @@ import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scrol
 import { cn } from '@/lib/utils';
 import { CARD_SPACING, drag } from './drag';
 import { groupByPriority, type Priority, priorityName, taskColor } from './model';
-import { board, current, type ListId, listTasks, useBoardSettings } from './state';
+import { board, createTask, current, type ListId, listTasks, useBoardSettings } from './state';
 import { TaskCard } from './TaskCard';
 
 /** A rail's height with the space under it, which is also how far apart they stack. */
@@ -68,6 +68,11 @@ export function CardList({
 
   return (
     <section
+      aria-label={
+        listId === 'backlog'
+          ? 'Backlog tasks'
+          : project.statuses.find((status) => status.id === listId.slice(7))?.name
+      }
       data-drop-list={listId}
       data-over={over ? '' : undefined}
       data-surface={surface && settings.surfaces ? '' : undefined}
@@ -105,8 +110,8 @@ export function CardList({
                     style={
                       headerMode === 'rail'
                         ? priority < (open ?? 0)
-                          ? { top: priority * RAIL }
-                          : { bottom: (4 - priority) * RAIL }
+                          ? { top: (priority - 1) * RAIL }
+                          : { bottom: (5 - priority) * RAIL }
                         : undefined
                     }
                   >
@@ -173,8 +178,20 @@ export function CardList({
                 </Fragment>
               );
             })}
+            {state.actions && (
+              <button
+                type="button"
+                aria-label={`Add task to ${listId === 'backlog' ? 'backlog' : project.statuses.find((status) => status.id === listId.slice(7))?.name}`}
+                onClick={() => createTask(listId === 'backlog' ? undefined : listId.slice(7))}
+                className="mt-1 hidden min-h-11 items-center rounded-xl px-4 text-left text-muted-foreground text-sm outline-none hover:bg-foreground/[0.05] focus-visible:ring-2 focus-visible:ring-ring md:flex"
+              >
+                + Add task
+              </button>
+            )}
             {tasks.length === 0 && !dragging && (
-              <p className="px-1 py-10 text-center text-muted-foreground text-sm">Nothing here.</p>
+              <p className="px-1 py-10 text-center text-muted-foreground text-sm">
+                {state.awaitingTasks ? 'Loading tasks…' : 'Nothing here.'}
+              </p>
             )}
           </div>
         </ScrollAreaViewport>

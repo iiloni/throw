@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { expect, type Page, test } from '@playwright/test';
 import { APP_LOAD_TIMEOUT, shapeRows, signUp } from './helpers';
 
-// The board is not built yet, so this drives the app's own task actions in the page instead of
-// clicking. The dev server serves each module at its source path, which the app imported too,
+// This exercises chained conflicts through the app's own actions; board.spec.ts covers UI
+// creation offline. The dev server serves each module at its source path, which the app imported too,
 // so `import()` here returns the same module, with the same collections and outbox.
 
 const json = { 'Content-Type': 'application/json' };

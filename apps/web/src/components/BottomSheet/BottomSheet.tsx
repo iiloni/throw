@@ -51,10 +51,10 @@ export function BottomSheet({
                   !active.closest('[role=menu]')
                     ? active
                     : document.querySelector<HTMLElement>('[data-shell-menu]');
-                if (initialFocusRef?.current) {
-                  event.preventDefault();
-                  initialFocusRef.current.focus();
-                }
+                // Focusing the Close button would open its tooltip, which takes the first Escape.
+                event.preventDefault();
+                if (initialFocusRef?.current) initialFocusRef.current.focus();
+                else if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus();
               }}
               onCloseAutoFocus={(event) => {
                 event.preventDefault();

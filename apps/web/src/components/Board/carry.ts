@@ -82,7 +82,7 @@ export function carryVertically(direction: -1 | 1) {
   } else {
     // Off the end of its zone: into the neighbouring priority, at the near end.
     const priority = task.priority + direction;
-    if (priority < 0 || priority > 4) return;
+    if (priority < 1 || priority > 5) return;
     const size = tasks.filter((item) => item.priority === priority).length;
     placeInList(taskId, listId, priority as Priority, direction === 1 ? 0 : size);
   }

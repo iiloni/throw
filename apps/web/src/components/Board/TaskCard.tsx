@@ -51,20 +51,31 @@ export function TaskCardFace({
     : undefined;
   return (
     <div className="px-4 pt-3.5 pb-3">
-      {parent && (
+      {parent && !state.actions && (
         <p className="mb-1.5 flex items-center gap-1 text-foreground/55 text-xs">
           <CornerDownRight className="size-3 shrink-0" aria-hidden />
           <span className="truncate">{parent.title}</span>
         </p>
       )}
       <p className="line-clamp-4 font-medium text-[0.9375rem] leading-snug [overflow-wrap:anywhere] max-md:text-base">
-        {task.title}
+        {task.title || 'Untitled task'}
       </p>
       <div className="mt-3 flex min-h-5 items-center gap-2.5 text-foreground/55 text-xs max-md:text-[0.8125rem]">
-        <span className="shrink-0 font-medium tabular-nums">{identifier(project, task)}</span>
+        <span className="shrink-0 font-medium tabular-nums">
+          {identifier(project, task) ?? 'Pending'}
+        </span>
         {tag && <span className="min-w-0 truncate text-tint-accent">{tag.name}</span>}
-        {task.secondaryTagIds.length > 0 && (
+        {task.secondaryTagIds.length > 0 && !state.actions && (
           <span className="shrink-0 tabular-nums">+{task.secondaryTagIds.length}</span>
+        )}
+        {parent && state.actions && (
+          <span
+            role="img"
+            aria-label={`Subtask of ${parent.title}`}
+            title={`Subtask of ${parent.title}`}
+          >
+            <CornerDownRight aria-hidden className="size-3" />
+          </span>
         )}
         <span className="flex-1" />
         {showStatus && status && (
@@ -73,7 +84,9 @@ export function TaskCardFace({
             <span className="truncate">{status.name}</span>
           </span>
         )}
-        {task.closedAt !== null && <span className="shrink-0">{closedAgo(task.closedAt)}</span>}
+        {task.closedAt !== null && !state.actions && (
+          <span className="shrink-0">{closedAgo(task.closedAt)}</span>
+        )}
         {settings.cardPriority && task.closedAt === null && (
           <PriorityGlyph priority={task.priority} name={priorityName(project, task.priority)} />
         )}
@@ -114,6 +127,13 @@ export function TaskCard({ task, showStatus, overlay = false, className }: Props
 
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.target !== event.currentTarget) return;
+    if (state.actions) {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        update({ openTaskId: task.id });
+      }
+      return;
+    }
     const arrows: Record<string, () => void> = {
       ArrowUp: () => carryVertically(-1),
       ArrowDown: () => carryVertically(1),
@@ -145,10 +165,10 @@ export function TaskCard({ task, showStatus, overlay = false, className }: Props
       data-overlay={overlay ? '' : undefined}
       data-color={color ?? undefined}
       tabIndex={overlay ? -1 : 0}
-      aria-label={`${identifier(project, task)} ${task.title}`}
-      aria-roledescription="Card. Space picks it up to move it."
+      aria-label={`${identifier(project, task) ?? 'Pending'} ${task.title || 'Untitled task'}`}
+      aria-roledescription={state.actions ? 'Task card' : 'Card. Space picks it up to move it.'}
       aria-current={open ? 'true' : undefined}
-      onPointerDown={overlay ? undefined : (event) => pressCard(event, task.id)}
+      onPointerDown={overlay || state.actions ? undefined : (event) => pressCard(event, task.id)}
       onClick={onClick}
       onKeyDown={overlay ? undefined : onKeyDown}
       onContextMenu={(event) => {
