@@ -221,12 +221,11 @@ export function Drawer({
         <div
           ref={head}
           className={cn(
-            'shrink-0 touch-none select-none px-3 pt-2',
+            'shrink-0 touch-none select-none px-3 pt-3',
             // The dock sits a little higher off the bottom edge than the header of an open drawer.
             detent === 'closed' && !paged ? 'pb-4' : 'pb-2',
           )}
         >
-          <div aria-hidden className="mx-auto mb-2 h-1 w-9 rounded-full bg-foreground/20" />
           {page && !docked && (
             <div className="flex h-[var(--dock-height)] items-center gap-2 pl-2">
               <h2 className="flex-1 truncate font-bold font-display text-xl tracking-[-0.01em]">

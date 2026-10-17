@@ -608,13 +608,8 @@ function MoveDrawer() {
         transition={springs.snappy}
         data-drop-expand=""
         style={{ borderTopLeftRadius: 28, borderTopRightRadius: 28 }}
-        className="glass-thick pointer-events-auto mx-auto w-full max-w-md overflow-hidden pb-[var(--safe-bottom)]"
+        className="glass-thick pointer-events-auto mx-auto w-full max-w-md overflow-hidden pt-2 pb-[var(--safe-bottom)]"
       >
-        <motion.div
-          layout="position"
-          aria-hidden
-          className="mx-auto mt-2 h-1 w-9 rounded-full bg-foreground/20"
-        />
         {pick && (
           <motion.div layout="position" className="flex h-12 items-center pr-1.5 pl-4">
             <span className="flex-1 font-medium text-sm tabular-nums">{selected} selected</span>

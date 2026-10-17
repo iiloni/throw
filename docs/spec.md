@@ -428,7 +428,9 @@ view), comments and activity.
   over the parent's pane and shrinks back into it.
 - Phone opening/closing uses Catch's card-to-note container transform and timing: the
   surface grows from its card and shrinks into its current position, with a fade when no
-  card is visible. A card's subtask underlay stays in place while the task is open. When
+  card is visible. As in Catch, the surface has no shadow of its own,
+  and a card's subtask underlay hides while its task is open and slides out from behind the
+  card as the task lands. When
   a task opens, the board's dock crossfades into the task's controls as Catch's dock does
   for a note. Desktop panes slide in from the side, as in Catch.
 - The phone dock's create button adds a task at the top of the current column's default

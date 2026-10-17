@@ -3,7 +3,7 @@ import { ChevronDown } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { board, current } from '@/components/Board/state';
-import { TrayGrip, traySurface } from '@/components/Board/TraySurface';
+import { traySurface } from '@/components/Board/TraySurface';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
@@ -73,9 +73,8 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
         }}
         role="toolbar"
         aria-label="Task controls"
-        className="flex touch-none flex-col px-3 pt-2 pb-2"
+        className="flex touch-none flex-col px-3 pt-3 pb-2"
       >
-        <TrayGrip className="mb-2" />
         <TaskControls
           task={task}
           statuses={statuses}

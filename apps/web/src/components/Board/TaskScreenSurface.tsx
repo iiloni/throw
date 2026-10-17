@@ -7,10 +7,12 @@ import { board, current, leaveTask } from './state';
 import { TaskCardFace } from './TaskCard';
 import { TaskContentContext } from './taskContent';
 import { TaskEditorReadyContext, TaskScrollContext } from './taskMotionContext';
-import { measureTaskCard, setTaskCardHidden, takeTaskOrigin } from './taskTransition';
+import { landTaskCard, measureTaskCard, setTaskCardHidden, takeTaskOrigin } from './taskTransition';
 import { MAX_DRAG, useSwipeToDismiss } from './useSwipeToDismiss';
 
 const lerp = (from: number, to: number, progress: number) => from + (to - from) * progress;
+/** Catch's lead: the card's underlay starts moving this long before the task lands. */
+const LAND_EARLY = 0.25;
 
 /**
  * Catch's card ⇄ note container transform: resize the clipping box, never its text. A subtask
@@ -82,14 +84,19 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
       return;
     }
     if (isPresent && origin) setTaskCardHidden(task.id, true);
+    let landing = 0;
     const cancel = afterPaint(() => {
       if (!isPresent) {
         // Trash and status changes have had a paint to remove or reposition the landing card.
-        const landing = measureTaskCard(task.id);
-        card.set(landing);
-        if (landing) {
-          setFaceStatus(landing.showStatus);
+        const rect = measureTaskCard(task.id);
+        card.set(rect);
+        if (rect) {
+          setFaceStatus(rect.showStatus);
           setTaskCardHidden(task.id, true);
+          landing = window.setTimeout(
+            () => landTaskCard(task.id),
+            (curves.collapse.duration - LAND_EARLY) * 1000,
+          );
         }
       }
       const curve = isPresent ? curves.expand : curves.collapse;
@@ -114,6 +121,7 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
     return () => {
       active = false;
       cancel();
+      window.clearTimeout(landing);
       stopSteady(progress);
       stopSteady(fade);
       stopSteady(dragY);
@@ -166,10 +174,11 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
           }
         }}
       >
+        {/* No shadow of its own, as in Catch: the card it lands in has one, so none vanishes. */}
         <motion.div
           data-task-surface=""
           data-color={taskColor(project, task) ?? undefined}
-          className="pointer-events-auto absolute top-0 left-0 overflow-hidden bg-[var(--tint,var(--card))] shadow-xl"
+          className="pointer-events-auto absolute top-0 left-0 overflow-hidden bg-[var(--tint,var(--card))]"
           style={{ x, y, width, height, borderRadius, scale, opacity, transformOrigin: 'center' }}
         >
           <motion.div

@@ -1,6 +1,13 @@
 import { Check, CornerDownRight } from 'lucide-react';
-import { motion } from 'motion/react';
-import { type KeyboardEvent, type MouseEvent, type ReactNode, useEffect, useRef } from 'react';
+import { animate, motion, useMotionValue } from 'motion/react';
+import {
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from 'react';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { carryAcross, carryVertically, pickUp, putBack, setDown } from './carry';
@@ -17,7 +24,7 @@ import {
 } from './model';
 import { SubtaskUnderlay } from './SubtaskUnderlay';
 import { board, current, toggleSelected, update, useBoardSettings } from './state';
-import { useTaskCardHidden } from './taskTransition';
+import { useTaskCardHidden, useTaskCardLanding } from './taskTransition';
 
 type Props = {
   task: Task;
@@ -118,6 +125,21 @@ export function TaskCard({
   const carried = state.carrying?.taskId === task.id;
   const open = state.openTaskId === task.id;
   const lifted = useTaskCardHidden(task.id);
+  // As in Catch, a task shrinking back into its card lands without the underlay, which slides
+  // out from behind the card as the task settles, as if the card were setting it down.
+  const settling = useTaskCardLanding(task.id);
+  const underlayHidden = lifted && !settling;
+  const underlay = useRef<HTMLDivElement>(null);
+  const underlayY = useMotionValue(0);
+  const wasHidden = useRef(underlayHidden);
+  useLayoutEffect(() => {
+    if (wasHidden.current && !underlayHidden && underlay.current) {
+      // The wrapper holds only the strip below the card; the underlay's top already tucks under.
+      underlayY.set(-underlay.current.offsetHeight);
+      void animate(underlayY, 0, springs.smooth);
+    }
+    wasHidden.current = underlayHidden;
+  }, [underlayHidden, underlayY]);
   // The real card waits unseen while its copy flies home.
   const landing = !overlay && dragState?.phase === 'landing' && dragState.ids.includes(task.id);
   // Where a list cannot close up around a held card, its place stays, faded.
@@ -250,17 +272,21 @@ export function TaskCard({
     <div
       data-card-root=""
       data-color={color ?? undefined}
-      // A task opening out of its card leaves the underlay behind, to land back on it.
       className={cn('isolate flex flex-col', landing && 'invisible')}
     >
       {card}
-      <SubtaskUnderlay
-        parent={task}
-        subtasks={subtasks}
-        inert={overlay}
-        folding={overlay && dragState?.unfolded}
-        uncovered={lifted}
-      />
+      <motion.div
+        ref={underlay}
+        className={cn('-z-10 relative flex flex-col', underlayHidden && 'invisible')}
+        style={{ y: underlayY }}
+      >
+        <SubtaskUnderlay
+          parent={task}
+          subtasks={subtasks}
+          inert={overlay}
+          folding={overlay && dragState?.unfolded}
+        />
+      </motion.div>
     </div>
   );
 }

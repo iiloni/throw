@@ -11,6 +11,8 @@ export type TaskRect = {
 };
 const origins = new Map<string, TaskRect>();
 const hidden = createStore<ReadonlySet<string>>(new Set());
+// Hidden cards whose task is about to land back in them.
+const landing = createStore<ReadonlySet<string>>(new Set());
 
 /** Prefer a subtask card in the open pane over a second copy on the board behind it. */
 export function measureTaskCard(taskId: string): TaskRect | null {
@@ -55,6 +57,24 @@ export function setTaskCardHidden(taskId: string, value: boolean) {
   if (value) next.add(taskId);
   else next.delete(taskId);
   hidden.set(next);
+  if (landing.get().has(taskId)) {
+    const settled = new Set(landing.get());
+    settled.delete(taskId);
+    landing.set(settled);
+  }
+}
+
+/**
+ * As Catch's `landCard`: marks a hidden card as moments from being shown, so its subtask
+ * underlay can slide out from behind it while the task settles into it.
+ */
+export function landTaskCard(taskId: string) {
+  if (!hidden.get().has(taskId)) return;
+  landing.set(new Set(landing.get()).add(taskId));
+}
+
+export function useTaskCardLanding(taskId: string) {
+  return landing.use().has(taskId);
 }
 
 export function useTaskCardHidden(taskId: string) {

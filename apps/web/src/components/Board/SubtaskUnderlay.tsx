@@ -13,21 +13,13 @@ type Props = {
   inert?: boolean;
   /** Starts unfolded and folds at once, for a copy of a card lifted with its subtasks open. */
   folding?: boolean;
-  /** Its card is away, opened as a task: the edge that tucks under the card stays hidden. */
-  uncovered?: boolean;
 };
 
 /**
  * A tab tucked under a card that counts its subtasks and unfolds to list them, as a link
  * tucks under a note in Catch. Its top edge hides under the card, so it reads as a card behind.
  */
-export function SubtaskUnderlay({
-  parent,
-  subtasks,
-  inert = false,
-  folding = false,
-  uncovered = false,
-}: Props) {
+export function SubtaskUnderlay({ parent, subtasks, inert = false, folding = false }: Props) {
   const state = board.use();
   const { project } = current(state);
   const [unfolded, setUnfolded] = useState(folding);
@@ -44,10 +36,7 @@ export function SubtaskUnderlay({
   return (
     <div
       data-no-drag={inert ? undefined : ''}
-      className={cn(
-        '-z-10 -mt-3 relative mx-2.5 rounded-b-2xl bg-[color-mix(in_oklch,var(--tint,var(--card)),var(--foreground)_7%)] pt-3 text-xs',
-        uncovered && '[clip-path:inset(0.75rem_0_0_0)]',
-      )}
+      className="-z-10 -mt-3 relative mx-2.5 rounded-b-2xl bg-[color-mix(in_oklch,var(--tint,var(--card)),var(--foreground)_7%)] pt-3 text-xs"
     >
       <button
         type="button"
