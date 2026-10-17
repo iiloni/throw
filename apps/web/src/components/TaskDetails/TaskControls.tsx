@@ -1,19 +1,21 @@
-import type { Status, Task } from '@throw/shared';
-import { Flag, MoreHorizontal } from 'lucide-react';
+import { type Status, type Task, taskTagColor } from '@throw/shared';
+import { Flag, MoreHorizontal, Tag } from 'lucide-react';
 import type { ButtonHTMLAttributes } from 'react';
 import { PriorityGlyph, StatusGlyph } from '@/components/Board/glyphs';
 import { type Project, priorityName } from '@/components/Board/model';
 import { update } from '@/components/Board/state';
 import type { TaskDrawerContent } from '@/components/Board/taskContent';
 import { IconButton } from '@/components/IconButton/IconButton';
+import { useTags, useTaskTags } from '@/lib/collections';
 import { TaskActions } from './TaskActions';
-import { PriorityPicker, StatusPicker } from './TaskPickers';
+import { PriorityPicker, StatusPicker, TagsPicker } from './TaskPickers';
 
-export type TaskPanel = 'status' | 'priority' | 'more';
+export type TaskPanel = 'status' | 'priority' | 'tags' | 'more';
 
 export const panelTitle: Record<TaskPanel, string> = {
   status: 'Status',
   priority: 'Priority',
+  tags: 'Tags',
   more: 'More',
 };
 
@@ -42,6 +44,16 @@ export function TaskControls({
   tooltips?: boolean;
 }) {
   const status = statuses.find((row) => row.id === task.statusId);
+  const { tags } = useTags(task.projectId);
+  const { taskTags } = useTaskTags(task.id);
+  const secondary = new Set(taskTags.map((row) => row.tagId));
+  const tagNames = [
+    ...tags.filter((tag) => tag.id === task.primaryTagId),
+    ...tags
+      .filter((tag) => secondary.has(tag.id) && tag.id !== task.primaryTagId)
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  ].map((tag) => tag.name);
+  const tagColor = taskTagColor(task, tags);
   return (
     <div className="flex h-[var(--dock-height)] w-full items-center justify-around gap-2">
       <IconButton
@@ -66,7 +78,18 @@ export function TaskControls({
           <PriorityGlyph priority={task.priority} name={priorityName(project, task.priority)} />
         )}
       </IconButton>
-      {/* Tags: mount the Tags control and its panel here when PR #8 lands on main. */}
+      {/* Tags are made in the project's tag manager; with none, there is nothing to pick. */}
+      {tags.length > 0 && (
+        <IconButton
+          label={`Tags: ${tagNames.join(', ') || 'none'}. Change`}
+          className={control}
+          tooltip={tooltips}
+          {...controlProps('tags')}
+          onClick={(event) => onOpen('tags', event.currentTarget)}
+        >
+          <Tag data-color={tagColor ?? undefined} className={tagColor ? 'text-tint-accent' : ''} />
+        </IconButton>
+      )}
       <IconButton
         label="More task actions"
         className={control}
@@ -96,6 +119,7 @@ export function TaskPanelContent({
   if (panel === 'status') return <StatusPicker task={task} statuses={statuses} onPicked={onDone} />;
   if (panel === 'priority')
     return <PriorityPicker task={task} project={project} onPicked={onDone} />;
+  if (panel === 'tags') return <TagsPicker task={task} />;
   return <TaskActions task={task} statuses={statuses} onDone={onDone} />;
 }
 

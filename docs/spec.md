@@ -409,9 +409,10 @@ view), comments and activity.
   drawer. It opens out of its card and closes back into it, on the card's color. Pulling it
   down from the top closes it too.
 - While a task is open on a phone, the dock (the collapsed [drawer](#the-drawer)) holds
-  that task's actions, as it does for a note in Catch: Status, Priority and More (close
-  or reopen, copy link), with Tags joining once the tag picker is wired. The task's pickers
-  open in the drawer as pages. On desktop the pane shows the same controls along its foot
+  that task's actions, as it does for a note in Catch: Status, Priority, Tags (once the
+  project has any) and More (close or reopen, copy link). The task's pickers open in the
+  drawer as pages; the tag picker stays open for several choices. The task's tags are
+  listed under its title. On desktop the pane shows the same controls along its foot
   and opens their panels in place.
 - The description is a directly editable, text-only BlockNote document. Changes commit
   when the task view closes or switches tasks; drafts survive reloads and conflicts.

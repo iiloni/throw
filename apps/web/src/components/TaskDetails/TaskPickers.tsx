@@ -2,6 +2,10 @@ import { compareStatuses, PRIORITIES, type Status, type Task } from '@throw/shar
 import { useId } from 'react';
 import { PriorityGlyph, StatusGlyph } from '@/components/Board/glyphs';
 import { type Project, priorityName } from '@/components/Board/model';
+import { TagPicker } from '@/components/TagPicker/TagPicker';
+import { useTags, useTaskTags } from '@/lib/collections';
+import { useAwaitingSync } from '@/lib/syncStatus';
+import { setPrimaryTag, setSecondaryTag } from '@/lib/tags';
 import { sendTask, updateTask } from '@/lib/tasks';
 
 /*
@@ -88,6 +92,31 @@ export function PriorityPicker({
           <span className="flex-1">{priorityName(project, priority)}</span>
         </label>
       ))}
+    </div>
+  );
+}
+
+/** Tags take several choices, so picking one leaves the picker open. */
+export function TagsPicker({ task }: { task: Task }) {
+  const { tags, isLoading } = useTags(task.projectId);
+  const { taskTags, isLoading: loadingAssignments } = useTaskTags(task.id);
+  const awaitingTags = useAwaitingSync(isLoading, tags.length);
+  const awaitingAssignments = useAwaitingSync(loadingAssignments, taskTags.length);
+  if (awaitingTags || awaitingAssignments)
+    return (
+      <p role="status" className="px-6 py-3 text-muted-foreground text-sm">
+        Loading tags…
+      </p>
+    );
+  return (
+    <div className="px-5 pt-1 pb-3">
+      <TagPicker
+        tags={tags}
+        primaryTagId={task.primaryTagId}
+        secondaryTagIds={taskTags.map((row) => row.tagId)}
+        onPrimaryChange={(id) => setPrimaryTag(task.id, id)}
+        onSecondaryChange={(id, present) => setSecondaryTag(task.id, id, present)}
+      />
     </div>
   );
 }

@@ -3,8 +3,10 @@ import {
   isClosedCategory,
   type Project,
   type Status,
+  type Tag,
   type Task,
   taskIdentifier,
+  taskTagColor,
 } from '@throw/shared';
 import { ChevronLeft, ChevronRight, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useContext, useState } from 'react';
@@ -16,21 +18,36 @@ import { TaskCard } from '@/components/Board/TaskCard';
 import { TaskTitle } from '@/components/Board/TaskView';
 import { TaskScrollContext } from '@/components/Board/taskMotionContext';
 import { IconButton } from '@/components/IconButton/IconButton';
+import { TaskTags } from '@/components/TaskTags/TaskTags';
 import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
+import { useTags, useTaskTags } from '@/lib/collections';
 import { createTask, restoreTask, sendTask, trashTask } from '@/lib/tasks';
 import { cn } from '@/lib/utils';
 import { TaskDescription } from './TaskDescription';
 import { TaskDrawer } from './TaskDrawer';
 
-function boardTask(task: Task): BoardTask {
+function boardTask(task: Task, tags: readonly Tag[]): BoardTask {
   return {
     ...task,
     closedAt: task.closedAt === null ? null : Date.parse(task.closedAt),
-    primaryTagId: null,
+    primaryTagColor: taskTagColor(task, tags),
     secondaryTagIds: [],
     description: undefined,
   };
+}
+
+function TaskTagList({ task, tags }: { task: Task; tags: readonly Tag[] }) {
+  const { taskTags } = useTaskTags(task.id);
+  return (
+    <div data-task-tags="" className="mt-3 empty:hidden">
+      <TaskTags
+        tags={tags}
+        primaryTagId={task.primaryTagId}
+        secondaryTagIds={taskTags.map((row) => row.tagId)}
+      />
+    </div>
+  );
 }
 
 export function TaskDetails({
@@ -48,6 +65,7 @@ export function TaskDetails({
   phone?: boolean;
 }) {
   const attachScroll = useContext(TaskScrollContext);
+  const { tags } = useTags(project.id);
   const parent = tasks.find((row) => row.id === task.parentId);
   const children = tasks
     .filter((row) => row.parentId === task.id && row.deletedAt === null)
@@ -122,7 +140,7 @@ export function TaskDetails({
               phone ? 'pb-[calc(var(--dock-height)+var(--safe-bottom)+3rem)]' : 'pb-10',
             )}
           >
-            <TaskTitle task={boardTask(task)} />
+            <TaskTitle task={boardTask(task, tags)} />
             {task.deletedAt && (
               <p role="status" className="mt-4 text-muted-foreground text-sm">
                 This task is in the trash. Restore it from the toolbar.
@@ -133,7 +151,7 @@ export function TaskDetails({
                 This subtask is in the trash with its parent. Restore the parent to bring it back.
               </p>
             )}
-            <div data-task-tags="" />
+            <TaskTagList task={task} tags={tags} />
             <TaskDescription task={task} />
             {task.parentId === null && (
               <section
@@ -155,7 +173,7 @@ export function TaskDetails({
                     return (
                       <TaskCard
                         key={child.id}
-                        task={boardTask(child)}
+                        task={boardTask(child, tags)}
                         showStatus
                         onOpen={() => update({ openTaskId: child.id })}
                         statusControl={

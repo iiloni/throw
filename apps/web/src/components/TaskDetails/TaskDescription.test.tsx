@@ -47,6 +47,7 @@ const row: Task = {
   priority: 3,
   position: 'a0',
   parentId: null,
+  primaryTagId: null,
   closedAt: null,
   deletedAt: null,
   createdAt: '2026-10-15T00:00:00Z',

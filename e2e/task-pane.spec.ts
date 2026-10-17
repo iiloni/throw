@@ -432,6 +432,50 @@ test('reduced motion keeps the drawer, keyboard controls and close-to-save edito
   }
 });
 
+test('tags are picked from the task controls and listed on the task', async ({
+  page,
+  isMobile,
+}) => {
+  const account = await fixture(page);
+  const { pane } = account;
+  // Tags are made in the project's tag manager; without any there is nothing to pick.
+  await expect(controls(page).getByRole('button', { name: /^Tags:/ })).toHaveCount(0);
+  const tag = async (name: string, parentId: string | null) => {
+    const id = randomUUID();
+    const data = { id, projectId: account.projectId, name, parentId, icon: null };
+    const response = await page.request.post('/api/tags', {
+      headers: account.headers,
+      data: { ...data, color: parentId ? null : 'amber' },
+    });
+    expect(response.status()).toBe(201);
+    return id;
+  };
+  const launch = await tag('Launch', null);
+  const press = await tag('Press', launch);
+  await controls(page).getByRole('button', { name: 'Tags: none. Change', exact: true }).click();
+  const picker = page.getByRole(isMobile ? 'dialog' : 'region', { name: 'Tags', exact: true });
+  await picker.getByRole('radio', { name: 'Primary: Launch', exact: true }).check();
+  await picker.getByRole('checkbox', { name: 'Secondary: Launch / Press', exact: true }).check();
+  // Tags take several choices, so the picker stays open until it is dismissed.
+  await expect(picker).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(picker).toHaveCount(0);
+  await expect(pane).toBeVisible();
+  await expect(
+    controls(page).getByRole('button', { name: 'Tags: Launch, Press. Change', exact: true }),
+  ).toBeFocused();
+  const listed = pane.getByRole('region', { name: 'Task tags' });
+  await expect(listed).toContainText('Launch');
+  await expect(listed).toContainText('Press');
+  await expect
+    .poll(async () => {
+      const row = await taskRow(page, account);
+      const assignments = await shapeRows(page.request, 'task-tags', account.headers);
+      return [row?.primary_tag_id, assignments.map((assignment) => assignment.tag_id)];
+    })
+    .toEqual([launch, [press]]);
+});
+
 test('the phone surface grows from its card without scaling text and lands back in it', async ({
   page,
   isMobile,

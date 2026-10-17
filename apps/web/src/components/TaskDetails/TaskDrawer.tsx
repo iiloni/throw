@@ -11,6 +11,8 @@ import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { panelTitle, TaskControls, type TaskPanel, TaskPanelContent } from './TaskControls';
 
+const panelHeight: Record<TaskPanel, number> = { status: 304, priority: 304, tags: 384, more: 176 };
+
 /**
  * The task pane's own drawer on desktop, where the shell has none (ADR 0009). It owns the
  * chrome, gestures, Escape and Back around the same controls and panels a phone shows in the
@@ -93,7 +95,7 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
             role="region"
             aria-label={panelTitle[panel]}
             initial={{ height: 0, opacity: 0 }}
-            animate={{ height: panel === 'more' ? 176 : 304, opacity: 1 }}
+            animate={{ height: panelHeight[panel], opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={reduced ? { duration: 0 } : springs.smooth}
             className="flex max-h-[min(50dvh,24rem)] flex-col overflow-hidden border-border border-t"

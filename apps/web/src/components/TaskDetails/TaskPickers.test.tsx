@@ -1,11 +1,24 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import type { Status, Task } from '@throw/shared';
+import type { Status, Tag, Task } from '@throw/shared';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { Project } from '@/components/Board/model';
-import { PriorityPicker, StatusPicker } from './TaskPickers';
+import { PriorityPicker, StatusPicker, TagsPicker } from './TaskPickers';
 
-const fake = vi.hoisted(() => ({ send: vi.fn(), update: vi.fn() }));
+const fake = vi.hoisted(() => ({
+  send: vi.fn(),
+  update: vi.fn(),
+  primary: vi.fn(),
+  secondary: vi.fn(),
+  tags: [] as Tag[],
+  taskTags: [] as { taskId: string; tagId: string }[],
+}));
 vi.mock('@/lib/tasks', () => ({ sendTask: fake.send, updateTask: fake.update }));
+vi.mock('@/lib/tags', () => ({ setPrimaryTag: fake.primary, setSecondaryTag: fake.secondary }));
+vi.mock('@/lib/syncStatus', () => ({ useAwaitingSync: () => false }));
+vi.mock('@/lib/collections', () => ({
+  useTags: () => ({ tags: fake.tags, isLoading: false }),
+  useTaskTags: () => ({ taskTags: fake.taskTags, isLoading: false }),
+}));
 
 const task: Task = {
   id: 'task',
@@ -19,6 +32,7 @@ const task: Task = {
   priority: 3,
   position: 'a0',
   parentId: null,
+  primaryTagId: null,
   closedAt: null,
   deletedAt: null,
   createdAt: '2026-10-15T00:00:00Z',
@@ -42,8 +56,7 @@ const statuses: Status[] = [
 const project = { priorityNames: ['Now', null, null, null, ''] } as unknown as Project;
 
 beforeEach(() => {
-  fake.send.mockReset();
-  fake.update.mockReset();
+  for (const mock of [fake.send, fake.update, fake.primary, fake.secondary]) mock.mockReset();
 });
 
 it('lists statuses in category order and sends the task to the one picked', () => {
@@ -69,4 +82,25 @@ it('names priorities by the project and updates the task with the one picked', (
   fireEvent.click(within(group).getByRole('radio', { name: 'Now' }));
   expect(fake.update).toHaveBeenCalledWith('task', { priority: 1 });
   expect(onPicked).toHaveBeenCalledOnce();
+});
+
+it('assigns tags in both roles without closing', () => {
+  const tag = (id: string, name: string, parentId: string | null = null): Tag => ({
+    id,
+    workspaceId: 'workspace',
+    projectId: 'project',
+    parentId,
+    name,
+    color: parentId ? null : 'teal',
+    icon: null,
+  });
+  fake.tags = [tag('work', 'Work'), tag('mobile', 'Mobile', 'work')];
+  fake.taskTags = [{ taskId: 'task', tagId: 'work' }];
+  render(<TagsPicker task={{ ...task, primaryTagId: 'work' }} />);
+  expect(screen.getByRole('radio', { name: 'Primary: Work' })).toBeChecked();
+  expect(screen.getByRole('checkbox', { name: 'Secondary: Work' })).toBeChecked();
+  fireEvent.click(screen.getByRole('button', { name: 'Clear primary' }));
+  expect(fake.primary).toHaveBeenCalledWith('task', null);
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Secondary: Work' }));
+  expect(fake.secondary).toHaveBeenCalledWith('task', 'work', false);
 });
