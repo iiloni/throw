@@ -1,6 +1,6 @@
 # 0009: The drawer
 
-Status: accepted (2026-10-15)
+Status: accepted (2026-10-15), amended 2026-10-17 for quick capture's card
 
 ## Context
 
@@ -28,7 +28,7 @@ are all content the drawer shows. Nothing slides up over the drawer as a second 
 
 **The collapsed drawer's header is the dock.** On a project or cross-project board it holds
 the backlog's handle, Search and the create button. While a task is open it holds that
-task's actions. The dock appears only on boards and open tasks. Settings and an empty
+task's actions, and while a new task is written above it, that task's controls. The dock appears only on boards and open tasks. Settings and an empty
 workspace keep the title menu alone: there the drawer is out of sight until something opens
 in it, and it goes away again when that closes.
 
@@ -56,7 +56,17 @@ groomed.
 supply of work with the board usable above it. Anything else the drawer shows traps focus,
 takes Escape and Back, and returns focus to whatever opened it. On opening, focus goes to
 the drawer itself rather than its first control: focusing the close button opened its
-tooltip, and the tooltip took the first Escape.
+tooltip, and the tooltip took the first Escape. Content built around a field (search, the
+capture card) names that field, and the drawer focuses it instead, so the keyboard rises as
+it opens.
+
+**Quick capture is a card above the dock (2026-10-17).** As in Catch's quick note, the
+create button opens a card holding the new task's title, floating above the collapsed
+drawer and riding above the keyboard with the dock. The dock holds the new task's status,
+priority and tags, and the create button becomes the card's close. Those controls open their
+pickers as pages under the dock, as an open task's do, and the card rides above them. The
+card is the drawer's: it draws it, dims the board behind it, and closes it on Back, Escape
+or a tap outside. It is not a second sheet; nothing else floats above the drawer.
 
 **One material.** The drawer is `glass-thick` at every height and for every content. The
 closed sheet's opaque background goes.
@@ -73,6 +83,7 @@ and the tag manager are centred dialogs.
   rules are written once.
 - The board settings and closed tasks content, and the move targets, become drawer content.
   The drag step wires held cards to the drawer's move state instead of a separate panel.
-- Search and capture, the task view's actions and pickers, and the tag manager render into
-  the drawer on phones, not into their own sheets or full-screen overlays.
+- Search, the task view's actions and pickers, and the tag manager render into the drawer
+  on phones, not into their own sheets or full-screen overlays. Capture is the drawer's card
+  and dock.
 - The prototype shares the Board components, so it gets the drawer too.

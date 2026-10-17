@@ -90,6 +90,26 @@ export function waitForShapeRow(page: Page, shape: string, name: string) {
   );
 }
 
+/** Rows can paint before a shape reaches its checkpoint; finish initial sync before going offline. */
+export async function waitForDeviceSync(page: Page) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          const { workspacesCollection, projectsCollection, statusesCollection, tasksCollection } =
+            await import(/* @vite-ignore */ '/src/lib/collections.ts');
+          return (
+            workspacesCollection.isReady() &&
+            projectsCollection.isReady() &&
+            statusesCollection.isReady() &&
+            tasksCollection.isReady()
+          );
+        }),
+      { timeout: APP_LOAD_TIMEOUT },
+    )
+    .toBe(true);
+}
+
 /** Rendering a streamed row precedes its SQLite commit. Cache the fixture before going offline. */
 export async function waitForCachedProject(page: Page, projectId: string, statusIds: string[]) {
   await expect

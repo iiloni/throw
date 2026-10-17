@@ -1,4 +1,4 @@
-import { compareStatuses, PRIORITIES, type Status, type Task } from '@throw/shared';
+import { compareStatuses, PRIORITIES, type Priority, type Status, type Task } from '@throw/shared';
 import { useId } from 'react';
 import { PriorityGlyph, StatusGlyph } from '@/components/Board/glyphs';
 import { byCategory, type Project, priorityName } from '@/components/Board/model';
@@ -26,6 +26,28 @@ export function StatusPicker({
   statuses: Status[];
   onPicked(): void;
 }) {
+  return (
+    <StatusOptions
+      value={task.statusId}
+      statuses={statuses}
+      onChange={(statusId) => {
+        if (statusId !== task.statusId) sendTask(task.id, statusId);
+        onPicked();
+      }}
+    />
+  );
+}
+
+/** The status grid on its own, for a task that does not exist yet. */
+export function StatusOptions({
+  value,
+  statuses,
+  onChange,
+}: {
+  value: string;
+  statuses: Status[];
+  onChange(statusId: string): void;
+}) {
   const name = useId();
   return (
     <div role="radiogroup" aria-label="Status" className="space-y-2.5 px-3 pt-1 pb-3">
@@ -47,11 +69,10 @@ export function StatusPicker({
                     className="absolute inset-0 cursor-pointer appearance-none rounded-2xl opacity-0"
                     type="radio"
                     name={name}
-                    checked={task.statusId === row.id}
-                    onChange={() => {
-                      sendTask(task.id, row.id);
-                      onPicked();
-                    }}
+                    checked={value === row.id}
+                    onChange={() => onChange(row.id)}
+                    // A checked radio fires no change; picking it again still closes the picker.
+                    onClick={() => value === row.id && onChange(row.id)}
                   />
                   <StatusGlyph category={row.category} className="size-4 shrink-0" />
                   <span className="min-w-0 truncate font-medium text-[0.8125rem]">{row.name}</span>
@@ -73,6 +94,27 @@ export function PriorityPicker({
   project: Project;
   onPicked(): void;
 }) {
+  return (
+    <PriorityOptions
+      value={task.priority}
+      project={project}
+      onChange={(priority) => {
+        if (priority !== task.priority) updateTask(task.id, { priority });
+        onPicked();
+      }}
+    />
+  );
+}
+
+export function PriorityOptions({
+  value,
+  project,
+  onChange,
+}: {
+  value: Priority;
+  project: Project;
+  onChange(priority: Priority): void;
+}) {
   const name = useId();
   return (
     <div role="radiogroup" aria-label="Priority" className="px-3 pb-3">
@@ -83,11 +125,9 @@ export function PriorityPicker({
             aria-label={priorityName(project, priority)}
             type="radio"
             name={name}
-            checked={task.priority === priority}
-            onChange={() => {
-              updateTask(task.id, { priority });
-              onPicked();
-            }}
+            checked={value === priority}
+            onChange={() => onChange(priority)}
+            onClick={() => value === priority && onChange(priority)}
           />
           <PriorityGlyph priority={priority} name={priorityName(project, priority)} />
           <span className="flex-1">{priorityName(project, priority)}</span>
