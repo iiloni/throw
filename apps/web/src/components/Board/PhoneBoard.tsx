@@ -483,7 +483,7 @@ function BoardDrawer({
         transition={springs.snappy}
         className={cn(
           dockButton,
-          'bg-brand text-brand-foreground shadow-[0_8px_24px_-6px_color-mix(in_oklab,var(--brand)_55%,transparent),inset_0_1px_0_rgb(255_255_255/0.45)]',
+          'bg-brand text-brand-foreground shadow-[0_2px_6px_-2px_color-mix(in_oklab,var(--brand)_45%,transparent),inset_0_1px_0_rgb(255_255_255/0.35)]',
         )}
       >
         <Plus className="size-7" strokeWidth={2.25} aria-hidden />
