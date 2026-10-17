@@ -148,10 +148,9 @@ export function TaskDescription({ task }: { task: Task }) {
           const existing = readDescriptionDraft(task.id);
           const next: DescriptionDraft = {
             document,
-            baseVersion:
-              existing?.status === 'editing' || existing?.status === 'conflict'
-                ? existing.baseVersion
-                : session.baseVersion,
+            // A queued draft's base is the version it saved: a parent pane left beneath its
+            // subtask keeps its editor after leaving, and editing resumes from that save.
+            baseVersion: existing ? existing.baseVersion : session.baseVersion,
             editorKey: session.key,
             submittedVersion: existing?.status === 'conflict' ? existing.submittedVersion : null,
             status: existing?.status === 'conflict' ? 'conflict' : 'editing',

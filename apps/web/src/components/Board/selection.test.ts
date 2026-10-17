@@ -2,7 +2,15 @@ import type { Project, Status, Tag, Task } from '@throw/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { compareClosed, compareTasks, identifier, subtasksOf, taskColor } from './model';
 import { projectBoardData } from './selection';
-import { board, initialBoard, listTasks, receiveBoard, update } from './state';
+import {
+  board,
+  initialBoard,
+  leaveTask,
+  listTasks,
+  openSubtask,
+  receiveBoard,
+  update,
+} from './state';
 
 const project: Project = {
   id: 'project',
@@ -128,6 +136,33 @@ describe('synced project board selection', () => {
     update({ openTaskId: null });
     expect(beforeLeave).toHaveBeenLastCalledWith('second');
     expect(board.get().openTaskId).toBeNull();
+  });
+  it('goes back down the trail a subtask was opened along, and starts a new one otherwise', () => {
+    const rows = [task('parent'), task('child', { parentId: 'parent' }), task('other')];
+    board.set(view(rows));
+    receiveBoard(projectBoardData(project, statuses, rows), {
+      create: () => '',
+      rename: () => {},
+      send: () => {},
+    });
+    update({ openTaskId: 'parent' });
+    openSubtask('child');
+    expect(board.get()).toMatchObject({ openTaskId: 'child', taskTrail: ['parent'] });
+    leaveTask();
+    expect(board.get()).toMatchObject({ openTaskId: 'parent', taskTrail: [] });
+    leaveTask();
+    expect(board.get().openTaskId).toBeNull();
+    update({ openTaskId: 'parent' });
+    openSubtask('child');
+    update({ openTaskId: 'other' });
+    expect(board.get().taskTrail).toEqual([]);
+    openSubtask('child');
+    receiveBoard(projectBoardData(project, statuses, [rows[1]!]), {
+      create: () => '',
+      rename: () => {},
+      send: () => {},
+    });
+    expect(board.get()).toMatchObject({ openTaskId: 'child', taskTrail: [] });
   });
   it('orders statuses by category, position and id, leaving active columns in project order', () => {
     const data = projectBoardData(

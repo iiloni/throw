@@ -13,7 +13,7 @@ import { useContext, useState } from 'react';
 import { StatusGlyph } from '@/components/Board/glyphs';
 import type { Task as BoardTask } from '@/components/Board/model';
 import { StatusMenu } from '@/components/Board/StatusMenu';
-import { current, update } from '@/components/Board/state';
+import { board, current, leaveTask, openSubtask, update } from '@/components/Board/state';
 import { TaskCard } from '@/components/Board/TaskCard';
 import { TaskTitle } from '@/components/Board/TaskView';
 import { TaskScrollContext } from '@/components/Board/taskMotionContext';
@@ -67,6 +67,10 @@ export function TaskDetails({
   const attachScroll = useContext(TaskScrollContext);
   const { tags } = useTags(project.id);
   const parent = tasks.find((row) => row.id === task.parentId);
+  const state = board.use();
+  // The task this one was opened from, if any: Back returns there rather than to the board.
+  const stack = [...state.taskTrail, state.openTaskId];
+  const below = tasks.find((row) => row.id === stack[stack.indexOf(task.id) - 1]);
   const children = tasks
     .filter((row) => row.parentId === task.id && row.deletedAt === null)
     .sort((a, b) => comparePositions(a.position, b.position) || a.id.localeCompare(b.id));
@@ -86,8 +90,12 @@ export function TaskDetails({
           className="glass flex min-w-0 items-center rounded-full p-1"
         >
           <IconButton
-            label="Back to the board"
-            onClick={() => update({ openTaskId: null })}
+            label={
+              below
+                ? `Back to ${taskIdentifier(project, below) ?? 'the parent task'}`
+                : 'Back to the board'
+            }
+            onClick={leaveTask}
             className="size-10 shrink-0 [&_svg]:size-5"
           >
             <ChevronLeft />
@@ -101,7 +109,9 @@ export function TaskDetails({
                 <button
                   type="button"
                   aria-label={`Open parent ${taskIdentifier(project, parent) ?? 'Pending'}`}
-                  onClick={() => update({ openTaskId: parent.id })}
+                  onClick={() =>
+                    below?.id === parent.id ? leaveTask() : update({ openTaskId: parent.id })
+                  }
                   className="min-h-10 truncate rounded-full px-1 outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60"
                 >
                   {taskIdentifier(project, parent) ?? 'Pending'}
@@ -175,7 +185,7 @@ export function TaskDetails({
                         key={child.id}
                         task={boardTask(child, tags)}
                         showStatus
-                        onOpen={() => update({ openTaskId: child.id })}
+                        onOpen={() => openSubtask(child.id)}
                         statusControl={
                           childStatus && (
                             <StatusMenu

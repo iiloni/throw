@@ -323,9 +323,13 @@ const UNCLIPPED = 'inset(0px 0px 0px 0px round 0px)';
  * its card and closes back into it, on the card's own color, and its actions sit in the
  * dock's place. Pulling it down from the top closes it too.
  */
-export function TaskScreen({ task }: { task: Task }) {
+export function TaskScreen({ task, covered }: { task: Task; covered?: boolean }) {
   const content = useContext(TaskContentContext);
-  return content ? <TaskScreenSurface task={task} /> : <PrototypeTaskScreen task={task} />;
+  return content ? (
+    <TaskScreenSurface task={task} covered={covered} />
+  ) : (
+    <PrototypeTaskScreen task={task} />
+  );
 }
 
 function PrototypeTaskScreen({ task }: { task: Task }) {

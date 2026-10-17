@@ -206,3 +206,15 @@ export function groupByPriority(tasks: Task[]): PriorityGroup[] {
 }
 
 export type BoardData = { project: Project; tasks: Task[]; hiddenTasks?: Task[] };
+
+/** Statuses in their board groups, closed ones together, keeping the order they come in. */
+export function byCategory<T extends { category: Category }>(statuses: readonly T[]) {
+  const groups: { name: string; statuses: T[] }[] = [
+    { name: 'Backlog', statuses: [] },
+    { name: 'Active', statuses: [] },
+    { name: 'Closed', statuses: [] },
+  ];
+  const slot: Record<Category, number> = { backlog: 0, active: 1, done: 2, cancelled: 2 };
+  for (const status of statuses) groups[slot[status.category]]!.statuses.push(status);
+  return groups;
+}

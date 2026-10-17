@@ -3,7 +3,7 @@ import { Flag, MoreHorizontal, Tag } from 'lucide-react';
 import type { ButtonHTMLAttributes } from 'react';
 import { PriorityGlyph, StatusGlyph } from '@/components/Board/glyphs';
 import { type Project, priorityName } from '@/components/Board/model';
-import { update } from '@/components/Board/state';
+import { leaveTask } from '@/components/Board/state';
 import type { TaskDrawerContent } from '@/components/Board/taskContent';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { useTags, useTaskTags } from '@/lib/collections';
@@ -20,11 +20,11 @@ export const panelTitle: Record<TaskPanel, string> = {
 };
 
 const control =
-  'h-[var(--dock-height)] flex-1 rounded-[var(--dock-radius)] bg-foreground/[0.06] [&_svg]:size-6';
+  'h-[var(--dock-height)] flex-1 rounded-[var(--dock-radius)] bg-foreground/[0.06] transition-colors duration-200 aria-expanded:bg-foreground/[0.14] aria-expanded:shadow-[inset_0_1px_0_var(--glass-highlight)] [&_svg]:size-6';
 
 type ControlProps = Pick<
   ButtonHTMLAttributes<HTMLButtonElement>,
-  'aria-expanded' | 'aria-controls' | 'aria-haspopup'
+  'aria-expanded' | 'aria-controls'
 >;
 
 /** The task's controls, as Catch's note toolbar: the pane drawer's header, or a phone's dock. */
@@ -125,7 +125,7 @@ export function TaskPanelContent({
 
 /**
  * An open task on a phone, as the board's drawer shows it (ADR 0009): its controls are the
- * dock, and each opens its picker or actions as a page.
+ * dock, and act as tabs over a page holding the picker or actions, with the dock above it.
  */
 export function taskDrawerContent({
   task,
@@ -148,18 +148,19 @@ export function taskDrawerContent({
         aria-label="Task controls"
         data-task-drawer=""
         onKeyDown={(event) => {
-          // The dock belongs to the open task, so Escape there closes the task as it does in it.
-          if (event.key !== 'Escape' || event.defaultPrevented) return;
+          // The dock belongs to the open task, so Escape there leaves it as it does in it. With
+          // a panel open, the drawer takes Escape to close the panel.
+          if (event.key !== 'Escape' || event.defaultPrevented || page) return;
           event.preventDefault();
-          update({ openTaskId: null });
+          leaveTask();
         }}
       >
         <TaskControls
           task={task}
           statuses={statuses}
           project={project}
-          onOpen={(panel) => onPage(panel)}
-          controlProps={() => ({ 'aria-haspopup': 'dialog' })}
+          onOpen={(panel) => onPage(panel === page ? null : panel)}
+          controlProps={(panel) => ({ 'aria-expanded': panel === page })}
           tooltips={false}
         />
       </div>
@@ -168,6 +169,7 @@ export function taskDrawerContent({
       key: page,
       title: panelTitle[page],
       fit: true,
+      dock: true,
       content: (
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[calc(var(--safe-bottom)+1rem)]">
           <TaskPanelContent

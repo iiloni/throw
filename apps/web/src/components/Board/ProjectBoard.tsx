@@ -17,7 +17,7 @@ import { createTask, sendTask, updateTask } from '@/lib/tasks';
 import { DesktopBoard } from './DesktopBoard';
 import { PhoneBoard } from './PhoneBoard';
 import { projectBoardData } from './selection';
-import { board, receiveBoard, update, useBoardSettings } from './state';
+import { board, leaveTask, receiveBoard, update, useBoardSettings } from './state';
 import { TaskScreen } from './TaskView';
 import { TaskContentContext } from './taskContent';
 
@@ -76,7 +76,7 @@ export function ProjectBoard({
         !event.defaultPrevented &&
         !document.querySelector('[role="menu"], [role="dialog"]')
       )
-        update({ openTaskId: null });
+        leaveTask();
     }
     window.addEventListener('keydown', close);
     return () => window.removeEventListener('keydown', close);
@@ -93,9 +93,13 @@ export function ProjectBoard({
         Connect to load this board on this device.
       </p>
     );
-  const openTask = [...data.tasks, ...(data.hiddenTasks ?? [])].find(
-    (task) => task.id === state.openTaskId,
-  );
+  const findTask = (id: string | null) =>
+    [...data.tasks, ...(data.hiddenTasks ?? [])].find((task) => task.id === id);
+  const openTask = findTask(state.openTaskId);
+  // A subtask opened from its parent's pane covers that pane, which stays to go back to.
+  const screens = openTask
+    ? [...state.taskTrail.map(findTask), openTask].filter((task) => task !== undefined)
+    : [];
   const openRow = phone ? tasks.find((row) => row.id === openTask?.id) : undefined;
   const taskContent = {
     drawer:
@@ -165,7 +169,10 @@ export function ProjectBoard({
           <DesktopBoard />
         )}
         <AnimatePresence>
-          {phone && openTask && <TaskScreen key={openTask.id} task={openTask} />}
+          {phone &&
+            screens.map((task) => (
+              <TaskScreen key={task.id} task={task} covered={task !== openTask} />
+            ))}
         </AnimatePresence>
       </div>
     </TaskContentContext.Provider>

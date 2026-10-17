@@ -99,6 +99,24 @@ it('stores typing locally, then queues one save with its captured version when l
   );
 });
 
+it('resumes from the queued save when a flushed editor stays mounted', () => {
+  render(<TaskDescription task={row} />);
+  fireEvent.change(screen.getByLabelText('Draft text'), { target: { value: 'First pass' } });
+  act(() => {
+    expect(flushTaskDescription('task')).toBe(true);
+  });
+  // A parent pane stays beneath its subtask, so its editor is still there to type in.
+  fireEvent.change(screen.getByLabelText('Draft text'), { target: { value: 'Second pass' } });
+  act(() => {
+    expect(flushTaskDescription('task')).toBe(true);
+  });
+  expect(fake.save).toHaveBeenLastCalledWith(
+    'task',
+    [{ type: 'paragraph', content: 'Second pass' }],
+    'new',
+  );
+});
+
 it('flushes on route unmount as well as the board close path', () => {
   const view = render(<TaskDescription task={row} />);
   fireEvent.change(screen.getByLabelText('Draft text'), {

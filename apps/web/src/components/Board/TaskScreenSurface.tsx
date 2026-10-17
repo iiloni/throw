@@ -3,7 +3,7 @@ import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useBackHandler } from '@/lib/backButton';
 import { afterPaint, animateSteady, curves, stopSteady } from '@/lib/motion';
 import { type Task, taskColor } from './model';
-import { board, current, update } from './state';
+import { board, current, leaveTask } from './state';
 import { TaskCardFace } from './TaskCard';
 import { TaskContentContext } from './taskContent';
 import { TaskEditorReadyContext, TaskScrollContext } from './taskMotionContext';
@@ -12,14 +12,19 @@ import { MAX_DRAG, useSwipeToDismiss } from './useSwipeToDismiss';
 
 const lerp = (from: number, to: number, progress: number) => from + (to - from) * progress;
 
-/** Catch's card ⇄ note container transform: resize the clipping box, never its text. */
-export function TaskScreenSurface({ task }: { task: Task }) {
+/**
+ * Catch's card ⇄ note container transform: resize the clipping box, never its text. A subtask
+ * opened from its parent's pane grows over that pane, which stays beneath it, `covered`.
+ */
+export function TaskScreenSurface({ task, covered = false }: { task: Task; covered?: boolean }) {
   const content = useContext(TaskContentContext)!;
   const { project } = current(board.use());
   const [isPresent, safeToRemove] = usePresence();
   const reduced = useReducedMotion();
   const [origin] = useState(() => (reduced ? null : takeTaskOrigin(task.id)));
   const card = useMotionValue(origin);
+  // The face matches the card it leaves or lands on: a board column's cards omit their status.
+  const [faceStatus, setFaceStatus] = useState(origin?.showStatus ?? true);
   const viewport = useMotionValue({ width: innerWidth, height: innerHeight });
   const progress = useMotionValue(reduced ? 1 : 0);
   const fade = useMotionValue(origin || reduced ? 1 : 0);
@@ -29,10 +34,11 @@ export function TaskScreenSurface({ task }: { task: Task }) {
     document.activeElement instanceof HTMLElement ? document.activeElement : null,
   );
   const close = () => {
-    if (board.get().openTaskId === task.id) update({ openTaskId: null });
+    if (board.get().openTaskId === task.id) leaveTask();
   };
-  useBackHandler(!!isPresent, close);
-  const attachScroll = useSwipeToDismiss({ dragY, onDismiss: close, enabled: !!isPresent });
+  const top = !!isPresent && !covered;
+  useBackHandler(top, close);
+  const attachScroll = useSwipeToDismiss({ dragY, onDismiss: close, enabled: top });
   const x = useTransform(() => (1 - progress.get()) * (card.get()?.x ?? 0));
   const y = useTransform(
     () => (1 - progress.get()) * (card.get()?.y ?? 0) + dragY.get() + (1 - fade.get()) * 48,
@@ -79,8 +85,12 @@ export function TaskScreenSurface({ task }: { task: Task }) {
     const cancel = afterPaint(() => {
       if (!isPresent) {
         // Trash and status changes have had a paint to remove or reposition the landing card.
-        card.set(measureTaskCard(task.id));
-        if (card.get()) setTaskCardHidden(task.id, true);
+        const landing = measureTaskCard(task.id);
+        card.set(landing);
+        if (landing) {
+          setFaceStatus(landing.showStatus);
+          setTaskCardHidden(task.id, true);
+        }
       }
       const curve = isPresent ? curves.expand : curves.collapse;
       const animations = [
@@ -120,9 +130,11 @@ export function TaskScreenSurface({ task }: { task: Task }) {
     // A new task's title has already taken focus to be named.
     if (!screen?.contains(document.activeElement)) screen?.focus({ preventScroll: true });
     return () => {
-      if (board.get().openTaskId) return;
-      // After the board's inert layer lifts and the landing card is shown again.
+      // After the inert layer beneath lifts and the landing card is shown again, unless the
+      // next task has taken focus.
       requestAnimationFrame(() => {
+        const active = document.activeElement;
+        if (active && active !== document.body) return;
         const target =
           opener.current?.isConnected && opener.current !== document.body
             ? opener.current
@@ -141,11 +153,11 @@ export function TaskScreenSurface({ task }: { task: Task }) {
       />
       <section
         role="dialog"
-        aria-label={isPresent ? 'Task' : 'Closing task'}
+        aria-label={isPresent ? (covered ? 'Task beneath' : 'Task') : 'Closing task'}
         data-task-screen={task.id}
         data-drop-block=""
         tabIndex={-1}
-        inert={!isPresent || !!content.drawer?.page}
+        inert={!top || !!content.drawer?.page}
         className="pointer-events-none fixed inset-0 z-40 outline-none"
         onKeyDown={(event) => {
           if (event.key === 'Escape' && !event.defaultPrevented) {
@@ -175,7 +187,7 @@ export function TaskScreenSurface({ task }: { task: Task }) {
             className="pointer-events-none absolute top-0 left-0"
             style={{ width: faceWidth, opacity: faceOpacity }}
           >
-            <TaskCardFace project={project} task={task} showStatus />
+            <TaskCardFace project={project} task={task} showStatus={faceStatus} />
           </motion.div>
         </motion.div>
       </section>

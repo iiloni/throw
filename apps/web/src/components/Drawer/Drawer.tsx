@@ -26,13 +26,15 @@ export type DrawerPage = {
   origin?: string;
   /** A short page rises only as far as its content needs, and no higher than full. */
   fit?: boolean;
+  /** The dock stays as the page's header, its buttons acting as tabs over the content. */
+  dock?: boolean;
 };
 
 /**
  * The phone's one drawer (ADR 0009): a glass surface along the bottom edge whose collapsed
  * header is the dock. It rests at three heights, pulled between them by its header. A page
  * replaces what it shows at full height, or at its own height when it fits its content, and
- * closing the page returns it to the height it was at. A held card sinks it out of the way,
+ * closing the page returns it to the height it was at. A docked page keeps the dock above it. A held card sinks it out of the way,
  * unless it is full and its own list is being reordered. Raised, it sits above a full-screen
  * view such as an open task, and its dock rides above the keyboard as a note's dock does in
  * Catch.
@@ -77,6 +79,11 @@ export function Drawer({
   // What the drawer leaves off screen at half height, kept clear at the end of its list.
   const [hidden, setHidden] = useState(0);
   const paged = page !== null;
+  const docked = paged && !!page.dock;
+  // A docked page stays while the drawer settles, so closing it never shows what is beneath.
+  const [leaving, setLeaving] = useState<DrawerPage | null>(null);
+  const last = useRef(page);
+  const shown = page ?? leaving;
 
   const offsets = () =>
     drawerOffsets(surface.current, head.current, safe.current, page?.fit ? body.current : null);
@@ -120,8 +127,13 @@ export function Drawer({
   useLayoutEffect(() => {
     const at = offsets();
     setHidden(detent === 'half' && !paged ? at.half : 0);
-    if (placed.current) animate(y, restingAt(at), reduced ? { duration: 0 } : springs.smooth);
-    else y.jump(restingAt(at));
+    const closing = !page && last.current?.dock ? last.current : null;
+    last.current = page;
+    setLeaving(closing);
+    if (placed.current) {
+      const settling = animate(y, restingAt(at), reduced ? { duration: 0 } : springs.smooth);
+      if (closing) void settling.then(() => setLeaving((now) => (now === closing ? null : now)));
+    } else y.jump(restingAt(at));
     placed.current = true;
   }, [sunk, detent, paged, page?.key, y, reduced]);
 
@@ -143,9 +155,19 @@ export function Drawer({
     opener.current = active instanceof HTMLElement ? active : null;
     surface.current?.focus({ preventScroll: true });
     return () => {
+      // A docked page closed from its own tab leaves focus on that tab.
+      if (head.current?.contains(document.activeElement)) return;
       if (opener.current?.isConnected) opener.current.focus({ preventScroll: true });
     };
   }, [paged]);
+
+  // Switching tabs makes the new tab the one focus returns to.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: follows the page shown
+  useEffect(() => {
+    const active = document.activeElement;
+    if (docked && active instanceof HTMLElement && head.current?.contains(active))
+      opener.current = active;
+  }, [docked, page?.key]);
 
   useEffect(() => {
     if (!paged) return;
@@ -205,7 +227,7 @@ export function Drawer({
           )}
         >
           <div aria-hidden className="mx-auto mb-2 h-1 w-9 rounded-full bg-foreground/20" />
-          {page && (
+          {page && !docked && (
             <div className="flex h-[var(--dock-height)] items-center gap-2 pl-2">
               <h2 className="flex-1 truncate font-bold font-display text-xl tracking-[-0.01em]">
                 {page.title}
@@ -216,19 +238,22 @@ export function Drawer({
             </div>
           )}
           {/* Kept mounted under a page, so focus can return to the dock button that opened it. */}
-          <div hidden={paged}>{dock}</div>
+          <div hidden={paged && !docked} className="relative">
+            {dock}
+          </div>
         </div>
         <div
           className="flex min-h-0 flex-1 flex-col"
           style={{ '--drawer-hidden': `${hidden}px` } as CSSProperties}
         >
-          {page ? (
+          {shown ? (
             <div
               ref={body}
-              key={page.key}
-              className={cn('flex min-h-0 flex-col', page.fit ? 'max-h-full' : 'flex-1')}
+              key={shown.key}
+              inert={!page}
+              className={cn('flex min-h-0 flex-col', shown.fit ? 'max-h-full' : 'flex-1')}
             >
-              {page.content}
+              {shown.content}
             </div>
           ) : (
             children

@@ -410,9 +410,11 @@ view), comments and activity.
   down from the top closes it too.
 - While a task is open on a phone, the dock (the collapsed [drawer](#the-drawer)) holds
   that task's actions, as it does for a note in Catch: Status, Priority, Tags (once the
-  project has any) and More (close or reopen, copy link). The task's pickers open in the
-  drawer as pages; the tag picker stays open for several choices. The task's tags are
-  listed under its title. On desktop the pane shows the same controls along its foot
+  project has any) and More (close or reopen, copy link). The controls act as tabs: each
+  opens its panel in the drawer beneath the dock, which stays as the panel's header, and
+  the drawer holds still until a panel is open. The status panel is the board's grid of
+  statuses by category; the tag picker stays open for several choices. The task's tags
+  are listed under its title. On desktop the pane shows the same controls along its foot
   and opens their panels in place.
 - The description is a directly editable, text-only BlockNote document. Changes commit
   when the task view closes or switches tasks; drafts survive reloads and conflicts.
@@ -420,10 +422,14 @@ view), comments and activity.
   left, trash/restore on the right.
 - Subtasks sit on the task pane as a board column of the same task cards, with status
   controls and an add action. A subtask opens in the same view, with its parent in the
-  breadcrumb.
+  breadcrumb. Opened from its parent's pane, it goes back there: Back, Escape, a pull and
+  the breadcrumb return to the parent, and on a phone the subtask grows out of its card
+  over the parent's pane and shrinks back into it.
 - Phone opening/closing uses Catch's card-to-note container transform and timing: the
   surface grows from its card and shrinks into its current position, with a fade when no
-  card is visible. Desktop panes slide in from the side, as in Catch.
+  card is visible. A card's subtask underlay stays in place while the task is open. When
+  a task opens, the board's dock crossfades into the task's controls as Catch's dock does
+  for a note. Desktop panes slide in from the side, as in Catch.
 - The phone dock's create button adds a task at the top of the current column's default
   priority (the backlog's default status while the backlog is open) and opens it with
   its title selected.

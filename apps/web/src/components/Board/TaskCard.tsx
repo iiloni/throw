@@ -187,6 +187,7 @@ export function TaskCard({
       ref={ref}
       data-card-id={task.id}
       data-card-root={subtasks.length === 0 ? '' : undefined}
+      data-show-status={showStatus ? '' : undefined}
       data-overlay={overlay ? '' : undefined}
       data-color={color ?? undefined}
       tabIndex={overlay ? -1 : 0}
@@ -249,7 +250,8 @@ export function TaskCard({
     <div
       data-card-root=""
       data-color={color ?? undefined}
-      className={cn('isolate flex flex-col', (landing || lifted) && 'invisible')}
+      // A task opening out of its card leaves the underlay behind, to land back on it.
+      className={cn('isolate flex flex-col', landing && 'invisible')}
     >
       {card}
       <SubtaskUnderlay
@@ -257,6 +259,7 @@ export function TaskCard({
         subtasks={subtasks}
         inert={overlay}
         folding={overlay && dragState?.unfolded}
+        uncovered={lifted}
       />
     </div>
   );

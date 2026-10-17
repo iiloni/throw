@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 import { BoardSettingsContent } from './BoardSettingsPanel';
 import { CardList } from './CardList';
 import { drag, holding, pageStride } from './drag';
-import { type Category, isClosed, type Status, type Task } from './model';
+import { byCategory, type Category, isClosed, type Status, type Task } from './model';
 import { StatusFilter, zoneStatuses } from './SideZone';
 import { StatusTile } from './StatusTile';
 import {
@@ -506,7 +506,7 @@ function BoardDrawer({
       label={task ? 'Task drawer' : 'Backlog'}
       origin="backlog"
       dock={
-        <AnimatePresence mode="popLayout" initial={false}>
+        <AnimatePresence initial={false}>
           <DockFace key={task ? 'task' : 'board'}>{task ? task.dock : dock}</DockFace>
         </AnimatePresence>
       }
@@ -514,7 +514,8 @@ function BoardDrawer({
       detents={task ? ['closed'] : undefined}
       onDetent={goTo}
       sunk={!task && sunk}
-      gesturesDisabled={held !== null || fingerDown}
+      // An open task's drawer moves only while one of its panels is open.
+      gesturesDisabled={held !== null || fingerDown || (!!task && !task.page)}
       page={task ? task.page : page ? pages[page] : null}
       onClosePage={task ? task.closePage : onClosePage}
       raised={!!task}
@@ -536,6 +537,7 @@ function BoardDrawer({
 }
 
 /** The board's dock and an open task's trade places, as Catch's dock does for a note. */
+/** Catch's dock swap for an opening note: the old face fades out of the way in place. */
 function DockFace({ children }: { children: ReactNode }) {
   const present = useIsPresent();
   const reduced = useReducedMotion();
@@ -543,10 +545,12 @@ function DockFace({ children }: { children: ReactNode }) {
     <motion.div
       aria-hidden={!present || undefined}
       inert={!present}
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 12 }}
-      transition={reduced ? { duration: 0 } : springs.snappy}
+      // Leaving, it stops taking up room so the new face sits where it will rest.
+      className={cn(!present && 'absolute inset-x-0 top-0')}
+      initial={{ opacity: 0, scale: 0.92 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.92, transition: { duration: reduced ? 0 : 0.16 } }}
+      transition={reduced ? { duration: 0 } : springs.smooth}
     >
       {children}
     </motion.div>
@@ -573,18 +577,6 @@ function CardStack({ count }: { count: number }) {
       ))}
     </span>
   );
-}
-
-/** The status groups, in the board's order. */
-function byCategory(statuses: Status[]) {
-  const groups: { name: string; statuses: Status[] }[] = [
-    { name: 'Backlog', statuses: [] },
-    { name: 'Active', statuses: [] },
-    { name: 'Closed', statuses: [] },
-  ];
-  const slot: Record<Category, number> = { backlog: 0, active: 1, done: 2, cancelled: 2 };
-  for (const status of statuses) groups[slot[status.category]]!.statuses.push(status);
-  return groups;
 }
 
 /**

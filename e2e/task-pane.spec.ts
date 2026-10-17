@@ -175,7 +175,22 @@ test('task fields, actions, subtasks and task links work in the split pane and p
     'Draft the announcement',
   );
   await expect(pane.getByRole('button', { name: 'Add subtask', exact: true })).toHaveCount(0);
+  // Opened from its parent's pane, the subtask goes back there rather than to the board.
+  if (isMobile) await expect(page.getByLabel('Task beneath', { exact: true })).toHaveCount(1);
+  await pane.getByRole('button', { name: 'Back to TASK-1', exact: true }).click();
+  await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue(
+    'A plan ready to share',
+  );
+  await expect(page.locator('[data-task-screen]')).toHaveCount(isMobile ? 1 : 0);
+  await pane.getByRole('article', { name: /^TASK-\d+ Draft the announcement$/ }).click();
+  await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue(
+    'Draft the announcement',
+  );
   await pane.getByRole('button', { name: 'Open parent TASK-1' }).click();
+  await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue(
+    'A plan ready to share',
+  );
+  await expect(pane.getByRole('button', { name: 'Back to the board', exact: true })).toBeVisible();
 
   await openMore(page);
   await page.getByRole('button', { name: 'Close task', exact: true }).click();
@@ -430,6 +445,44 @@ test('reduced motion keeps the drawer, keyboard controls and close-to-save edito
     await page.screenshot({ path });
     await testInfo.attach(`${colorScheme} with reduced motion`, { path, contentType: 'image/png' });
   }
+});
+
+test('the phone task drawer holds still until a panel opens, and keeps its tabs above it', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'Desktop has no drawer (ADR 0009)');
+  await fixture(page);
+  const dock = controls(page);
+  const status = dock.getByRole('button', { name: 'Status: Working. Change', exact: true });
+  const top = async () => (await dock.boundingBox())!.y;
+  const before = await top();
+  const session = await page.context().newCDPSession(page);
+  const touch = (type: string, y: number) =>
+    session.send('Input.dispatchTouchEvent', {
+      type,
+      touchPoints: type === 'touchEnd' ? [] : [{ x: 40, y }],
+    });
+  await touch('touchStart', before + 20);
+  for (let step = 1; step <= 10; step++) await touch('touchMove', before + 20 - step * 25);
+  expect(await top()).toBe(before);
+  await touch('touchEnd', 0);
+  await session.detach();
+  await expect(page.getByRole('dialog', { name: 'Backlog' })).toHaveCount(0);
+
+  await status.click();
+  await expect(status).toHaveAttribute('aria-expanded', 'true');
+  const panel = page.getByRole('dialog', { name: 'Status', exact: true });
+  await expect(panel.getByRole('radio', { name: 'Working', exact: true })).toBeChecked();
+  // The controls stay above the panel as its tabs.
+  await expect(dock).toBeInViewport();
+  const priority = dock.getByRole('button', { name: 'Priority: Default. Change' });
+  await priority.click();
+  await expect(page.getByRole('dialog', { name: 'Priority', exact: true })).toBeVisible();
+  await expect(status).toHaveAttribute('aria-expanded', 'false');
+  await priority.click();
+  await expect(page.getByRole('dialog', { name: 'Priority', exact: true })).toHaveCount(0);
+  await expect(priority).toBeFocused();
 });
 
 test('tags are picked from the task controls and listed on the task', async ({

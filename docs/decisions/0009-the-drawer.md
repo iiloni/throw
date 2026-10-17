@@ -36,12 +36,15 @@ in it, and it goes away again when that closes.
 its header, and tapping the dock's handle opens or closes it. Content chooses the heights
 it uses. The backlog uses all three. Board settings, the closed tasks, search and forms open
 at full height with a fixed header and their own scrolling. A short picker may rise only as
-far as its content needs.
+far as its content needs. An open task's drawer stays collapsed and does not move until one
+of its panels is open.
 
 **Opening something replaces what the drawer shows; it does not stack.** Closing it with
 the close button, Back, Escape or a pull down returns the drawer to what it showed before,
 at the height it was. Board settings opened over the half-open backlog comes back to the
-half-open backlog.
+half-open backlog. An open task's panels keep its dock as their header: the dock's buttons
+act as tabs, switching the panel beneath them, and tapping the open one closes it. While a
+panel closes, it stays in place until the drawer has settled.
 
 **Holding a card turns the drawer into the move drawer.** Lifting a card sinks the
 drawer's content out of the way, and its header becomes the move target. Bringing the card

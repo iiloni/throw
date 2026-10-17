@@ -1,6 +1,14 @@
 import { createStore } from '@/lib/store';
 
-export type TaskRect = { x: number; y: number; width: number; height: number; radius: number };
+export type TaskRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  radius: number;
+  /** Whether the card shows its status, so the face that flies to it matches. */
+  showStatus: boolean;
+};
 const origins = new Map<string, TaskRect>();
 const hidden = createStore<ReadonlySet<string>>(new Set());
 
@@ -25,6 +33,7 @@ export function measureTaskCard(taskId: string): TaskRect | null {
       width: box.width,
       height: box.height,
       radius: Number.parseFloat(getComputedStyle(card).borderTopLeftRadius) || 16,
+      showStatus: card.dataset.showStatus !== undefined,
     };
   }
   return null;
