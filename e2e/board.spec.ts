@@ -269,14 +269,38 @@ test('a task created offline appears immediately, survives reload and gains its 
 }) => {
   test.setTimeout(120_000);
   const account = await fixture(page, true);
-  // The API-created fixture must finish caching before this test disconnects the device.
-  // The empty tasks shape can be ready before the project's initial snapshot commits.
+  // Readiness can precede a later API-created row's disk commit. Verify the fixture in
+  // SQLite before disconnecting, so the reload tests the offline task, not setup timing.
   await page.evaluate(async () => {
     const { projectsCollection, statusesCollection } = await import(
       /* @vite-ignore */ '/src/lib/collections.ts'
     );
     await Promise.all([projectsCollection.preload(), statusesCollection.preload()]);
   });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        async ({ projectId, workspaceId }) => {
+          const { projectsCollection, statusesCollection, workspacesCollection } = await import(
+            /* @vite-ignore */ '/src/lib/collections.ts'
+          );
+          const [projects, statuses, workspaces] = await Promise.all([
+            projectsCollection.config.persistence.adapter.loadSubset('projects', {}),
+            statusesCollection.config.persistence.adapter.loadSubset('statuses', {}),
+            workspacesCollection.config.persistence.adapter.loadSubset('workspaces', {}),
+          ]);
+          return (
+            projects.some((row: { key: string }) => row.key === projectId) &&
+            workspaces.some((row: { key: string }) => row.key === workspaceId) &&
+            statuses.filter(
+              (row: { value: { projectId: string } }) => row.value.projectId === projectId,
+            ).length === 6
+          );
+        },
+        { projectId: account.projectId, workspaceId: account.workspaceId },
+      ),
+    )
+    .toBe(true);
   await expect(page.locator('[aria-busy="false"]')).toBeVisible();
   await page.route('**/api/**', (route) => route.abort('connectionfailed'));
   await page
