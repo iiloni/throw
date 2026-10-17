@@ -37,6 +37,7 @@ const task = (id: string, changes: Partial<Task> = {}): Task => ({
   statusId: 'backlog',
   priority: 3,
   position: 'a0',
+  primaryTagId: null,
   ...changes,
 });
 const index = (tasks: Task[], projects = [project, other]) =>

@@ -80,7 +80,9 @@ export function CommandPalette({ mode, onClose, onOpenTask, onModeChange }: Prop
                   opener.current.focus({ preventScroll: true });
                 else if (returnFocus.current === 'task')
                   document
-                    .querySelector<HTMLElement>('[aria-label="Task"] [aria-label="Close task"]')
+                    .querySelector<HTMLElement>(
+                      '[aria-label="Task"] [aria-label="Task navigation"] button',
+                    )
                     ?.focus({ preventScroll: true });
               }}
             >

@@ -77,10 +77,8 @@ async function open(page: Page, mobile = false) {
 async function closeSearch(page: Page, mobile: boolean) {
   await page.getByRole('button', { name: mobile ? 'Close' : 'Close search', exact: true }).click();
 }
-async function closeTask(page: Page, mobile: boolean) {
-  await page
-    .getByRole('button', { name: mobile ? 'Back to the board' : 'Close task', exact: true })
-    .click();
+async function closeTask(page: Page) {
+  await page.getByRole('button', { name: 'Back to the board', exact: true }).click();
 }
 function taskPane(page: Page, mobile: boolean) {
   return page.getByRole(mobile ? 'dialog' : 'region', { name: 'Task', exact: true });
@@ -103,8 +101,10 @@ test('palette searches titles, identifiers, description, closed tasks and subtas
     'Fix keyboard capture',
   );
   if (!isMobile)
-    await expect(page.getByRole('button', { name: 'Close task', exact: true })).toBeFocused();
-  await closeTask(page, isMobile);
+    await expect(
+      page.getByRole('button', { name: 'Back to the board', exact: true }),
+    ).toBeFocused();
+  await closeTask(page);
   for (const query of ['CAT-1', '1']) {
     await open(page, isMobile);
     await input(page).fill(query);
@@ -113,7 +113,7 @@ test('palette searches titles, identifiers, description, closed tasks and subtas
     );
     await input(page).press('Enter');
     await expect(taskPane(page, isMobile)).toContainText('CAT-1');
-    await closeTask(page, isMobile);
+    await closeTask(page);
   }
   await open(page, isMobile);
   await input(page).fill('needle');
@@ -216,7 +216,7 @@ test('offline capture is immediate, searchable, persists and receives a number o
   await input(page).fill('Captured with no connection');
   await input(page).press('ControlOrMeta+Enter');
   await expect(taskPane(page, isMobile)).toContainText('Pending');
-  await closeTask(page, isMobile);
+  await closeTask(page);
   await open(page, isMobile);
   await input(page).fill('Captured with no connection');
   await expect(
