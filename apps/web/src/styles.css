@@ -1,6 +1,38 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Catch's editor surface inherits the task's tint, type and theme. */
+.bn-container.task-editor[data-color-scheme] {
+  --bn-colors-editor-background: transparent;
+  --bn-colors-editor-text: var(--foreground);
+  --bn-font-family: var(--font-sans);
+}
+.bn-container.task-editor .bn-default-styles {
+  font-family: var(--font-sans);
+}
+.bn-container.task-editor .bn-editor {
+  padding: 0;
+  min-height: 3rem;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+}
+.bn-container.task-editor [data-content-type="heading"] {
+  font-family: var(--font-display);
+}
+.bn-container.task-editor [data-content-type="checkListItem"] input {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: var(--brand);
+}
+.bn-container.task-editor .bn-block-content[data-content-type="codeBlock"] {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  border-radius: 0.75rem;
+}
+.bn-container.task-editor a {
+  color: var(--brand-link);
+}
+
 /*
  * Theme tokens use light-dark(), so switching theme only means changing
  * `color-scheme` on <html>. Prefer these tokens over `dark:` variants.

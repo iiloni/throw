@@ -15,6 +15,7 @@ import {
   sendToStatus,
   type Task,
 } from './model';
+import { rememberTaskOrigin } from './taskTransition';
 
 /**
  * How the board looks and behaves, as the person using it prefers. Kept on the device.
@@ -70,6 +71,8 @@ export type BoardState = {
   subtasksAsCards: boolean;
   selection: string[];
   openTaskId: string | null;
+  /** The tasks the open one was opened from, innermost last: where leaving it goes back to. */
+  taskTrail: string[];
   /** Cards whose subtask underlay is unfolded. */
   expanded: string[];
   /** A card picked up from the keyboard, and the tasks as they were before. */
@@ -92,6 +95,7 @@ export function initialBoard(boards: BoardData[] = []): BoardState {
     subtasksAsCards: false,
     selection: [],
     openTaskId: null,
+    taskTrail: [],
     expanded: [],
     carrying: null,
     announcement: '',
@@ -103,10 +107,41 @@ export const board = createStore<BoardState>(initialBoard());
 
 export function update(change: Partial<BoardState> | ((state: BoardState) => Partial<BoardState>)) {
   const state = board.get();
-  board.set({ ...state, ...(typeof change === 'function' ? change(state) : change) });
+  const next = typeof change === 'function' ? change(state) : change;
+  if (
+    state.openTaskId &&
+    'openTaskId' in next &&
+    next.openTaskId !== state.openTaskId &&
+    state.actions?.beforeLeave?.(state.openTaskId) === false
+  )
+    return;
+  const moving = 'openTaskId' in next && next.openTaskId !== state.openTaskId;
+  // Returning down the trail finds its task where it was left, so only a new opening grows.
+  if (moving && next.openTaskId && innerWidth < 768 && !state.taskTrail.includes(next.openTaskId))
+    rememberTaskOrigin(next.openTaskId);
+  // Opening a task any other way starts a new trail.
+  board.set({ ...state, ...(moving && !('taskTrail' in next) ? { taskTrail: [] } : {}), ...next });
+}
+
+/** A subtask opened from its parent's pane goes back to that pane when it is left. */
+export function openSubtask(taskId: string) {
+  update((state) => ({
+    openTaskId: taskId,
+    taskTrail: state.openTaskId ? [...state.taskTrail, state.openTaskId] : [],
+  }));
+}
+
+/** Back, Escape and a dismissing pull: to the task this one was opened from, or the board. */
+export function leaveTask() {
+  update((state) => ({
+    openTaskId: state.taskTrail.at(-1) ?? null,
+    taskTrail: state.taskTrail.slice(0, -1),
+  }));
 }
 
 export type BoardActions = {
+  /** Flush device-local editor text before closing or opening another task. */
+  beforeLeave?(taskId: string): boolean;
   create(statusId?: string): string;
   rename(taskId: string, title: string): void;
   send(taskIds: string[], statusId: string): void;
@@ -119,11 +154,14 @@ export function receiveBoard(data: BoardData, actions: BoardActions, awaitingTas
     board.set({ ...initialBoard([data]), actions, awaitingTasks });
   } else {
     const exists = (id: string) => data.tasks.some((task) => task.id === id);
+    const canOpen = (id: string) => exists(id) || data.hiddenTasks?.some((task) => task.id === id);
+    const open = before.openTaskId && canOpen(before.openTaskId) ? before.openTaskId : null;
     update({
       boards: [data],
       actions,
       awaitingTasks,
-      openTaskId: before.openTaskId && exists(before.openTaskId) ? before.openTaskId : null,
+      openTaskId: open,
+      taskTrail: open ? before.taskTrail.filter(canOpen) : [],
       expanded: before.expanded.filter(exists),
       selection: before.selection.filter(exists),
     });
@@ -149,6 +187,7 @@ export function selectProject(projectId: string) {
     closedFilter: null,
     selection: [],
     openTaskId: null,
+    taskTrail: [],
     carrying: null,
   });
 }

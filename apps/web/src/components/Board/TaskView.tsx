@@ -1,7 +1,7 @@
 import { ArrowLeft, X } from 'lucide-react';
-import { motion, useDragControls, useReducedMotion } from 'motion/react';
+import { motion, useDragControls, useIsPresent, useReducedMotion } from 'motion/react';
 import { Dialog } from 'radix-ui';
-import { type PointerEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { type PointerEvent, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
@@ -11,12 +11,14 @@ import { PriorityGlyph, StatusGlyph } from './glyphs';
 import { identifier, priorityName, statusById, subtasksOf, type Task, taskColor } from './model';
 import { StatusMenu } from './StatusMenu';
 import { board, current, renameTask, sendTasks, update } from './state';
+import { TaskScreenSurface } from './TaskScreenSurface';
+import { TaskContentContext } from './taskContent';
 
 const chip =
   'flex h-8 items-center gap-1.5 rounded-full bg-foreground/[0.07] px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60';
 
 /** The title, written in place. A task just created starts here with its title selected. */
-function TaskTitle({ task }: { task: Task }) {
+export function TaskTitle({ task }: { task: Task }) {
   const fresh = board.use().newTaskId === task.id;
   const ref = useRef<HTMLTextAreaElement>(null);
   useLayoutEffect(() => {
@@ -62,6 +64,7 @@ function TaskTitle({ task }: { task: Task }) {
         if (title !== task.title) renameTask(task.id, title);
       }}
       onKeyDown={(event) => {
+        if (event.key === 'Escape') event.currentTarget.blur();
         if (event.key === 'Enter') {
           event.preventDefault();
           event.currentTarget.blur();
@@ -186,9 +189,11 @@ function TaskHeader({ task }: { task: Task }) {
       <span className="font-medium text-foreground/60 text-sm tabular-nums">
         {identifier(project, task) ?? 'Pending'}
       </span>
-      <IconButton label="Close task" onClick={() => update({ openTaskId: null })}>
-        <X />
-      </IconButton>
+      <div className="flex items-center gap-1">
+        <IconButton label="Close task" onClick={() => update({ openTaskId: null })}>
+          <X />
+        </IconButton>
+      </div>
     </div>
   );
 }
@@ -197,17 +202,34 @@ export const PANE_MIN = 340;
 
 /** Wide screens: the task beside the board, on the card's own color. */
 export function TaskPane({ task }: { task: Task }) {
+  const present = useIsPresent();
+  const content = useContext(TaskContentContext);
   useBackHandler(true, () => update({ openTaskId: null }));
   const { project } = current(board.use());
   return (
     <motion.section
       aria-label="Task"
+      inert={!present}
       data-color={taskColor(project, task) ?? undefined}
-      className="flex h-full min-w-0 flex-col rounded-3xl bg-[var(--tint,var(--card))] shadow-[0_1px_2px_oklch(0_0_0/0.06)]"
+      className="flex h-full min-w-0 flex-col overflow-hidden rounded-3xl bg-[var(--tint,var(--card))] shadow-[0_1px_2px_oklch(0_0_0/0.06)]"
       style={{ minWidth: PANE_MIN }}
     >
-      <TaskHeader task={task} />
-      <TaskBody key={task.id} task={task} />
+      {content ? (
+        <motion.div
+          key={task.id}
+          className="flex min-h-0 flex-1 flex-col"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25, ease: 'easeOut' }}
+        >
+          {content.body(task.id)}
+        </motion.div>
+      ) : (
+        <>
+          <TaskHeader task={task} />
+          <TaskBody key={task.id} task={task} />
+        </>
+      )}
     </motion.section>
   );
 }
@@ -301,7 +323,16 @@ const UNCLIPPED = 'inset(0px 0px 0px 0px round 0px)';
  * its card and closes back into it, on the card's own color, and its actions sit in the
  * dock's place. Pulling it down from the top closes it too.
  */
-export function TaskScreen({ task }: { task: Task }) {
+export function TaskScreen({ task, covered }: { task: Task; covered?: boolean }) {
+  const content = useContext(TaskContentContext);
+  return content ? (
+    <TaskScreenSurface task={task} covered={covered} />
+  ) : (
+    <PrototypeTaskScreen task={task} />
+  );
+}
+
+function PrototypeTaskScreen({ task }: { task: Task }) {
   const { project } = current(board.use());
   const status = statusById(project, task.statusId);
   const controls = useDragControls();

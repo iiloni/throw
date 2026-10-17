@@ -1,7 +1,8 @@
 # Tags for later screens
 
 The tag model and write rules are in [data-model.md](data-model.md#tag-tree), adapted from
-Catch ADR 0016. The task pane, board and project settings are deliberately not wired here.
+Catch ADR 0016. The board shows primary tag colours and the task pane picks and lists a
+task's tags (`TaskDetails/TaskPickers.tsx`); project settings do not manage tags yet.
 
 ## Data and actions
 
@@ -46,12 +47,12 @@ All actions use `write()` and the outbox. Do not mutate collections from compone
   slot. Ported from Catch, including ancestry guides, reduced-motion-aware row transitions
   and deferred offscreen contents for large trees. Indentation is visually capped, not depth.
 
-When the shell drawer from [ADR 0009](https://github.com/iiloni/throw/blob/8fb8c58/docs/decisions/0009-the-drawer.md)
-lands, phone tag management and picking move into that single drawer. The ADR currently
-lives on the board branch, ahead of `main`. The container owns replacement/restoration,
-modality, gestures, Back and focus on the drawer itself. On desktop, management uses a centred dialog and picking a
-popover constrained to the window. The current sheet wrappers are temporary until those
-screens wire the shared content into their containers.
+On a phone, picking is a page of the single drawer from
+[ADR 0009](decisions/0009-the-drawer.md), which owns replacement/restoration, modality,
+gestures, Back and focus. On desktop the task pane opens the picker as a panel of its own
+controls, beside the status and priority pickers. Phone tag management moves into the drawer
+too, and on desktop uses a centred dialog. `TagForm`'s sheet wrapper is temporary until
+management gets a product entry point.
 
 The development-only `/prototype/tags` route demonstrates all pieces against real data.
 Sign in first, then choose a project/task or create an example project. Its edits persist.

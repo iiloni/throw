@@ -69,11 +69,12 @@ test('a task created and edited offline syncs correctly beside another device’
   const created = await page.evaluate(
     async ({ projectId, shared, active, document }) => {
       const tasks = await import(/* @vite-ignore */ '/src/lib/tasks.ts');
+      const c = await import(/* @vite-ignore */ '/src/lib/collections.ts');
       const id: string = tasks.createTask(projectId, { title: 'Made offline' });
       tasks.updateTask(id, { title: 'Made and renamed offline' });
       tasks.moveTask(id, { statusId: active, priority: 1, position: 'a5' });
       tasks.updateTask(shared, { title: 'Offline title', priority: 2 });
-      tasks.saveDescription(shared, document);
+      tasks.saveDescription(shared, document, c.tasksCollection.get(shared)!.descriptionVersion);
       return id;
     },
     { projectId, shared, active, document },

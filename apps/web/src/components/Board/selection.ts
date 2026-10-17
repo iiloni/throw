@@ -18,6 +18,13 @@ export function projectBoardData(
 ): BoardData {
   const parents = new Map(tasks.map((task) => [task.id, task]));
   const projectTags = tags.filter((tag) => tag.projectId === project.id);
+  const present = (task: TaskRow) => ({
+    ...task,
+    closedAt: task.closedAt === null ? null : Date.parse(task.closedAt),
+    primaryTagColor: taskTagColor(task, projectTags),
+    secondaryTagIds: [],
+    description: undefined,
+  });
   return {
     project: {
       id: project.id,
@@ -35,12 +42,14 @@ export function projectBoardData(
           task.projectId === project.id &&
           !isTaskTrashed(task, parents.get(task.parentId ?? ''), project),
       )
-      .map((task) => ({
-        ...task,
-        closedAt: task.closedAt === null ? null : Date.parse(task.closedAt),
-        primaryTagColor: taskTagColor(task, projectTags),
-        secondaryTagIds: [],
-        description: undefined,
-      })),
+      .map(present),
+    // A trashed task stays open for restoring, but never enters a board list or count.
+    hiddenTasks: tasks
+      .filter(
+        (task) =>
+          task.projectId === project.id &&
+          isTaskTrashed(task, parents.get(task.parentId ?? ''), project),
+      )
+      .map(present),
   };
 }

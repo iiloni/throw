@@ -103,7 +103,9 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
   const [paneWidth, setPaneWidth] = useState(440);
   const [resizing, setResizing] = useState(false);
   const active = project.statuses.filter((status) => status.category === 'active');
-  const openTask = tasks.find((task) => task.id === state.openTaskId);
+  const openTask = [...tasks, ...(current(state).hiddenTasks ?? [])].find(
+    (task) => task.id === state.openTaskId,
+  );
   const dragging = held?.phase === 'dragging';
   // A gallery covers the columns. A held card still needs somewhere to go, so they come
   // back as dropzones for as long as it is held.
@@ -305,7 +307,7 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
                 initial={{ width: 0, opacity: 0 }}
                 animate={{ width: paneWidth + HANDLE_WIDTH + PANE_MARGIN, opacity: 1 }}
                 exit={{ width: 0, opacity: 0 }}
-                transition={resizing ? { duration: 0 } : springs.smooth}
+                transition={resizing ? { duration: 0 } : springs.pane}
               >
                 <SplitHandle
                   width={paneWidth}

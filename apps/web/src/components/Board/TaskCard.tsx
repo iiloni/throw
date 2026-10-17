@@ -1,6 +1,13 @@
 import { Check, CornerDownRight } from 'lucide-react';
-import { motion } from 'motion/react';
-import { type KeyboardEvent, type MouseEvent, useEffect, useRef } from 'react';
+import { animate, motion, useMotionValue } from 'motion/react';
+import {
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from 'react';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { carryAcross, carryVertically, pickUp, putBack, setDown } from './carry';
@@ -17,6 +24,7 @@ import {
 } from './model';
 import { SubtaskUnderlay } from './SubtaskUnderlay';
 import { board, current, toggleSelected, update, useBoardSettings } from './state';
+import { useTaskCardHidden, useTaskCardLanding } from './taskTransition';
 
 type Props = {
   task: Task;
@@ -25,6 +33,8 @@ type Props = {
   /** The copy that follows the pointer during a drag. */
   overlay?: boolean;
   className?: string;
+  onOpen?: () => void;
+  statusControl?: ReactNode;
 };
 
 function closedAgo(closedAt: number) {
@@ -37,10 +47,12 @@ export function TaskCardFace({
   project,
   task,
   showStatus,
+  statusControl,
 }: {
   project: Project;
   task: Task;
   showStatus?: boolean;
+  statusControl?: ReactNode;
 }) {
   const [settings] = useBoardSettings();
   const state = board.use();
@@ -78,12 +90,13 @@ export function TaskCardFace({
           </span>
         )}
         <span className="flex-1" />
-        {showStatus && status && (
-          <span className="flex min-w-0 items-center gap-1">
-            <StatusGlyph category={status.category} className="size-3" />
-            <span className="truncate">{status.name}</span>
-          </span>
-        )}
+        {statusControl ??
+          (showStatus && status && (
+            <span className="flex min-w-0 items-center gap-1">
+              <StatusGlyph category={status.category} className="size-3" />
+              <span className="truncate">{status.name}</span>
+            </span>
+          ))}
         {task.closedAt !== null && !state.actions && (
           <span className="shrink-0">{closedAgo(task.closedAt)}</span>
         )}
@@ -95,15 +108,38 @@ export function TaskCardFace({
   );
 }
 
-export function TaskCard({ task, showStatus, overlay = false, className }: Props) {
+export function TaskCard({
+  task,
+  showStatus,
+  overlay = false,
+  className,
+  onOpen,
+  statusControl,
+}: Props) {
   const state = board.use();
   const dragState = drag.use();
   const { project, tasks } = current(state);
   const color = taskColor(project, task);
   const subtasks = state.subtasksAsCards ? [] : subtasksOf(tasks, task.id);
-  const selected = state.selection.includes(task.id);
+  const selected = !onOpen && state.selection.includes(task.id);
   const carried = state.carrying?.taskId === task.id;
   const open = state.openTaskId === task.id;
+  const lifted = useTaskCardHidden(task.id);
+  // As in Catch, a task shrinking back into its card lands without the underlay, which slides
+  // out from behind the card as the task settles, as if the card were setting it down.
+  const settling = useTaskCardLanding(task.id);
+  const underlayHidden = lifted && !settling;
+  const underlay = useRef<HTMLDivElement>(null);
+  const underlayY = useMotionValue(0);
+  const wasHidden = useRef(underlayHidden);
+  useLayoutEffect(() => {
+    if (wasHidden.current && !underlayHidden && underlay.current) {
+      // The wrapper holds only the strip below the card; the underlay's top already tucks under.
+      underlayY.set(-underlay.current.offsetHeight);
+      void animate(underlayY, 0, springs.smooth);
+    }
+    wasHidden.current = underlayHidden;
+  }, [underlayHidden, underlayY]);
   // The real card waits unseen while its copy flies home.
   const landing = !overlay && dragState?.phase === 'landing' && dragState.ids.includes(task.id);
   // Where a list cannot close up around a held card, its place stays, faded.
@@ -117,7 +153,13 @@ export function TaskCard({ task, showStatus, overlay = false, className }: Props
 
   function onClick(event: MouseEvent<HTMLElement>) {
     if (overlay || consumeDragClick()) return;
+    // Portalled status choices bubble through React, but are not a click on this card.
+    if (event.target instanceof Node && !event.currentTarget.contains(event.target)) return;
     if (event.target instanceof Element && event.target.closest('[data-no-drag]')) return;
+    if (onOpen) {
+      onOpen();
+      return;
+    }
     if (event.metaKey || event.ctrlKey || event.shiftKey || state.selection.length > 0) {
       toggleSelected(task.id);
     } else {
@@ -127,6 +169,11 @@ export function TaskCard({ task, showStatus, overlay = false, className }: Props
 
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.target !== event.currentTarget) return;
+    if (onOpen && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      onOpen();
+      return;
+    }
     if (state.actions) {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
@@ -162,13 +209,16 @@ export function TaskCard({ task, showStatus, overlay = false, className }: Props
       ref={ref}
       data-card-id={task.id}
       data-card-root={subtasks.length === 0 ? '' : undefined}
+      data-show-status={showStatus ? '' : undefined}
       data-overlay={overlay ? '' : undefined}
       data-color={color ?? undefined}
       tabIndex={overlay ? -1 : 0}
       aria-label={`${identifier(project, task) ?? 'Pending'} ${task.title || 'Untitled task'}`}
       aria-roledescription={state.actions ? 'Task card' : 'Card. Space picks it up to move it.'}
       aria-current={open ? 'true' : undefined}
-      onPointerDown={overlay || state.actions ? undefined : (event) => pressCard(event, task.id)}
+      onPointerDown={
+        overlay || state.actions || onOpen ? undefined : (event) => pressCard(event, task.id)
+      }
       onClick={onClick}
       onKeyDown={overlay ? undefined : onKeyDown}
       onContextMenu={(event) => {
@@ -184,12 +234,17 @@ export function TaskCard({ task, showStatus, overlay = false, className }: Props
         open && 'ring-2 ring-brand ring-inset',
         (carried || overlay) && 'shadow-xl hover:shadow-xl',
         carried && 'ring-2 ring-brand',
-        landing && 'invisible',
+        (landing || lifted) && 'invisible',
         away && 'opacity-30',
         className,
       )}
     >
-      <TaskCardFace project={project} task={task} showStatus={showStatus} />
+      <TaskCardFace
+        project={project}
+        task={task}
+        showStatus={showStatus}
+        statusControl={statusControl}
+      />
       <motion.span
         aria-hidden
         className="-inset-px pointer-events-none absolute rounded-2xl border-2 border-foreground"
@@ -220,12 +275,18 @@ export function TaskCard({ task, showStatus, overlay = false, className }: Props
       className={cn('isolate flex flex-col', landing && 'invisible')}
     >
       {card}
-      <SubtaskUnderlay
-        parent={task}
-        subtasks={subtasks}
-        inert={overlay}
-        folding={overlay && dragState?.unfolded}
-      />
+      <motion.div
+        ref={underlay}
+        className={cn('-z-10 relative flex flex-col', underlayHidden && 'invisible')}
+        style={{ y: underlayY }}
+      >
+        <SubtaskUnderlay
+          parent={task}
+          subtasks={subtasks}
+          inert={overlay}
+          folding={overlay && dragState?.unfolded}
+        />
+      </motion.div>
     </div>
   );
 }

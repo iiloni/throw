@@ -90,6 +90,40 @@ export function waitForShapeRow(page: Page, shape: string, name: string) {
   );
 }
 
+/** Rendering a streamed row precedes its SQLite commit. Cache the fixture before going offline. */
+export async function waitForCachedProject(page: Page, projectId: string, statusIds: string[]) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          async ({ projectId, statusIds }) => {
+            const { projectsCollection, statusesCollection, workspacesCollection } = await import(
+              /* @vite-ignore */ '/src/lib/collections.ts'
+            );
+            const project = projectsCollection.get(projectId) as
+              | { workspaceId: string }
+              | undefined;
+            if (!project || !projectsCollection.isReady() || !statusesCollection.isReady())
+              return false;
+            const [projects, statuses, workspaces]: Array<Array<{ key: string | number }>> =
+              await Promise.all([
+                projectsCollection.config.persistence.adapter.scanRows('projects'),
+                statusesCollection.config.persistence.adapter.scanRows('statuses'),
+                workspacesCollection.config.persistence.adapter.scanRows('workspaces'),
+              ]);
+            return (
+              projects!.some((row) => row.key === projectId) &&
+              workspaces!.some((row) => row.key === project.workspaceId) &&
+              statusIds.every((id) => statuses!.some((row) => row.key === id))
+            );
+          },
+          { projectId, statusIds },
+        ),
+      { timeout: APP_LOAD_TIMEOUT },
+    )
+    .toBe(true);
+}
+
 /**
  * The rows a shape holds for the signed-in user now, read through the server's proxy. The
  * first response is the shape as it was when Electric first built it, so this follows its

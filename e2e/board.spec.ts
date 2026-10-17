@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect, type Locator, type Page, test } from '@playwright/test';
-import { APP_LOAD_TIMEOUT, shapeRows, signUp } from './helpers';
+import { APP_LOAD_TIMEOUT, shapeRows, signUp, waitForCachedProject } from './helpers';
 import { newTag, tagTaskUpdate } from './tag-helpers';
 
 async function fixture(page: Page, empty = false) {
@@ -252,9 +252,7 @@ test('subtasks change status in place and tasks open beside the board or full sc
   const viewport = page.viewportSize()!;
   if (isMobile) expect(box.width).toBe(viewport.width);
   else expect(box.width).toBeLessThan(viewport.width * 0.65);
-  await page
-    .getByRole('button', { name: isMobile ? 'Back to the board' : 'Close task', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Back to the board', exact: true }).click();
   await expect(pane).toHaveCount(0);
   await page.getByRole('article', { name: /Board parent$/ }).focus();
   await page.keyboard.press('Enter');
@@ -302,6 +300,7 @@ test('a task created offline appears immediately, survives reload and gains its 
     )
     .toBe(true);
   await expect(page.locator('[aria-busy="false"]')).toBeVisible();
+  await waitForCachedProject(page, account.projectId, [account.status('Build')]);
   await page.route('**/api/**', (route) => route.abort('connectionfailed'));
   await page
     .getByRole('button', { name: isMobile ? 'New task' : 'Add task to Build', exact: true })
@@ -312,9 +311,7 @@ test('a task created offline appears immediately, survives reload and gains its 
   await title.fill('Written without a connection');
   await title.press('Enter');
   await expect(pane).toContainText('Pending');
-  await page
-    .getByRole('button', { name: isMobile ? 'Back to the board' : 'Close task', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Back to the board', exact: true }).click();
   const card = page.getByRole('article', {
     name: 'Pending Written without a connection',
     exact: true,
@@ -403,10 +400,14 @@ test('rails, galleries, board settings and the phone tray keep their distinct la
   await page.getByRole('switch', { name: 'Priority labels', exact: true }).click();
   await page.getByRole('switch', { name: 'Priority on cards', exact: true }).click();
   await page.getByRole('switch', { name: 'Scrollbars', exact: true }).click();
-  await page
+  const backlogRail = page
     .getByRole('group', { name: 'Backlog', exact: true })
-    .getByRole('button', { name: 'With board' })
-    .click();
+    .getByRole('button', { name: 'With board' });
+  if (isMobile) {
+    // A phone has no columns or side rails for these to change.
+    await expect(backlogRail).toHaveCount(0);
+    await expect(page.getByRole('switch', { name: 'Column backgrounds' })).toHaveCount(0);
+  } else await backlogRail.click();
   await page.keyboard.press('Escape');
   await expect(page.locator('html')).not.toHaveAttribute('data-hide-scrollbars');
   await page.reload();
@@ -415,11 +416,7 @@ test('rails, galleries, board settings and the phone tray keep their distinct la
     'aria-checked',
     'true',
   );
-  await expect(
-    page
-      .getByRole('group', { name: 'Backlog', exact: true })
-      .getByRole('button', { name: 'With board' }),
-  ).toHaveAttribute('aria-pressed', 'true');
+  if (!isMobile) await expect(backlogRail).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.press('Escape');
   await openBacklog(page, isMobile);
   if (isMobile) {
@@ -613,9 +610,7 @@ test('creating from a filtered backlog uses its default status and reveals the n
   const title = pane.getByRole('textbox', { name: 'Task title' });
   await title.fill('New backlog task');
   await title.press('Enter');
-  await page
-    .getByRole('button', { name: isMobile ? 'Back to the board' : 'Close task', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Back to the board', exact: true }).click();
   await expect(backlog.getByRole('button', { name: 'All', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',

@@ -1,8 +1,16 @@
 import type { Project, Status, Tag, Task } from '@throw/shared';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { compareClosed, compareTasks, identifier, subtasksOf, taskColor } from './model';
 import { projectBoardData } from './selection';
-import { initialBoard, listTasks } from './state';
+import {
+  board,
+  initialBoard,
+  leaveTask,
+  listTasks,
+  openSubtask,
+  receiveBoard,
+  update,
+} from './state';
 
 const project: Project = {
   id: 'project',
@@ -94,6 +102,67 @@ describe('synced project board selection', () => {
     expect(
       projectBoardData({ ...project, deletedAt: '2026-10-14T12:00:00Z' }, statuses, rows).tasks,
     ).toEqual([]);
+  });
+  it('keeps a trashed task open for restoring without putting it on the board, and closes a purged task', () => {
+    const actions = { create: () => '', rename: () => {}, send: () => {} };
+    receiveBoard(projectBoardData(project, statuses, [task('open')]), actions);
+    update({ openTaskId: 'open' });
+    const data = projectBoardData(project, statuses, [
+      task('open', { deletedAt: '2026-10-15T00:00:00Z' }),
+    ]);
+    receiveBoard(data, actions);
+    expect(board.get().openTaskId).toBe('open');
+    expect(listTasks(board.get(), 'status:build')).toEqual([]);
+    expect(data.hiddenTasks?.map((task) => task.id)).toEqual(['open']);
+    receiveBoard(projectBoardData(project, statuses, []), actions);
+    expect(board.get().openTaskId).toBeNull();
+  });
+  it('flushes the open task before close or switch and keeps it open on a local save failure', () => {
+    board.set(view([task('first'), task('second')]));
+    const beforeLeave = vi.fn(() => false);
+    receiveBoard(projectBoardData(project, statuses, [task('first'), task('second')]), {
+      create: () => '',
+      rename: () => {},
+      send: () => {},
+      beforeLeave,
+    });
+    update({ openTaskId: 'first' });
+    update({ openTaskId: 'second' });
+    expect(beforeLeave).toHaveBeenCalledWith('first');
+    expect(board.get().openTaskId).toBe('first');
+    beforeLeave.mockReturnValue(true);
+    update({ openTaskId: 'second' });
+    expect(board.get().openTaskId).toBe('second');
+    update({ openTaskId: null });
+    expect(beforeLeave).toHaveBeenLastCalledWith('second');
+    expect(board.get().openTaskId).toBeNull();
+  });
+  it('goes back down the trail a subtask was opened along, and starts a new one otherwise', () => {
+    const rows = [task('parent'), task('child', { parentId: 'parent' }), task('other')];
+    board.set(view(rows));
+    receiveBoard(projectBoardData(project, statuses, rows), {
+      create: () => '',
+      rename: () => {},
+      send: () => {},
+    });
+    update({ openTaskId: 'parent' });
+    openSubtask('child');
+    expect(board.get()).toMatchObject({ openTaskId: 'child', taskTrail: ['parent'] });
+    leaveTask();
+    expect(board.get()).toMatchObject({ openTaskId: 'parent', taskTrail: [] });
+    leaveTask();
+    expect(board.get().openTaskId).toBeNull();
+    update({ openTaskId: 'parent' });
+    openSubtask('child');
+    update({ openTaskId: 'other' });
+    expect(board.get().taskTrail).toEqual([]);
+    openSubtask('child');
+    receiveBoard(projectBoardData(project, statuses, [rows[1]!]), {
+      create: () => '',
+      rename: () => {},
+      send: () => {},
+    });
+    expect(board.get()).toMatchObject({ openTaskId: 'child', taskTrail: [] });
   });
   it('orders statuses by category, position and id, leaving active columns in project order', () => {
     const data = projectBoardData(

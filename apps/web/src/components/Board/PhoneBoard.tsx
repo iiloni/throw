@@ -8,9 +8,9 @@ import {
   SlidersHorizontal,
   X,
 } from 'lucide-react';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
-import { type ReactNode, useCallback, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useContext, useRef, useState } from 'react';
 import { type Detent, Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 import { BoardSettingsContent } from './BoardSettingsPanel';
 import { CardList } from './CardList';
 import { drag, holding, pageStride } from './drag';
-import { type Category, isClosed, type Status, type Task } from './model';
+import { byCategory, type Category, isClosed, type Status, type Task } from './model';
 import { StatusFilter, zoneStatuses } from './SideZone';
 import { StatusTile } from './StatusTile';
 import {
@@ -33,6 +33,8 @@ import {
   update,
 } from './state';
 import { TaskCard } from './TaskCard';
+import { TaskContentContext } from './taskContent';
+import { useTaskSurfaceShown } from './taskTransition';
 
 /** Clear space at the end of a column, for the collapsed drawer resting over it. */
 const DOCK_SPACE = 'calc(var(--dock-height) + var(--safe-bottom) + 3rem)';
@@ -76,6 +78,8 @@ export function PhoneBoard({
   const [drawerPage, setDrawerPage] = useState<BoardPage | null>(null);
   const closePage = useCallback(() => setDrawerPage(null), []);
   const paged = drawerPage !== null;
+  // An open task covers the board; the drawer above it is the task's (ADR 0009).
+  const covered = paged || state.openTaskId !== null;
 
   function turnTo(index: number, behavior: ScrollBehavior = 'smooth') {
     const element = pager.current;
@@ -87,7 +91,7 @@ export function PhoneBoard({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <header className="shrink-0 pt-[var(--safe-top)]" inert={paged}>
+      <header className="shrink-0 pt-[var(--safe-top)]" inert={covered}>
         <div className="flex h-16 items-center gap-2 pr-3 pl-5">
           {projectMenu ?? (
             <DropdownMenu.Root>
@@ -143,11 +147,11 @@ export function PhoneBoard({
       </header>
 
       {searchContent ? (
-        <div className="min-h-0 flex-1 pb-[var(--dock-space)]" inert={paged}>
+        <div className="min-h-0 flex-1 pb-[var(--dock-space)]" inert={covered}>
           {searchContent}
         </div>
       ) : (
-        <div className="relative flex min-h-0 flex-1" inert={paged}>
+        <div className="relative flex min-h-0 flex-1" inert={covered}>
           <div
             ref={pager}
             data-pager=""
@@ -421,6 +425,10 @@ function BoardDrawer({
   const [detent, setDetent] = useState<Detent>(initialOpen ? 'half' : 'closed');
   // Grooming keeps the backlog where it is; anything else held wants the board.
   const sunk = held !== null && (page !== null || detent !== 'full');
+  // While a task is open, the collapsed drawer is its dock; the backlog waits at its height.
+  const task = useContext(TaskContentContext)?.drawer;
+  // A closing task shrinks beneath the drawer, as an opening one grows beneath it.
+  const raised = useTaskSurfaceShown();
 
   function goTo(next: Detent) {
     setDetent(next);
@@ -475,7 +483,7 @@ function BoardDrawer({
         transition={springs.snappy}
         className={cn(
           dockButton,
-          'bg-brand text-brand-foreground shadow-[0_8px_24px_-6px_color-mix(in_oklab,var(--brand)_55%,transparent),inset_0_1px_0_rgb(255_255_255/0.45)]',
+          'bg-brand text-brand-foreground shadow-[0_2px_6px_-2px_color-mix(in_oklab,var(--brand)_45%,transparent),inset_0_1px_0_rgb(255_255_255/0.35)]',
         )}
       >
         <Plus className="size-7" strokeWidth={2.25} aria-hidden />
@@ -498,17 +506,27 @@ function BoardDrawer({
 
   return (
     <Drawer
-      label="Backlog"
+      label={task ? 'Task drawer' : 'Backlog'}
       origin="backlog"
-      dock={dock}
-      detent={detent}
+      dock={
+        <AnimatePresence initial={false}>
+          <DockFace key={task ? 'task' : 'board'}>{task ? task.dock : dock}</DockFace>
+        </AnimatePresence>
+      }
+      detent={task ? 'closed' : detent}
+      detents={task ? ['closed'] : undefined}
       onDetent={goTo}
-      sunk={sunk}
-      gesturesDisabled={held !== null || fingerDown}
-      page={page ? pages[page] : null}
-      onClosePage={onClosePage}
+      sunk={!task && sunk}
+      // An open task's drawer moves only while one of its panels is open.
+      gesturesDisabled={held !== null || fingerDown || (!!task && !task.page)}
+      page={task ? task.page : page ? pages[page] : null}
+      onClosePage={task ? task.closePage : onClosePage}
+      raised={!!task || raised}
     >
-      <div className="flex min-h-0 flex-1 flex-col" inert={detent === 'closed' && !held}>
+      <div
+        className="flex min-h-0 flex-1 flex-col"
+        inert={!!task || (detent === 'closed' && !held)}
+      >
         <StatusFilter zone="backlog" className="px-4 pt-1" />
         <CardList
           listId="backlog"
@@ -518,6 +536,26 @@ function BoardDrawer({
         />
       </div>
     </Drawer>
+  );
+}
+
+/** The board's dock and an open task's trade places, as Catch's dock does for a note. */
+function DockFace({ children }: { children: ReactNode }) {
+  const present = useIsPresent();
+  const reduced = useReducedMotion();
+  return (
+    <motion.div
+      aria-hidden={!present || undefined}
+      inert={!present}
+      // Leaving, it stops taking up room so the new face sits where it will rest.
+      className={cn(!present && 'absolute inset-x-0 top-0')}
+      initial={{ opacity: 0, scale: 0.92 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.92, transition: { duration: reduced ? 0 : 0.16 } }}
+      transition={reduced ? { duration: 0 } : springs.smooth}
+    >
+      {children}
+    </motion.div>
   );
 }
 
@@ -541,18 +579,6 @@ function CardStack({ count }: { count: number }) {
       ))}
     </span>
   );
-}
-
-/** The status groups, in the board's order. */
-function byCategory(statuses: Status[]) {
-  const groups: { name: string; statuses: Status[] }[] = [
-    { name: 'Backlog', statuses: [] },
-    { name: 'Active', statuses: [] },
-    { name: 'Closed', statuses: [] },
-  ];
-  const slot: Record<Category, number> = { backlog: 0, active: 1, done: 2, cancelled: 2 };
-  for (const status of statuses) groups[slot[status.category]]!.statuses.push(status);
-  return groups;
 }
 
 /**
@@ -584,13 +610,8 @@ function MoveDrawer() {
         transition={springs.snappy}
         data-drop-expand=""
         style={{ borderTopLeftRadius: 28, borderTopRightRadius: 28 }}
-        className="glass-thick pointer-events-auto mx-auto w-full max-w-md overflow-hidden pb-[var(--safe-bottom)]"
+        className="glass-thick pointer-events-auto mx-auto w-full max-w-md overflow-hidden pt-2 pb-[var(--safe-bottom)]"
       >
-        <motion.div
-          layout="position"
-          aria-hidden
-          className="mx-auto mt-2 h-1 w-9 rounded-full bg-foreground/20"
-        />
         {pick && (
           <motion.div layout="position" className="flex h-12 items-center pr-1.5 pl-4">
             <span className="flex-1 font-medium text-sm tabular-nums">{selected} selected</span>
