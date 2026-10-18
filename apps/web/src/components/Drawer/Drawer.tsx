@@ -63,7 +63,8 @@ export type DrawerCard = {
  * unless it is full and its own list is being reordered. Raised, it sits above a full-screen
  * view such as an open task, and its dock rides above the keyboard as a note's dock does in
  * Catch. Otherwise an open page ends above the keyboard, so its input stays in view. A card
- * floats above the dock, which rides above the keyboard with it.
+ * floats above the dock, which rides above the keyboard with it, and so do pickers opened
+ * over the card as the keyboard goes away.
  */
 export function Drawer({
   label,
@@ -271,7 +272,9 @@ export function Drawer({
         className={cn(
           'glass-thick fixed inset-x-0 top-[calc(var(--safe-top)+0.5rem)] mx-auto flex w-full max-w-md flex-col rounded-t-[1.75rem] outline-none',
           raised ? 'z-[45]' : 'z-30',
-          raised || (carded && !paged)
+          // Over a card, a picker puts the keyboard away: the drawer keeps its full height and
+          // slides down with the keyboard, so the picker settles low, by the fingers.
+          raised || carded
             ? 'bottom-0 [translate:0_calc(var(--keyboard)*-1)]'
             : paged
               ? 'bottom-[var(--keyboard)]'

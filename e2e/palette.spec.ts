@@ -277,6 +277,18 @@ test('workspace board asks for capture project; phone search and capture sit abo
 }) => {
   const phone = isMobile || browserName === 'firefox';
   if (phone && !isMobile) await page.setViewportSize({ width: 412, height: 915 });
+  // The test sets --keyboard itself. Without the VirtualKeyboard API, the app reads the
+  // keyboard from the viewport on every focus change, which would put it back to 0, so
+  // Firefox gets one that never moves, as Chromium's does here.
+  if (browserName === 'firefox')
+    await page.addInitScript(() =>
+      Object.defineProperty(navigator, 'virtualKeyboard', {
+        value: Object.assign(new EventTarget(), {
+          overlaysContent: false,
+          boundingRect: new DOMRect(),
+        }),
+      }),
+    );
   const account = await fixture(page);
   if (phone) {
     const above = (locator: ReturnType<Page['locator']>) =>
@@ -300,6 +312,28 @@ test('workspace board asks for capture project; phone search and capture sit abo
     await page.getByRole('button', { name: 'New task in the backlog', exact: true }).click();
     await above(capture(page).getByRole('textbox', { name: 'Task title' }));
     await above(page.getByRole('button', { name: 'Close new task', exact: true }));
+    // A picker puts the keyboard away and settles at the bottom, not where the keyboard was,
+    // even when it is taller than the room the keyboard left.
+    await page.evaluate(() => document.documentElement.style.setProperty('--keyboard', '520px'));
+    await captureControls(page)
+      .getByRole('button', { name: /^Status:/ })
+      .click();
+    const picker = page.getByRole('radiogroup', { name: 'Status' });
+    await expect(picker).toBeVisible();
+    // Its height is measured once, as it opens: shortened to the room above the keyboard, a
+    // tall picker would rise to the top and stay there once the keyboard had gone.
+    await expect(page.getByRole('dialog', { name: 'Status', exact: true })).toHaveCSS(
+      'bottom',
+      '0px',
+    );
+    await page.evaluate(() => document.documentElement.style.setProperty('--keyboard', '0px'));
+    await expect
+      .poll(async () => {
+        const box = await picker.boundingBox();
+        return box ? box.y + box.height : 0;
+      })
+      .toBeGreaterThan(page.viewportSize()!.height - 120);
+    await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
     await expect(capture(page)).toHaveCount(0);
     await page.evaluate(() => document.documentElement.style.removeProperty('--keyboard'));
@@ -320,6 +354,8 @@ test('workspace board asks for capture project; phone search and capture sit abo
   const title = capture(page).getByRole('textbox', { name: 'Task title' });
   await expect(title).toHaveValue('Capture from workspace');
   await expect(title).toBeFocused();
+  // A fresh page may still be loading statuses; capture waits for the project's backlog.
+  await expect(capture(page).getByText('Ideas', { exact: true })).toBeVisible();
   await title.press('Enter');
   await expect(taskPane(page, phone).getByRole('textbox', { name: 'Task title' })).toHaveValue(
     'Capture from workspace',
