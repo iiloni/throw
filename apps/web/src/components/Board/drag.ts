@@ -1,5 +1,6 @@
 import { animate, motionValue } from 'motion/react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
+import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { createStore } from '@/lib/store';
 import type { Priority } from './model';
@@ -148,8 +149,9 @@ function reducedMotion() {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-function tick(ms = 8) {
-  if (drag.get()?.touch) navigator.vibrate?.(ms);
+/** Haptics belong to touch: a mouse has its own feel. */
+function feel(effect: keyof typeof haptics) {
+  if (drag.get()?.touch) haptics[effect]();
 }
 
 // A page starts scrolling under a finger unless the move is cancelled, and only a listener
@@ -253,7 +255,7 @@ function prime() {
   if (!press) return;
   primed = true;
   holding.set(true);
-  navigator.vibrate?.(12);
+  haptics.longPress();
   if (!board.get().selection.includes(press.taskId)) {
     primedSelect = true;
     toggleSelected(press.taskId);
@@ -303,7 +305,7 @@ function begin() {
   });
   document.documentElement.dataset.dragging = '';
   holdBoard();
-  tick(12);
+  feel('selection');
   // Before the first render, so the gap opens where the card already is.
   resolve();
   frame = requestAnimationFrame(loop);
@@ -356,7 +358,7 @@ function set(change: Partial<DragState>) {
       : target.kind === 'status'
         ? target.statusId
         : `${target.listId}:${target.kind === 'place' ? target.priority : ''}`;
-  if (landing(state.target) !== landing(next.target)) tick();
+  if (landing(state.target) !== landing(next.target)) feel('selection');
   drag.set(next);
 }
 
@@ -409,42 +411,24 @@ function indexIn(list: HTMLElement, priority: Priority, y: number, height: numbe
   return index;
 }
 
-type Box = { top: number; left: number; width: number };
-
 /**
  * Where among a gallery's cards, read left to right and then down, a card centred on `x`,
- * `y` belongs. Measured from layout, not from where the cards are drawn mid-animation, and
- * as if no gap were open: past the gap each card stands where the one before it would be.
+ * `y` belongs. Nothing in a gallery moves while a card is held, so the cards are compared
+ * where they stand.
  */
 function gridIndex(list: HTMLElement, priority: Priority, x: number, y: number, ids: string[]) {
-  const boxes: Box[] = [];
-  let previous: Box | null = null;
-  let shifted = false;
-  for (const element of list.querySelectorAll<HTMLElement>('[data-gap], [data-slot]')) {
-    const parent = element.offsetParent;
-    if (!(parent instanceof HTMLElement) || element.hidden) continue;
-    const origin = parent.getBoundingClientRect();
-    const box = {
-      top: origin.top + element.offsetTop,
-      left: origin.left + element.offsetLeft,
-      width: element.offsetWidth,
-    };
-    if (element.dataset.gap !== undefined) {
-      shifted = true;
-      previous = box;
-      continue;
-    }
-    if (Number(element.dataset.zone) !== priority || ids.includes(element.dataset.slot ?? ''))
-      continue;
-    boxes.push(shifted && previous ? previous : box);
-    previous = box;
-  }
+  const boxes = [...list.querySelectorAll<HTMLElement>('[data-slot]')]
+    .filter(
+      (element) =>
+        Number(element.dataset.zone) === priority && !ids.includes(element.dataset.slot ?? ''),
+    )
+    .map((element) => element.getBoundingClientRect());
   // The row the card is in: the last one starting above its centre.
   const rows = [...new Set(boxes.map((box) => Math.round(box.top)))].sort((a, b) => a - b);
-  const row = rows.filter((top) => top <= y).at(-1) ?? rows[0];
+  const row = rows.filter((top) => top <= y).at(-1) ?? rows[0] ?? 0;
   return boxes.filter((box) => {
     const top = Math.round(box.top);
-    return top < (row ?? 0) || (top === row && box.left + box.width / 2 < x);
+    return top < row || (top === row && box.left + box.width / 2 < x);
   }).length;
 }
 
@@ -562,7 +546,7 @@ function autoScroll() {
       pager.scrollBy({ left: side * pageStride(pager), behavior: 'smooth' });
       // The next turn waits for this one to settle as well.
       pageHold = { side, since: now + 250 };
-      tick();
+      feel('threshold');
     }
   }
 }
@@ -614,7 +598,7 @@ function finish(commit: boolean) {
   }
   if (target && state.ids.length > 1) update({ selection: [] });
   if (!wasTouch) swallowClick();
-  if (target) tick(14);
+  if (target) feel('success');
   drag.set({ ...state, phase: 'landing', target: null, rail: null });
   land(lead, target?.kind === 'status' ? target.statusId : null);
 }

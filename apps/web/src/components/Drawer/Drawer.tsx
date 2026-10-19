@@ -89,6 +89,7 @@ export function Drawer({
   detents = ['closed', 'half', 'full'],
   raised = false,
   card = null,
+  move = null,
 }: {
   label: string;
   /** The header at rest: the dock when collapsed. */
@@ -106,6 +107,13 @@ export function Drawer({
   detents?: readonly Detent[];
   raised?: boolean;
   card?: DrawerCard | null;
+  /**
+   * Where held or selected cards are sent (ADR 0009). The header becomes it and the drawer
+   * rests just tall enough to show it, its content sinking out of sight but staying mounted,
+   * since a touch ends if the element it began on goes. The backlog being groomed at full
+   * height keeps its place, and the move target floats at its foot instead.
+   */
+  move?: ReactNode;
 }) {
   const surface = useRef<HTMLElement>(null);
   const head = useRef<HTMLDivElement>(null);
@@ -118,6 +126,9 @@ export function Drawer({
   const [hidden, setHidden] = useState(0);
   const paged = page !== null;
   const docked = paged && !!page.dock;
+  const moving = move !== null;
+  const grooming = moving && detent === 'full' && !paged;
+  const moveInHead = moving && !grooming;
   const carded = card !== null;
   const modal = paged || carded;
   // Read by effects that run once per opening, after the props that opened them.
@@ -146,7 +157,7 @@ export function Drawer({
     return at;
   };
   const restingAt = (at: ReturnType<typeof offsets>) =>
-    sunk ? at.sunk : paged ? at.page : at[detent];
+    moveInHead ? at.closed : sunk ? at.sunk : paged ? at.page : at[detent];
 
   function settle(next: Detent) {
     // Let go at the height it was at: there is no new detent to move it.
@@ -155,7 +166,7 @@ export function Drawer({
   }
 
   useDrawerGesture(surface, {
-    disabled: sunk || gesturesDisabled,
+    disabled: sunk || moving || gesturesDisabled,
     onMove: (dy) => {
       y.stop();
       const at = offsets();
@@ -218,7 +229,20 @@ export function Drawer({
       });
     } else y.jump(restingAt(at));
     placed.current = true;
-  }, [sunk, detent, paged, page?.key, y, reduced]);
+  }, [sunk, detent, paged, page?.key, y, reduced, moveInHead]);
+
+  // The move target opens into a grid and closes again under the card; the drawer rises and
+  // falls with it so exactly the target shows.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: offsets reads refs
+  useLayoutEffect(() => {
+    const element = head.current;
+    if (!moveInHead || !element) return;
+    const observer = new ResizeObserver(() =>
+      animate(y, offsets().closed, reduced ? { duration: 0 } : springs.snappy),
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [moveInHead, reduced, y]);
 
   useLayoutEffect(() => {
     const onResize = () => {
@@ -310,6 +334,8 @@ export function Drawer({
         data-detent={detent}
         data-page={page?.key}
         data-drop-block=""
+        // The whole visible drawer, safe area too, opens the move target under a held card.
+        data-drop-expand={moveInHead ? '' : undefined}
         data-origin={page ? page.origin : origin}
         style={{ y, '--drawer-reveal': reveal } as MotionStyle}
         className={cn(
@@ -364,7 +390,8 @@ export function Drawer({
             detent === 'closed' && !paged ? 'pb-4' : 'pb-2',
           )}
         >
-          {page && !docked && (
+          {moveInHead && move}
+          {page && !docked && !moveInHead && (
             <div className="flex h-[var(--dock-height)] items-center gap-2 pl-2">
               <h2 className="flex-1 truncate font-bold font-display text-xl tracking-[-0.01em]">
                 {page.title}
@@ -375,12 +402,16 @@ export function Drawer({
             </div>
           )}
           {/* Kept mounted under a page, so focus can return to the dock button that opened it. */}
-          <div hidden={paged && !docked} className="relative">
+          <div hidden={(paged && !docked) || moveInHead} className="relative">
             {dock}
           </div>
         </div>
         <div
-          className="flex min-h-0 flex-1 flex-col"
+          className={cn(
+            'relative flex min-h-0 flex-1 flex-col transition-opacity duration-150',
+            // Sunk under the move target; still mounted, so a touch begun in it carries on.
+            moveInHead && 'opacity-0',
+          )}
           style={{ '--drawer-hidden': `${hidden}px` } as CSSProperties}
         >
           {shown ? (
@@ -398,6 +429,16 @@ export function Drawer({
             </div>
           ) : (
             children
+          )}
+          {grooming && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col justify-end">
+              <div
+                data-drop-expand=""
+                className="glass-thick pointer-events-auto rounded-t-[1.75rem] px-3 pt-3 pb-[calc(var(--safe-bottom)+0.5rem)] shadow-[0_-8px_24px_-12px_oklch(0_0_0/0.25)]"
+              >
+                {move}
+              </div>
+            </div>
           )}
         </div>
       </motion.section>
