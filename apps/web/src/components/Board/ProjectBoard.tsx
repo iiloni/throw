@@ -1,14 +1,11 @@
 import type { Project } from '@throw/shared';
-import { Search } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { ShellMenu } from '@/components/AppShell/ShellMenu';
 import { useShell } from '@/components/AppShell/shell';
-import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { type TaskPanel, taskDrawerContent } from '@/components/TaskDetails/TaskControls';
 import { TaskDetails } from '@/components/TaskDetails/TaskDetails';
-import { Button } from '@/components/ui/button';
 import { useStatuses, useTags, useTasks } from '@/lib/collections';
 import { flushTaskDescription } from '@/lib/descriptionEditing';
 import { useMedia } from '@/lib/media';
@@ -139,31 +136,11 @@ export function ProjectBoard({
               </h1>
             }
             syncIndicator={<SyncIndicator />}
-            searchContent={
-              shell.view === 'search' ? (
-                <EmptyState icon={Search} title="Search">
-                  Search will help you find work across this workspace.
-                  <Button
-                    className="mt-4"
-                    variant="ghost"
-                    onClick={() =>
-                      shell.selectProject(project.workspaceId, project.id, 'board', true)
-                    }
-                  >
-                    Back to the board
-                  </Button>
-                </EmptyState>
-              ) : undefined
-            }
             onBacklogChange={(open) =>
               shell.selectProject(project.workspaceId, project.id, open ? 'backlog' : 'board', true)
             }
-            onReturnBoard={() => {
-              if (shell.view === 'search')
-                shell.selectProject(project.workspaceId, project.id, 'board', true);
-            }}
             initialBacklog={shell.view === 'backlog'}
-            onSearch={() => shell.selectProject(project.workspaceId, project.id, 'search', true)}
+            palette
           />
         ) : (
           <DesktopBoard />

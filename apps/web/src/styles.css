@@ -264,6 +264,37 @@
   }
 }
 
+/* Catch's chosen option in a list: a raised pane of the card under the glass. */
+@utility glass-chosen {
+  background-color: color-mix(in oklab, var(--card) 72%, transparent);
+  backdrop-filter: blur(24px) saturate(180%);
+  color: var(--foreground);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, var(--foreground) 45%, transparent),
+    inset 0 1px 0 var(--glass-highlight),
+    0 1px 2px color-mix(in oklab, var(--glass-shadow) 50%, transparent);
+
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--card);
+    backdrop-filter: none;
+  }
+}
+
+/* Catch's filter chips. */
+@utility glass-badge {
+  background-color: var(--glass);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 1px 2px color-mix(in oklab, var(--glass-shadow) 50%, transparent);
+
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--popover);
+    backdrop-filter: none;
+  }
+}
+
 /*
  * Sonner gives every toast its column's full width (the whole screen on phones). Size each
  * to its text and center it; the extra attribute outranks Sonner's own injected rules.

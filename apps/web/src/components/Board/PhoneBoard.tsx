@@ -11,6 +11,7 @@ import {
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
 import { type ReactNode, useCallback, useContext, useRef, useState } from 'react';
+import { type PhoneCapture, usePhonePalette } from '@/components/CommandPalette/PhonePalette';
 import { type Detent, Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
@@ -51,18 +52,17 @@ export function PhoneBoard({
   projectMenu,
   syncIndicator,
   initialBacklog = false,
-  onSearch,
+  palette = false,
   onReset,
-  searchContent,
   onBacklogChange,
   onReturnBoard,
 }: {
   projectMenu?: ReactNode;
   syncIndicator?: ReactNode;
   initialBacklog?: boolean;
-  onSearch?: () => void;
+  /** Search and quick capture open in the drawer; without it, create adds a card in place. */
+  palette?: boolean;
   onReset?: () => void;
-  searchContent?: ReactNode;
   onBacklogChange?: (open: boolean) => void;
   onReturnBoard?: () => void;
 }) {
@@ -77,9 +77,14 @@ export function PhoneBoard({
   const [page, setPage] = useState(0);
   const [drawerPage, setDrawerPage] = useState<BoardPage | null>(null);
   const closePage = useCallback(() => setDrawerPage(null), []);
-  const paged = drawerPage !== null;
-  // An open task covers the board; the drawer above it is the task's (ADR 0009).
-  const covered = paged || state.openTaskId !== null;
+  const phonePalette = usePhonePalette({
+    project,
+    onSearchPage: (open) => setDrawerPage(open ? 'search' : null),
+  });
+  const capture = phonePalette.capture;
+  // A page, the capture card or an open task covers the board; the drawer above it is theirs
+  // (ADR 0009).
+  const covered = drawerPage !== null || capture.card !== null || state.openTaskId !== null;
 
   function turnTo(index: number, behavior: ScrollBehavior = 'smooth') {
     const element = pager.current;
@@ -143,51 +148,46 @@ export function PhoneBoard({
         {syncIndicator && (
           <div className="px-5 text-muted-foreground empty:hidden">{syncIndicator}</div>
         )}
-        {!searchContent && <FlowTrack statuses={active} page={page} onTurn={turnTo} />}
+        <FlowTrack statuses={active} page={page} onTurn={turnTo} />
       </header>
 
-      {searchContent ? (
-        <div className="min-h-0 flex-1 pb-[var(--dock-space)]" inert={covered}>
-          {searchContent}
+      <div className="relative flex min-h-0 flex-1" inert={covered}>
+        <div
+          ref={pager}
+          data-pager=""
+          onScroll={(event) =>
+            setPage(Math.round(event.currentTarget.scrollLeft / pageStride(event.currentTarget)))
+          }
+          className="phone-pager flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
+        >
+          {active.map((status) => (
+            <div key={status.id} data-page="" data-origin="active" className={pageClass}>
+              <CardList
+                listId={`status:${status.id}`}
+                endSpace={DOCK_SPACE}
+                tight
+                className="flex-1"
+              />
+            </div>
+          ))}
         </div>
-      ) : (
-        <div className="relative flex min-h-0 flex-1" inert={covered}>
-          <div
-            ref={pager}
-            data-pager=""
-            onScroll={(event) =>
-              setPage(Math.round(event.currentTarget.scrollLeft / pageStride(event.currentTarget)))
-            }
-            className="phone-pager flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
-          >
-            {active.map((status) => (
-              <div key={status.id} data-page="" data-origin="active" className={pageClass}>
-                <CardList
-                  listId={`status:${status.id}`}
-                  endSpace={DOCK_SPACE}
-                  tight
-                  className="flex-1"
-                />
-              </div>
-            ))}
-          </div>
-          <PeekEdge side={-1} shown={page > 0} />
-          <PeekEdge side={1} shown={page < active.length - 1} />
-          {done && <DonePocket status={done} shown={page === active.length - 1} />}
-        </div>
-      )}
+        <PeekEdge side={-1} shown={page > 0} />
+        <PeekEdge side={1} shown={page < active.length - 1} />
+        {done && <DonePocket status={done} shown={page === active.length - 1} />}
+      </div>
 
       <BoardDrawer
         page={drawerPage}
         onClosePage={closePage}
         onReset={onReset}
         initialOpen={initialBacklog}
-        onSearch={() => {
-          setPage(0);
-          onSearch?.();
-        }}
+        searchPage={phonePalette.search}
+        capture={capture}
+        onSearch={palette ? () => setDrawerPage('search') : undefined}
         onChange={onBacklogChange}
         onCreate={(inBacklog) => {
+          // Capture lands where a new card would: the backlog while it is open, else this column.
+          if (palette) return capture.open(inBacklog ? undefined : active[page]?.id);
           onReturnBoard?.();
           createTask(inBacklog ? undefined : active[page]?.id);
         }}
@@ -387,7 +387,7 @@ function DonePocket({ status, shown }: { status: Status; shown: boolean }) {
   );
 }
 
-type BoardPage = 'closed' | 'settings';
+type BoardPage = 'closed' | 'settings' | 'search';
 
 const dockButton =
   'relative flex size-[var(--dock-height)] shrink-0 items-center justify-center rounded-[var(--dock-radius)] outline-none focus-visible:ring-2 focus-visible:ring-ring/70';
@@ -405,6 +405,8 @@ function BoardDrawer({
   onReset,
   onCreate,
   initialOpen,
+  searchPage,
+  capture,
   onSearch,
   onChange,
 }: {
@@ -413,6 +415,8 @@ function BoardDrawer({
   onReset?: () => void;
   onCreate: (inBacklog: boolean) => void;
   initialOpen: boolean;
+  searchPage: DrawerPage;
+  capture: PhoneCapture;
   onSearch?: () => void;
   onChange?: (open: boolean) => void;
 }) {
@@ -435,7 +439,8 @@ function BoardDrawer({
     onChange?.(next !== 'closed');
   }
 
-  const dock = (
+  const capturing = capture.card !== null;
+  const backlogFace = (
     <div className="flex items-center gap-2">
       <button
         type="button"
@@ -462,36 +467,64 @@ function BoardDrawer({
         <span className="font-bold font-display text-lg tracking-[-0.01em]">Backlog</span>
         <span className="text-muted-foreground text-sm tabular-nums">{count}</span>
       </button>
+      {onSearch && (
+        <motion.button
+          type="button"
+          aria-label="Search"
+          onClick={onSearch}
+          whileTap={{ scale: 0.88 }}
+          transition={springs.snappy}
+          className={cn(dockButton, 'bg-foreground/[0.06] text-foreground')}
+        >
+          <Search className="size-6" aria-hidden />
+        </motion.button>
+      )}
+    </div>
+  );
+  // While a new task is written above the dock, the dock holds its controls and the create
+  // button turns into its close, as Catch's compose button does.
+  const dock = (
+    <div className="flex items-center gap-2">
+      <div className="relative min-w-0 flex-1">
+        <AnimatePresence initial={false}>
+          <DockFace key={capturing ? 'capture' : 'backlog'}>
+            {capturing ? capture.controls : backlogFace}
+          </DockFace>
+        </AnimatePresence>
+      </div>
       <motion.button
         type="button"
-        aria-label="Search"
-        onClick={() => {
-          setDetent('closed');
-          onSearch?.();
-        }}
-        whileTap={{ scale: 0.88 }}
-        transition={springs.snappy}
-        className={cn(dockButton, 'bg-foreground/[0.06] text-foreground')}
-      >
-        <Search className="size-6" aria-hidden />
-      </motion.button>
-      <motion.button
-        type="button"
-        aria-label={detent === 'closed' ? 'New task' : 'New task in the backlog'}
-        onClick={() => onCreate(detent !== 'closed')}
+        aria-label={
+          capturing
+            ? 'Close new task'
+            : detent === 'closed'
+              ? 'New task'
+              : 'New task in the backlog'
+        }
+        onClick={() => (capturing ? capture.close() : onCreate(detent !== 'closed'))}
         whileTap={{ scale: 0.88 }}
         transition={springs.snappy}
         className={cn(
           dockButton,
-          'bg-brand text-brand-foreground shadow-[0_2px_6px_-2px_color-mix(in_oklab,var(--brand)_45%,transparent),inset_0_1px_0_rgb(255_255_255/0.35)]',
+          'transition-[background-color,color,box-shadow] duration-300',
+          capturing
+            ? 'bg-foreground/[0.06] text-foreground'
+            : 'bg-brand text-brand-foreground shadow-[0_2px_6px_-2px_color-mix(in_oklab,var(--brand)_45%,transparent),inset_0_1px_0_rgb(255_255_255/0.35)]',
         )}
       >
-        <Plus className="size-7" strokeWidth={2.25} aria-hidden />
+        <motion.span
+          className="flex"
+          animate={{ rotate: capturing ? 45 : 0 }}
+          transition={springs.bouncy}
+        >
+          <Plus className="size-7" strokeWidth={2.25} aria-hidden />
+        </motion.span>
       </motion.button>
     </div>
   );
 
   const pages: Record<BoardPage, DrawerPage> = {
+    search: searchPage,
     closed: { key: 'closed', title: 'Closed', origin: 'closed', content: <ClosedTasks /> },
     settings: {
       key: 'settings',
@@ -513,19 +546,22 @@ function BoardDrawer({
           <DockFace key={task ? 'task' : 'board'}>{task ? task.dock : dock}</DockFace>
         </AnimatePresence>
       }
-      detent={task ? 'closed' : detent}
-      detents={task ? ['closed'] : undefined}
+      detent={task || capturing ? 'closed' : detent}
+      detents={task || capturing ? ['closed'] : undefined}
       onDetent={goTo}
       sunk={!task && sunk}
       // An open task's drawer moves only while one of its panels is open.
-      gesturesDisabled={held !== null || fingerDown || (!!task && !task.page)}
-      page={task ? task.page : page ? pages[page] : null}
-      onClosePage={task ? task.closePage : onClosePage}
+      gesturesDisabled={
+        held !== null || fingerDown || (!!task && !task.page) || (capturing && !capture.page)
+      }
+      page={task ? task.page : capturing ? capture.page : page ? pages[page] : null}
+      onClosePage={task ? task.closePage : capturing ? capture.closePage : onClosePage}
+      card={task ? null : capture.card}
       raised={!!task || raised}
     >
       <div
         className="flex min-h-0 flex-1 flex-col"
-        inert={!!task || (detent === 'closed' && !held)}
+        inert={!!task || capturing || (detent === 'closed' && !held)}
       >
         <StatusFilter zone="backlog" className="px-4 pt-1" />
         <CardList

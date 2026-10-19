@@ -1,4 +1,4 @@
-import { type Status, type Task, taskTagColor } from '@throw/shared';
+import { type Priority, type Status, type Task, taskTagColor } from '@throw/shared';
 import { Flag, MoreHorizontal, Tag } from 'lucide-react';
 import type { ButtonHTMLAttributes } from 'react';
 import { PriorityGlyph, StatusGlyph } from '@/components/Board/glyphs';
@@ -43,7 +43,6 @@ export function TaskControls({
   controlProps(panel: TaskPanel): ControlProps;
   tooltips?: boolean;
 }) {
-  const status = statuses.find((row) => row.id === task.statusId);
   const { tags } = useTags(task.projectId);
   const { taskTags } = useTaskTags(task.id);
   const secondary = new Set(taskTags.map((row) => row.tagId));
@@ -53,7 +52,44 @@ export function TaskControls({
       .filter((tag) => secondary.has(tag.id) && tag.id !== task.primaryTagId)
       .sort((a, b) => a.name.localeCompare(b.name)),
   ].map((tag) => tag.name);
-  const tagColor = taskTagColor(task, tags);
+  return (
+    <ControlButtons
+      status={statuses.find((row) => row.id === task.statusId)}
+      priority={task.priority}
+      project={project}
+      tags={tags.length > 0 ? { names: tagNames, color: taskTagColor(task, tags) } : null}
+      onOpen={onOpen}
+      controlProps={controlProps}
+      tooltips={tooltips}
+      more
+    />
+  );
+}
+
+/**
+ * The control buttons themselves, for a task or one still being written: status, priority,
+ * tags when the project has any, and optionally the rest of the task's actions.
+ */
+export function ControlButtons({
+  status,
+  priority,
+  project,
+  tags,
+  onOpen,
+  controlProps,
+  tooltips = true,
+  more = false,
+}: {
+  status: Status | undefined;
+  priority: Priority;
+  project: Project;
+  /** Tags are made in the project's tag manager; with none, there is nothing to pick. */
+  tags: { names: string[]; color: string | null } | null;
+  onOpen(panel: TaskPanel, element: HTMLButtonElement): void;
+  controlProps(panel: TaskPanel): ControlProps;
+  tooltips?: boolean;
+  more?: boolean;
+}) {
   return (
     <div className="flex h-[var(--dock-height)] w-full items-center justify-around gap-2">
       <IconButton
@@ -66,39 +102,43 @@ export function TaskControls({
         <StatusGlyph category={status?.category ?? 'backlog'} />
       </IconButton>
       <IconButton
-        label={`Priority: ${priorityName(project, task.priority)}. Change`}
+        label={`Priority: ${priorityName(project, priority)}. Change`}
         className={control}
         tooltip={tooltips}
         {...controlProps('priority')}
         onClick={(event) => onOpen('priority', event.currentTarget)}
       >
-        {task.priority === 3 ? (
+        {priority === 3 ? (
           <Flag />
         ) : (
-          <PriorityGlyph priority={task.priority} name={priorityName(project, task.priority)} />
+          <PriorityGlyph priority={priority} name={priorityName(project, priority)} />
         )}
       </IconButton>
-      {/* Tags are made in the project's tag manager; with none, there is nothing to pick. */}
-      {tags.length > 0 && (
+      {tags && (
         <IconButton
-          label={`Tags: ${tagNames.join(', ') || 'none'}. Change`}
+          label={`Tags: ${tags.names.join(', ') || 'none'}. Change`}
           className={control}
           tooltip={tooltips}
           {...controlProps('tags')}
           onClick={(event) => onOpen('tags', event.currentTarget)}
         >
-          <Tag data-color={tagColor ?? undefined} className={tagColor ? 'text-tint-accent' : ''} />
+          <Tag
+            data-color={tags.color ?? undefined}
+            className={tags.color ? 'text-tint-accent' : ''}
+          />
         </IconButton>
       )}
-      <IconButton
-        label="More task actions"
-        className={control}
-        tooltip={tooltips}
-        {...controlProps('more')}
-        onClick={(event) => onOpen('more', event.currentTarget)}
-      >
-        <MoreHorizontal />
-      </IconButton>
+      {more && (
+        <IconButton
+          label="More task actions"
+          className={control}
+          tooltip={tooltips}
+          {...controlProps('more')}
+          onClick={(event) => onOpen('more', event.currentTarget)}
+        >
+          <MoreHorizontal />
+        </IconButton>
+      )}
     </div>
   );
 }

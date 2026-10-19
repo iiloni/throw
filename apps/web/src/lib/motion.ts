@@ -5,6 +5,7 @@ export const springs = {
   pane: { type: 'spring', visualDuration: 0.45, bounce: 0 },
   snappy: { type: 'spring', visualDuration: 0.3, bounce: 0.2 },
   smooth: { type: 'spring', visualDuration: 0.4, bounce: 0.15 },
+  bouncy: { type: 'spring', visualDuration: 0.45, bounce: 0.28 },
 } satisfies Record<string, Transition>;
 
 export const EASE_EMPHASIZED = [0.2, 0, 0, 1] as const;
