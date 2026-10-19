@@ -515,3 +515,46 @@ test.describe('phone', () => {
       .toBe(board.status('Build'));
   });
 });
+
+test.describe('phone swipes', () => {
+  test.skip(({ isMobile, browserName }) => !isMobile || browserName !== 'chromium', 'Touch input');
+
+  test('a card swiped right closes into done; a swipe left still turns the page', async ({
+    page,
+  }) => {
+    const board = await fixture(page);
+    const touch = await finger(page);
+    const columns = page.getByRole('navigation', { name: 'Columns' });
+    // A short swipe springs back and writes nothing.
+    const later = await centre(await settled(card(page, 'Later position')));
+    await touch.press(later, 30);
+    await touch.move({ x: later.x + 60, y: later.y }, 200);
+    await touch.lift();
+    await page.waitForTimeout(600);
+    expect((await taskRow(page, board.headers, board.ids['Later position']!))?.status_id).toBe(
+      board.status('Build'),
+    );
+    // Far enough, and it closes.
+    const earlier = await centre(await settled(card(page, 'Earlier position')));
+    await touch.press(earlier, 30);
+    await touch.move({ x: earlier.x + 200, y: earlier.y }, 300);
+    await expect(page.locator('[data-swipe-reveal="armed"]')).toHaveText('Done');
+    await touch.lift();
+    await expect(card(page, 'Earlier position')).toHaveCount(0);
+    await expect
+      .poll(
+        async () => (await taskRow(page, board.headers, board.ids['Earlier position']!))?.status_id,
+      )
+      .toBe(board.status('Done'));
+    await expect(page.getByRole('button', { name: /^3 done this week/ })).toBeVisible();
+    // Leftwards over a card is still the page.
+    const low = await centre(await settled(card(page, 'Low priority')));
+    await touch.press(low, 30);
+    await touch.move({ x: low.x - 220, y: low.y }, 250);
+    await touch.lift();
+    await expect(columns.getByRole('button', { name: 'Review' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+});

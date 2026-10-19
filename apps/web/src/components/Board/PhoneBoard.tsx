@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 import { BoardSettingsContent } from './BoardSettingsPanel';
 import { CardList } from './CardList';
 import { drag, holding, pageStride } from './drag';
-import { byCategory, type Category, isClosed, type Status, type Task } from './model';
+import { byCategory, isClosed, type Status, type Task } from './model';
 import { StatusFilter, zoneStatuses } from './SideZone';
 import { StatusTile } from './StatusTile';
 import {
@@ -158,6 +158,7 @@ export function PhoneBoard({
         <div
           ref={pager}
           data-pager=""
+          data-selecting={state.selection.length > 0 ? '' : undefined}
           onScroll={(event) =>
             setPage(Math.round(event.currentTarget.scrollLeft / pageStride(event.currentTarget)))
           }
