@@ -53,6 +53,24 @@ describe('history sentences', () => {
     [change('description', 'v1', 'v2'), 'Changed the description.'],
   ])('words %j', (item, expected) => expect(changeSentence(item, context)).toBe(expected));
 
+  it('does not claim a change happened when another write already set the wanted value', () => {
+    expect(changeSentence(change('title', 'Same', 'Same'), context)).toBe(
+      'Title was already “Same”.',
+    );
+    expect(changeSentence(change('priority', 3, 3), context)).toBe(
+      'Priority was already “Default”.',
+    );
+    expect(changeSentence(change('parentId', null, null), context)).toBe(
+      'The task already had no parent.',
+    );
+    expect(changeSentence(change('trashed', true, true), context)).toBe(
+      'The task was already in the trash.',
+    );
+    expect(changeSentence(change('description', 'v1', 'v1'), context)).toBe(
+      'The description was already up to date.',
+    );
+  });
+
   it('states the requested value, the value that stood, and the refusal reason', () => {
     expect(
       changeSentence(

@@ -61,6 +61,21 @@ export function changeSentence(change: ActivityChange, context: HistoryContext):
   const wanted = value(change, true, context);
   const stood = value(change, false, context);
   if (change.reason === 'replaced') return `The requested status was unavailable. Used ${wanted}.`;
+  if (change.applied && change.previous === change.requested) {
+    if (change.field === 'description') return 'The description was already up to date.';
+    if (change.field === 'trashed') return `The task was already ${wanted}.`;
+    if (change.field === 'parentId')
+      return change.requested === null
+        ? 'The task already had no parent.'
+        : `The task was already under ${wanted}.`;
+    if (change.field === 'primaryTagId' && change.requested === null)
+      return 'The task already had no primary tag.';
+    if (change.field === 'secondaryTags')
+      return change.requested === null
+        ? 'The tag was already absent.'
+        : `Tag ${wanted} was already assigned.`;
+    return `${labels[change.field] ?? 'The field'} was already ${wanted}.`;
+  }
   if (!change.applied) {
     const reason =
       change.reason === 'stale'
