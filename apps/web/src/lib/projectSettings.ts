@@ -1,4 +1,8 @@
 import { type Project, projectKeySchema, type Status, type Task } from '@throw/shared';
+import { z } from 'zod';
+
+export const settingsSectionSchema = z.enum(['general', 'statuses', 'priorities', 'tags']);
+export type SettingsSection = z.infer<typeof settingsSectionSchema>;
 
 export function projectKeyIssue(project: Project, key: string, projects: readonly Project[]) {
   if (project.key === null) return 'Connect to settle this project’s first key before changing it.';

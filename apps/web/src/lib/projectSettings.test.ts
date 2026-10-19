@@ -7,7 +7,13 @@ import {
   taskSchema,
 } from '@throw/shared';
 import { describe, expect, it } from 'vitest';
-import { projectKeyIssue, statusRemovalIssue, statusUsage, trashRoots } from './projectSettings';
+import {
+  projectKeyIssue,
+  settingsSectionSchema,
+  statusRemovalIssue,
+  statusUsage,
+  trashRoots,
+} from './projectSettings';
 import { writeRefusalMessage } from './writeRefusal';
 
 const workspaceId = '0199a0a0-0000-7000-8000-000000000001';
@@ -56,6 +62,10 @@ const task = (n: number, fields: Partial<Task> = {}) =>
 const deletedAt = '2026-10-19T00:00:00.000Z';
 
 describe('project settings rules', () => {
+  it('uses General for unknown sections while retaining valid bookmarked sections', () => {
+    expect(settingsSectionSchema.catch('general').parse('statuses')).toBe('statuses');
+    expect(settingsSectionSchema.catch('general').parse('unknown')).toBe('general');
+  });
   it('validates proposed keys and accounts for workspace scope, trash and settled suffixes', () => {
     const own = project(1);
     for (const key of ['', '1KEY', 'lower', 'ABCDEF2', 'A-B'])
@@ -102,7 +112,13 @@ describe('project settings rules', () => {
       'previous key is kept',
     );
     expect(writeRefusalMessage('{"error":"Tasks use this status"}')).toContain('trash');
-    for (const body of ['<html>bad gateway</html>', '{}', '{"error":"secret details"}'])
+    for (const body of [
+      '<html>bad gateway</html>',
+      '{}',
+      '{"error":"secret details"}',
+      '{"error":"constructor"}',
+      '{"error":"toString"}',
+    ])
       expect(writeRefusalMessage(body)).toBeNull();
   });
 });

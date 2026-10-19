@@ -532,7 +532,8 @@ dock rather than opening as a page. Desktop has no drawer. The rules are in
   opens the palette over it and replaces the view with `board`.
 - `/w/:workspaceId/p/:projectId/settings` manages a project's appearance, statuses,
   priority names, key and tags. The rail's project menu and the phone board's title menu
-  open it; the appearance form is shared with project creation.
+  open it; the appearance form is shared with project creation. The optional `section`
+  search parameter keeps the chosen section across reloads and reconnects.
 - `/w/:workspaceId/p/:projectId/trash` lists that project's independently trashed tasks,
   with inherited subtasks grouped under their parent. It is reached from project settings
   and the rail's project menu.

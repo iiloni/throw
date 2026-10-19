@@ -32,7 +32,7 @@ async function setup(page: Page, isMobile: boolean) {
     await page.getByRole('button', { name: 'Switch project or workspace', exact: true }).click();
   } else await page.getByRole('button', { name: 'Project menu for Workshop', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Project settings', exact: true }).click();
-  await expect(page).toHaveURL(`${new URL(page.url()).origin}${board}/settings`);
+  await expect.poll(() => new URL(page.url()).pathname).toBe(`${board}/settings`);
   return {
     ...account,
     ...ids,
@@ -306,7 +306,11 @@ test('offline settings edits persist and replay; refused renames, keys and delet
     timeout: 40_000,
   });
   await page.reload();
-  await section(page, 'Statuses');
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Project settings sections' })
+      .getByRole('button', { name: 'Statuses', exact: true }),
+  ).toHaveAttribute('aria-current', 'page');
   await expect(statusRow(page, 'Offline review')).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
   await page.unroute('**/api/**');
   await synced

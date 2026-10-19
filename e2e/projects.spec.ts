@@ -65,7 +65,7 @@ test('create, edit and confirm deletion of a project from the shell', async ({
   await page.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('New kitchen');
   await expect(page.getByRole('button', { name: 'Edit project', exact: true })).toBeFocused();
-  expect(page.url()).toBe(`${projectUrl.split('?')[0]}/settings`);
+  expect(new URL(page.url()).pathname).toBe(`${new URL(projectUrl).pathname}/settings`);
   await expect
     .poll(async () =>
       (await shapeRows(page.request, 'projects', headers)).map(({ name, color, icon }) => ({

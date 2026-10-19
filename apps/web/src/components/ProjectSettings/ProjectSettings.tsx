@@ -7,14 +7,25 @@ import { TagManager } from '@/components/TagManager/TagManager';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useProjects, useStatuses, useTasks } from '@/lib/collections';
-import { projectKeyIssue } from '@/lib/projectSettings';
+import {
+  projectKeyIssue,
+  type SettingsSection,
+  settingsSectionSchema,
+} from '@/lib/projectSettings';
 import { changeProjectKey, renamePriority } from '@/lib/projects';
 import { statusesOf } from '@/lib/statuses';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { StatusSettings } from './StatusSettings';
 
-export function ProjectSettings({ project }: { project: Project }) {
-  const [section, setSection] = useState('general');
+export function ProjectSettings({
+  project,
+  section,
+  onSectionChange,
+}: {
+  project: Project;
+  section: SettingsSection;
+  onSectionChange: (section: SettingsSection) => void;
+}) {
   const [editing, setEditing] = useState(false);
   const { statuses, isLoading } = useStatuses();
   const { tasks, isLoading: loadingTasks } = useTasks();
@@ -39,13 +50,13 @@ export function ProjectSettings({ project }: { project: Project }) {
         aria-label="Project settings sections"
         className="mb-8 flex flex-wrap gap-1 border-b pb-3"
       >
-        {['general', 'statuses', 'priorities', 'tags'].map((tab) => (
+        {settingsSectionSchema.options.map((tab) => (
           <Button
             key={tab}
             variant="ghost"
             aria-current={section === tab ? 'page' : undefined}
             className={section === tab ? 'h-11 bg-accent px-3' : 'h-11 px-3'}
-            onClick={() => setSection(tab)}
+            onClick={() => onSectionChange(tab)}
           >
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
           </Button>
