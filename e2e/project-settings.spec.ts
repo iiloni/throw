@@ -6,17 +6,19 @@ const synced = expect.configure({ timeout: 60_000 });
 
 async function setup(page: Page, isMobile: boolean) {
   const account = await signUp(page);
-  const ids = await page.evaluate(async () => {
-    const { workspacesCollection } = await import('/src/lib/collections.ts');
-    const { createProject } = await import('/src/lib/projects.ts');
-    const workspaceId = [...workspacesCollection.values()][0]!.id;
-    return { workspaceId, projectId: createProject(workspaceId, 'Workshop') };
-  });
-  const board = `/w/${ids.workspaceId}/p/${ids.projectId}`;
-  await page.goto(board);
+  if (isMobile) {
+    await page.getByRole('button', { name: 'Switch project or workspace', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'New project', exact: true }).click();
+  } else await page.getByRole('button', { name: 'New project', exact: true }).click();
+  await page.getByLabel('Project name', { exact: true }).fill('Workshop');
+  await page.getByRole('button', { name: 'Create', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Workshop', {
     timeout: APP_LOAD_TIMEOUT,
   });
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const parts = new URL(page.url()).pathname.split('/');
+  const ids = { workspaceId: parts[2]!, projectId: parts[4]! };
+  const board = `/w/${ids.workspaceId}/p/${ids.projectId}`;
   await waitForDeviceSync(page);
   await synced
     .poll(() =>
