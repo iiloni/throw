@@ -202,6 +202,11 @@ appear in the same timeline.
   workspace. Comments can be edited and deleted after posting, and are ordered by when the
   server received them.
 - The log and comments are kept on the device, so the timeline can be read offline.
+- The task view shows one row per server write, with short sentences for its fields.
+  Creation is condensed to the title and status, with any unavailable initial choices
+  stated separately. Separate writes are never grouped across comments or refusals.
+- Comments use the description's text-only editor. Only their author sees edit and delete
+  controls. A comment written offline is marked pending until it receives a server time.
 
 ### Closed and deleted tasks
 
@@ -599,8 +604,14 @@ little as possible; it is not the normal way to use the app (ADR 0005).
    login without coupling them. Not decided.
 4. **Deployment.** How one Compose stack runs either or both apps when they live in
    separate repositories.
-5. **Refused changes.** How the app tells the user that a change made offline was not
-   applied, beyond the entry in the task's log.
+5. **Refused changes — settled (2026-10-19).** A quiet notice inside the affected task,
+   with no toast or app-wide notification. It appears from the synced log on every device
+   for the user whose change was refused, stays until dismissed on that device, and links
+   to the exact history entry. One notice summarizes multiple unapplied updates; dismissing
+   it acknowledges those entries, and a later refusal brings it back. The entry says what
+   was wanted, what stood and why. A refused description links to the existing draft
+   recovery and review controls; another device can recover its document from the log.
+   Dismissal does not delete the history or a recovery draft.
 6. **Reordering the full-width backlog.** The gallery lays cards out in several columns per
    priority. Whether cards can be reordered there, and how a drop position reads in a
    masonry layout, is not designed.

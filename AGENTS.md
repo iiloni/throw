@@ -22,12 +22,12 @@ opens subtasks through the board's existing `openTaskId`. Its real content is su
 On a phone the same boundary hands the board's drawer the open task's dock and pickers
 (`TaskDetails/TaskControls.tsx`); the desktop pane hosts them in its own `TaskDrawer`.
 The activity log syncs to devices and comments are built (`lib/comments.ts`), with a
-timeline query in `collections.ts` but no timeline view yet. Tags have their data layer and
-reusable controls in `components/Tag*`, with a real-data `/prototype/tags` workshop in
+timeline query in `collections.ts` and a task history view in `TaskDetails/TaskTimeline.tsx`.
+Tags have their data layer and reusable controls in `components/Tag*`, with a real-data `/prototype/tags` workshop in
 development only. The board colour helper is `taskTagColor` in `@throw/shared`. The task
-pane picks and lists tags; tag management has no product entry point yet, and the timeline
-in the task pane is a separate step. Real-board dragging and keyboard moves are not wired
-yet.
+pane picks and lists tags; tag management has no product entry point yet. The task history
+interleaves server entries and comments; refused changes have a quiet task-only notice and
+description recovery links. Real-board dragging and keyboard moves are not wired yet.
 
 The board's interaction was worked out in a prototype on mock data: `/prototype/board`, in
 development builds only, with its components in `apps/web/src/components/Board`. It keeps

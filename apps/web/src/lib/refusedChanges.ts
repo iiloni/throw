@@ -10,8 +10,8 @@ const listeners = new Set<Listener>();
 
 /**
  * Hears about task changes the server did not apply because the field had changed or the
- * value was no longer valid (ADR 0005). How the app tells the user is not decided yet
- * (docs/spec.md, open questions); the change is in the task's log either way.
+ * value was no longer valid (ADR 0005). The task notice reads the synced log so it also
+ * reaches other devices; this callback is only for immediate sending-device handling.
  */
 export function onRefusedChanges(listener: Listener) {
   listeners.add(listener);
