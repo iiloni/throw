@@ -25,9 +25,12 @@ The activity log syncs to devices and comments are built (`lib/comments.ts`), wi
 timeline query in `collections.ts` but no timeline view yet. Tags have their data layer and
 reusable controls in `components/Tag*`, with a real-data `/prototype/tags` workshop in
 development only. The board colour helper is `taskTagColor` in `@throw/shared`. The task
-pane picks and lists tags; tag management has no product entry point yet, and the timeline
+pane picks and lists tags; project settings mounts tag management, and the timeline
 in the task pane is a separate step. Real-board dragging and keyboard moves are not wired
-yet.
+yet. Project settings lives at `/w/:workspaceId/p/:projectId/settings`, with project task
+trash beside it at `/trash`. Workspace trash is `/w/:workspaceId/trash`. Settings and trash
+forms use the shell's `ManagementSurface` host for the shared Drawer on phones and centred
+dialogs on desktop; project appearance reuses `ManagementForm`.
 
 The board's interaction was worked out in a prototype on mock data: `/prototype/board`, in
 development builds only, with its components in `apps/web/src/components/Board`. It keeps

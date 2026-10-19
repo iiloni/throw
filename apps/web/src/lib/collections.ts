@@ -60,6 +60,7 @@ import { getServerUrl } from './serverUrl';
 import { shapeFetch } from './shapeFetch';
 import { addPendingWrite, getSyncStatus, settlePendingWrite, updateSyncStatus } from './syncStatus';
 import { taskTimeline } from './timeline';
+import { writeRefusalMessage } from './writeRefusal';
 import {
   changeIdFor,
   commentCreateRequest,
@@ -573,7 +574,7 @@ function classifyWriteError(error: unknown): Error {
     }
     // A 404 is an edit to something deleted on another device before it arrived.
     if (error.status === 404) return reject('It was deleted on another device.');
-    return reject('The server turned it down.');
+    return reject(writeRefusalMessage(error.message) ?? 'The server turned it down.');
   }
   // `fetch` rejects when the server cannot be reached.
   updateSyncStatus({ offline: true });

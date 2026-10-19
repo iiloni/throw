@@ -1,9 +1,9 @@
 import { type Tag, tagSubtreeIds } from '@throw/shared';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { BottomSheet } from '@/components/BottomSheet/BottomSheet';
 import { IconButton } from '@/components/IconButton/IconButton';
-import { TagForm } from '@/components/TagForm/TagForm';
+import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
+import { TagEditor } from '@/components/TagForm/TagForm';
 import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { TagTree } from '@/components/TagTree/TagTree';
 import { Button } from '@/components/ui/button';
@@ -12,9 +12,7 @@ import { useAwaitingSync } from '@/lib/syncStatus';
 import { deleteTag } from '@/lib/tags';
 
 /**
- * Catch's tag settings as an embeddable project manager; no settings screen is wired. Its
- * editor and delete confirmation open in sheets for now; on phones they become drawer content
- * that replaces the manager (ADR 0009), using `TagEditor` and `TagDeleteConfirm`.
+ * Project tag management, using the settings drawer on phones and a dialog on desktop.
  */
 export function TagManager({ projectId }: { projectId: string }) {
   const { tags, isLoading } = useTags(projectId);
@@ -83,24 +81,28 @@ export function TagManager({ projectId }: { projectId: string }) {
         />
       )}
       {editing && (
-        <TagForm
-          projectId={projectId}
-          tags={tags}
-          initial={editing}
-          onDone={() => setEditing(null)}
-        />
+        <ManagementSurface
+          open
+          title={editing.tag ? 'Edit tag' : 'New tag'}
+          onClose={() => setEditing(null)}
+        >
+          <TagEditor
+            projectId={projectId}
+            tags={tags}
+            initial={editing}
+            onDone={() => setEditing(null)}
+          />
+        </ManagementSurface>
       )}
-      <BottomSheet
+      <ManagementSurface
         open={deleting !== null}
-        onOpenChange={(open) => {
-          if (!open) setDeleting(null);
-        }}
+        onClose={() => setDeleting(null)}
         title={`Delete ${deleting?.name ?? 'tag'}?`}
       >
         {deleting && (
           <TagDeleteConfirm tag={deleting} tags={tags} onDone={() => setDeleting(null)} />
         )}
-      </BottomSheet>
+      </ManagementSurface>
     </section>
   );
 }

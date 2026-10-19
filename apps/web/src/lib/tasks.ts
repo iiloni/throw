@@ -320,3 +320,16 @@ export function emptyTrash(workspaceId: string) {
     for (const project of projects) deleteProjectRows(project.id);
   });
 }
+
+/** Empties only the independent task roots in this project, as this device sees them. */
+export function emptyProjectTrash(projectId: string) {
+  const project = projectsCollection.get(projectId);
+  if (!project || project.deletedAt !== null) return;
+  const tasks = trashedItems(project.workspaceId).tasks.filter(
+    (task) => task.projectId === projectId,
+  );
+  if (!tasks.length) return;
+  write(() => {
+    for (const task of tasks) deleteTaskRows(task.id);
+  });
+}

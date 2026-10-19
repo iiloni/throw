@@ -35,6 +35,8 @@ export type ShellState = {
   goBoard: () => void;
   selectBoardView: (view: 'board' | 'search') => void;
   goSettings: () => void;
+  goProjectSettings: (project: Project) => void;
+  goTrash: (project?: Project) => void;
 };
 export const ShellContext = createContext<ShellState | null>(null);
 export function useShell() {

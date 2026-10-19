@@ -429,7 +429,11 @@ The owner has not reviewed these yet.
   survive closing and reloading. The outbox response retains refused text even with the pane
   closed; an acknowledgement only clears the matching pending save. The server also keeps
   refused text in its activity entry. Sign-out clears the account's device drafts.
-- **Deleting a project in the shell** now moves it to the trash. There is no trash view yet.
+- **Deleting a project in the shell** moves it to the trash. Workspace trash lists trashed
+  projects and independent task roots; project trash limits those task roots to one project.
+  Restoring a parent reveals any subtask trashed separately, which keeps its own restore and
+  purge controls. Inherited children have no independent controls while their owner is
+  trashed. Emptying a project's trash queues only that project's independent task roots.
 
 ### The log and comments
 
