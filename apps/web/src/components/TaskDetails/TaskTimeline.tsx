@@ -191,7 +191,7 @@ export function TaskTimeline({
             key={item.id}
             id={`history-${item.id}`}
             tabIndex={-1}
-            className="scroll-m-6 rounded-lg outline-none focus:ring-2 focus:ring-ring/60"
+            className="scroll-m-6 rounded-lg outline-none [overflow-wrap:anywhere] focus:ring-2 focus:ring-ring/60"
           >
             {item.type === 'comment' ? (
               <CommentRow comment={item.comment} pending={item.pending} />
