@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
+import { CARD_HELP_ID } from './BoardAnnouncer';
 import { carryAcross, carryVertically, pickUp, putBack, setDown } from './carry';
 import { consumeDragClick, drag, isPrimed, pressCard } from './drag';
 import { PriorityGlyph, StatusGlyph } from './glyphs';
@@ -174,13 +175,6 @@ export function TaskCard({
       onOpen();
       return;
     }
-    if (state.actions) {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        update({ openTaskId: task.id });
-      }
-      return;
-    }
     const arrows: Record<string, () => void> = {
       ArrowUp: () => carryVertically(-1),
       ArrowDown: () => carryVertically(1),
@@ -214,11 +208,10 @@ export function TaskCard({
       data-color={color ?? undefined}
       tabIndex={overlay ? -1 : 0}
       aria-label={`${identifier(project, task) ?? 'Pending'} ${task.title || 'Untitled task'}`}
-      aria-roledescription={state.actions ? 'Task card' : 'Card. Space picks it up to move it.'}
+      aria-roledescription="Task card"
+      aria-describedby={overlay || onOpen ? undefined : CARD_HELP_ID}
       aria-current={open ? 'true' : undefined}
-      onPointerDown={
-        overlay || state.actions || onOpen ? undefined : (event) => pressCard(event, task.id)
-      }
+      onPointerDown={overlay || onOpen ? undefined : (event) => pressCard(event, task.id)}
       onClick={onClick}
       onKeyDown={overlay ? undefined : onKeyDown}
       onContextMenu={(event) => {

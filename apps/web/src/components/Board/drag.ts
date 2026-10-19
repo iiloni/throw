@@ -6,9 +6,12 @@ import type { Priority } from './model';
 import {
   board,
   current,
+  holdBoard,
   type ListId,
   listStatusId,
+  moveToPlace,
   placeInList,
+  releaseBoard,
   sendTasks,
   toggleSelected,
   update,
@@ -299,6 +302,7 @@ function begin() {
     page: 0,
   });
   document.documentElement.dataset.dragging = '';
+  holdBoard();
   tick(12);
   // Before the first render, so the gap opens where the card already is.
   resolve();
@@ -405,6 +409,45 @@ function indexIn(list: HTMLElement, priority: Priority, y: number, height: numbe
   return index;
 }
 
+type Box = { top: number; left: number; width: number };
+
+/**
+ * Where among a gallery's cards, read left to right and then down, a card centred on `x`,
+ * `y` belongs. Measured from layout, not from where the cards are drawn mid-animation, and
+ * as if no gap were open: past the gap each card stands where the one before it would be.
+ */
+function gridIndex(list: HTMLElement, priority: Priority, x: number, y: number, ids: string[]) {
+  const boxes: Box[] = [];
+  let previous: Box | null = null;
+  let shifted = false;
+  for (const element of list.querySelectorAll<HTMLElement>('[data-gap], [data-slot]')) {
+    const parent = element.offsetParent;
+    if (!(parent instanceof HTMLElement) || element.hidden) continue;
+    const origin = parent.getBoundingClientRect();
+    const box = {
+      top: origin.top + element.offsetTop,
+      left: origin.left + element.offsetLeft,
+      width: element.offsetWidth,
+    };
+    if (element.dataset.gap !== undefined) {
+      shifted = true;
+      previous = box;
+      continue;
+    }
+    if (Number(element.dataset.zone) !== priority || ids.includes(element.dataset.slot ?? ''))
+      continue;
+    boxes.push(shifted && previous ? previous : box);
+    previous = box;
+  }
+  // The row the card is in: the last one starting above its centre.
+  const rows = [...new Set(boxes.map((box) => Math.round(box.top)))].sort((a, b) => a - b);
+  const row = rows.filter((top) => top <= y).at(-1) ?? rows[0];
+  return boxes.filter((box) => {
+    const top = Math.round(box.top);
+    return top < (row ?? 0) || (top === row && box.left + box.width / 2 < x);
+  }).length;
+}
+
 function resolve() {
   const state = drag.get();
   if (state?.phase !== 'dragging') return;
@@ -463,8 +506,12 @@ function resolve() {
   }
 
   const centre = pointer.y - grab.y + state.height / 2;
-  if (config.heldColumn === 'full') priority = zoneAt(list, centre, priority);
-  const index = indexIn(list, priority, centre, state.height, state.ids);
+  // A gallery keeps its layout under a held card, as a column does in Full.
+  const grid = list.dataset.layout === 'grid';
+  if (config.heldColumn === 'full' || grid) priority = zoneAt(list, centre, priority);
+  const index = grid
+    ? gridIndex(list, priority, pointer.x - grab.x + overlayWidth.get() / 2, centre, state.ids)
+    : indexIn(list, priority, centre, state.height, state.ids);
   set({ target: { kind: 'place', listId, priority, index }, priority, rail });
 }
 
@@ -541,19 +588,35 @@ function finish(commit: boolean) {
   const wasTouch = press?.touch ?? false;
   release();
   if (!state) return;
-  const [lead] = state.ids;
-  const target = commit ? state.target : null;
+  const lead = state.ids[0]!;
+  let target = commit ? state.target : null;
+  // Placed among the cards the person saw, before the sync held back meanwhile comes in.
+  const place =
+    target?.kind === 'place'
+      ? placeInList(lead, target.listId, target.priority, target.index)
+      : null;
+  const movable = releaseBoard(state.ids);
+  if (target && movable.length < state.ids.length) {
+    update({
+      announcement:
+        state.ids.length === 1
+          ? 'Not moved: it changed on another device while it was held.'
+          : `${state.ids.length - movable.length} not moved: they changed on another device while they were held.`,
+    });
+    // The card under the finger goes back to where the server has it.
+    if (!movable.includes(lead)) target = null;
+  }
   if (target?.kind === 'place') {
-    placeInList(lead!, target.listId, target.priority, target.index);
+    if (place) moveToPlace(lead, place);
   } else if (target) {
     const statusId = target.kind === 'status' ? target.statusId : listStatusId(target.listId);
-    if (statusId) sendTasks(state.ids, statusId);
+    if (statusId) sendTasks(movable, statusId);
   }
   if (target && state.ids.length > 1) update({ selection: [] });
   if (!wasTouch) swallowClick();
   if (target) tick(14);
   drag.set({ ...state, phase: 'landing', target: null, rail: null });
-  land(lead!, target?.kind === 'status' ? target.statusId : null);
+  land(lead, target?.kind === 'status' ? target.statusId : null);
 }
 
 function settle() {

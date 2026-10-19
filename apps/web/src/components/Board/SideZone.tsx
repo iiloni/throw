@@ -14,6 +14,7 @@ import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { CardList } from './CardList';
 import { drag } from './drag';
+import { BacklogGallery } from './Gallery';
 import { type Category, groupByPriority, priorityName, type Status } from './model';
 import { StatusTile } from './StatusTile';
 import { board, countIn, createTask, current, listTasks, update, type ZoneState } from './state';
@@ -162,7 +163,9 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
               </IconButton>
             </div>
             <StatusFilter zone={zone} />
-            {view === 'full' ? (
+            {view === 'full' && zone === 'backlog' ? (
+              <BacklogGallery showStatus={state.backlogFilter === null} />
+            ) : view === 'full' ? (
               <Gallery zone={zone} />
             ) : zone === 'backlog' ? (
               <CardList

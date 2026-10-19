@@ -123,6 +123,13 @@ export type Placement = {
   peers: Task[];
 };
 
+/** A task's place on the board: what one move writes, all three together (ADR 0008). */
+export type Place = { statusId: string; priority: Priority; position: string };
+
+export function placeOf(task: Task): Place {
+  return { statusId: task.statusId, priority: task.priority, position: task.position };
+}
+
 function withStatus(project: Project, task: Task, statusId: string, now: number): Task {
   if (statusId === task.statusId) return task;
   const from = statusById(project, task.statusId);
@@ -139,6 +146,37 @@ function withStatus(project: Project, task: Task, statusId: string, now: number)
   };
 }
 
+/** The task as it is once moved to `place`. */
+export function moveTo(project: Project, task: Task, place: Place, now = Date.now()): Task {
+  const moved = withStatus(project, task, place.statusId, now);
+  // A subtask's position orders it among its parent's subtasks, not in a column, so a
+  // card that stands for one keeps it.
+  const position = task.parentId === null ? place.position : task.position;
+  return { ...moved, priority: place.priority, position };
+}
+
+/** Where a placement puts a task, worked out from the peers it was shown among. */
+export function placementPlace(task: Task, placement: Placement): Place {
+  const peers = placement.peers.filter((peer) => peer.id !== task.id);
+  const index = Math.max(0, Math.min(placement.index, peers.length));
+  const before = peers[index - 1];
+  const after = peers[index];
+  const statusId = placement.statusId ?? task.statusId;
+  // Put down where it already was: nothing to write.
+  if (
+    statusId === task.statusId &&
+    placement.priority === task.priority &&
+    (!before || compareTasks(before, task) < 0) &&
+    (!after || compareTasks(task, after) < 0)
+  )
+    return placeOf(task);
+  return {
+    statusId,
+    priority: placement.priority,
+    position: positionBetween(before?.position ?? null, after?.position ?? null),
+  };
+}
+
 /** Moves one task to an exact place in a priority zone. */
 export function placeTask(
   project: Project,
@@ -147,17 +185,23 @@ export function placeTask(
   placement: Placement,
   now = Date.now(),
 ): Task[] {
-  const peers = placement.peers.filter((task) => task.id !== taskId);
-  const index = Math.max(0, Math.min(placement.index, peers.length));
-  const position = positionBetween(
-    peers[index - 1]?.position ?? null,
-    peers[index]?.position ?? null,
+  return tasks.map((task) =>
+    task.id === taskId ? moveTo(project, task, placementPlace(task, placement), now) : task,
   );
-  return tasks.map((task) => {
-    if (task.id !== taskId) return task;
-    const moved = placement.statusId ? withStatus(project, task, placement.statusId, now) : task;
-    return { ...moved, priority: placement.priority, position };
-  });
+}
+
+/**
+ * Whether another device moved a task while this one held it: its status, priority or parent
+ * is no longer what the person saw when they picked it up. The server would keep its own
+ * values over a move made from that view (ADR 0005), so the board does not send one.
+ */
+export function movedElsewhere(seen: Task, live: Task | undefined) {
+  return (
+    live === undefined ||
+    live.statusId !== seen.statusId ||
+    live.priority !== seen.priority ||
+    live.parentId !== seen.parentId
+  );
 }
 
 /**

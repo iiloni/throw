@@ -1,13 +1,22 @@
-import { identifier, isClosed, type Priority, priorityName, statusById } from './model';
+import {
+  identifier,
+  isClosed,
+  moveTo,
+  type Priority,
+  priorityName,
+  sendToStatus,
+  statusById,
+} from './model';
 import {
   board,
+  carryTo,
   current,
+  finishCarrying,
   type ListId,
   listTasks,
   placeInList,
-  restoreTasks,
   revealStatus,
-  sendTasks,
+  startCarrying,
   update,
 } from './state';
 
@@ -15,6 +24,8 @@ import {
  * Moving a card from the keyboard: Space picks it up, the arrows move it, Space or Enter
  * sets it down and Escape puts it back. Up and down cross priority zones the way a drag
  * does; left and right walk the project's statuses, opening a side zone to follow the card.
+ * The card is shown where it is carried and written once, when it is set down, so a walk
+ * across five columns is one move in the task's history, not five.
  */
 
 function describe(taskId: string) {
@@ -41,25 +52,39 @@ function listOf(taskId: string): ListId | null {
 }
 
 export function pickUp(taskId: string) {
-  update((state) => ({
-    // A card travels with its subtasks folded away.
-    expanded: state.expanded.filter((id) => id !== taskId),
-    carrying: { taskId, before: current().tasks },
+  // A card travels with its subtasks folded away.
+  update((state) => ({ expanded: state.expanded.filter((id) => id !== taskId) }));
+  if (!startCarrying(taskId)) return;
+  update({
     announcement: `Picked up. ${describe(taskId)}. Arrows move it, Space sets it down, Escape puts it back.`,
-  }));
+  });
 }
 
 export function setDown() {
   const carrying = board.get().carrying;
   if (!carrying) return;
-  update({ carrying: null, announcement: `Set down. ${describe(carrying.taskId)}` });
+  const result = finishCarrying();
+  update({
+    announcement:
+      result === 'refused'
+        ? `Not moved: it changed on another device while it was carried. ${describe(carrying.taskId)}`
+        : result === 'unchanged'
+          ? `Set down where it was. ${describe(carrying.taskId)}`
+          : `Set down. ${describe(carrying.taskId)}`,
+  });
 }
 
 export function putBack() {
-  const carrying = board.get().carrying;
-  if (!carrying) return;
-  restoreTasks(carrying.before);
+  if (!board.get().carrying) return;
   update({ carrying: null, announcement: 'Put back where it was.' });
+}
+
+/** Shows the carried card at its new place. */
+function carryPlaced(taskId: string, listId: ListId, priority: Priority, index: number) {
+  const { project, tasks } = current();
+  const task = tasks.find((item) => item.id === taskId);
+  const place = placeInList(taskId, listId, priority, index);
+  if (task && place) carryTo(moveTo(project, task, place));
 }
 
 export function carryVertically(direction: -1 | 1) {
@@ -78,13 +103,13 @@ export function carryVertically(direction: -1 | 1) {
   const index = zone.findIndex((item) => item.id === taskId);
   const next = index + direction;
   if (next >= 0 && next < zone.length) {
-    placeInList(taskId, listId, task.priority, next);
+    carryPlaced(taskId, listId, task.priority, next);
   } else {
     // Off the end of its zone: into the neighbouring priority, at the near end.
     const priority = task.priority + direction;
     if (priority < 1 || priority > 5) return;
     const size = tasks.filter((item) => item.priority === priority).length;
-    placeInList(taskId, listId, priority as Priority, direction === 1 ? 0 : size);
+    carryPlaced(taskId, listId, priority as Priority, direction === 1 ? 0 : size);
   }
   update({ announcement: describe(taskId) });
 }
@@ -97,7 +122,8 @@ export function carryAcross(direction: -1 | 1) {
   const index = project.statuses.findIndex((status) => status.id === task.statusId);
   const next = project.statuses[index + direction];
   if (!next) return;
-  sendTasks([taskId], next.id);
+  const moved = sendToStatus(project, tasks, [taskId], next.id).find((item) => item.id === taskId);
+  if (moved) carryTo(moved);
   revealStatus(next.id);
   update({ announcement: describe(taskId) });
 }

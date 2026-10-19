@@ -10,13 +10,27 @@ import { useStatuses, useTags, useTasks } from '@/lib/collections';
 import { flushTaskDescription } from '@/lib/descriptionEditing';
 import { useMedia } from '@/lib/media';
 import { useAwaitingSync } from '@/lib/syncStatus';
-import { createTask, sendTask, updateTask } from '@/lib/tasks';
+import { createTask, moveTask, sendTask, updateTask } from '@/lib/tasks';
+import { BoardAnnouncer } from './BoardAnnouncer';
+import { putBack } from './carry';
 import { DesktopBoard } from './DesktopBoard';
+import { DragOverlay } from './DragOverlay';
+import { configureDrag, drag } from './drag';
+import type { Place } from './model';
 import { PhoneBoard } from './PhoneBoard';
 import { projectBoardData } from './selection';
 import { board, leaveTask, receiveBoard, update, useBoardSettings } from './state';
 import { TaskScreen } from './TaskView';
 import { TaskContentContext } from './taskContent';
+
+function attempt(write: () => void) {
+  try {
+    write();
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** Only this boundary knows collections and writes; the prototype shares the whole board. */
 export function ProjectBoard({
@@ -33,6 +47,7 @@ export function ProjectBoard({
   const phone = useMedia('(max-width: 767px)');
   const state = board.use();
   const [settings] = useBoardSettings();
+  configureDrag({ heldColumn: settings.heldColumn });
   const data = useMemo(
     () => projectBoardData(project, statuses, tasks, tags),
     [project, statuses, tasks, tags],
@@ -47,9 +62,12 @@ export function ProjectBoard({
       beforeLeave: flushTaskDescription,
       create: (statusId?: string) => createTask(project.id, { statusId, title: 'New task' }),
       rename: (id: string, title: string) => updateTask(id, { title }),
-      send: (ids: string[], statusId: string) => {
-        for (const id of [...ids].reverse()) sendTask(id, statusId);
-      },
+      // A task purged or a status deleted on another device cannot be moved to; the board
+      // falls back to what sync has.
+      place: (id: string, place: Place) => attempt(() => moveTask(id, place)),
+      send: (ids: string[], statusId: string) =>
+        // Last first, so the first lands on top.
+        [...ids].reverse().every((id) => attempt(() => sendTask(id, statusId))),
     }),
     [project.id],
   );
@@ -69,11 +87,16 @@ export function ProjectBoard({
   useEffect(() => {
     function close(event: KeyboardEvent) {
       if (
-        event.key === 'Escape' &&
-        !event.defaultPrevented &&
-        !document.querySelector('[role="menu"], [role="dialog"]')
+        event.key !== 'Escape' ||
+        event.defaultPrevented ||
+        drag.get() ||
+        document.querySelector('[role="menu"], [role="dialog"]')
       )
-        leaveTask();
+        return;
+      const { carrying, selection } = board.get();
+      if (carrying) putBack();
+      else if (selection.length > 0) update({ selection: [] });
+      else leaveTask();
     }
     window.addEventListener('keydown', close);
     return () => window.removeEventListener('keydown', close);
@@ -151,6 +174,8 @@ export function ProjectBoard({
               <TaskScreen key={task.id} task={task} covered={task !== openTask} />
             ))}
         </AnimatePresence>
+        <DragOverlay />
+        <BoardAnnouncer />
       </div>
     </TaskContentContext.Provider>
   );
