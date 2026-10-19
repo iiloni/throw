@@ -362,6 +362,77 @@ test('workspace board asks for capture project; phone search and capture sit abo
   );
 });
 
+test('a picker over the capture card trades places with the keyboard without a bounce', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'The capture card is the phone drawer’s');
+  await fixture(page);
+  await page.getByRole('button', { name: 'New task', exact: true }).click();
+  await page.evaluate(() => document.documentElement.style.setProperty('--keyboard', '320px'));
+  // Waits for the card's own entrance to settle.
+  const controls = captureControls(page);
+  let rest = 0;
+  await expect
+    .poll(async () => {
+      const [last, top] = [rest, (await controls.boundingBox())!.y];
+      rest = top;
+      return top === last && top < page.viewportSize()!.height - 320;
+    })
+    .toBe(true);
+  // Plays the keyboard leaving or arriving a moment after the tap, as Android does, and
+  // records where the dock is on each frame.
+  const trace = (target: 'Status' | 'radio', from: number, to: number) =>
+    page.evaluate(
+      async ({ target, from, to }) => {
+        const root = document.documentElement;
+        const dock = document.querySelector('[aria-label="New task controls"]')!;
+        const tops: number[] = [];
+        const until = performance.now() + 1200;
+        const sample = () => {
+          tops.push(Math.round(dock.getBoundingClientRect().top));
+          if (performance.now() < until) requestAnimationFrame(sample);
+        };
+        const button =
+          target === 'Status'
+            ? dock.querySelector<HTMLElement>('button')
+            : document.querySelector<HTMLElement>('[role="radiogroup"] input[type="radio"]');
+        button!.click();
+        sample();
+        await new Promise((resolve) => setTimeout(resolve, from ? 60 : 180));
+        const start = performance.now();
+        await new Promise<void>((resolve) => {
+          const step = () => {
+            const t = Math.min(1, (performance.now() - start) / 250);
+            root.style.setProperty('--keyboard', `${from + (to - from) * (1 - (1 - t) ** 3)}px`);
+            if (t < 1) requestAnimationFrame(step);
+            else resolve();
+          };
+          step();
+        });
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        return tops;
+      },
+      { target, from, to },
+    );
+  const opening = await trace('Status', 320, 0);
+  await expect(page.getByRole('radiogroup', { name: 'Status' })).toBeVisible();
+  const closing = await trace('radio', 0, 320);
+  await expect(page.getByRole('radiogroup', { name: 'Status' })).toHaveCount(0);
+  for (const tops of [opening, closing]) {
+    // Rounding to whole pixels can step back one.
+    const moves = tops
+      .slice(1)
+      .map((top, i) => top - tops[i]!)
+      .filter((move) => Math.abs(move) > 1)
+      .map(Math.sign);
+    expect(new Set(moves).size, tops.join(' ')).toBeLessThanOrEqual(1);
+  }
+  expect(opening.at(-1)).toBeGreaterThan(opening[0]!);
+  expect(Math.abs(closing.at(-1)! - opening[0]!)).toBeLessThanOrEqual(1);
+  await page.keyboard.press('Escape');
+});
+
 test('palette remains usable with reduced motion in light and dark', async ({
   page,
   isMobile,

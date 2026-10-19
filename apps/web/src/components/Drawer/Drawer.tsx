@@ -1,5 +1,13 @@
 import { X } from 'lucide-react';
-import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion } from 'motion/react';
+import {
+  AnimatePresence,
+  animate,
+  type MotionStyle,
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useTransform,
+} from 'motion/react';
 import {
   type CSSProperties,
   type ReactNode,
@@ -63,8 +71,9 @@ export type DrawerCard = {
  * unless it is full and its own list is being reordered. Raised, it sits above a full-screen
  * view such as an open task, and its dock rides above the keyboard as a note's dock does in
  * Catch. Otherwise an open page ends above the keyboard, so its input stays in view. A card
- * floats above the dock, which rides above the keyboard with it, and so do pickers opened
- * over the card as the keyboard goes away.
+ * floats above the dock, which rides above the keyboard with it. A page opened over the card
+ * takes the keyboard's place rather than stacking on it, so the card glides between the two
+ * instead of bouncing as one leaves and the other arrives.
  */
 export function Drawer({
   label,
@@ -114,14 +123,28 @@ export function Drawer({
   // Read by effects that run once per opening, after the props that opened them.
   const latest = useRef({ page, card });
   latest.current = { page, card };
+  // How far an open page lifts the dock. Over a card, the keyboard and a page share that
+  // room, unless the page has a field of its own being typed in, which needs both.
+  const closedAt = useRef(0);
+  const reveal = useTransform(y, (at) => `${closedAt.current - at}px`);
+  const [typingInPage, setTypingInPage] = useState(false);
+  const holding = useRef(0);
   const closeTop = () => (paged ? onClosePage() : card?.onClose());
   // A docked page stays while the drawer settles, so closing it never shows what is beneath.
   const [leaving, setLeaving] = useState<DrawerPage | null>(null);
   const last = useRef(page);
   const shown = page ?? leaving;
 
-  const offsets = () =>
-    drawerOffsets(surface.current, head.current, safe.current, page?.fit ? body.current : null);
+  const offsets = () => {
+    const at = drawerOffsets(
+      surface.current,
+      head.current,
+      safe.current,
+      page?.fit ? body.current : null,
+    );
+    closedAt.current = at.closed;
+    return at;
+  };
   const restingAt = (at: ReturnType<typeof offsets>) =>
     sunk ? at.sunk : paged ? at.page : at[detent];
 
@@ -168,11 +191,31 @@ export function Drawer({
     const at = offsets();
     setHidden(detent === 'half' && !paged ? at.half : 0);
     const closing = !page && last.current?.dock ? last.current : null;
+    const opening = paged && !last.current;
     last.current = page;
     setLeaving(closing);
+    const run = ++holding.current;
     if (placed.current) {
-      const settling = animate(y, restingAt(at), reduced ? { duration: 0 } : springs.smooth);
-      if (closing) void settling.then(() => setLeaving((now) => (now === closing ? null : now)));
+      // A picker opened over the card is already as high as the keyboard it replaces, hidden
+      // behind it, so the dock only follows the keyboard down to where the picker ends.
+      if (opening && carded && !typingInPage)
+        y.jump(Math.min(y.get(), at.closed - Math.min(keyboardHeight(), at.closed - at.page)));
+      const settle = () =>
+        run === holding.current
+          ? animate(y, restingAt(at), reduced ? { duration: 0 } : springs.smooth)
+          : undefined;
+      // Closing a picker over the card sends focus back to its field, and the keyboard rises a
+      // moment later. The picker holds its room until then, so the card does not dip between.
+      const field = latest.current.card?.focus?.current;
+      const settling =
+        closing && field && !typingInPage && !reduced
+          ? keyboardReturn(closedAt.current - y.get(), () => run !== holding.current).then(settle)
+          : Promise.resolve(settle());
+      void settling.then(() => {
+        if (run !== holding.current) return;
+        if (closing) setLeaving((now) => (now === closing ? null : now));
+        if (!paged) setTypingInPage(false);
+      });
     } else y.jump(restingAt(at));
     placed.current = true;
   }, [sunk, detent, paged, page?.key, y, reduced]);
@@ -268,17 +311,19 @@ export function Drawer({
         data-page={page?.key}
         data-drop-block=""
         data-origin={page ? page.origin : origin}
-        style={{ y }}
+        style={{ y, '--drawer-reveal': reveal } as MotionStyle}
         className={cn(
           'glass-thick fixed inset-x-0 top-[calc(var(--safe-top)+0.5rem)] mx-auto flex w-full max-w-md flex-col rounded-t-[1.75rem] outline-none',
           raised ? 'z-[45]' : 'z-30',
-          // Over a card, a picker puts the keyboard away: the drawer keeps its full height and
-          // slides down with the keyboard, so the picker settles low, by the fingers.
-          raised || carded
-            ? 'bottom-0 [translate:0_calc(var(--keyboard)*-1)]'
-            : paged
-              ? 'bottom-[var(--keyboard)]'
-              : 'bottom-0',
+          // Over a card, the drawer keeps its full height and the keyboard rides under the dock
+          // until a page reaches past it, so a picker settles low, by the fingers.
+          carded && !typingInPage
+            ? 'bottom-0 [translate:0_calc(max(0px,var(--keyboard)-var(--drawer-reveal))*-1)]'
+            : raised || carded
+              ? 'bottom-0 [translate:0_calc(var(--keyboard)*-1)]'
+              : paged
+                ? 'bottom-[var(--keyboard)]'
+                : 'bottom-0',
         )}
       >
         <AnimatePresence>
@@ -339,10 +384,14 @@ export function Drawer({
           style={{ '--drawer-hidden': `${hidden}px` } as CSSProperties}
         >
           {shown ? (
+            // biome-ignore lint/a11y/noStaticElementInteractions: notes where focus went, without handling it
             <div
               ref={body}
               key={shown.key}
               inert={!page}
+              onFocus={(event) => {
+                if (carded && page && typing(event.target)) setTypingInPage(true);
+              }}
               className={cn('flex min-h-0 flex-col', shown.fit ? 'max-h-full' : 'flex-1')}
             >
               {shown.content}
@@ -354,6 +403,38 @@ export function Drawer({
       </motion.section>
     </>
   );
+}
+
+function keyboardHeight() {
+  return Number.parseFloat(document.documentElement.style.getPropertyValue('--keyboard')) || 0;
+}
+
+function typing(element: EventTarget) {
+  return (
+    element instanceof HTMLElement &&
+    (element.isContentEditable ||
+      element.matches('textarea, input:not([type="checkbox"], [type="radio"], [type="button"])'))
+  );
+}
+
+/**
+ * Resolves once the keyboard has risen past `height` or come to rest, or after a while if it
+ * never comes, as with a hardware keyboard.
+ */
+function keyboardReturn(height: number, cancelled: () => boolean) {
+  const start = performance.now();
+  return new Promise<void>((resolve) => {
+    let previous = -1;
+    const step = () => {
+      if (cancelled()) return;
+      const keyboard = keyboardHeight();
+      const rested = keyboard > 0 && keyboard === previous;
+      if (keyboard >= height || rested || performance.now() - start > 600) return resolve();
+      previous = keyboard;
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
 }
 
 /**
