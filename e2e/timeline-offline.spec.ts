@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { expect, type Page, test } from '@playwright/test';
 import { APP_LOAD_TIMEOUT, shapeRows, signUp } from './helpers';
 
-// As in `tasks-offline.spec.ts`, this drives the app's own actions in the page: the timeline
-// view is not built yet. The dev server serves each module at its source path, so `import()`
+// As in `tasks-offline.spec.ts`, this drives the app's own actions independently of the
+// task view. The dev server serves each module at its source path, so `import()`
 // returns the modules the app runs, with the same collections and outbox.
 
 const json = { 'Content-Type': 'application/json' };
@@ -164,9 +164,13 @@ test('comments and task edits made offline join the timeline in the server’s o
   // title loses to the rename and the priority applies; the comment edit that arrived last
   // stands; the comment deleted offline is gone; the one written and deleted offline never
   // shows.
+  // Reconnecting leaves the outbox's exponential retry timer intact. A refusal can
+  // legitimately arrive after the default five-second assertion window.
   await expect
-    .poll(() =>
-      page.evaluate(() => (window as unknown as { refusedChangeIds: string[] }).refusedChangeIds),
+    .poll(
+      () =>
+        page.evaluate(() => (window as unknown as { refusedChangeIds: string[] }).refusedChangeIds),
+      { timeout: 60_000 },
     )
     .toHaveLength(1);
   // A refusal names the entry that records it.
