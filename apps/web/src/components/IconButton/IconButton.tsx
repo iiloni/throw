@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 type Props = React.ComponentProps<typeof Button> & {
   /** Accessible name, also shown as the tooltip in browsers. */
   label: string;
-  /** Docks go without: a tooltip left closing as the dock hides would take the next Escape. */
+  /** Docks go without: a tooltip left open as the dock hides would take the next Escape. */
   tooltip?: boolean;
 };
 
