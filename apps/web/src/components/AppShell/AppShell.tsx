@@ -2,14 +2,16 @@ import { Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { comparePositions } from '@throw/shared';
 import {
   Columns3,
+  MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
-  Pencil,
   Plus,
   Search,
   Settings2,
+  Trash2,
 } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
+import { DropdownMenu } from 'radix-ui';
 import { type ReactNode, useEffect, useState } from 'react';
 import { z } from 'zod';
 import { ShellMenu } from '@/components/AppShell/ShellMenu';
@@ -25,6 +27,7 @@ import { board, update } from '@/components/Board/state';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { CommandPalette, type PaletteMode } from '@/components/CommandPalette/CommandPalette';
 import { Dock } from '@/components/Dock/Dock';
+import { ManagementSurfaceProvider } from '@/components/ManagementSurface/ManagementSurface';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { type ShellForm, ShellForms } from '@/components/ShellForms/ShellForms';
@@ -49,6 +52,10 @@ export function AppShell() {
   const rawParams = useRouterState({ select: (state) => state.matches.at(-1)?.params });
   const params = paramsSchema.parse(rawParams ?? {});
   const location = useRouterState({ select: (state) => state.location });
+  // Keep the shell with the rendered route while its replacement loads.
+  const displayedPath = useRouterState({
+    select: (state) => state.matches.at(-1)?.pathname ?? state.location.pathname,
+  });
   const navigating = useRouterState({ select: (state) => state.isLoading });
   const { workspaces: allWorkspaces, isLoading: loadingWorkspaces } = useWorkspaces();
   const { projects: allProjects, isLoading: loadingProjects } = useProjects();
@@ -86,10 +93,10 @@ export function AppShell() {
       : allProjects.length,
   );
   const view = viewSchema.catch('board').parse((location.search as { view?: unknown }).view);
-  const crossBoard = location.pathname.endsWith('/board');
-  const projectBoard = !!project;
+  const crossBoard = displayedPath.endsWith('/board');
+  const projectBoard = !!project && !/\/(settings|trash)$/.test(displayedPath);
   const boardState = board.use();
-  const settings = location.pathname === '/settings';
+  const settings = displayedPath === '/settings';
 
   useEffect(() => {
     if (navigating || !workspace || !params.workspaceId) return;
@@ -199,7 +206,7 @@ export function AppShell() {
     openTask: (projectId, taskId, created) => {
       if (!workspace) return;
       setPendingTask({ projectId, taskId, created });
-      if (project?.id !== projectId) selectProject(workspace.id, projectId);
+      if (project?.id !== projectId || !projectBoard) selectProject(workspace.id, projectId);
     },
     selectBoardView: (view) => {
       if (workspace)
@@ -209,6 +216,21 @@ export function AppShell() {
           search: { view },
           replace: true,
         });
+    },
+    goProjectSettings: (project) => {
+      void navigate({
+        to: '/w/$workspaceId/p/$projectId/settings',
+        params: { workspaceId: project.workspaceId, projectId: project.id },
+      });
+    },
+    goTrash: (project) => {
+      if (project)
+        void navigate({
+          to: '/w/$workspaceId/p/$projectId/trash',
+          params: { workspaceId: project.workspaceId, projectId: project.id },
+        });
+      else if (workspace)
+        void navigate({ to: '/w/$workspaceId/trash', params: { workspaceId: workspace.id } });
     },
     goSettings: () => {
       void navigate({ to: '/settings' });
@@ -223,144 +245,183 @@ export function AppShell() {
       >
         Skip to content
       </a>
-      <div className="flex min-h-dvh">
-        {desktop && (
-          <motion.aside
-            aria-label="Navigation rail"
-            data-expanded={expanded}
-            initial={false}
-            animate={{ width: expanded ? 248 : 80 }}
-            transition={reduced ? { duration: 0 } : { ...springs.smooth, bounce: 0 }}
-            className="glass sticky top-0 flex h-dvh shrink-0 flex-col overflow-hidden border-y-0 border-l-0 pt-[calc(var(--safe-top)+0.75rem)] pb-[calc(var(--safe-bottom)+0.75rem)] pl-[var(--safe-left)]"
-          >
-            {/*
+      <ManagementSurfaceProvider active={!projectBoard}>
+        <div className="flex min-h-dvh">
+          {desktop && (
+            <motion.aside
+              aria-label="Navigation rail"
+              data-expanded={expanded}
+              initial={false}
+              animate={{ width: expanded ? 248 : 80 }}
+              transition={reduced ? { duration: 0 } : { ...springs.smooth, bounce: 0 }}
+              className="glass sticky top-0 flex h-dvh shrink-0 flex-col overflow-hidden border-y-0 border-l-0 pt-[calc(var(--safe-top)+0.75rem)] pb-[calc(var(--safe-bottom)+0.75rem)] pl-[var(--safe-left)]"
+            >
+              {/*
               Inset so the mark sits on the rail's icon column. The lockup measures this box
               and falls back to the mark alone once the collapsed rail is too narrow for it.
             */}
-            <div className="mb-2 pr-3 pl-[1.125rem]">
-              <BrandLockup orientation="horizontal" iconSize={32} />
-            </div>
-            <div className="px-3">
-              <ShellMenu expanded={expanded} />
-            </div>
-            {workspace && (
-              <div className="mt-3 px-3">
-                <RailButton label="Search" expanded={expanded} onClick={() => setPalette('search')}>
-                  <Search className="size-5" aria-hidden />
+              <div className="mb-2 pr-3 pl-[1.125rem]">
+                <BrandLockup orientation="horizontal" iconSize={32} />
+              </div>
+              <div className="px-3">
+                <ShellMenu expanded={expanded} />
+              </div>
+              {workspace && (
+                <div className="mt-3 px-3">
+                  <RailButton
+                    label="Search"
+                    expanded={expanded}
+                    onClick={() => setPalette('search')}
+                  >
+                    <Search className="size-5" aria-hidden />
+                  </RailButton>
+                </div>
+              )}
+              <nav
+                aria-label="Projects"
+                className="mt-5 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden px-3"
+              >
+                {projects.map((item) => (
+                  <div key={item.id} className="group/project relative shrink-0">
+                    <RailButton
+                      label={item.name}
+                      href={`/w/${item.workspaceId}/p/${item.id}?view=board`}
+                      expanded={expanded}
+                      active={project?.id === item.id}
+                      className={expanded ? 'pr-11' : undefined}
+                      onClick={() => selectProject(item.workspaceId, item.id)}
+                    >
+                      <span
+                        data-color={item.color}
+                        className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-tint text-tint-accent"
+                      >
+                        <ProjectIcon name={item.icon} className="size-5" />
+                      </span>
+                    </RailButton>
+                    {expanded && (
+                      <DropdownMenu.Root>
+                        <DropdownMenu.Trigger asChild>
+                          <button
+                            type="button"
+                            aria-label={`Project menu for ${item.name}`}
+                            className="absolute top-2 right-1 flex size-8 items-center justify-center rounded-full bg-background/80 text-muted-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            <MoreHorizontal aria-hidden className="size-4" />
+                          </button>
+                        </DropdownMenu.Trigger>
+                        <DropdownMenu.Portal>
+                          <DropdownMenu.Content
+                            align="start"
+                            side="right"
+                            sideOffset={8}
+                            collisionPadding={12}
+                            className="glass-thick z-40 min-w-48 rounded-2xl p-2"
+                          >
+                            <DropdownMenu.Item
+                              className="flex min-h-11 cursor-pointer items-center rounded-xl px-3 text-sm outline-none focus:bg-accent"
+                              onSelect={() => context.goProjectSettings(item)}
+                            >
+                              Project settings
+                            </DropdownMenu.Item>
+                            <DropdownMenu.Item
+                              className="flex min-h-11 cursor-pointer items-center rounded-xl px-3 text-sm outline-none focus:bg-accent"
+                              onSelect={() => context.goTrash(item)}
+                            >
+                              Project trash
+                            </DropdownMenu.Item>
+                          </DropdownMenu.Content>
+                        </DropdownMenu.Portal>
+                      </DropdownMenu.Root>
+                    )}
+                  </div>
+                ))}
+                {workspace && (
+                  <RailButton
+                    label="New project"
+                    expanded={expanded}
+                    onClick={() => setForm({ kind: 'new-project', workspace })}
+                  >
+                    <Plus aria-hidden className="size-5" />
+                  </RailButton>
+                )}
+                {workspace && (
+                  <div className="mt-3 border-t pt-3">
+                    <RailButton
+                      label="All projects"
+                      href={`/w/${workspace.id}/board`}
+                      expanded={expanded}
+                      active={crossBoard}
+                      onClick={goBoard}
+                    >
+                      <Columns3 aria-hidden className="size-5" />
+                    </RailButton>
+                  </div>
+                )}
+              </nav>
+              <div className="mt-3 flex flex-col gap-2 px-3">
+                {workspace && (
+                  <RailButton
+                    label="Workspace trash"
+                    expanded={expanded}
+                    onClick={() => context.goTrash()}
+                  >
+                    <Trash2 aria-hidden className="size-5" />
+                  </RailButton>
+                )}
+                {projectBoard && (
+                  <div className="px-2">
+                    <SyncIndicator />
+                  </div>
+                )}
+                {projectBoard && <BoardSettingsPanel expanded={expanded} />}
+
+                <RailButton
+                  label="Settings"
+                  href="/settings"
+                  expanded={expanded}
+                  active={settings}
+                  onClick={context.goSettings}
+                >
+                  <Settings2 aria-hidden className="size-5" />
+                </RailButton>
+                <RailButton
+                  label={expanded ? 'Collapse navigation' : 'Expand navigation'}
+                  expanded={expanded}
+                  onClick={() => setRailChoice(!expanded)}
+                >
+                  {expanded ? (
+                    <PanelLeftClose aria-hidden className="size-5" />
+                  ) : (
+                    <PanelLeftOpen aria-hidden className="size-5" />
+                  )}
                 </RailButton>
               </div>
-            )}
-            <nav
-              aria-label="Projects"
-              className="mt-5 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden px-3"
+            </motion.aside>
+          )}
+          <div className="flex min-w-0 flex-1 flex-col pr-[var(--safe-right)]">
+            {!projectBoard && <PageHeader desktop={desktop} />}
+            <main
+              id="main-content"
+              tabIndex={-1}
+              className={cn(
+                'min-h-0 flex-1 outline-none',
+                projectBoard ? 'h-dvh flex-none' : 'pb-[var(--dock-space)] md:pb-8',
+              )}
             >
-              {projects.map((item) => (
-                <div key={item.id} className="group/project relative shrink-0">
-                  <RailButton
-                    label={item.name}
-                    href={`/w/${item.workspaceId}/p/${item.id}?view=board`}
-                    expanded={expanded}
-                    active={project?.id === item.id}
-                    className={expanded ? 'pr-11' : undefined}
-                    onClick={() => selectProject(item.workspaceId, item.id)}
-                  >
-                    <span
-                      data-color={item.color}
-                      className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-tint text-tint-accent"
-                    >
-                      <ProjectIcon name={item.icon} className="size-5" />
-                    </span>
-                  </RailButton>
-                  {expanded && (
-                    <button
-                      type="button"
-                      aria-label={`Edit ${item.name}`}
-                      title={`Edit ${item.name}`}
-                      onClick={() => setForm({ kind: 'edit-project', project: item })}
-                      className="absolute top-2 right-1 flex size-8 items-center justify-center rounded-full text-muted-foreground opacity-0 outline-none transition-opacity hover:bg-foreground/10 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring group-focus-within/project:opacity-100 group-hover/project:opacity-100 [@media(hover:none)]:opacity-100"
-                    >
-                      <Pencil aria-hidden className="size-4" />
-                    </button>
-                  )}
-                </div>
-              ))}
-              {workspace && (
-                <RailButton
-                  label="New project"
-                  expanded={expanded}
-                  onClick={() => setForm({ kind: 'new-project', workspace })}
-                >
-                  <Plus aria-hidden className="size-5" />
-                </RailButton>
-              )}
-              {workspace && (
-                <div className="mt-3 border-t pt-3">
-                  <RailButton
-                    label="All projects"
-                    href={`/w/${workspace.id}/board`}
-                    expanded={expanded}
-                    active={crossBoard}
-                    onClick={goBoard}
-                  >
-                    <Columns3 aria-hidden className="size-5" />
-                  </RailButton>
-                </div>
-              )}
-            </nav>
-            <div className="mt-3 flex flex-col gap-2 px-3">
-              {projectBoard && (
-                <div className="px-2">
-                  <SyncIndicator />
-                </div>
-              )}
-              {projectBoard && <BoardSettingsPanel expanded={expanded} />}
-
-              <RailButton
-                label="Settings"
-                href="/settings"
-                expanded={expanded}
-                active={settings}
-                onClick={context.goSettings}
-              >
-                <Settings2 aria-hidden className="size-5" />
-              </RailButton>
-              <RailButton
-                label={expanded ? 'Collapse navigation' : 'Expand navigation'}
-                expanded={expanded}
-                onClick={() => setRailChoice(!expanded)}
-              >
-                {expanded ? (
-                  <PanelLeftClose aria-hidden className="size-5" />
-                ) : (
-                  <PanelLeftOpen aria-hidden className="size-5" />
-                )}
-              </RailButton>
-            </div>
-          </motion.aside>
-        )}
-        <div className="flex min-w-0 flex-1 flex-col pr-[var(--safe-right)]">
-          {!projectBoard && <PageHeader desktop={desktop} />}
-          <main
-            id="main-content"
-            tabIndex={-1}
-            className={cn(
-              'min-h-0 flex-1 outline-none',
-              projectBoard ? 'h-dvh flex-none' : 'pb-[var(--dock-space)] md:pb-8',
-            )}
-          >
-            <Outlet />
-          </main>
+              <Outlet />
+            </main>
+          </div>
         </div>
-      </div>
-      {!desktop && !projectBoard && <Dock />}
-      <CommandPalette
-        key={workspace?.id ?? 'none'}
-        mode={palette}
-        onClose={() => setPalette(null)}
-        onModeChange={setPalette}
-        onOpenTask={context.openTask}
-      />
-      <ShellForms form={form} onClose={() => setForm(null)} />
+        {!desktop && !projectBoard && crossBoard && <Dock />}
+        <CommandPalette
+          key={workspace?.id ?? 'none'}
+          mode={palette}
+          onClose={() => setPalette(null)}
+          onModeChange={setPalette}
+          onOpenTask={context.openTask}
+        />
+        <ShellForms form={form} onClose={() => setForm(null)} />
+      </ManagementSurfaceProvider>
     </ShellContext.Provider>
   );
 }

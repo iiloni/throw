@@ -18,7 +18,10 @@ import { Route as PrototypeBoardRouteImport } from './routes/prototype.board'
 import { Route as PrototypeTagsRouteImport } from './routes/prototype.tags'
 import { Route as AppWWorkspaceIdIndexRouteImport } from './routes/_app/w.$workspaceId.index'
 import { Route as AppWWorkspaceIdBoardRouteImport } from './routes/_app/w.$workspaceId.board'
+import { Route as AppWWorkspaceIdTrashRouteImport } from './routes/_app/w.$workspaceId.trash'
 import { Route as AppWWorkspaceIdPProjectIdRouteImport } from './routes/_app/w.$workspaceId.p.$projectId'
+import { Route as AppWWorkspaceIdPProjectIdSettingsRouteImport } from './routes/_app/w.$workspaceId.p.$projectId_.settings'
+import { Route as AppWWorkspaceIdPProjectIdTrashRouteImport } from './routes/_app/w.$workspaceId.p.$projectId_.trash'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -64,10 +67,27 @@ const AppWWorkspaceIdBoardRoute = AppWWorkspaceIdBoardRouteImport.update({
   path: '/w/$workspaceId/board',
   getParentRoute: () => AppRoute,
 } as any)
+const AppWWorkspaceIdTrashRoute = AppWWorkspaceIdTrashRouteImport.update({
+  id: '/w/$workspaceId/trash',
+  path: '/w/$workspaceId/trash',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppWWorkspaceIdPProjectIdRoute =
   AppWWorkspaceIdPProjectIdRouteImport.update({
     id: '/w/$workspaceId/p/$projectId',
     path: '/w/$workspaceId/p/$projectId',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppWWorkspaceIdPProjectIdSettingsRoute =
+  AppWWorkspaceIdPProjectIdSettingsRouteImport.update({
+    id: '/w/$workspaceId/p/$projectId_/settings',
+    path: '/w/$workspaceId/p/$projectId/settings',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppWWorkspaceIdPProjectIdTrashRoute =
+  AppWWorkspaceIdPProjectIdTrashRouteImport.update({
+    id: '/w/$workspaceId/p/$projectId_/trash',
+    path: '/w/$workspaceId/p/$projectId/trash',
     getParentRoute: () => AppRoute,
   } as any)
 
@@ -79,8 +99,11 @@ export interface FileRoutesByFullPath {
   '/prototype/board': typeof PrototypeBoardRoute
   '/prototype/tags': typeof PrototypeTagsRoute
   '/w/$workspaceId/board': typeof AppWWorkspaceIdBoardRoute
+  '/w/$workspaceId/trash': typeof AppWWorkspaceIdTrashRoute
   '/w/$workspaceId/': typeof AppWWorkspaceIdIndexRoute
   '/w/$workspaceId/p/$projectId': typeof AppWWorkspaceIdPProjectIdRoute
+  '/w/$workspaceId/p/$projectId/settings': typeof AppWWorkspaceIdPProjectIdSettingsRoute
+  '/w/$workspaceId/p/$projectId/trash': typeof AppWWorkspaceIdPProjectIdTrashRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -90,8 +113,11 @@ export interface FileRoutesByTo {
   '/prototype/tags': typeof PrototypeTagsRoute
   '/': typeof AppIndexRoute
   '/w/$workspaceId/board': typeof AppWWorkspaceIdBoardRoute
+  '/w/$workspaceId/trash': typeof AppWWorkspaceIdTrashRoute
   '/w/$workspaceId': typeof AppWWorkspaceIdIndexRoute
   '/w/$workspaceId/p/$projectId': typeof AppWWorkspaceIdPProjectIdRoute
+  '/w/$workspaceId/p/$projectId/settings': typeof AppWWorkspaceIdPProjectIdSettingsRoute
+  '/w/$workspaceId/p/$projectId/trash': typeof AppWWorkspaceIdPProjectIdTrashRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -103,8 +129,11 @@ export interface FileRoutesById {
   '/prototype/tags': typeof PrototypeTagsRoute
   '/_app/': typeof AppIndexRoute
   '/_app/w/$workspaceId/board': typeof AppWWorkspaceIdBoardRoute
+  '/_app/w/$workspaceId/trash': typeof AppWWorkspaceIdTrashRoute
   '/_app/w/$workspaceId/': typeof AppWWorkspaceIdIndexRoute
   '/_app/w/$workspaceId/p/$projectId': typeof AppWWorkspaceIdPProjectIdRoute
+  '/_app/w/$workspaceId/p/$projectId_/settings': typeof AppWWorkspaceIdPProjectIdSettingsRoute
+  '/_app/w/$workspaceId/p/$projectId_/trash': typeof AppWWorkspaceIdPProjectIdTrashRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -116,8 +145,11 @@ export interface FileRouteTypes {
     | '/prototype/board'
     | '/prototype/tags'
     | '/w/$workspaceId/board'
+    | '/w/$workspaceId/trash'
     | '/w/$workspaceId/'
     | '/w/$workspaceId/p/$projectId'
+    | '/w/$workspaceId/p/$projectId/settings'
+    | '/w/$workspaceId/p/$projectId/trash'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -127,8 +159,11 @@ export interface FileRouteTypes {
     | '/prototype/tags'
     | '/'
     | '/w/$workspaceId/board'
+    | '/w/$workspaceId/trash'
     | '/w/$workspaceId'
     | '/w/$workspaceId/p/$projectId'
+    | '/w/$workspaceId/p/$projectId/settings'
+    | '/w/$workspaceId/p/$projectId/trash'
   id:
     | '__root__'
     | '/_app'
@@ -139,8 +174,11 @@ export interface FileRouteTypes {
     | '/prototype/tags'
     | '/_app/'
     | '/_app/w/$workspaceId/board'
+    | '/_app/w/$workspaceId/trash'
     | '/_app/w/$workspaceId/'
     | '/_app/w/$workspaceId/p/$projectId'
+    | '/_app/w/$workspaceId/p/$projectId_/settings'
+    | '/_app/w/$workspaceId/p/$projectId_/trash'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -216,11 +254,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppWWorkspaceIdBoardRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/w/$workspaceId/trash': {
+      id: '/_app/w/$workspaceId/trash'
+      path: '/w/$workspaceId/trash'
+      fullPath: '/w/$workspaceId/trash'
+      preLoaderRoute: typeof AppWWorkspaceIdTrashRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/w/$workspaceId/p/$projectId': {
       id: '/_app/w/$workspaceId/p/$projectId'
       path: '/w/$workspaceId/p/$projectId'
       fullPath: '/w/$workspaceId/p/$projectId'
       preLoaderRoute: typeof AppWWorkspaceIdPProjectIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/w/$workspaceId/p/$projectId_/settings': {
+      id: '/_app/w/$workspaceId/p/$projectId_/settings'
+      path: '/w/$workspaceId/p/$projectId/settings'
+      fullPath: '/w/$workspaceId/p/$projectId/settings'
+      preLoaderRoute: typeof AppWWorkspaceIdPProjectIdSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/w/$workspaceId/p/$projectId_/trash': {
+      id: '/_app/w/$workspaceId/p/$projectId_/trash'
+      path: '/w/$workspaceId/p/$projectId/trash'
+      fullPath: '/w/$workspaceId/p/$projectId/trash'
+      preLoaderRoute: typeof AppWWorkspaceIdPProjectIdTrashRouteImport
       parentRoute: typeof AppRoute
     }
   }
@@ -230,16 +289,23 @@ interface AppRouteChildren {
   AppSettingsRoute: typeof AppSettingsRoute
   AppIndexRoute: typeof AppIndexRoute
   AppWWorkspaceIdBoardRoute: typeof AppWWorkspaceIdBoardRoute
+  AppWWorkspaceIdTrashRoute: typeof AppWWorkspaceIdTrashRoute
   AppWWorkspaceIdIndexRoute: typeof AppWWorkspaceIdIndexRoute
   AppWWorkspaceIdPProjectIdRoute: typeof AppWWorkspaceIdPProjectIdRoute
+  AppWWorkspaceIdPProjectIdSettingsRoute: typeof AppWWorkspaceIdPProjectIdSettingsRoute
+  AppWWorkspaceIdPProjectIdTrashRoute: typeof AppWWorkspaceIdPProjectIdTrashRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppSettingsRoute: AppSettingsRoute,
   AppIndexRoute: AppIndexRoute,
   AppWWorkspaceIdBoardRoute: AppWWorkspaceIdBoardRoute,
+  AppWWorkspaceIdTrashRoute: AppWWorkspaceIdTrashRoute,
   AppWWorkspaceIdIndexRoute: AppWWorkspaceIdIndexRoute,
   AppWWorkspaceIdPProjectIdRoute: AppWWorkspaceIdPProjectIdRoute,
+  AppWWorkspaceIdPProjectIdSettingsRoute:
+    AppWWorkspaceIdPProjectIdSettingsRoute,
+  AppWWorkspaceIdPProjectIdTrashRoute: AppWWorkspaceIdPProjectIdTrashRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

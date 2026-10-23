@@ -530,7 +530,17 @@ dock rather than opening as a page. Desktop has no drawer. The rules are in
   the board and replace the view with `board`. The palette has no route of its own.
 - `/w/:workspaceId/board` is the cross-project board for that workspace; `view=search`
   opens the palette over it and replaces the view with `board`.
-- `/settings` holds account and appearance controls.
+- `/w/:workspaceId/p/:projectId/settings` manages a project's appearance, statuses,
+  priority names, key and tags. The rail's project menu and the phone board's title menu
+  open it; the appearance form is shared with project creation. The optional `section`
+  search parameter keeps the chosen section across reloads and reconnects.
+- `/w/:workspaceId/p/:projectId/trash` lists that project's independently trashed tasks,
+  with inherited subtasks grouped under their parent. It is reached from project settings
+  and the rail's project menu.
+- `/w/:workspaceId/trash` lists trashed projects and independently trashed tasks across the
+  workspace. The workspace menu and desktop rail open it. Each trash offers restore,
+  confirmed permanent removal and confirmed emptying of that scope.
+- `/settings` holds account, board and appearance controls.
 - `/` restores the device's last workspace and project for the signed-in account.
   `/w/:workspaceId` restores that workspace's last project, otherwise its first project
   by position, otherwise the create-project prompt.
@@ -541,13 +551,15 @@ UUID, not its identifier: a task created offline has no number yet, and a projec
 can change (ADR 0007). A direct project URL keeps its view on reload. Selecting a project
 from navigation opens its board; the shell remembers the last project separately per
 workspace. Projects append by position. Deleting a project requires confirmation and moves
-it to the trash (see [Project](#project)); the trash has no view yet.
+it to the trash (see [Project](#project)), where it can be restored or removed for good.
 
 The project board uses synced tasks, statuses and primary tags, with the backlog in the
 drawer on a phone. Cards resolve their primary tag's root colour with `taskTagColor` and
 show the tag's name; a partially synced tag tree leaves the card neutral. The drawer
 (`components/Drawer`) carries the backlog, the closed tasks, board settings, and search and
-capture; the board owns it for now. The move drawer is still its own panel until the drag
+capture; the board owns it for now. Away from boards, the shell hosts that same Drawer
+component for project settings and trash forms, with no dock at rest. Tag management uses
+this host on phones and a centred dialog on desktop. The move drawer is still its own panel until the drag
 step, and the shell's project forms still use `BottomSheet` until the drawer moves to the
 shell. The cross-project board remains a placeholder; search and quick capture use the
 command palette. Task panes have a

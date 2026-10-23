@@ -258,6 +258,26 @@ describe('the trash', () => {
   });
 });
 
+describe('project trash', () => {
+  it('empties only that project, including descendants, in one write', () => {
+    const workspaceId = projectsCollection.get(projectId)!.workspaceId;
+    const other = createProject(workspaceId, 'Other');
+    const parent = tasks.createTask(projectId);
+    const child = tasks.createTask(projectId, { parentId: parent });
+    const kept = tasks.createTask(other);
+    tasks.trashTask(parent);
+    tasks.trashTask(kept);
+    tasks.emptyProjectTrash(projectId);
+    expect(
+      fake.written
+        .at(-1)!
+        .mutations.map((mutation) => String(mutation.key))
+        .sort(),
+    ).toEqual([parent, child].sort());
+    expect(tasksCollection.get(kept)).toBeDefined();
+  });
+});
+
 describe('offline tag actions', () => {
   it('creates parents before children and includes initial assignments in the task create', () => {
     const parent = tags.createTag(projectId, { name: 'Product', color: 'teal' });

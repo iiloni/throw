@@ -1,7 +1,5 @@
-import { Ellipsis } from 'lucide-react';
 import { ShellMenu } from '@/components/AppShell/ShellMenu';
 import { useShell } from '@/components/AppShell/shell';
-import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 
@@ -41,15 +39,6 @@ export function PageHeader({ desktop }: { desktop: boolean }) {
             <ShellMenu phone />
           )}
         </h1>
-        {shell.project && (
-          <IconButton
-            label="Edit project"
-            className="size-11 shrink-0"
-            onClick={() => shell.openForm({ kind: 'edit-project', project: shell.project! })}
-          >
-            <Ellipsis />
-          </IconButton>
-        )}
       </div>
     </header>
   );
