@@ -1,4 +1,4 @@
-import { motion, useSpring, useTransform, useVelocity } from 'motion/react';
+import { motion, useReducedMotion, useSpring, useTransform, useVelocity } from 'motion/react';
 import { createPortal } from 'react-dom';
 import { springs } from '@/lib/motion';
 import { drag, overlayPosition, overlayWidth } from './drag';
@@ -12,6 +12,7 @@ import { TaskCard } from './TaskCard';
 export function DragOverlay() {
   const held = drag.use();
   const state = board.use();
+  const reduced = useReducedMotion();
   // The card swings back against the direction it is carried, like something held by a corner.
   const velocity = useVelocity(overlayPosition.x);
   const lean = useSpring(useTransform(velocity, [-1400, 0, 1400], [-6, 0, 6], { clamp: true }), {
@@ -26,6 +27,8 @@ export function DragOverlay() {
   // Over a dropzone the card is being sent, not placed: it shrinks to a token so the
   // zones around it stay readable.
   const token = flying && held.target?.kind === 'status';
+  // Reduced motion keeps the copy flat and still: no lean, no lift, no shrinking flight.
+  const scale = held.swallowed ? 0.2 : token ? 0.55 : flying && !reduced ? 1.05 : 1;
 
   return createPortal(
     <motion.div
@@ -35,16 +38,22 @@ export function DragOverlay() {
     >
       <motion.div
         style={{
-          rotate: flying && !token ? lean : 0,
+          rotate: flying && !token && !reduced ? lean : 0,
           // Scaled about the finger, so a shrinking card stays under it.
           transformOrigin: `${(held.grab.x / held.width) * 100}% ${held.grab.y}px`,
         }}
         initial={{ scale: 1 }}
         animate={{
-          scale: held.swallowed ? 0.2 : token ? 0.55 : flying ? 1.05 : 1,
+          scale,
           opacity: held.swallowed ? 0 : token ? 0.92 : 1,
         }}
-        transition={held.swallowed ? { duration: 0.28, ease: [0.2, 0, 0, 1] } : springs.snappy}
+        transition={
+          reduced
+            ? { duration: 0 }
+            : held.swallowed
+              ? { duration: 0.28, ease: [0.2, 0, 0, 1] }
+              : springs.snappy
+        }
       >
         {/* A held selection travels as a stack with the count on top. */}
         {[2, 1]

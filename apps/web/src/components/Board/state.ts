@@ -9,9 +9,13 @@ import {
   compareTasks,
   DEFAULT_PRIORITY,
   isClosed,
+  movedElsewhere,
+  moveTo,
+  type Place,
   type Priority,
   type Project,
-  placeTask,
+  placementPlace,
+  placeOf,
   sendToStatus,
   type Task,
 } from './model';
@@ -75,8 +79,11 @@ export type BoardState = {
   taskTrail: string[];
   /** Cards whose subtask underlay is unfolded. */
   expanded: string[];
-  /** A card picked up from the keyboard, and the tasks as they were before. */
-  carrying: { taskId: string; before: Task[] } | null;
+  /**
+   * A card picked up from the keyboard: the task as it was when picked up, and where it is
+   * being carried. The board shows it there; nothing is written until it is set down.
+   */
+  carrying: { taskId: string; seen: Task; preview: Task } | null;
   announcement: string;
   /** A task just created, whose title is waiting to be written. */
   newTaskId: string | null;
@@ -144,11 +151,25 @@ export type BoardActions = {
   beforeLeave?(taskId: string): boolean;
   create(statusId?: string): string;
   rename(taskId: string, title: string): void;
-  send(taskIds: string[], statusId: string): void;
+  /** False when the move could not be queued, such as for a task purged meanwhile. */
+  place(taskId: string, place: Place): boolean;
+  send(taskIds: string[], statusId: string): boolean;
 };
+
+type Received = [data: BoardData, actions: BoardActions, awaitingTasks: boolean];
+/** The data last given to the board, to fall back on when a move cannot be queued. */
+let received: Received | null = null;
+/** While a card is held, sync waits here so the column does not change under it. */
+let held = false;
+let waiting: Received | null = null;
 
 /** Sync replaces data only: open panes, filters and underlays remain device UI state. */
 export function receiveBoard(data: BoardData, actions: BoardActions, awaitingTasks = false) {
+  received = [data, actions, awaitingTasks];
+  if (held && board.get().actions !== null && board.get().projectId === data.project.id) {
+    waiting = received;
+    return;
+  }
   const before = board.get();
   if (before.projectId !== data.project.id || before.actions === null) {
     board.set({ ...initialBoard([data]), actions, awaitingTasks });
@@ -164,12 +185,70 @@ export function receiveBoard(data: BoardData, actions: BoardActions, awaitingTas
       taskTrail: open ? before.taskTrail.filter(canOpen) : [],
       expanded: before.expanded.filter(exists),
       selection: before.selection.filter(exists),
+      // A card carried from the keyboard that another device trashed or purged is dropped.
+      ...(before.carrying && !exists(before.carrying.taskId)
+        ? { carrying: null, announcement: 'The carried task was removed on another device.' }
+        : {}),
     });
   }
 }
 
-export function current(state: BoardState = board.get()): BoardData {
+/**
+ * Holds incoming sync while a card is held: rows that arrive would reorder the column under
+ * it, move the gap and could take the card itself away (ADR 0008).
+ */
+export function holdBoard() {
+  held = true;
+}
+
+/**
+ * Lets the held sync in, and returns which of the held cards can still be moved: those no
+ * other device moved in the meantime. The others stay where the server put them.
+ */
+export function releaseBoard(taskIds: string[]): string[] {
+  const seen = current().tasks;
+  held = false;
+  const next = waiting;
+  waiting = null;
+  if (next) receiveBoard(...next);
+  const live = current().tasks;
+  return taskIds.filter((id) => {
+    const before = seen.find((task) => task.id === id);
+    return (
+      before &&
+      !movedElsewhere(
+        before,
+        live.find((task) => task.id === id),
+      )
+    );
+  });
+}
+
+function shown(state: BoardState): BoardData {
   return state.boards.find((item) => item.project.id === state.projectId) ?? state.boards[0]!;
+}
+
+const presented = new WeakMap<BoardState, BoardData>();
+
+/** The board as shown: a card carried from the keyboard appears where it is being carried. */
+export function current(state: BoardState = board.get()): BoardData {
+  const data = shown(state);
+  const carrying = state.carrying;
+  if (!carrying) return data;
+  let result = presented.get(state);
+  if (!result) {
+    result = {
+      ...data,
+      tasks: data.tasks.map((task) => (task.id === carrying.taskId ? carrying.preview : task)),
+    };
+    presented.set(state, result);
+  }
+  return result;
+}
+
+/** The board as synced, without a carried card's preview. */
+export function syncedTasks(state: BoardState = board.get()) {
+  return shown(state).tasks;
 }
 
 function setTasks(tasks: Task[]) {
@@ -230,19 +309,54 @@ export function countIn(state: BoardState, statusId: string) {
   ).length;
 }
 
-export function placeInList(taskId: string, listId: ListId, priority: Priority, index: number) {
+/**
+ * Where a card lands at `index` in a priority zone of a list, among the cards shown there.
+ * Worked out from what the person sees, so while a card is held it reads the held board.
+ */
+export function placeInList(
+  taskId: string,
+  listId: ListId,
+  priority: Priority,
+  index: number,
+): Place | null {
   const state = board.get();
-  const { project, tasks } = current(state);
-  const peers = listTasks(state, listId).filter((task) => task.priority === priority);
-  setTasks(
-    placeTask(project, tasks, taskId, { statusId: listStatusId(listId), priority, index, peers }),
-  );
+  const task = current(state).tasks.find((item) => item.id === taskId);
+  if (!task) return null;
+  const peers = listTasks(state, listId).filter((item) => item.priority === priority);
+  return placementPlace(task, { statusId: listStatusId(listId), priority, index, peers });
+}
+
+/** Falls back to the synced data when a move could not be queued. */
+function revert() {
+  if (received) receiveBoard(...received);
+}
+
+/**
+ * Moves a task to a place in one write (ADR 0008). The board shows it there at once, so a
+ * landing card finds its place before sync brings the row back.
+ */
+export function moveToPlace(taskId: string, place: Place) {
+  const { project } = current();
+  const tasks = syncedTasks();
+  const task = tasks.find((item) => item.id === taskId);
+  if (!task) return;
+  const { statusId, priority, position } = task;
+  if (place.statusId === statusId && place.priority === priority && place.position === position)
+    return;
+  setTasks(tasks.map((item) => (item.id === taskId ? moveTo(project, item, place) : item)));
+  if (board.get().actions?.place(taskId, place) === false) revert();
 }
 
 export function sendTasks(taskIds: string[], statusId: string) {
-  if (board.get().actions) return board.get().actions!.send(taskIds, statusId);
-  const { project, tasks } = current();
-  setTasks(sendToStatus(project, tasks, taskIds, statusId));
+  const { project } = current();
+  const tasks = syncedTasks();
+  // A card already in the status stays where it is.
+  const moving = taskIds.filter(
+    (id) => tasks.find((task) => task.id === id)?.statusId !== statusId,
+  );
+  if (moving.length === 0) return;
+  setTasks(sendToStatus(project, tasks, moving, statusId));
+  if (board.get().actions?.send(moving, statusId) === false) revert();
 }
 
 export function setSubtaskStatus(taskId: string, statusId: string) {
@@ -295,8 +409,38 @@ export function renameTask(taskId: string, title: string) {
   setTasks(tasks.map((task) => (task.id === taskId ? { ...task, title } : task)));
 }
 
-export function restoreTasks(tasks: Task[]) {
-  setTasks(tasks);
+/** A card carried from the keyboard is shown at `preview` until it is set down. */
+export function carryTo(preview: Task) {
+  update((state) => (state.carrying ? { carrying: { ...state.carrying, preview } } : {}));
+}
+
+export function startCarrying(taskId: string) {
+  const task = syncedTasks().find((item) => item.id === taskId);
+  if (task) update({ carrying: { taskId, seen: task, preview: task } });
+  return Boolean(task);
+}
+
+/**
+ * Sets a carried card down: one write for where it ended up, unless another device moved it
+ * while it was carried. Returns whether it moved.
+ */
+export function finishCarrying(): 'moved' | 'unchanged' | 'refused' | null {
+  const carrying = board.get().carrying;
+  if (!carrying) return null;
+  const live = syncedTasks().find((task) => task.id === carrying.taskId);
+  const place = placeOf(carrying.preview);
+  const unchanged =
+    live !== undefined &&
+    place.statusId === live.statusId &&
+    place.priority === live.priority &&
+    place.position === live.position;
+  if (movedElsewhere(carrying.seen, live)) {
+    update({ carrying: null });
+    return 'refused';
+  }
+  if (!unchanged) moveToPlace(carrying.taskId, place);
+  update({ carrying: null });
+  return unchanged ? 'unchanged' : 'moved';
 }
 
 export function toggleSelected(taskId: string) {

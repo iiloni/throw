@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
+import { CARD_HELP_ID } from './BoardAnnouncer';
 import { carryAcross, carryVertically, pickUp, putBack, setDown } from './carry';
 import { consumeDragClick, drag, isPrimed, pressCard } from './drag';
 import { PriorityGlyph, StatusGlyph } from './glyphs';
@@ -24,6 +25,7 @@ import {
 } from './model';
 import { SubtaskUnderlay } from './SubtaskUnderlay';
 import { board, current, toggleSelected, update, useBoardSettings } from './state';
+import { swipe, swipeX } from './swipe';
 import { useTaskCardHidden, useTaskCardLanding } from './taskTransition';
 
 type Props = {
@@ -123,6 +125,8 @@ export function TaskCard({
   const subtasks = state.subtasksAsCards ? [] : subtasksOf(tasks, task.id);
   const selected = !onOpen && state.selection.includes(task.id);
   const carried = state.carrying?.taskId === task.id;
+  const swiped = swipe.use();
+  const swiping = !overlay && swiped?.taskId === task.id;
   const open = state.openTaskId === task.id;
   const lifted = useTaskCardHidden(task.id);
   // As in Catch, a task shrinking back into its card lands without the underlay, which slides
@@ -174,13 +178,6 @@ export function TaskCard({
       onOpen();
       return;
     }
-    if (state.actions) {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        update({ openTaskId: task.id });
-      }
-      return;
-    }
     const arrows: Record<string, () => void> = {
       ArrowUp: () => carryVertically(-1),
       ArrowDown: () => carryVertically(1),
@@ -214,16 +211,16 @@ export function TaskCard({
       data-color={color ?? undefined}
       tabIndex={overlay ? -1 : 0}
       aria-label={`${identifier(project, task) ?? 'Pending'} ${task.title || 'Untitled task'}`}
-      aria-roledescription={state.actions ? 'Task card' : 'Card. Space picks it up to move it.'}
+      aria-roledescription="Task card"
+      aria-describedby={overlay || onOpen ? undefined : CARD_HELP_ID}
       aria-current={open ? 'true' : undefined}
-      onPointerDown={
-        overlay || state.actions || onOpen ? undefined : (event) => pressCard(event, task.id)
-      }
+      onPointerDown={overlay || onOpen ? undefined : (event) => pressCard(event, task.id)}
       onClick={onClick}
       onKeyDown={overlay ? undefined : onKeyDown}
       onContextMenu={(event) => {
         if (dragState || isPrimed()) event.preventDefault();
       }}
+      style={swiping ? { x: swipeX } : undefined}
       whileTap={overlay || carried ? undefined : { scale: 0.97 }}
       animate={{ scale: carried ? 1.03 : 1 }}
       transition={springs.snappy}

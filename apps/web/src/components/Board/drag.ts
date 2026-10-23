@@ -1,18 +1,23 @@
 import { animate, motionValue } from 'motion/react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
+import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { createStore } from '@/lib/store';
 import type { Priority } from './model';
 import {
   board,
   current,
+  holdBoard,
   type ListId,
   listStatusId,
+  moveToPlace,
   placeInList,
+  releaseBoard,
   sendTasks,
   toggleSelected,
   update,
 } from './state';
+import { beginSwipe, cancelSwipe, canSwipe, endSwipe, moveSwipe, swipe } from './swipe';
 
 /**
  * The board's drag engine, on raw pointer events.
@@ -145,8 +150,9 @@ function reducedMotion() {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-function tick(ms = 8) {
-  if (drag.get()?.touch) navigator.vibrate?.(ms);
+/** Haptics belong to touch: a mouse has its own feel. */
+function feel(effect: keyof typeof haptics) {
+  if (drag.get()?.touch) haptics[effect]();
 }
 
 // A page starts scrolling under a finger unless the move is cancelled, and only a listener
@@ -210,10 +216,18 @@ function onPointerMove(event: PointerEvent) {
   if (!press) return;
   pointer = { x: event.clientX, y: event.clientY };
   const distance = Math.hypot(pointer.x - press.x, pointer.y - press.y);
+  if (swipe.get()) return moveSwipe(pointer.x - press.x, pointer.x);
   if (!drag.get()) {
     if (press.touch) {
-      // A touch that travels before the hold completes is a scroll.
-      if (distance > TOUCH_SLOP) primed ? begin() : release();
+      const dx = pointer.x - press.x;
+      const across = dx > 0 && dx > Math.abs(pointer.y - press.y) * 2;
+      // A touch that travels before the hold completes is a scroll, or a swipe to close.
+      if (distance <= TOUCH_SLOP) return;
+      if (primed) begin();
+      else if (across && canSwipe(press.element)) {
+        window.clearTimeout(longPress);
+        beginSwipe(press.taskId, press.element, pointer.x);
+      } else release();
     } else if (distance > MOUSE_SLOP) begin();
     return;
   }
@@ -222,6 +236,11 @@ function onPointerMove(event: PointerEvent) {
 
 function onPointerUp() {
   if (drag.get()) return finish(true);
+  if (swipe.get()) {
+    endSwipe();
+    swallowClick();
+    return release();
+  }
   // The hold already selected the card; the click that follows must not undo it.
   if (primed) swallowClick();
   release();
@@ -229,7 +248,10 @@ function onPointerUp() {
 
 function onPointerCancel() {
   if (drag.get()) finish(false);
-  else release();
+  else {
+    cancelSwipe();
+    release();
+  }
 }
 
 function onKeyDown(event: KeyboardEvent) {
@@ -250,7 +272,7 @@ function prime() {
   if (!press) return;
   primed = true;
   holding.set(true);
-  navigator.vibrate?.(12);
+  haptics.longPress();
   if (!board.get().selection.includes(press.taskId)) {
     primedSelect = true;
     toggleSelected(press.taskId);
@@ -299,7 +321,8 @@ function begin() {
     page: 0,
   });
   document.documentElement.dataset.dragging = '';
-  tick(12);
+  holdBoard();
+  feel('selection');
   // Before the first render, so the gap opens where the card already is.
   resolve();
   frame = requestAnimationFrame(loop);
@@ -352,7 +375,7 @@ function set(change: Partial<DragState>) {
       : target.kind === 'status'
         ? target.statusId
         : `${target.listId}:${target.kind === 'place' ? target.priority : ''}`;
-  if (landing(state.target) !== landing(next.target)) tick();
+  if (landing(state.target) !== landing(next.target)) feel('selection');
   drag.set(next);
 }
 
@@ -403,6 +426,27 @@ function indexIn(list: HTMLElement, priority: Priority, y: number, height: numbe
     if (y > rect.top - gaps + (rect.height + height) / 2) index += 1;
   }
   return index;
+}
+
+/**
+ * Where among a gallery's cards, read left to right and then down, a card centred on `x`,
+ * `y` belongs. Nothing in a gallery moves while a card is held, so the cards are compared
+ * where they stand.
+ */
+function gridIndex(list: HTMLElement, priority: Priority, x: number, y: number, ids: string[]) {
+  const boxes = [...list.querySelectorAll<HTMLElement>('[data-slot]')]
+    .filter(
+      (element) =>
+        Number(element.dataset.zone) === priority && !ids.includes(element.dataset.slot ?? ''),
+    )
+    .map((element) => element.getBoundingClientRect());
+  // The row the card is in: the last one starting above its centre.
+  const rows = [...new Set(boxes.map((box) => Math.round(box.top)))].sort((a, b) => a - b);
+  const row = rows.filter((top) => top <= y).at(-1) ?? rows[0] ?? 0;
+  return boxes.filter((box) => {
+    const top = Math.round(box.top);
+    return top < row || (top === row && box.left + box.width / 2 < x);
+  }).length;
 }
 
 function resolve() {
@@ -463,8 +507,12 @@ function resolve() {
   }
 
   const centre = pointer.y - grab.y + state.height / 2;
-  if (config.heldColumn === 'full') priority = zoneAt(list, centre, priority);
-  const index = indexIn(list, priority, centre, state.height, state.ids);
+  // A gallery keeps its layout under a held card, as a column does in Full.
+  const grid = list.dataset.layout === 'grid';
+  if (config.heldColumn === 'full' || grid) priority = zoneAt(list, centre, priority);
+  const index = grid
+    ? gridIndex(list, priority, pointer.x - grab.x + overlayWidth.get() / 2, centre, state.ids)
+    : indexIn(list, priority, centre, state.height, state.ids);
   set({ target: { kind: 'place', listId, priority, index }, priority, rail });
 }
 
@@ -515,7 +563,7 @@ function autoScroll() {
       pager.scrollBy({ left: side * pageStride(pager), behavior: 'smooth' });
       // The next turn waits for this one to settle as well.
       pageHold = { side, since: now + 250 };
-      tick();
+      feel('threshold');
     }
   }
 }
@@ -541,19 +589,35 @@ function finish(commit: boolean) {
   const wasTouch = press?.touch ?? false;
   release();
   if (!state) return;
-  const [lead] = state.ids;
-  const target = commit ? state.target : null;
+  const lead = state.ids[0]!;
+  let target = commit ? state.target : null;
+  // Placed among the cards the person saw, before the sync held back meanwhile comes in.
+  const place =
+    target?.kind === 'place'
+      ? placeInList(lead, target.listId, target.priority, target.index)
+      : null;
+  const movable = releaseBoard(state.ids);
+  if (target && movable.length < state.ids.length) {
+    update({
+      announcement:
+        state.ids.length === 1
+          ? 'Not moved: it changed on another device while it was held.'
+          : `${state.ids.length - movable.length} not moved: they changed on another device while they were held.`,
+    });
+    // The card under the finger goes back to where the server has it.
+    if (!movable.includes(lead)) target = null;
+  }
   if (target?.kind === 'place') {
-    placeInList(lead!, target.listId, target.priority, target.index);
+    if (place) moveToPlace(lead, place);
   } else if (target) {
     const statusId = target.kind === 'status' ? target.statusId : listStatusId(target.listId);
-    if (statusId) sendTasks(state.ids, statusId);
+    if (statusId) sendTasks(movable, statusId);
   }
   if (target && state.ids.length > 1) update({ selection: [] });
   if (!wasTouch) swallowClick();
-  if (target) tick(14);
+  if (target) feel('success');
   drag.set({ ...state, phase: 'landing', target: null, rail: null });
-  land(lead!, target?.kind === 'status' ? target.statusId : null);
+  land(lead, target?.kind === 'status' ? target.statusId : null);
 }
 
 function settle() {
