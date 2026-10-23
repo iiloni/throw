@@ -124,9 +124,10 @@ Or from inside the worktree itself, as an agent's final command:
 Removal refuses the primary checkout, the checkout running the command, and worktrees with
 uncommitted changes, untracked files or unexpected ignored files. Dependencies, build output
 and test reports are treated as disposable; pass `--strict` to
-refuse those too. It then deletes that worktree's Compose volumes (asking first unless `-y`)
-and removes the checkout. The branch is kept unless `--delete-branch` is given, which uses a
-non-forced `git branch -d`, so unmerged work is never deleted.
+refuse those too. It then deletes that worktree's Compose volumes and the app image Compose
+built for it (asking first unless `-y`), and removes the checkout. Pulled images such as
+Postgres and Electric are shared and kept. The branch is kept unless `--delete-branch` is
+given, which uses a non-forced `git branch -d`, so unmerged work is never deleted.
 
 To remove every non-main worktree, run this from the primary checkout while it is on `main`:
 
