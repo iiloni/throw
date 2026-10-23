@@ -27,9 +27,16 @@ export function DescriptionEditor({
   initialContent,
   editable = false,
   onChange,
+  placeholder = 'Describe the work…',
+  autoFocus = false,
+  scrollClearance = 0,
 }: {
   initialContent: Description;
   editable?: boolean;
+  placeholder?: string;
+  autoFocus?: boolean;
+  /** Keep actions beneath an editor clear of the dock while typing. */
+  scrollClearance?: number;
   onChange?: (document: Description) => void;
 }) {
   const theme = useResolvedTheme();
@@ -41,9 +48,12 @@ export function DescriptionEditor({
     trailingBlock: true,
     dictionary: {
       ...en,
-      placeholders: { ...en.placeholders, default: 'Describe the work…' },
+      placeholders: { ...en.placeholders, default: placeholder },
     },
   });
+  useEffect(() => {
+    if (autoFocus && editable) editor.focus();
+  }, [autoFocus, editable, editor]);
   // Catch keeps the caret above its native keyboard and dock. Throw owns the same inset
   // as a CSS token, so observe it rather than installing a second keyboard tracker. A dock
   // resting over the scroll area declares itself as the area's bottom scroll padding.
@@ -64,7 +74,7 @@ export function DescriptionEditor({
         const covered = Number.parseFloat(getComputedStyle(area).scrollPaddingBottom) || 0;
         if (keyboard <= 0 && covered <= 0) return;
         const caret = view.coordsAtPos(view.state.selection.head);
-        const bottom = area.getBoundingClientRect().bottom - covered - 16;
+        const bottom = area.getBoundingClientRect().bottom - covered - 16 - scrollClearance;
         if (caret.bottom > bottom) area.scrollTop += caret.bottom - bottom + 12;
       });
     }
@@ -78,7 +88,7 @@ export function DescriptionEditor({
       offChange();
       cancelAnimationFrame(frame);
     };
-  }, [editor, editable]);
+  }, [editor, editable, scrollClearance]);
 
   return (
     <div className="description-editor">
