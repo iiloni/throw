@@ -77,17 +77,34 @@ const shapeMessages = z.array(
   }),
 );
 
-/** Waits for the app's own stream before a test takes already-synced data offline. */
-export function waitForShapeRow(page: Page, shape: string, name: string) {
-  return page.waitForResponse(
-    async (response) => {
-      if (!new URL(response.url()).pathname.endsWith(`/api/shapes/${shape}`) || !response.ok())
-        return false;
-      const parsed = shapeMessages.safeParse(await response.json().catch(() => null));
-      return parsed.success && parsed.data.some((message) => message.value?.name === name);
-    },
-    { timeout: APP_LOAD_TIMEOUT },
-  );
+/**
+ * Waits for the app's own stream before a test takes already-synced data offline: the named
+ * row has reached the device's database, which only synced rows do. Reading response bodies
+ * instead missed rows when Chromium dropped a body it had already handed to the page.
+ */
+export async function waitForShapeRow(page: Page, shape: 'projects' | 'statuses', name: string) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          async ({ shape, name }) => {
+            const { projectsCollection, statusesCollection } = await import(
+              /* @vite-ignore */ '/src/lib/collections.ts'
+            );
+            const collection = shape === 'projects' ? projectsCollection : statusesCollection;
+            const ids = [...collection.values()]
+              .filter((row: { name: string }) => row.name === name)
+              .map((row: { id: string }) => row.id);
+            if (ids.length === 0) return false;
+            const rows: Array<{ key: string | number }> =
+              await collection.config.persistence.adapter.scanRows(shape);
+            return ids.some((id) => rows.some((row) => row.key === id));
+          },
+          { shape, name },
+        ),
+      { timeout: APP_LOAD_TIMEOUT },
+    )
+    .toBe(true);
 }
 
 /** Rows can paint before a shape reaches its checkpoint; finish initial sync before going offline. */
