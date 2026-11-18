@@ -38,6 +38,10 @@ export const workspaceRoutes = new Hono<AppEnv>()
     const userId = c.get('user')!.id;
     const { id } = c.req.valid('param');
     const body = c.req.valid('json');
+    if (Object.keys(body).length === 0) {
+      if (!(await isMember(db, userId, id))) return c.json({ error: 'Workspace not found' }, 404);
+      return c.json({ txid: null });
+    }
     const txid = await db.transaction(async (tx) => {
       const updated = await tx
         .update(workspaces)

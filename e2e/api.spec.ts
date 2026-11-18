@@ -4,6 +4,19 @@ import { createAccount, shapeRows } from './helpers';
 
 const json = { 'Content-Type': 'application/json' };
 
+test('an empty workspace patch is a no-op for members only @api', async ({ request }) => {
+  const owner = await createAccount(request);
+  const stranger = await createAccount(request);
+  const [workspace] = await shapeRows(request, 'workspaces', owner.headers);
+  const path = `/api/workspaces/${workspace?.id}`;
+
+  const unchanged = await request.patch(path, { headers: owner.headers, data: {} });
+  expect(unchanged.status()).toBe(200);
+  expect(await unchanged.json()).toEqual({ txid: null });
+  const missing = await request.patch(path, { headers: stranger.headers, data: {} });
+  expect(missing.status()).toBe(404);
+});
+
 test('a project is visible and writable only to members of its workspace @api', async ({
   request,
 }) => {
