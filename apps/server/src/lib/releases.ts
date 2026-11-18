@@ -64,7 +64,13 @@ export async function listReleases(channel: VersionInfo['channel']): Promise<Rel
     pending ??= fetchReleases().finally(() => {
       pending = null;
     });
-    data = await pending;
+    try {
+      data = await pending;
+    } catch (error) {
+      // GitHub limits unauthenticated requests per hour. A list from a few minutes ago is
+      // still worth answering with; only a server that never had one has nothing to say.
+      if (!cached) throw error;
+    }
   }
   return { channel, releases: releasesForChannel(data, channel) };
 }

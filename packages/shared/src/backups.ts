@@ -100,7 +100,7 @@ export function localDateTime(now: Date, timeZone: string) {
 
 /**
  * The local date a scheduled backup is due for at `now`, or null when today's has run or its
- * time has not come. Comparing dates rather than instants also throwes up after downtime:
+ * time has not come. Comparing dates rather than instants also catches up after downtime:
  * a server that was off at the scheduled time runs the backup when it starts.
  */
 export function backupDueDate(

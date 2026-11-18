@@ -37,8 +37,10 @@ export function useAndroidUpdateAvailable() {
 }
 
 let checking: Promise<void> | null = null;
+let lastCheck = 0;
 export function checkForUpdates() {
   checking ??= (async () => {
+    lastCheck = Date.now();
     updates.set({ ...updates.get(), checking: true, error: null });
     const [server, app] = await Promise.allSettled([
       api.versionInfo().then((result) => versionInfoSchema.parse(result)),
@@ -66,12 +68,17 @@ export function checkForUpdates() {
   return checking;
 }
 
+/** Returning to the app checks again only after this long; switching windows is frequent. */
+const RESUME_CHECK_INTERVAL = 60_000;
+
 /** Refresh on launch and resume so a running server upgrade reaches every settings entry. */
 export function watchUpdates() {
   const refresh = () => {
-    if (document.visibilityState !== 'hidden') void checkForUpdates();
+    if (document.visibilityState === 'hidden') return;
+    if (Date.now() - lastCheck < RESUME_CHECK_INTERVAL) return;
+    void checkForUpdates();
   };
-  refresh();
+  void checkForUpdates();
   const interval = window.setInterval(refresh, 5 * 60_000);
   window.addEventListener('online', refresh);
   window.addEventListener('focus', refresh);

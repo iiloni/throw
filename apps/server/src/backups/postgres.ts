@@ -216,9 +216,20 @@ export async function restoreDatabase(
         }`,
       );
     }
+    // One transaction, which also refuses statements that cannot run inside one, such as
+    // dropping a database: without a superuser to make a sandbox role, the dump is loaded as
+    // the live database's owner.
     await run(
       'pg_restore',
-      ['--no-owner', '--no-privileges', '--exit-on-error', '--dbname', scratchName, dumpFile],
+      [
+        '--no-owner',
+        '--no-privileges',
+        '--exit-on-error',
+        '--single-transaction',
+        '--dbname',
+        scratchName,
+        dumpFile,
+      ],
       scratchUrl,
     );
 

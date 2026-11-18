@@ -40,10 +40,18 @@ function begin(kind: 'backup' | 'restore') {
 const reason = (error: unknown) =>
   error instanceof BackupError ? error.message : 'It failed unexpectedly. See the server log.';
 
-/** Claims the server before its first await, so a caller can tell at once that it started. */
-export async function runBackup(kind: 'manual' | 'scheduled', keep?: number) {
+/**
+ * Claims the server before its first await, so a caller can tell at once that it started.
+ * `first` runs once the server is claimed.
+ */
+export async function runBackup(
+  kind: 'manual' | 'scheduled',
+  keep?: number,
+  first?: () => Promise<void>,
+) {
   begin('backup');
   try {
+    await first?.();
     const name = await createBackup(backupConfig, { kind });
     if (keep) await pruneBackups(backupConfig.backupsDir, kind, keep);
     lastBackup = { finishedAt: new Date().toISOString(), name, error: null };
@@ -125,9 +133,11 @@ async function runDueBackup() {
   const state = await readSchedule(backupConfig.backupsDir);
   const due = backupDueDate(state.schedule, state.lastRunDate, new Date());
   if (!due || isBusy()) return;
-  // Recorded first, so a backup that fails is reported once rather than retried each minute.
-  await writeSchedule(backupConfig.backupsDir, { ...state, lastRunDate: due });
-  const name = await runBackup('scheduled', state.schedule.keep);
+  // Recorded first, so a backup that fails is reported once rather than retried each minute,
+  // and only once the server is claimed, so a manual backup cannot take the day's turn.
+  const name = await runBackup('scheduled', state.schedule.keep, () =>
+    writeSchedule(backupConfig.backupsDir, { ...state, lastRunDate: due }),
+  );
   console.log(`Scheduled backup saved as ${name}`);
 }
 

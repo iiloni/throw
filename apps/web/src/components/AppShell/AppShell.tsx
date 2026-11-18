@@ -39,7 +39,7 @@ import { projectsIn } from '@/lib/projects';
 import { usePersistentState } from '@/lib/storage';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { watchUpdates } from '@/lib/updates';
-import { updateReloadBlocked } from '@/lib/useUpdateReloadBlocked';
+import { holdUpdateReload } from '@/lib/useUpdateReloadBlocked';
 import { cn } from '@/lib/utils';
 
 const railSchema = z.boolean().nullable();
@@ -75,10 +75,8 @@ export function AppShell() {
     created?: boolean;
   } | null>(null);
   const [form, setForm] = useState<ShellForm | null>(null);
-  useEffect(() => {
-    updateReloadBlocked.set(form !== null);
-    return () => updateReloadBlocked.set(false);
-  }, [form]);
+  const formOpen = form !== null;
+  useEffect(() => (formOpen ? holdUpdateReload() : undefined), [formOpen]);
   const workspaces = [...allWorkspaces].sort((a, b) => comparePositions(a.position, b.position));
   const preferredWorkspace = workspaces.find((item) => item.id === remembered.workspaceId);
   const workspace = params.workspaceId

@@ -40,8 +40,8 @@ elif [[ -z "$(docker compose ps -a -q "$app_service" 2>/dev/null)" ]]; then
     echo "Throw has not run here yet, so there is nothing to back up."
 else
     # Made by the version that wrote the data, before anything is replaced. If it fails the
-    # update stops here, with Throw still running as it was. Attachments are left out: an
-    # The backup covers only this app’s database.
+    # update stops here, with Throw still running as it was. The backup covers only this
+    # app’s database.
     echo "Backing up the database..."
     "$script_dir/backup.sh" create --kind update
 fi

@@ -96,13 +96,14 @@ export async function restoreBackup(config: BackupConfig, path: string): Promise
       );
     }
     safetyBackup = await createBackup(config, { kind: 'pre-restore' });
-    await pruneBackups(config.backupsDir, 'pre-restore', SAFETY_BACKUPS_KEPT);
   }
 
   const work = await workDir(config.backupsDir);
   try {
     const dumpFile = join(work, DATABASE);
     await extractFile(archive, DATABASE, dumpFile);
+    // Only once the dump is out: the backup being restored may be the oldest safety backup.
+    if (safetyBackup) await pruneBackups(config.backupsDir, 'pre-restore', SAFETY_BACKUPS_KEPT);
     await restoreDatabase(config.databaseUrl, dumpFile, {
       workDir: work,
       migrationsFolder: config.migrationsFolder,

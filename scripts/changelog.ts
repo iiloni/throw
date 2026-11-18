@@ -225,7 +225,7 @@ export function compareProtocols(from: Protocol | null | undefined, to: Protocol
       `API protocol: app ${from.version} → ${to.version}; server supports ` +
       `${protocolRange(from)} → ${protocolRange(to)}. ${order}` +
       (needsNewServer || rejectsOldApps
-        ? ' Local notes and queued writes are kept while sync is paused.'
+        ? ' Local tasks and queued writes are kept while sync is paused.'
         : ''),
   };
 }

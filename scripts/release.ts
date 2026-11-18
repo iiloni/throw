@@ -1,21 +1,18 @@
 import { appendFileSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { z } from 'zod';
+import { compareReleaseVersions, parseReleaseVersion } from '../packages/shared/src/releases.ts';
 
-const releaseTag = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-preview)?$/;
-
+/** Release tags are `v` and a release version; the grammar and ordering live in shared code. */
 export function parseReleaseTag(input: unknown) {
   const tag = z.string().max(128).parse(input);
-  const match = releaseTag.exec(tag);
-  if (!match || match[0] !== tag) {
-    throw new Error('Use vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-preview.');
-  }
-  return {
-    version: tag.slice(1),
-    channel: match[4] ? 'preview' : 'stable',
-    parts: match.slice(1, 4).map(BigInt),
-  };
+  const release = tag.startsWith('v') ? parseReleaseVersion(tag.slice(1)) : null;
+  if (!release) throw new Error('Use vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-preview.');
+  return { version: tag.slice(1), channel: release.channel, parts: release.parts };
 }
+
+const isReleaseTag = (tag: string) =>
+  tag.startsWith('v') && parseReleaseVersion(tag.slice(1)) !== null;
 
 export function releaseMetadata(tag: unknown, repositoryInput: unknown, runNumber: unknown) {
   const { version, channel } = parseReleaseTag(tag);
@@ -43,13 +40,7 @@ export function releaseMetadata(tag: unknown, repositoryInput: unknown, runNumbe
 }
 
 export function compareReleaseTags(left: string, right: string) {
-  const a = parseReleaseTag(left);
-  const b = parseReleaseTag(right);
-  for (let index = 0; index < a.parts.length; index++) {
-    if (a.parts[index] !== b.parts[index]) return a.parts[index] > b.parts[index] ? 1 : -1;
-  }
-  if (a.channel === b.channel) return 0;
-  return a.channel === 'stable' ? 1 : -1;
+  return compareReleaseVersions(parseReleaseTag(left).version, parseReleaseTag(right).version);
 }
 
 /** The supported release tags in `input`, lowest version first. */
@@ -95,7 +86,7 @@ export function shouldPromote(tag: string, input: unknown) {
     if (release.isDraft) continue;
     if (release.tagName === tag)
       throw new Error(`Release ${tag} is already published; create a new tag.`);
-    if (!releaseTag.test(release.tagName)) continue;
+    if (!isReleaseTag(release.tagName)) continue;
     if (
       parseReleaseTag(release.tagName).channel === channel &&
       compareReleaseTags(tag, release.tagName) < 0

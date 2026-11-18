@@ -20,7 +20,10 @@ const releases = [
   release('v6.0.0-preview', { prerelease: false }),
   release('unrelated'),
 ];
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 describe('GitHub release listing', () => {
   it('shows only published releases for the server channel, newest version first', () => {
@@ -49,6 +52,17 @@ describe('GitHub release listing', () => {
     expect(stable.releases).toHaveLength(2);
     expect(preview.releases).toHaveLength(2);
     await listReleases('stable');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers from an older list when GitHub fails', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json(releases)));
+    await listReleases('stable');
+    vi.advanceTimersByTime(6 * 60_000);
+    const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 403 }));
+    vi.stubGlobal('fetch', fetch);
+    expect((await listReleases('stable')).releases).toHaveLength(2);
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

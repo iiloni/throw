@@ -19,7 +19,7 @@ import {
 import { getServerUrl } from './serverUrl';
 
 /**
- * The server's backups, for its admins (ADR 0012). These are plain requests rather than
+ * The server's backups, for its admins (ADR 0011). These are plain requests rather than
  * queued writes: a backup or a restore is something to do now, with the server answering.
  */
 export class BackupRequestError extends Error {

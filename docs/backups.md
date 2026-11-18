@@ -94,6 +94,9 @@ The database role needs `CREATEDB` and table ownership. A superuser connection c
 restricted temporary role to load untrusted uploaded SQL. A role with dangerous host-file,
 program-execution or role-creation privileges but without superuser is refused. The combined
 example uses plain CREATEDB/REPLICATION owners and withholds cluster administration credentials.
+With such an owner there is no sandbox role, so an uploaded backup's SQL runs with the owner's
+rights over its own database (within one transaction, so it cannot drop a database). Restore
+only backups you trust, as you would any file that replaces all of a server's data.
 Replicating apps still share a trusted cluster; use separate stacks for stronger isolation.
 
 The host restore stops only the app and runs the shipped CLI in a one-off container, so it
