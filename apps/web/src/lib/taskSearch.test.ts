@@ -1,13 +1,15 @@
-import type { Project, Task } from '@throw/shared';
+import type { Project, Tag, Task } from '@throw/shared';
 import { describe, expect, it } from 'vitest';
 import {
   descriptionSnippet,
   descriptionText,
   highlight,
   indexTasks,
+  matchedTags,
   parseTaskIdentifier,
   searchProjects,
   searchTasks,
+  taskTagNames,
 } from './taskSearch';
 
 const project: Project = {
@@ -205,5 +207,40 @@ describe('highlighting', () => {
     expect(text.endsWith('…')).toBe(true);
     expect(snippet && marked(snippet)).toEqual(['needle']);
     expect(descriptionSnippet(description, 'absent')).toBeNull();
+  });
+});
+
+describe('tag search', () => {
+  const tag = (id: string, name: string, parentId: string | null = null): Tag => ({
+    id,
+    workspaceId: 'workspace',
+    projectId: project.id,
+    name,
+    parentId,
+    icon: null,
+    color: null,
+  });
+  const tags = [tag('home', 'Home'), tag('garden', 'Garden', 'home'), tag('urgent', 'Urgent')];
+
+  it('finds a task by its primary or secondary tags, and by their ancestors', () => {
+    const tasks = [
+      task('weed', { primaryTagId: 'garden' }),
+      task('call', { number: 2 }),
+      task('plain', { number: 3 }),
+    ];
+    const names = taskTagNames(tasks, tags, [
+      { taskId: 'call', tagId: 'urgent', workspaceId: 'workspace', projectId: project.id },
+    ]);
+    expect(names.get('weed')).toEqual(['Home', 'Garden']);
+    const indexed = indexTasks(tasks, [project], [], 'workspace', names);
+    expect(ids(searchTasks(indexed, 'home'))).toEqual(['weed']);
+    expect(ids(searchTasks(indexed, 'urgent'))).toEqual(['call']);
+    expect(matchedTags(indexed[0]!.tags, 'gard')).toEqual(['Garden']);
+  });
+
+  it('adds nothing for a tag that has not synced', () => {
+    expect(taskTagNames([task('weed', { primaryTagId: 'missing' })], tags, []).get('weed')).toEqual(
+      [],
+    );
   });
 });
