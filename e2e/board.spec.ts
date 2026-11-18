@@ -281,7 +281,12 @@ test('board settings opens in the drawer on a phone and in a panel held to the w
   await trigger.click();
   await expect(settings).toBeVisible();
   // The drawer takes focus itself, so its close button's tooltip does not take the first Escape.
-  if (isMobile) await expect(settings).toBeFocused();
+  if (isMobile) {
+    await expect(settings).toBeFocused();
+    // The drawer takes its new height on Motion's next frame, before it paints; a read straight
+    // after focus moves can come first, so wait for it to come to rest at full height.
+    await expect.poll(async () => (await settings.boundingBox())?.y ?? Infinity).toBeLessThan(24);
+  }
   const bounds = await settings.boundingBox();
   if (!bounds) throw new Error('Board settings has no bounds');
   expect(bounds.y).toBeGreaterThanOrEqual(0);
