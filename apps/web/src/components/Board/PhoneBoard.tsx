@@ -15,12 +15,13 @@ import { type PhoneCapture, usePhonePalette } from '@/components/CommandPalette/
 import { type Detent, Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
+import { useBackHandler } from '@/lib/backButton';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { BoardSettingsContent } from './BoardSettingsPanel';
 import { CardList } from './CardList';
 import { drag, holding, pageStride } from './drag';
-import { byCategory, type Category, isClosed, type Status, type Task } from './model';
+import { byCategory, isClosed, type Status, type Task } from './model';
 import { StatusFilter, zoneStatuses } from './SideZone';
 import { StatusTile } from './StatusTile';
 import {
@@ -85,6 +86,8 @@ export function PhoneBoard({
   // A page, the capture card or an open task covers the board; the drawer above it is theirs
   // (ADR 0009).
   const covered = drawerPage !== null || capture.card !== null || state.openTaskId !== null;
+  // Back lets go of selected cards before it closes anything else.
+  useBackHandler(state.selection.length > 0, () => update({ selection: [] }));
 
   function turnTo(index: number, behavior: ScrollBehavior = 'smooth') {
     const element = pager.current;
@@ -155,6 +158,7 @@ export function PhoneBoard({
         <div
           ref={pager}
           data-pager=""
+          data-selecting={state.selection.length > 0 ? '' : undefined}
           onScroll={(event) =>
             setPage(Math.round(event.currentTarget.scrollLeft / pageStride(event.currentTarget)))
           }
@@ -192,7 +196,6 @@ export function PhoneBoard({
           createTask(inBacklog ? undefined : active[page]?.id);
         }}
       />
-      <MoveDrawer />
     </div>
   );
 }
@@ -427,8 +430,9 @@ function BoardDrawer({
   const statuses = zoneStatuses('backlog', project.statuses);
   const count = listTasks({ ...state, backlogFilter: null }, 'backlog').length;
   const [detent, setDetent] = useState<Detent>(initialOpen ? 'half' : 'closed');
-  // Grooming keeps the backlog where it is; anything else held wants the board.
-  const sunk = held !== null && (page !== null || detent !== 'full');
+  const dragging = held?.phase === 'dragging';
+  // Selecting by holding a card must not open the grid under the finger that is still down.
+  const pick = state.selection.length > 0 && !dragging && !fingerDown;
   // While a task is open, the collapsed drawer is its dock; the backlog waits at its height.
   const task = useContext(TaskContentContext)?.drawer;
   // A closing task shrinks beneath the drawer, as an opening one grows beneath it.
@@ -549,7 +553,7 @@ function BoardDrawer({
       detent={task || capturing ? 'closed' : detent}
       detents={task || capturing ? ['closed'] : undefined}
       onDetent={goTo}
-      sunk={!task && sunk}
+      move={!task && !capturing && (dragging || pick) ? <MovePanel pick={pick} /> : null}
       // An open task's drawer moves only while one of its panels is open.
       gesturesDisabled={
         held !== null || fingerDown || (!!task && !task.page) || (capturing && !capture.page)
@@ -618,77 +622,61 @@ function CardStack({ count }: { count: number }) {
 }
 
 /**
- * Where a held card is sent anywhere, wherever it came from: a lip at the bottom edge that
- * opens into a grid of every status when the card is brought onto it. Selected cards open
- * it too. It is where the drawer was, which sinks out of the way while a card is held.
+ * Where a held card is sent anywhere, wherever it came from: the drawer's header, which opens
+ * into a grid of every status when the card is brought onto it and closes when it leaves.
+ * With cards selected it is open, and tapping a status moves them (ADR 0009).
  */
-function MoveDrawer() {
+function MovePanel({ pick }: { pick: boolean }) {
   const state = board.use();
   const held = drag.use();
-  const fingerDown = holding.use();
   const { project } = current(state);
   const selected = state.selection.length;
-  const dragging = held?.phase === 'dragging';
-  // Selecting by holding a card must not open the grid under the finger that is still down.
-  const pick = selected > 0 && !dragging && !fingerDown;
-  // A held card opens the grid by being brought to the lip, and closes it by leaving.
-  const open = pick || (dragging && held.over);
+  const open = pick || (held?.phase === 'dragging' && held.over);
   const send = (statusId: string) => {
     sendTasks(state.selection, statusId);
     update({ selection: [] });
   };
-  if (!open && !dragging) return null;
-
   return (
-    <div data-drop-block="" className="pointer-events-none fixed inset-x-0 bottom-0 z-50">
-      <motion.div
-        layout
-        transition={springs.snappy}
-        data-drop-expand=""
-        style={{ borderTopLeftRadius: 28, borderTopRightRadius: 28 }}
-        className="glass-thick pointer-events-auto mx-auto w-full max-w-md overflow-hidden pt-2 pb-[var(--safe-bottom)]"
-      >
-        {pick && (
-          <motion.div layout="position" className="flex h-12 items-center pr-1.5 pl-4">
-            <span className="flex-1 font-medium text-sm tabular-nums">{selected} selected</span>
-            <IconButton label="Clear selection" onClick={() => update({ selection: [] })}>
-              <X />
-            </IconButton>
-          </motion.div>
-        )}
-        {open ? (
-          <motion.div
-            layout="position"
-            className={cn('space-y-2.5 px-3 pt-2 pb-3', pick && 'pt-0')}
-          >
-            {byCategory(project.statuses).map((group) => (
-              <section key={group.name}>
-                <h3 className="px-1 pb-1.5 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
-                  {group.name}
-                </h3>
-                <div className="grid grid-cols-3 gap-2">
-                  {group.statuses.map((status) => (
-                    <StatusTile
-                      key={status.id}
-                      status={status}
-                      shape="row"
-                      onPick={pick ? () => send(status.id) : undefined}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
-          </motion.div>
-        ) : (
-          <motion.p
-            layout="position"
-            className="flex h-10 items-center justify-center pb-1 font-medium text-muted-foreground text-xs"
-          >
-            Move to a status
-          </motion.p>
-        )}
-      </motion.div>
-    </div>
+    <motion.div
+      key="move"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.16 }}
+    >
+      {pick && (
+        <div className="flex h-11 items-center pr-0.5 pl-2">
+          <span className="flex-1 font-medium text-sm tabular-nums">{selected} selected</span>
+          <IconButton label="Clear selection" onClick={() => update({ selection: [] })}>
+            <X />
+          </IconButton>
+        </div>
+      )}
+      {open ? (
+        <div className="space-y-2.5 pt-1">
+          {byCategory(project.statuses).map((group) => (
+            <section key={group.name}>
+              <h3 className="px-1 pb-1.5 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
+                {group.name}
+              </h3>
+              <div className="grid grid-cols-3 gap-2">
+                {group.statuses.map((status) => (
+                  <StatusTile
+                    key={status.id}
+                    status={status}
+                    shape="row"
+                    onPick={pick ? () => send(status.id) : undefined}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <p className="flex h-10 items-center justify-center font-medium text-muted-foreground text-xs">
+          Move to a status
+        </p>
+      )}
+    </motion.div>
   );
 }
 

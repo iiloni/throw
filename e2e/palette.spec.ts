@@ -253,16 +253,8 @@ test('offline capture is immediate, searchable, persists and receives a number o
   await expect(
     palette(page).getByRole('option', { name: /Captured with no connection Pending/ }),
   ).toBeVisible();
-  if (isMobile) {
-    // The phone board reloads its statuses on reconnecting, which closes its drawer page.
-    await closeSearch(page, true);
-    await page.unroute('**/api/**');
-    await expect(
-      page.getByRole('article', { name: 'CAT-4 Captured with no connection', exact: true }),
-    ).toBeVisible({ timeout: 60_000 });
-    await open(page);
-    await input(page).fill('Captured with no connection');
-  } else await page.unroute('**/api/**');
+  // Reconnecting fetches the shapes again; the open search page stays through it.
+  await page.unroute('**/api/**');
   await expect(
     palette(page).getByRole('option', { name: /Captured with no connection CAT-4/ }),
   ).toBeVisible({ timeout: 60_000 });

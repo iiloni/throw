@@ -27,13 +27,18 @@ Tags have their data layer and reusable controls in `components/Tag*`, with a re
 development only. The board colour helper is `taskTagColor` in `@throw/shared`. The task
 pane picks and lists tags; tag management has no product entry point yet. The task history
 interleaves server entries and comments; refused changes have a quiet task-only notice and
-description recovery links. Real-board dragging and keyboard moves are not wired yet.
+description recovery links. Cards move on the project board by drag, keyboard,
+phone long press, the move drawer and a rightward swipe to close (ADR 0008).
 
 The board's interaction was worked out in a prototype on mock data: `/prototype/board`, in
 development builds only, with its components in `apps/web/src/components/Board`. It keeps
-mock data and the drag engine, and shares the components with the real project board. `Board/ProjectBoard.tsx` adapts collections and task actions at the boundary;
-`Board/selection.ts` selects visible rows. The drag step should use ADR 0008 and wire
-placements through `moveTask` without replacing those components.
+mock data and shares the components and the drag engine (`Board/drag.ts`) with the real
+project board. `Board/ProjectBoard.tsx` adapts collections and task actions at the boundary;
+`Board/selection.ts` selects visible rows. `Board/state.ts` holds incoming sync while a card
+is held and turns drops into `moveTask` and `sendTask` calls; `Board/carry.ts` is the
+keyboard carry and `Board/swipe.ts` the phone's swipe to close. The collection hooks hold
+their last rows through a reconnect's full snapshot (`lib/steadyRows.ts`), so the board
+does not unmount while a shape reloads.
 
 ## Layout
 
