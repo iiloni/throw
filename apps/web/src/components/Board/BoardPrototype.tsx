@@ -1,6 +1,6 @@
 import { AnimatePresence } from 'motion/react';
 import { useEffect, useLayoutEffect, useState } from 'react';
-import { useMedia } from '@/lib/media';
+import { useDesktop } from '@/lib/media';
 import { BoardAnnouncer } from './BoardAnnouncer';
 import { putBack } from './carry';
 import { DesktopBoard } from './DesktopBoard';
@@ -22,7 +22,7 @@ export function BoardPrototype() {
     setReady(true);
   }, []);
   const reset = () => board.set(initialBoard(mockBoards()));
-  const phone = useMedia('(max-width: 767px)');
+  const phone = !useDesktop();
   const state = board.use();
   const [settings] = useBoardSettings();
   configureDrag({ heldColumn: settings.heldColumn });

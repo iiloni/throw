@@ -7,7 +7,7 @@ import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { type TaskPanel, taskDrawerContent } from '@/components/TaskDetails/TaskControls';
 import { TaskDetails } from '@/components/TaskDetails/TaskDetails';
 import { useStatuses, useTags, useTasks } from '@/lib/collections';
-import { useMedia } from '@/lib/media';
+import { useDesktop } from '@/lib/media';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { createTask } from '@/lib/tasks';
 import { BoardAnnouncer } from './BoardAnnouncer';
@@ -32,7 +32,7 @@ export function ProjectBoard({
   const { statuses, isLoading: loadingStatuses } = useStatuses();
   const { tasks, isLoading: loadingTasks } = useTasks();
   const { tags } = useTags(project.id);
-  const phone = useMedia('(max-width: 767px)');
+  const phone = !useDesktop();
   const state = board.use();
   const data = useMemo(
     () => projectBoardData(project, statuses, tasks, tags),

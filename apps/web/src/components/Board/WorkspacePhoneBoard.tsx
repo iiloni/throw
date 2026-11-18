@@ -1,8 +1,9 @@
-import { ChevronDown, Plus, Search, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, Search, SlidersHorizontal } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { type ReactNode, useContext, useLayoutEffect, useRef, useState } from 'react';
 import { Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
 import { IconButton } from '@/components/IconButton/IconButton';
+import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
@@ -19,6 +20,7 @@ import {
   pageClass,
 } from './PhoneBoard';
 import { CATEGORY_NAMES } from './StatusMenu';
+import { SwipeReveal } from './SwipeReveal';
 import { board, countIn, current, listTasks, update, useBoardSettings } from './state';
 import { TaskCard } from './TaskCard';
 import { TaskContentContext } from './taskContent';
@@ -190,8 +192,8 @@ function CategoryPage({ category }: { category: Category }) {
   const bands = groupByPriority(listTasks(state, target)).filter((band) => band.tasks.length > 0);
   const over = held?.phase === 'dragging' && held.target?.kind === 'status';
   const aimed = over && held.target?.kind === 'status' && held.target.statusId === target;
-  // Cancelled work is folded until asked for, as it is on desktop.
-  const hidden = category === 'cancelled' && folded.cancelled;
+  const foldable = category === 'done' || category === 'cancelled' ? category : null;
+  const hidden = foldable !== null && folded[foldable];
   const open = category === 'backlog' || category === 'active';
   return (
     <section
@@ -204,42 +206,49 @@ function CategoryPage({ category }: { category: Category }) {
         aimed && held?.origin !== category && 'bg-accent/60',
       )}
     >
-      <div
-        data-autoscroll=""
-        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-[var(--gutter)] pt-1 [scrollbar-width:none]"
-        style={{ paddingBottom: DOCK_SPACE }}
-      >
-        {hidden ? (
-          <button
-            type="button"
-            onClick={() => setFolded({ ...folded, cancelled: false })}
-            className="mt-6 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-foreground/[0.06] px-4 text-muted-foreground text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
-          >
-            Show {countIn(state, target)} cancelled
-            <ChevronDown aria-hidden className="size-4" />
-          </button>
-        ) : (
-          bands.map((band) => (
-            <section key={band.priority} aria-label={priorityName(project, band.priority)}>
-              <div className="zone-header" data-mode={settings.zoneLabels ? 'label' : 'hidden'}>
-                <div className="zone-header-face">
-                  <span className="truncate">{priorityName(project, band.priority)}</span>
-                </div>
-              </div>
-              {band.tasks.map((task) => (
-                <div key={task.id} data-slot={task.id} className="pb-3">
-                  <TaskCard task={task} showStatus />
-                </div>
+      <ScrollArea edges className="flex-1">
+        <ScrollAreaViewport data-autoscroll="">
+          <div className="px-[var(--gutter)] pt-1" style={{ paddingBottom: DOCK_SPACE }}>
+            {foldable && (
+              <button
+                type="button"
+                aria-expanded={!hidden}
+                onClick={() => setFolded({ ...folded, [foldable]: !hidden })}
+                className="mt-2 mb-1 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-foreground/[0.06] px-4 text-muted-foreground text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
+              >
+                {hidden ? `Show ${countIn(state, target)} ${foldable}` : `Hide ${foldable}`}
+                {hidden ? (
+                  <ChevronDown aria-hidden className="size-4" />
+                ) : (
+                  <ChevronUp aria-hidden className="size-4" />
+                )}
+              </button>
+            )}
+            {!hidden &&
+              bands.map((band) => (
+                <section key={band.priority} aria-label={priorityName(project, band.priority)}>
+                  <div className="zone-header" data-mode={settings.zoneLabels ? 'label' : 'hidden'}>
+                    <div className="zone-header-face">
+                      <span className="truncate">{priorityName(project, band.priority)}</span>
+                    </div>
+                  </div>
+                  {band.tasks.map((task) => (
+                    <div key={task.id} data-slot={task.id} className="relative pb-3">
+                      {open && <SwipeReveal taskId={task.id} />}
+                      <TaskCard task={task} showStatus />
+                    </div>
+                  ))}
+                </section>
               ))}
-            </section>
-          ))
-        )}
-        {!hidden && bands.length === 0 && (
-          <p className="px-1 py-10 text-center text-muted-foreground text-sm">
-            {state.awaitingTasks ? 'Loading tasks…' : 'Nothing here.'}
-          </p>
-        )}
-      </div>
+            {!hidden && bands.length === 0 && (
+              <p className="px-1 py-10 text-center text-muted-foreground text-sm">
+                {state.awaitingTasks ? 'Loading tasks…' : 'Nothing here.'}
+              </p>
+            )}
+          </div>
+        </ScrollAreaViewport>
+        <ScrollBar />
+      </ScrollArea>
     </section>
   );
 }

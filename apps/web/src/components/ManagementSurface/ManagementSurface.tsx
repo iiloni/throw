@@ -11,7 +11,7 @@ import {
 } from 'react';
 import { BottomSheet } from '@/components/BottomSheet/BottomSheet';
 import { Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
-import { useMedia } from '@/lib/media';
+import { useDesktop } from '@/lib/media';
 
 // Settings and trash have no dock at rest. Their shell-owned drawer exists only while a
 // form or confirmation is open; TagManager can use the same host as the surrounding screen.
@@ -29,7 +29,7 @@ export function ManagementSurfaceProvider({
 }) {
   // The same query the surfaces use, so at a fractional width between the two breakpoints
   // the host and its surfaces still agree on which one shows.
-  const phone = !useMedia('(min-width: 768px)');
+  const phone = !useDesktop();
   const [surface, setSurface] = useState<{
     id: string;
     page: DrawerPage;
@@ -91,7 +91,7 @@ export function ManagementSurface({
   initialFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const host = useContext(SurfaceContext);
-  const desktop = useMedia('(min-width: 768px)');
+  const desktop = useDesktop();
   const id = useId();
   useEffect(() => {
     if (!open || desktop || !host) return;

@@ -5,8 +5,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 const media = vi.hoisted(() => ({ wide: false, fractional: false }));
 // A fractional width between the breakpoints matches neither query.
 vi.mock('@/lib/media', () => ({
-  useMedia: (query: string) =>
-    !media.fractional && (query === '(min-width: 768px)' ? media.wide : !media.wide),
+  useDesktop: () => !media.fractional && media.wide,
 }));
 vi.mock('@/components/Drawer/Drawer', () => ({
   Drawer: ({

@@ -11,3 +11,7 @@ export function useMedia(query: string) {
   );
   return useSyncExternalStore(subscribe, () => window.matchMedia(query).matches);
 }
+
+export function useDesktop() {
+  return useMedia('(min-width: 768px)');
+}

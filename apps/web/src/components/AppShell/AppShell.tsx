@@ -35,7 +35,7 @@ import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
 import { getSignedInUser } from '@/lib/auth';
 import { useProjects, useWorkspaces } from '@/lib/collections';
-import { useMedia } from '@/lib/media';
+import { useDesktop, useMedia } from '@/lib/media';
 import { springs } from '@/lib/motion';
 import { projectsIn } from '@/lib/projects';
 import { usePersistentState } from '@/lib/storage';
@@ -70,7 +70,7 @@ export function AppShell() {
   );
   const [railChoice, setRailChoice] = usePersistentState('throw-rail-expanded', railSchema, null);
   const wide = useMedia('(min-width: 1200px)');
-  const desktop = useMedia('(min-width: 768px)');
+  const desktop = useDesktop();
   const expanded = railChoice ?? wide;
   const reduced = useReducedMotion();
   const [palette, setPalette] = useState<PaletteMode | null>(null);

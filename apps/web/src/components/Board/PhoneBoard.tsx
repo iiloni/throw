@@ -15,6 +15,7 @@ import { type PhoneCapture, usePhonePalette } from '@/components/CommandPalette/
 import { type Detent, Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
+import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
@@ -743,28 +744,33 @@ function ClosedTasks() {
   return (
     <>
       <StatusFilter zone="closed" />
-      <section
-        aria-label="Closed tasks"
-        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3.5 pb-[calc(var(--safe-bottom)+1.5rem)] [scrollbar-width:none]"
-      >
-        {groups.map((group) => (
-          <section key={group.label}>
-            <h3 className="px-1.5 pt-3 pb-2 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
-              {group.label}
-            </h3>
-            <div className="space-y-3">
-              {group.tasks.map((task) => (
-                <TaskCard key={task.id} task={task} showStatus={state.closedFilter === null} />
-              ))}
-            </div>
+      <ScrollArea edges className="flex-1">
+        <ScrollAreaViewport data-autoscroll="">
+          <section
+            aria-label="Closed tasks"
+            className="px-3.5 pb-[calc(var(--safe-bottom)+1.5rem)]"
+          >
+            {groups.map((group) => (
+              <section key={group.label}>
+                <h3 className="px-1.5 pt-3 pb-2 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
+                  {group.label}
+                </h3>
+                <div className="space-y-3">
+                  {group.tasks.map((task) => (
+                    <TaskCard key={task.id} task={task} showStatus={state.closedFilter === null} />
+                  ))}
+                </div>
+              </section>
+            ))}
+            {groups.length === 0 && (
+              <p className="py-10 text-center text-muted-foreground text-sm">
+                {state.awaitingTasks ? 'Loading tasks…' : 'Nothing closed.'}
+              </p>
+            )}
           </section>
-        ))}
-        {groups.length === 0 && (
-          <p className="py-10 text-center text-muted-foreground text-sm">
-            {state.awaitingTasks ? 'Loading tasks…' : 'Nothing closed.'}
-          </p>
-        )}
-      </section>
+        </ScrollAreaViewport>
+        <ScrollBar />
+      </ScrollArea>
     </>
   );
 }

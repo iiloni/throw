@@ -61,7 +61,7 @@ export function Trash({ projectId }: { projectId?: string }) {
         Nothing is removed automatically. Restoring a project or parent brings its tasks back; a
         subtask trashed separately stays in the trash.
       </p>
-      <div className="mb-6 flex flex-wrap gap-4 text-sm text-primary">
+      <div className="mb-6 flex flex-wrap gap-4 text-sm text-[var(--brand-link)]">
         {projectId && project && (
           <Link to="/w/$workspaceId/p/$projectId/settings" params={{ workspaceId, projectId }}>
             Project settings
