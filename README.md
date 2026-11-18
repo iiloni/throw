@@ -26,13 +26,18 @@ Each Git worktree gets its own stack, so several branches can run side by side; 
 
 ## Self-hosting
 
-No image is published yet. To run a production build from a checkout:
+[Deployment](docs/deployment.md) covers published-image installation, HTTPS and running beside
+Catch with one Postgres container and separate app databases. Production configuration lives
+in an operator-owned directory. [Releases](docs/releases.md) covers channels, Android signing
+and publishing; [backups](docs/backups.md) covers scheduling and recovery.
+
+Before the first image is published, or to build a checkout:
 
 ```bash
-cp .env.example .env   # set BETTER_AUTH_SECRET, BETTER_AUTH_URL, POSTGRES_PASSWORD, ELECTRIC_SECRET
-docker compose up -d --build
+cp .env.example .env   # set auth URL/secret, Postgres password and Electric secret
+# In .env, uncomment COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml
+docker compose up -d --build --wait
 ```
 
-The app listens on port 3100 (`THROW_PORT` to change it). The first account you create
-becomes the instance admin, and sign-up then closes; `REGISTRATION=open` lets anyone sign
-up instead.
+The app listens on port 3100 (`THROW_PORT` to change it). The first account becomes the
+instance admin and sign-up then closes; `REGISTRATION=open` explicitly permits more accounts.

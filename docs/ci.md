@@ -13,9 +13,9 @@ and checks and both E2E projects succeed in the same run. A PR with only `run e2
 has a failing `validation` check after successful E2E, with a message that approval is
 required. A PR with neither label also has a failing `validation` check; its ordinary
 `check` job still reports whether development checks passed. Skipped E2E jobs do not satisfy
-the gate. Main pushes and manual CI requests request the full suite. There is no release
-workflow yet; the reuse of a verified full pass for an exact commit
-(`scripts/wait-for-ci.ts`) is kept from Catch for when there is.
+the gate. Main pushes and manual CI requests request the full suite. Release waits for a verified full pass at its exact tagged commit
+(`scripts/wait-for-ci.ts`); see [release setup](releases.md) for signing, publication permissions
+and the opt-in `RELEASES_ENABLED` variable.
 
 A change confined to documentation is the exception: it runs `check` and skips E2E, on
 its PR and on the push to `main` that follows. See

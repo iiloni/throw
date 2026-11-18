@@ -104,3 +104,8 @@ and the tag manager are centred dialogs.
   on phones, not into their own sheets or full-screen overlays. Capture is the drawer's card
   and dock.
 - The prototype shares the Board components, so it gets the drawer too.
+- **Exception: app-level prompts (2026-11-18).** The update prompts (`AppUpdatePrompt`,
+  `WebUpdatePrompt`) stay centred dialogs at every width. They can appear over any screen,
+  including a board whose drawer is open with its own content, and must not replace that
+  content or wait for it to close. Settings' own confirmations, such as restoring or
+  deleting a server backup, use `ManagementSurface` like other management forms.

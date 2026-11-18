@@ -115,13 +115,18 @@ connectivity and collection storage. System-bar styling follows the selected app
 theme and Catch's local keyboard-insets plugin keeps the WebView full size.
 Android 7 (API 24) is the minimum OS; the WebView must support the app's modern browser APIs.
 
-Release tasks deliberately fail until signing and distribution are implemented. Before
-releasing, establish version/versionCode metadata, signing keys, a release pipeline, upgrade
-and backup policy, and update prompts alongside the web release. A debug build under a
-stable/preview ID must be uninstalled before installing a differently signed release; keep
-unsynced data safe. The permanent IDs must remain unchanged after distribution.
+Release builds require explicit version metadata and the persistent signing credentials in
+[docs/releases.md](docs/releases.md). Dev remains debug-only. Stable/preview debug APKs
+cannot replace differently signed releases; sync pending data before uninstalling one.
 
-## Releasing
+## Releasing and production
 
-There is no release process yet. Catch's tagging, changelog and image publishing scripts
-have not been ported.
+[Releases](docs/releases.md) covers tagging, signing, CI and publishing, including safe dry
+runs. [Deployment](docs/deployment.md) covers standalone Throw and the owner-approved combined
+Catch/Throw example. [Backups](docs/backups.md) covers schedules and recovery.
+`./scripts/dev.sh backup <command>` uses this checkout's database and ignored `.backups/`.
+`./scripts/dev.sh production-smoke` builds a real production image and tests boot, migrations,
+backup and restore in a temporary Compose project, then removes its containers/volumes/image.
+Never publish, push tags, create repository secrets or change settings without specific owner
+approval. Full E2E was explicitly requested for the release feature; ordinary changes still
+follow the targeted-test policy above.

@@ -112,7 +112,8 @@ identity is `org.iloni.throwtasks` (Throw), `.preview` (Throw Preview), `.dev` (
 
 Sync the matching web channel before each native build (`THROW_CHANNEL=preview pnpm
 --filter @throw/web android:sync`, then `assemblePreviewDebug`). Do not edit generated
-resources. Release signing/distribution and selectable launcher icons remain deferred.
+resources. Release signing/distribution is documented in [Releases](releases.md); selectable launcher
+icons remain deferred.
 Raster/alpha tests verify favicon frames, opaque maskable surfaces, adaptive safe zones
 and monochrome knockouts; APK and physical-device validation are documented separately
 in [Android validation](android-validation.md).

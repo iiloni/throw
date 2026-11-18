@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { inferAdditionalFields } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';
 import { z } from 'zod';
 import { getServerUrl } from './serverUrl';
@@ -53,6 +54,7 @@ function userOf(data: unknown): SignedInUser | null {
  * web app and the Android app (a different origin) share one code path.
  */
 export const authClient = createAuthClient({
+  plugins: [inferAdditionalFields({ user: { role: { type: 'string', input: false } } })],
   baseURL: getServerUrl(),
   basePath: '/api/auth',
   fetchOptions: {

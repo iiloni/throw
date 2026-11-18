@@ -1,5 +1,20 @@
 # syntax=docker/dockerfile:1.7
-FROM node:24-slim AS base
+FROM node:24-slim AS runtime
+ARG POSTGRES_MAJOR=17
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+        -o /usr/share/keyrings/postgresql.asc \
+    && . /etc/os-release \
+    && echo "deb [signed-by=/usr/share/keyrings/postgresql.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends "postgresql-client-${POSTGRES_MAJOR}" \
+    && apt-get purge -y curl \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM runtime AS base
 WORKDIR /workspace
 COPY package.json ./
 RUN npm install -g "pnpm@$(node -p "require('./package.json').packageManager.split('@')[1]")" \
@@ -28,7 +43,7 @@ RUN --mount=type=cache,id=throw-pnpm-store,target=/pnpm-store \
     && printf '\nallowUnusedPatches: true\n' >> pnpm-workspace.yaml \
     && pnpm --filter @throw/server deploy --prod --legacy /out
 
-FROM node:24-slim AS production
+FROM runtime AS production
 WORKDIR /app
 ARG THROW_VERSION=
 ARG THROW_CHANNEL=dev
@@ -43,6 +58,7 @@ COPY --from=build /out/package.json ./package.json
 COPY --from=build /workspace/apps/server/dist ./dist
 COPY --from=build /workspace/apps/server/drizzle ./drizzle
 COPY --from=build /workspace/apps/web/dist ./web
+RUN mkdir -p /data/backups && chown node:node /data/backups
 USER node
 EXPOSE 3000
 CMD ["sh", "-c", "node dist/db/migrate.mjs && node dist/index.mjs"]

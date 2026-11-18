@@ -22,6 +22,7 @@ import {
   type ShellState,
   viewSchema,
 } from '@/components/AppShell/shell';
+import { AppUpdatePrompt } from '@/components/AppUpdatePrompt/AppUpdatePrompt';
 import { BoardSettingsPanel } from '@/components/Board/BoardSettingsPanel';
 import { board, update } from '@/components/Board/state';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
@@ -31,6 +32,7 @@ import { PageHeader } from '@/components/PageHeader/PageHeader';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { type ShellForm, ShellForms } from '@/components/ShellForms/ShellForms';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
+import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
 import { getSignedInUser } from '@/lib/auth';
 import { useProjects, useWorkspaces } from '@/lib/collections';
 import { useMedia } from '@/lib/media';
@@ -38,6 +40,8 @@ import { springs } from '@/lib/motion';
 import { projectsIn } from '@/lib/projects';
 import { usePersistentState } from '@/lib/storage';
 import { useAwaitingSync } from '@/lib/syncStatus';
+import { watchUpdates } from '@/lib/updates';
+import { holdUpdateReload } from '@/lib/useUpdateReloadBlocked';
 import { cn } from '@/lib/utils';
 
 const railSchema = z.boolean().nullable();
@@ -48,6 +52,7 @@ const paramsSchema = z.object({
 
 export function AppShell() {
   const navigate = useNavigate();
+  useEffect(watchUpdates, []);
   const rawParams = useRouterState({ select: (state) => state.matches.at(-1)?.params });
   // From the rendered match, as the params are: the location moves first while a navigation
   // loads, and reading it would swap the shell's layout before its page.
@@ -75,6 +80,8 @@ export function AppShell() {
     created?: boolean;
   } | null>(null);
   const [form, setForm] = useState<ShellForm | null>(null);
+  const formOpen = form !== null;
+  useEffect(() => (formOpen ? holdUpdateReload() : undefined), [formOpen]);
   const workspaces = [...allWorkspaces].sort((a, b) => comparePositions(a.position, b.position));
   const preferredWorkspace = workspaces.find((item) => item.id === remembered.workspaceId);
   const workspace = params.workspaceId
@@ -413,6 +420,8 @@ export function AppShell() {
           onModeChange={setPalette}
           onOpenTask={context.openTask}
         />
+        <AppUpdatePrompt />
+        <WebUpdatePrompt />
         <ShellForms form={form} onClose={() => setForm(null)} />
       </ManagementSurfaceProvider>
     </ShellContext.Provider>

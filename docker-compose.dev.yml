@@ -14,6 +14,8 @@ services:
         required: false
     environment:
       NODE_ENV: development
+      BACKUPS_DIR: /workspace/.backups
+      UPDATE_BACKUPS: false
       # The container runs as the host UID, which may have no home directory in the image.
       HOME: /tmp
       BETTER_AUTH_URL: http://${THROW_PUBLIC_HOST:-localhost}:${THROW_PORT:-5173}

@@ -11,3 +11,5 @@ coverage/
 .tanstack/
 test-results/
 playwright-report/
+
+.backups/

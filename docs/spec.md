@@ -46,6 +46,10 @@ integrations.
   tokens, scripts). Shared packages are extracted only once duplication hurts.
 - A self-hoster can run either app or both. The intended shape is one Postgres container
   with a separate database per app; each app needs its own Electric and replication slot.
+- Deployment lives in an operator-owned directory, with a combined Compose example in Throw
+  ([deployment guide](deployment.md), ADR 0010). Each app pins and updates its own image.
+- Server admins can make, schedule, download and restore whole-server database backups
+  ([backup guide](backups.md), ADR 0011).
 - Build starts after Catch reaches maturity.
 
 ## First version
@@ -626,8 +630,8 @@ and the move drawer on a phone, and by swiping to close.
   queued writes and Capacitor for Android.
 - Android uses `org.iloni.throwtasks` (Throw), `.preview` (Throw Preview) and `.dev`
   (Throw Dev), with separate device data and channel artwork. Bundled code works offline;
-  stable/preview ask for the self-hosted server URL. Signing, distribution and updates are
-  deferred to the release work.
+  stable/preview ask for the self-hosted server URL. Signed releases and web/Android update
+  prompts follow [the release guide](releases.md).
 - Shapes are filtered by workspace and project membership, not by user ID as in Catch.
 
 ### Offline changes and conflicts
@@ -659,8 +663,9 @@ little as possible; it is not the normal way to use the app (ADR 0005).
    answer can filter them without a migration.
 3. **Single sign-on.** Accepting an external OIDC provider in both apps would give shared
    login without coupling them. Not decided.
-4. **Deployment.** How one Compose stack runs either or both apps when they live in
-   separate repositories.
+4. **Deployment — settled (2026-11-18).** Each app ships its own image and Compose file; the
+   combined example in `deploy/combined` runs either or both from one stack on one Postgres,
+   with separate owners and databases (ADR 0010, [docs/deployment.md](deployment.md)).
 5. **Refused changes — settled (2026-10-19).** A quiet notice inside the affected task,
    with no toast or app-wide notification. It appears from the synced log on every device
    for the user whose change was refused, stays until dismissed on that device, and links

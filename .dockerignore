@@ -1,6 +1,7 @@
 **/node_modules
 **/dist
 **/dev-dist
+apps/web/android
 .git
 .env*
 **/.env*
@@ -8,3 +9,5 @@
 **/*.keystore
 test-results
 playwright-report
+
+.backups

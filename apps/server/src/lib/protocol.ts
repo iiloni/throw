@@ -10,7 +10,9 @@ import { createMiddleware } from 'hono/factory';
 function isExempt(method: string, path: string) {
   if (path.startsWith('/api/auth/')) return true;
   if (method !== 'GET' && method !== 'HEAD') return false;
-  return ['/api/health', '/api/compatibility'].includes(path);
+  return ['/api/health', '/api/compatibility', '/api/updates', '/api/updates/releases'].includes(
+    path,
+  );
 }
 
 export const requireCompatibleProtocol = createMiddleware(async (c, next) => {

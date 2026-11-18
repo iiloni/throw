@@ -41,6 +41,12 @@ const envSchema = z.object({
   WEB_DIST_DIR: z.string().optional(),
   /** The release this image was built from. Unset in development. */
   THROW_VERSION: z.string().optional(),
+  BACKUPS_DIR: z.string().default('/data/backups'),
+  UPDATE_BACKUPS: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+  UPDATE_BACKUPS_KEPT: z.coerce.number().int().min(1).default(10),
   THROW_CHANNEL: releaseChannelSchema.default('dev'),
 });
 

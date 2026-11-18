@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
-import { APP_LOAD_TIMEOUT, signUp } from './helpers';
+import { APP_LOAD_TIMEOUT, signUp, waitForShapeRow } from './helpers';
 
 async function contrast(locator: Locator, ink: 'color' | 'borderColor', surface: 'self' | 'page') {
   return locator.evaluate(
@@ -196,6 +196,9 @@ test('brand surfaces preserve artwork, contrast and usable layout on light and d
   await page.setViewportSize({ width: 320, height: 800 });
   // Development has no service worker: keep artwork/code reachable and block the API,
   // as the repository's offline tests do. Production precaches every fallback asset.
+  // The outbox sends in order and holds each write until its transaction streams back, so
+  // the earlier project must arrive first or the offline write waits behind it as "Saving…".
+  await waitForShapeRow(page, 'projects', 'Brand check');
   await page.route('**/api/**', (route) => route.abort());
   await addProject(page, 'Offline brand check', true);
   await expect(page.getByRole('status')).toContainText('Offline');
