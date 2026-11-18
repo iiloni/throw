@@ -3,11 +3,18 @@ import {
   type Project,
   STARTER_STATUSES,
   type Status,
+  type Tag,
   type Task,
+  type TaskTag,
   updateTaskSchema,
 } from '@throw/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { changeIdFor, taskCreateRequest, taskUpdateRequest } from './writeRequests';
+import {
+  changeIdFor,
+  taskCreateFromWrite,
+  taskCreateRequest,
+  taskUpdateRequest,
+} from './writeRequests';
 
 // The actions run against real TanStack DB collections, kept in memory, and writes that are
 // never sent: as on a device that is offline. Each write's mutations then go through the same
@@ -17,12 +24,17 @@ vi.mock('./collections', async () => {
   const { createCollection, createTransaction, localOnlyCollectionOptions } = await import(
     '@tanstack/react-db'
   );
+  const { taskTagKey } = await import('@throw/shared');
   const collection = <T extends { id: string }>(id: string) =>
     createCollection(localOnlyCollectionOptions<T, string>({ id, getKey: (row) => row.id }));
   return {
     projectsCollection: collection<Project>('projects'),
     statusesCollection: collection<Status>('statuses'),
     tasksCollection: collection<Task>('tasks'),
+    tagsCollection: collection<Tag>('tags'),
+    taskTagsCollection: createCollection(
+      localOnlyCollectionOptions<TaskTag, string>({ id: 'task-tags', getKey: taskTagKey }),
+    ),
     write(mutate: () => void) {
       const transaction = createTransaction({ autoCommit: false, mutationFn: async () => {} });
       transaction.mutate(mutate);
@@ -35,6 +47,7 @@ vi.mock('./collections', async () => {
 const { projectsCollection, statusesCollection, tasksCollection } = await import('./collections');
 const { createProject } = await import('./projects');
 const tasks = await import('./tasks');
+const tags = await import('./tags');
 
 const KEY = '0199a0a0-0000-7000-8000-00000000000a';
 
@@ -100,6 +113,8 @@ describe('creating a task offline', () => {
       priority: 3,
       position: task.position,
       parentId: null,
+      primaryTagId: null,
+      secondaryTagIds: [],
     });
   });
 
@@ -156,9 +171,9 @@ describe('editing a task offline', () => {
 
   it('sends a description save with the version it replaces', () => {
     const id = tasks.createTask(projectId, { title: 'Notes' });
-    tasks.saveDescription(id, [{ type: 'paragraph' }]);
+    tasks.saveDescription(id, [{ type: 'paragraph' }], null);
     const first = tasksCollection.get(id)!.descriptionVersion;
-    tasks.saveDescription(id, [{ type: 'paragraph', content: 'more' }]);
+    tasks.saveDescription(id, [{ type: 'paragraph', content: 'more' }], first);
     const request = lastUpdateRequest();
     expect(request?.changes.description).toEqual({
       before: first,
@@ -167,6 +182,20 @@ describe('editing a task offline', () => {
         document: [{ type: 'paragraph', content: 'more' }],
       },
     });
+  });
+
+  it('does not queue a draft against a description that changed while it was edited', () => {
+    const id = tasks.createTask(projectId);
+    const saved = tasks.saveDescription(id, [{ type: 'paragraph', content: 'New version' }], null)!;
+    const count = fake.written.length;
+    expect(
+      tasks.saveDescription(id, [{ type: 'paragraph', content: 'Stale draft' }], null),
+    ).toBeNull();
+    expect(fake.written).toHaveLength(count);
+    expect(tasksCollection.get(id)?.descriptionVersion).toBe(saved.version);
+    expect(tasksCollection.get(id)?.description).toEqual([
+      { type: 'paragraph', content: 'New version' },
+    ]);
   });
 
   it('sends the trash state, not the device’s time', () => {
@@ -226,5 +255,48 @@ describe('the trash', () => {
     tasks.emptyTrash(workspaceId);
     const deleted = fake.written.at(-1)!.mutations.map((mutation) => String(mutation.key));
     expect(deleted.sort()).toEqual([parent, child, loose].sort());
+  });
+});
+
+describe('offline tag actions', () => {
+  it('creates parents before children and includes initial assignments in the task create', () => {
+    const parent = tags.createTag(projectId, { name: 'Product', color: 'teal' });
+    const child = tags.createTag(projectId, { name: 'Mobile', parentId: parent });
+    expect(() => tags.updateTag(parent, { parentId: child, color: null })).toThrow(/own branch/);
+    const taskId = tasks.createTask(projectId, {
+      primaryTagId: child,
+      secondaryTagIds: [parent, child],
+    });
+    const mutations = fake.written.at(-1)!.mutations;
+    expect(mutations.map((mutation) => mutation.collection.id)).toEqual([
+      'tasks',
+      'task-tags',
+      'task-tags',
+    ]);
+    expect(taskCreateFromWrite(tasksCollection.get(taskId)!, mutations)).toMatchObject({
+      primaryTagId: child,
+      secondaryTagIds: [parent, child],
+    });
+    tags.setPrimaryTag(taskId, parent);
+    expect(lastUpdateRequest()?.changes).toEqual({
+      primaryTagId: { before: child, after: parent },
+    });
+  });
+  it('cleans only a deleted branch locally and leaves unrelated assignments', async () => {
+    const { taskTagsCollection, taskTagKey } = {
+      ...(await import('./collections')),
+      ...(await import('@throw/shared')),
+    };
+    const root = tags.createTag(projectId, { name: 'Root' });
+    const child = tags.createTag(projectId, { name: 'Child', parentId: root });
+    const other = tags.createTag(projectId, { name: 'Other' });
+    const taskId = tasks.createTask(projectId, {
+      primaryTagId: child,
+      secondaryTagIds: [root, other],
+    });
+    tags.deleteTag(root);
+    expect(tasksCollection.get(taskId)?.primaryTagId).toBeNull();
+    expect(taskTagsCollection.has(taskTagKey({ taskId, tagId: root }))).toBe(false);
+    expect(taskTagsCollection.has(taskTagKey({ taskId, tagId: other }))).toBe(true);
   });
 });

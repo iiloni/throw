@@ -1,6 +1,14 @@
 import { Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { comparePositions } from '@throw/shared';
-import { Columns3, PanelLeftClose, PanelLeftOpen, Plus, Settings2 } from 'lucide-react';
+import {
+  Columns3,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Pencil,
+  Plus,
+  Search,
+  Settings2,
+} from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { z } from 'zod';
@@ -13,11 +21,15 @@ import {
   viewSchema,
 } from '@/components/AppShell/shell';
 import { AppUpdatePrompt } from '@/components/AppUpdatePrompt/AppUpdatePrompt';
+import { BoardSettingsPanel } from '@/components/Board/BoardSettingsPanel';
+import { board, update } from '@/components/Board/state';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
+import { CommandPalette, type PaletteMode } from '@/components/CommandPalette/CommandPalette';
 import { Dock } from '@/components/Dock/Dock';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { type ShellForm, ShellForms } from '@/components/ShellForms/ShellForms';
+import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
 import { getSignedInUser } from '@/lib/auth';
 import { useProjects, useWorkspaces } from '@/lib/collections';
@@ -56,6 +68,12 @@ export function AppShell() {
   const desktop = useMedia('(min-width: 768px)');
   const expanded = railChoice ?? wide;
   const reduced = useReducedMotion();
+  const [palette, setPalette] = useState<PaletteMode | null>(null);
+  const [pendingTask, setPendingTask] = useState<{
+    projectId: string;
+    taskId: string;
+    created?: boolean;
+  } | null>(null);
   const [form, setForm] = useState<ShellForm | null>(null);
   useEffect(() => {
     updateReloadBlocked.set(form !== null);
@@ -78,6 +96,8 @@ export function AppShell() {
   );
   const view = viewSchema.catch('board').parse((location.search as { view?: unknown }).view);
   const crossBoard = location.pathname.endsWith('/board');
+  const projectBoard = !!project;
+  const boardState = board.use();
   const settings = location.pathname === '/settings';
 
   useEffect(() => {
@@ -121,6 +141,54 @@ export function AppShell() {
         search: { view: 'board' },
       });
   }
+  useEffect(() => {
+    function shortcut(event: KeyboardEvent) {
+      if (
+        event.key.toLowerCase() !== 'k' ||
+        !(event.metaKey || event.ctrlKey) ||
+        event.altKey ||
+        event.isComposing
+      )
+        return;
+      event.preventDefault();
+      if (!workspace || form || (document.querySelector('[role="dialog"]') && !palette)) return;
+      setPalette((before) => (before ? null : 'search'));
+    }
+    window.addEventListener('keydown', shortcut);
+    return () => window.removeEventListener('keydown', shortcut);
+  }, [workspace, form, palette]);
+  useEffect(() => {
+    if (!pendingTask || boardState.projectId !== pendingTask.projectId || !boardState.actions)
+      return;
+    if (
+      !boardState.boards.some((data) => data.tasks.some((task) => task.id === pendingTask.taskId))
+    )
+      return;
+    update({
+      openTaskId: pendingTask.taskId,
+      ...(pendingTask.created ? { backlogFilter: null } : {}),
+    });
+    setPendingTask(null);
+  }, [pendingTask, boardState]);
+  // Old shell links still open the palette without replacing the board with a search page.
+  useEffect(() => {
+    if (view !== 'search' || !workspace) return;
+    setPalette('search');
+    if (project)
+      void navigate({
+        to: '/w/$workspaceId/p/$projectId',
+        params: { workspaceId: workspace.id, projectId: project.id },
+        search: { view: 'board' },
+        replace: true,
+      });
+    else
+      void navigate({
+        to: '/w/$workspaceId/board',
+        params: { workspaceId: workspace.id },
+        search: { view: 'board' },
+        replace: true,
+      });
+  }, [view, workspace, project, navigate]);
   const context: ShellState = {
     workspaces,
     workspace,
@@ -136,6 +204,12 @@ export function AppShell() {
     selectWorkspace,
     openForm: setForm,
     goBoard,
+    openPalette: (mode = 'search') => setPalette(mode),
+    openTask: (projectId, taskId, created) => {
+      if (!workspace) return;
+      setPendingTask({ projectId, taskId, created });
+      if (project?.id !== projectId) selectProject(workspace.id, projectId);
+    },
     selectBoardView: (view) => {
       if (workspace)
         void navigate({
@@ -178,26 +252,46 @@ export function AppShell() {
             <div className="px-3">
               <ShellMenu expanded={expanded} />
             </div>
+            {workspace && (
+              <div className="mt-3 px-3">
+                <RailButton label="Search" expanded={expanded} onClick={() => setPalette('search')}>
+                  <Search className="size-5" aria-hidden />
+                </RailButton>
+              </div>
+            )}
             <nav
               aria-label="Projects"
               className="mt-5 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden px-3"
             >
               {projects.map((item) => (
-                <RailButton
-                  key={item.id}
-                  label={item.name}
-                  href={`/w/${item.workspaceId}/p/${item.id}?view=board`}
-                  expanded={expanded}
-                  active={project?.id === item.id}
-                  onClick={() => selectProject(item.workspaceId, item.id)}
-                >
-                  <span
-                    data-color={item.color}
-                    className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-tint text-tint-accent"
+                <div key={item.id} className="group/project relative shrink-0">
+                  <RailButton
+                    label={item.name}
+                    href={`/w/${item.workspaceId}/p/${item.id}?view=board`}
+                    expanded={expanded}
+                    active={project?.id === item.id}
+                    className={expanded ? 'pr-11' : undefined}
+                    onClick={() => selectProject(item.workspaceId, item.id)}
                   >
-                    <ProjectIcon name={item.icon} className="size-5" />
-                  </span>
-                </RailButton>
+                    <span
+                      data-color={item.color}
+                      className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-tint text-tint-accent"
+                    >
+                      <ProjectIcon name={item.icon} className="size-5" />
+                    </span>
+                  </RailButton>
+                  {expanded && (
+                    <button
+                      type="button"
+                      aria-label={`Edit ${item.name}`}
+                      title={`Edit ${item.name}`}
+                      onClick={() => setForm({ kind: 'edit-project', project: item })}
+                      className="absolute top-2 right-1 flex size-8 items-center justify-center rounded-full text-muted-foreground opacity-0 outline-none transition-opacity hover:bg-foreground/10 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring group-focus-within/project:opacity-100 group-hover/project:opacity-100 [@media(hover:none)]:opacity-100"
+                    >
+                      <Pencil aria-hidden className="size-4" />
+                    </button>
+                  )}
+                </div>
               ))}
               {workspace && (
                 <RailButton
@@ -223,6 +317,13 @@ export function AppShell() {
               )}
             </nav>
             <div className="mt-3 flex flex-col gap-2 px-3">
+              {projectBoard && (
+                <div className="px-2">
+                  <SyncIndicator />
+                </div>
+              )}
+              {projectBoard && <BoardSettingsPanel expanded={expanded} />}
+
               <RailButton
                 label="Settings"
                 href="/settings"
@@ -247,17 +348,27 @@ export function AppShell() {
           </motion.aside>
         )}
         <div className="flex min-w-0 flex-1 flex-col pr-[var(--safe-right)]">
-          <PageHeader desktop={desktop} />
+          {!projectBoard && <PageHeader desktop={desktop} />}
           <main
             id="main-content"
             tabIndex={-1}
-            className="min-h-0 flex-1 pb-[var(--dock-space)] outline-none md:pb-8"
+            className={cn(
+              'min-h-0 flex-1 outline-none',
+              projectBoard ? 'h-dvh flex-none' : 'pb-[var(--dock-space)] md:pb-8',
+            )}
           >
             <Outlet />
           </main>
         </div>
       </div>
-      {!desktop && <Dock />}
+      {!desktop && !projectBoard && <Dock />}
+      <CommandPalette
+        key={workspace?.id ?? 'none'}
+        mode={palette}
+        onClose={() => setPalette(null)}
+        onModeChange={setPalette}
+        onOpenTask={context.openTask}
+      />
       <AppUpdatePrompt />
       <WebUpdatePrompt />
       <ShellForms form={form} onClose={() => setForm(null)} />
@@ -272,6 +383,7 @@ function RailButton({
   children,
   onClick,
   href,
+  className,
 }: {
   label: string;
   expanded: boolean;
@@ -279,6 +391,7 @@ function RailButton({
   children: ReactNode;
   onClick: () => void;
   href?: string;
+  className?: string;
 }) {
   const props = {
     title: expanded ? undefined : label,
@@ -287,6 +400,7 @@ function RailButton({
     className: cn(
       'relative flex h-12 w-full shrink-0 items-center gap-3 rounded-2xl px-2 text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
       active ? 'bg-accent font-semibold' : 'text-muted-foreground hover:bg-accent/60',
+      className,
     ),
   };
   const content = (
@@ -295,7 +409,7 @@ function RailButton({
       <span
         aria-hidden={!expanded}
         className={cn(
-          'truncate whitespace-nowrap transition-opacity duration-150',
+          'min-w-0 truncate whitespace-nowrap transition-opacity duration-150',
           !expanded && 'opacity-0',
         )}
       >

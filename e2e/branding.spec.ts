@@ -26,16 +26,16 @@ async function contrast(locator: Locator, ink: 'color' | 'borderColor', surface:
   );
 }
 
-/** Whether the element's fill is the jade selected surface rather than a neutral one. */
-async function paintedWithAccent(locator: Locator) {
-  return locator.evaluate((element) => {
+/** The selected surface on desktop, or the board tray's primary action on a phone. */
+async function paintedWithToken(locator: Locator, token: '--accent' | '--brand' = '--accent') {
+  return locator.evaluate((element, token) => {
     const probe = document.createElement('span');
-    probe.style.backgroundColor = 'var(--accent)';
+    probe.style.backgroundColor = `var(${token})`;
     document.body.append(probe);
-    const accent = getComputedStyle(probe).backgroundColor;
+    const expected = getComputedStyle(probe).backgroundColor;
     probe.remove();
-    return getComputedStyle(element).backgroundColor === accent;
-  });
+    return getComputedStyle(element).backgroundColor === expected;
+  }, token);
 }
 
 async function openPhoneMenu(page: Page) {
@@ -166,14 +166,12 @@ test('brand surfaces preserve artwork, contrast and usable layout on light and d
 
   await addProject(page, 'Brand check', isMobile);
   const selected = isMobile
-    ? page
-        .getByRole('navigation', { name: 'Project views', exact: true })
-        .locator('a[aria-current="page"] > span[aria-hidden]')
+    ? page.getByRole('button', { name: 'New task', exact: true })
     : page
         .getByRole('navigation', { name: 'Projects', exact: true })
         .getByRole('link', { name: 'Brand check', exact: true });
-  await expect.poll(() => paintedWithAccent(selected)).toBe(true);
-  if (!isMobile) expect(await contrast(selected, 'color', 'self')).toBeGreaterThanOrEqual(4.5);
+  await expect.poll(() => paintedWithToken(selected, isMobile ? '--brand' : '--accent')).toBe(true);
+  expect(await contrast(selected, 'color', 'self')).toBeGreaterThanOrEqual(4.5);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
@@ -185,16 +183,16 @@ test('brand surfaces preserve artwork, contrast and usable layout on light and d
   } else {
     const settings = page.getByRole('link', { name: 'Settings', exact: true });
     await settings.click();
-    await expect.poll(() => paintedWithAccent(settings)).toBe(true);
+    await expect.poll(() => paintedWithToken(settings)).toBe(true);
     // Selection moves with the route: the project left behind returns to the neutral rail.
-    await expect.poll(() => paintedWithAccent(selected)).toBe(false);
+    await expect.poll(() => paintedWithToken(selected)).toBe(false);
   }
   const theme = page.getByRole('button', { name: 'Dark', exact: true, pressed: true });
-  await expect.poll(() => paintedWithAccent(theme)).toBe(true);
+  await expect.poll(() => paintedWithToken(theme)).toBe(true);
   expect(await contrast(theme, 'color', 'self')).toBeGreaterThanOrEqual(4.5);
   await page.screenshot({ path: info.outputPath('settings-dark.png') });
 
-  // Sync feedback shares the phone header's first line with the workspace name.
+  // Sync feedback and the board controls must fit a narrow phone.
   await page.setViewportSize({ width: 320, height: 800 });
   // Development has no service worker: keep artwork/code reachable and block the API,
   // as the repository's offline tests do. Production precaches every fallback asset.

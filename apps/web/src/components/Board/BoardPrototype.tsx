@@ -1,12 +1,14 @@
 import { AnimatePresence } from 'motion/react';
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { useMedia } from '@/lib/media';
+import { BoardAnnouncer } from './BoardAnnouncer';
 import { putBack } from './carry';
 import { DesktopBoard } from './DesktopBoard';
 import { DragOverlay } from './DragOverlay';
 import { configureDrag, drag } from './drag';
+import { mockBoards } from './mockData';
 import { PhoneBoard } from './PhoneBoard';
-import { board, current, update, useBoardSettings } from './state';
+import { board, current, initialBoard, update, useBoardSettings } from './state';
 import { TaskScreen } from './TaskView';
 
 /**
@@ -14,6 +16,12 @@ import { TaskScreen } from './TaskView';
  * It brings its own frame and leaves the app shell alone.
  */
 export function BoardPrototype() {
+  const [ready, setReady] = useState(false);
+  useLayoutEffect(() => {
+    board.set(initialBoard(mockBoards()));
+    setReady(true);
+  }, []);
+  const reset = () => board.set(initialBoard(mockBoards()));
   const phone = useMedia('(max-width: 767px)');
   const state = board.use();
   const [settings] = useBoardSettings();
@@ -23,7 +31,9 @@ export function BoardPrototype() {
     document.documentElement.toggleAttribute('data-hide-scrollbars', !settings.scrollbars);
     return () => document.documentElement.removeAttribute('data-hide-scrollbars');
   }, [settings.scrollbars]);
-  const openTask = current(state).tasks.find((task) => task.id === state.openTaskId);
+  const openTask = state.boards.length
+    ? current(state).tasks.find((task) => task.id === state.openTaskId)
+    : undefined;
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -38,16 +48,17 @@ export function BoardPrototype() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  if (!ready) return null;
   return (
     <>
-      {phone ? <PhoneBoard /> : <DesktopBoard />}
+      <div className="h-dvh">
+        {phone ? <PhoneBoard onReset={reset} /> : <DesktopBoard onReset={reset} />}
+      </div>
       <AnimatePresence>
         {phone && openTask && <TaskScreen key="task" task={openTask} />}
       </AnimatePresence>
       <DragOverlay />
-      <p aria-live="assertive" className="sr-only">
-        {state.announcement}
-      </p>
+      <BoardAnnouncer />
     </>
   );
 }

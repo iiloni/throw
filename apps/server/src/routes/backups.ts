@@ -62,7 +62,7 @@ export const backupDownloadRoutes = new Hono<AppEnv>()
   });
 
 /**
- * Server backups, protected by the server-admin guard (ADR 0010). Unlike every
+ * Server backups, protected by the server-admin guard (ADR 0011). Unlike every
  * other route these act on all users' data at once, so nothing here filters by the caller.
  */
 export const backupRoutes = new Hono<AppEnv>()

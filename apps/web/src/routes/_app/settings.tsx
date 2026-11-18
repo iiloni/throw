@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useCallback, useEffect, useState } from 'react';
 import { AppUpdate } from '@/components/AppUpdate/AppUpdate';
+import { BoardSettingsControls } from '@/components/Board/BoardSettingsPanel';
 import { ServerBackups } from '@/components/ServerBackups/ServerBackups';
 import { Button } from '@/components/ui/button';
 import { authClient, clearAuthToken, getSignedInUser } from '@/lib/auth';
@@ -56,6 +57,10 @@ function Settings() {
         <AppUpdate />
       </section>
       {admin && <ServerBackups onAccessDenied={accessDenied} />}
+      <section className="border-t pt-6">
+        <h2 className="mb-3 font-semibold">Board</h2>
+        <BoardSettingsControls includeTheme={false} />
+      </section>
       <section className="border-t pt-6">
         <h2 className="font-semibold">Account</h2>
         <p className="mt-2 break-all text-muted-foreground text-sm">{user?.name || user?.email}</p>

@@ -3,6 +3,7 @@ import { comparePositions, positionSchema } from './position';
 import { DEFAULT_PRIORITY, prioritySchema } from './priorities';
 import { isClosedCategory, type StatusCategory } from './statuses';
 import { timestampSchema, txidResponseSchema } from './sync';
+import { secondaryTagChangesSchema } from './tags';
 
 /** A BlockNote document, text only. Null for a task without a description. */
 export const descriptionSchema = z.array(z.record(z.string(), z.unknown())).nullable();
@@ -27,6 +28,7 @@ export const taskSchema = z.object({
   priority: prioritySchema,
   /** Within its status and priority, or for a subtask within its parent. */
   position: positionSchema,
+  primaryTagId: z.uuid().nullable(),
   parentId: z.uuid().nullable(),
   /** Server times. A device holds a placeholder from its own clock until the row syncs. */
   closedAt: timestampSchema.nullable(),
@@ -53,6 +55,11 @@ export const createTaskSchema = taskSchema
   .extend({
     statusId: z.uuid().nullable().default(null),
     priority: prioritySchema.default(DEFAULT_PRIORITY),
+    primaryTagId: z.uuid().nullable().default(null),
+    secondaryTagIds: z
+      .array(z.uuid())
+      .default([])
+      .transform((ids) => [...new Set(ids)]),
   })
   .strict();
 export type CreateTask = z.input<typeof createTaskSchema>;
@@ -64,6 +71,8 @@ export const TASK_FIELDS = [
   'statusId',
   'priority',
   'parentId',
+  'primaryTagId',
+  'secondaryTags',
   'trashed',
 ] as const;
 export const taskFieldSchema = z.enum(TASK_FIELDS);
@@ -85,6 +94,8 @@ export const taskChangesSchema = z
     priority: change(prioritySchema),
     statusId: change(z.uuid()),
     parentId: change(z.uuid().nullable()),
+    primaryTagId: change(z.uuid().nullable()),
+    secondaryTags: secondaryTagChangesSchema,
     trashed: change(z.boolean()),
     description: z
       .object({
@@ -125,7 +136,11 @@ export type UpdateTask = z.infer<typeof updateTaskSchema>;
 export const refusalReasonSchema = z.enum(['stale', 'invalid']);
 export type RefusalReason = z.infer<typeof refusalReasonSchema>;
 
-export const refusedFieldSchema = z.object({ field: taskFieldSchema, reason: refusalReasonSchema });
+export const refusedFieldSchema = z.object({
+  field: taskFieldSchema,
+  reason: refusalReasonSchema,
+  tagId: z.uuid().optional(),
+});
 export type RefusedField = z.infer<typeof refusedFieldSchema>;
 
 /**
@@ -134,6 +149,7 @@ export type RefusedField = z.infer<typeof refusedFieldSchema>;
  */
 export const updateTaskResponseSchema = txidResponseSchema.extend({
   refused: z.array(refusedFieldSchema),
+  secondaryTagsTxid: z.number().optional(),
 });
 export type UpdateTaskResponse = z.infer<typeof updateTaskResponseSchema>;
 

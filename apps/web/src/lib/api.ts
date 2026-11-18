@@ -1,12 +1,17 @@
 import type {
+  CreateComment,
   CreateProject,
   CreateStatus,
+  CreateTag,
   CreateTask,
   CreateWorkspace,
   ReleasesResponse,
+  TagWriteResponse,
   TxidResponse,
+  UpdateComment,
   UpdateProject,
   UpdateStatus,
+  UpdateTag,
   UpdateTask,
   UpdateTaskResponse,
   UpdateWorkspace,
@@ -67,9 +72,19 @@ export const api = {
   updateStatus: (id: string, body: UpdateStatus) =>
     request<TxidResponse>(`/statuses/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteStatus: (id: string) => request<TxidResponse>(`/statuses/${id}`, { method: 'DELETE' }),
+  createTag: (body: CreateTag) =>
+    request<TagWriteResponse>('/tags', { method: 'POST', body: JSON.stringify(body) }),
+  updateTag: (id: string, body: UpdateTag) =>
+    request<TagWriteResponse>(`/tags/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteTag: (id: string) => request<TagWriteResponse>(`/tags/${id}`, { method: 'DELETE' }),
   createTask: (body: CreateTask) =>
-    request<TxidResponse>('/tasks', { method: 'POST', body: JSON.stringify(body) }),
+    request<TagWriteResponse>('/tasks', { method: 'POST', body: JSON.stringify(body) }),
   updateTask: (id: string, body: UpdateTask) =>
     request<UpdateTaskResponse>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   purgeTask: (id: string) => request<TxidResponse>(`/tasks/${id}`, { method: 'DELETE' }),
+  createComment: (body: CreateComment) =>
+    request<TxidResponse>('/comments', { method: 'POST', body: JSON.stringify(body) }),
+  updateComment: (id: string, body: UpdateComment) =>
+    request<TxidResponse>(`/comments/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteComment: (id: string) => request<TxidResponse>(`/comments/${id}`, { method: 'DELETE' }),
 };

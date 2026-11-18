@@ -50,16 +50,16 @@ export function PriorityGlyph({
   name: string;
   className?: string;
 }) {
-  const Icon = PRIORITY_ICONS[priority];
+  const Icon = PRIORITY_ICONS[priority - 1];
   if (!Icon) return null;
   return (
     <span
       role="img"
       aria-label={`Priority: ${name}`}
       title={name}
-      className={cn('shrink-0', priority === 0 && 'text-destructive', className)}
+      className={cn('shrink-0', priority === 1 && 'text-destructive', className)}
     >
-      <Icon className="size-4" strokeWidth={priority === 0 ? 2.75 : 2.25} aria-hidden />
+      <Icon className="size-4" strokeWidth={priority === 1 ? 2.75 : 2.25} aria-hidden />
     </span>
   );
 }

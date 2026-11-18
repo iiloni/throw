@@ -13,11 +13,15 @@ import {
 } from '@tanstack/offline-transactions';
 import {
   createCollection,
+  eq,
   type PendingMutation,
   type Transaction,
   useLiveQuery,
 } from '@tanstack/react-db';
 import {
+  activityEntrySchema,
+  type Comment,
+  commentSchema,
   createStatusSchema,
   createWorkspaceSchema,
   type Project,
@@ -25,9 +29,15 @@ import {
   projectSchema,
   type Status,
   statusSchema,
+  type Tag,
+  type TagWriteResponse,
   type Task,
-  type TxidResponse,
+  type TaskTag,
+  tagSchema,
   taskSchema,
+  taskTagKey,
+  taskTagSchema,
+  updateTagSchema,
   updateWorkspaceSchema,
   workspaceSchema,
 } from '@throw/shared';
@@ -37,6 +47,7 @@ import { z } from 'zod';
 import { ApiError, api } from './api';
 import { getAuthToken, resolveSignedInUser } from './auth';
 import { CompatibilityError } from './compatibility';
+import { clearDescriptionDrafts, settleDescriptionDraft } from './descriptionDrafts';
 import {
   createOnlineDetector,
   createOutboxStorage,
@@ -47,6 +58,7 @@ import { orderQueuedWrites } from './orderQueuedWrites';
 import { reportRefusedChanges } from './refusedChanges';
 import { getServerUrl } from './serverUrl';
 import { shapeFetch } from './shapeFetch';
+import { noteLocalWrite, useSteadyRows } from './steadyRows';
 import {
   addPendingWrite,
   getPendingWriteIds,
@@ -54,12 +66,16 @@ import {
   settlePendingWrite,
   updateSyncStatus,
 } from './syncStatus';
+import { taskTimeline } from './timeline';
 import {
   changeIdFor,
+  commentCreateRequest,
+  commentUpdateRequest,
   projectCreateRequest,
   projectUpdateRequest,
   statusUpdateRequest,
-  taskCreateRequest,
+  tagCreateRequest,
+  taskCreateFromWrite,
   taskUpdateRequest,
 } from './writeRequests';
 
@@ -67,6 +83,9 @@ import {
 // shows and edits its data without a connection (ADR 0002).
 const user = await resolveSignedInUser();
 const database = user ? await openLocalDatabase(user.id) : null;
+
+/** Who this device's writes come from, as the server will record it. */
+export const signedInUserId = user?.id ?? null;
 
 /** Keeps nothing: without a database, collections live in memory. */
 const memoryOnly: PersistedCollectionPersistence = {
@@ -164,6 +183,63 @@ export const tasksCollection = createCollection(
       getKey: (task) => task.id,
       shapeOptions: shapeOptions('tasks'),
     }),
+    2,
+  ),
+);
+
+/** The complete tree and assignments are available before going offline. */
+export const tagsCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      ...alwaysSynced,
+      id: 'tags',
+      schema: tagSchema,
+      getKey: (tag) => tag.id,
+      shapeOptions: shapeOptions('tags'),
+    }),
+    1,
+  ),
+);
+export const taskTagsCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      ...alwaysSynced,
+      id: 'task-tags',
+      schema: taskTagSchema,
+      getKey: taskTagKey,
+      shapeOptions: shapeOptions('task-tags'),
+    }),
+    1,
+  ),
+);
+
+/**
+ * The tasks' activity log (ADR 0006). The server writes every entry; devices only read it, so
+ * it is not writable. It always syncs because a task's timeline reads offline.
+ */
+export const activityCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      ...alwaysSynced,
+      id: 'task_activity',
+      schema: activityEntrySchema,
+      getKey: (entry) => entry.id,
+      shapeOptions: shapeOptions('task_activity'),
+    }),
+    1,
+  ),
+);
+
+/** The comments on those tasks. */
+export const commentsCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      ...alwaysSynced,
+      id: 'comments',
+      schema: commentSchema,
+      getKey: (comment) => comment.id,
+      shapeOptions: shapeOptions('comments'),
+    }),
     1,
   ),
 );
@@ -173,6 +249,9 @@ const writableCollections = {
   projects: projectsCollection,
   statuses: statusesCollection,
   tasks: tasksCollection,
+  comments: commentsCollection,
+  tags: tagsCollection,
+  taskTags: taskTagsCollection,
 };
 
 type WritableCollection = (typeof writableCollections)[keyof typeof writableCollections];
@@ -198,6 +277,10 @@ async function pushWrites({
       if (!sent) continue;
       const response = await sent.request;
       if (response.txid !== null) waits.push({ collections: sent.waitOn, txid: response.txid });
+      if (response.tasksTxid !== undefined)
+        waits.push({ collections: [tasksCollection], txid: response.tasksTxid });
+      if (response.secondaryTagsTxid !== undefined)
+        waits.push({ collections: [taskTagsCollection], txid: response.secondaryTagsTxid });
     }
   } catch (error) {
     const classified = classifyWriteError(error);
@@ -218,11 +301,11 @@ async function pushWrites({
 
 /** One mutation's request, and the collections whose shapes will stream its transaction. */
 interface Sent {
-  request: Promise<TxidResponse>;
+  request: Promise<TagWriteResponse>;
   waitOn: WritableCollection[];
 }
 
-const sending = (request: Promise<TxidResponse>, ...waitOn: WritableCollection[]): Sent => ({
+const sending = (request: Promise<TagWriteResponse>, ...waitOn: WritableCollection[]): Sent => ({
   request,
   waitOn,
 });
@@ -243,6 +326,11 @@ function send(
   idempotencyKey: string,
 ): Sent | null {
   const key = String(mutation.key);
+  const deletedTags = new Set(
+    mutations
+      .filter((other) => other.collection.id === tagsCollection.id && other.type === 'delete')
+      .map((other) => String(other.key)),
+  );
   if (mutation.collection.id === workspacesCollection.id) {
     switch (mutation.type) {
       case 'insert':
@@ -292,15 +380,21 @@ function send(
           return sending(api.updateProject(key, { trashed: true }), projectsCollection);
         // The purge removes the project's statuses and tasks too, which the device deleted in
         // the same write. Wait for them as well, but only on shapes that will stream it.
-        const tasksGo = mutations.some(
-          (other) =>
-            other.type === 'delete' &&
-            other.collection.id === tasksCollection.id &&
-            (other.original as Task).projectId === key,
+        const dependents = [tasksCollection, tagsCollection, taskTagsCollection].filter(
+          (collection) =>
+            mutations.some(
+              (other) =>
+                other.type === 'delete' &&
+                other.collection.id === collection.id &&
+                (other.original as { projectId: string }).projectId === key,
+            ),
         );
-        return tasksGo
-          ? sending(api.purgeProject(key), projectsCollection, statusesCollection, tasksCollection)
-          : sending(api.purgeProject(key), projectsCollection, statusesCollection);
+        return sending(
+          api.purgeProject(key),
+          projectsCollection,
+          statusesCollection,
+          ...dependents,
+        );
       }
     }
   }
@@ -333,14 +427,61 @@ function send(
           : sending(api.deleteStatus(key), statusesCollection);
     }
   }
+  if (mutation.collection.id === tagsCollection.id) {
+    const tag = (mutation.type === 'delete' ? mutation.original : mutation.modified) as Tag;
+    if (deletedInWrite(mutations, projectsCollection.id, tag.projectId)) return null;
+    switch (mutation.type) {
+      case 'insert':
+        return sending(api.createTag(tagCreateRequest(mutation.modified as Tag)), tagsCollection);
+      case 'update':
+        return sending(api.updateTag(key, updateTagSchema.parse(mutation.changes)), tagsCollection);
+      case 'delete':
+        return tag.parentId && deletedInWrite(mutations, tagsCollection.id, tag.parentId)
+          ? null
+          : sending(api.deleteTag(key), tagsCollection);
+    }
+  }
+  if (mutation.collection.id === taskTagsCollection.id) {
+    const row = (mutation.type === 'delete' ? mutation.original : mutation.modified) as TaskTag;
+    const task = mutations.find(
+      (other) => other.collection.id === tasksCollection.id && String(other.key) === row.taskId,
+    );
+    // Creates carry initial secondaries. Branch deletion/purges derive cleanup on the server.
+    if (
+      deletedTags.has(row.tagId) ||
+      (task && (task.type === 'insert' || task.type === 'delete')) ||
+      deletedInWrite(mutations, projectsCollection.id, row.projectId)
+    )
+      return null;
+    return sending(
+      api
+        .updateTask(row.taskId, {
+          changeId: changeIdFor(idempotencyKey, key),
+          changes: { secondaryTags: [{ tagId: row.tagId, present: mutation.type !== 'delete' }] },
+        })
+        .then((response) => {
+          reportRefusedChanges(row.taskId, response.refused, changeIdFor(idempotencyKey, key));
+          return response;
+        }),
+      tasksCollection,
+    );
+  }
   if (mutation.collection.id === tasksCollection.id) {
     switch (mutation.type) {
       case 'insert':
         return sending(
-          api.createTask(taskCreateRequest(mutation.modified as Task)),
+          api.createTask(taskCreateFromWrite(mutation.modified as Task, mutations)),
           tasksCollection,
         );
       case 'update': {
+        // A deleted branch clears current server assignments atomically.
+        const original = mutation.original as Task;
+        if (
+          original.primaryTagId &&
+          deletedTags.has(original.primaryTagId) &&
+          Object.keys(mutation.changes).every((field) => field === 'primaryTagId')
+        )
+          return null;
         const body = taskUpdateRequest(
           mutation.original as Task,
           mutation.modified as Task,
@@ -350,7 +491,19 @@ function send(
         if (!body) return null;
         return sending(
           api.updateTask(key, body).then((response) => {
-            reportRefusedChanges(key, response.refused);
+            if (body.changes.description) {
+              try {
+                settleDescriptionDraft(
+                  key,
+                  body.changes.description.after,
+                  response.refused.some((field) => field.field === 'description'),
+                );
+              } catch {
+                // A recovery draft must not turn an acknowledged write into a retry.
+                toast.error('Description recovery could not be stored on this device');
+              }
+            }
+            reportRefusedChanges(key, response.refused, body.changeId);
             return response;
           }),
           tasksCollection,
@@ -364,8 +517,43 @@ function send(
           (task.parentId !== null && deletedInWrite(mutations, tasksCollection.id, task.parentId))
         )
           return null;
-        return sending(api.purgeTask(key), tasksCollection);
+        const taskIds = new Set([
+          key,
+          ...mutations.flatMap((other) =>
+            other.type === 'delete' &&
+            other.collection.id === tasksCollection.id &&
+            (other.original as Task).parentId === key
+              ? [String(other.key)]
+              : [],
+          ),
+        ]);
+        const assignmentsGo = mutations.some(
+          (other) =>
+            other.type === 'delete' &&
+            other.collection.id === taskTagsCollection.id &&
+            taskIds.has((other.original as TaskTag).taskId),
+        );
+        return sending(
+          api.purgeTask(key),
+          tasksCollection,
+          ...(assignmentsGo ? [taskTagsCollection] : []),
+        );
       }
+    }
+  }
+  if (mutation.collection.id === commentsCollection.id) {
+    switch (mutation.type) {
+      case 'insert':
+        return sending(
+          api.createComment(commentCreateRequest(mutation.modified as Comment)),
+          commentsCollection,
+        );
+      case 'update': {
+        const body = commentUpdateRequest(mutation.changes as Partial<Comment>);
+        return body ? sending(api.updateComment(key, body), commentsCollection) : null;
+      }
+      case 'delete':
+        return sending(api.deleteComment(key), commentsCollection);
     }
   }
   throw new NonRetriableError(`Writes to ${mutation.collection.id} are not supported`);
@@ -449,6 +637,7 @@ export function write(mutate: () => void): Transaction {
     // Ordered within a millisecond, unlike the outbox's own times (see `orderQueuedWrites`).
     idempotencyKey: uuidv7(),
   });
+  noteLocalWrite();
   const transaction = offline.mutate(mutate);
   addPendingWrite(transaction.id);
   offline.commit().then(
@@ -478,6 +667,7 @@ export async function clearLocalData() {
   executor.dispose();
   await database?.destroy();
   if (user) deleteOutbox(user.id);
+  clearDescriptionDrafts();
 }
 
 /** The signed-in user's workspaces, unordered, and whether they are still loading. */
@@ -486,22 +676,68 @@ export function useWorkspaces() {
   return { workspaces: data, isLoading };
 }
 
-/** Every project in the user's workspaces, unordered. */
+/**
+ * Every project in the user's workspaces, unordered. Rows stay through a re-fetch on
+ * reconnecting (`useSteadyRows`), as do statuses and tasks.
+ */
 export function useProjects() {
   const { data = [], isLoading } = useLiveQuery((q) => q.from({ project: projectsCollection }));
-  return { projects: data, isLoading };
+  return { projects: useSteadyRows(data), isLoading };
 }
 
 /** Every status of the user's projects, unordered. */
 export function useStatuses() {
   const { data = [], isLoading } = useLiveQuery((q) => q.from({ status: statusesCollection }));
-  return { statuses: data, isLoading };
+  return { statuses: useSteadyRows(data), isLoading };
 }
 
 /** Every task and subtask in the user's projects, unordered, trashed ones included. */
 export function useTasks() {
   const { data = [], isLoading } = useLiveQuery((q) => q.from({ task: tasksCollection }));
-  return { tasks: data, isLoading };
+  return { tasks: useSteadyRows(data), isLoading };
+}
+
+/**
+ * A task's timeline as the device holds it now: its log entries and comments in the server's
+ * order, with comments not yet received by the server last (see `taskTimeline`).
+ */
+export function readTaskTimeline(taskId: string) {
+  return taskTimeline(
+    [...activityCollection.values()].filter((entry) => entry.taskId === taskId),
+    [...commentsCollection.values()].filter((comment) => comment.taskId === taskId),
+  );
+}
+
+/** `readTaskTimeline`, kept up to date. */
+export function useTaskTimeline(taskId: string) {
+  const entries = useLiveQuery(
+    (q) => q.from({ entry: activityCollection }).where(({ entry }) => eq(entry.taskId, taskId)),
+    [taskId],
+  );
+  const comments = useLiveQuery(
+    (q) =>
+      q.from({ comment: commentsCollection }).where(({ comment }) => eq(comment.taskId, taskId)),
+    [taskId],
+  );
+  return {
+    timeline: taskTimeline(entries.data ?? [], comments.data ?? []),
+    isLoading: entries.isLoading || comments.isLoading,
+  };
+}
+
+const emptyTags: Tag[] = [];
+
+export function useTags(projectId: string) {
+  const { data, isLoading } = useLiveQuery(
+    (q) => q.from({ tag: tagsCollection }).where(({ tag }) => eq(tag.projectId, projectId)),
+    [projectId],
+  );
+  // Keep the result stable between sync changes: the board adapts it in a layout effect.
+  return { tags: data ?? emptyTags, isLoading };
+}
+export function useTaskTags(taskId: string) {
+  const { data = [], isLoading } = useLiveQuery((q) => q.from({ assignment: taskTagsCollection }));
+  return { taskTags: data.filter((row) => row.taskId === taskId), isLoading };
 }
 
 /** A reload must wait for in-flight writes to reach durable storage or the server. */

@@ -12,6 +12,7 @@ import type { AppEnv } from '../context';
 import { db, type Transaction } from '../db/client';
 import { projects, statuses, workspaces } from '../db/schema';
 import { requireUser } from '../lib/requireUser';
+import { lockTagTree } from '../lib/tagTree';
 import { currentTxid } from '../lib/txid';
 import { isMember, memberWorkspaces } from '../lib/workspaces';
 
@@ -137,6 +138,7 @@ export const projectRoutes = new Hono<AppEnv>()
     const userId = c.get('user')!.id;
     const { id } = c.req.valid('param');
     const txid = await db.transaction(async (tx) => {
+      await lockTagTree(tx, id);
       const deleted = await tx
         .delete(projects)
         .where(

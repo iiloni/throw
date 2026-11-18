@@ -1,8 +1,9 @@
 # Task data model
 
 Status: agreed with the owner on 2026-10-13. Projects, statuses, priorities, keys, tasks,
-subtasks, the trash and the conflict rule are built; tags, comments and the log's sync are
-not. Decisions taken while building it are under [Implementation notes](#implementation-notes).
+subtasks, tags, the trash, the conflict rule, the log's sync and comments are built; the
+timeline has a data layer but no view. Decisions taken while building it are under
+[Implementation notes](#implementation-notes).
 
 This states the model behind tasks precisely enough to implement: the entities, their
 fields, who assigns each value, how rows are ordered and what the server does with each
@@ -104,8 +105,7 @@ A subtask is a task with a parent. There is one table.
 | `createdAt` | Server | |
 
 Secondary tags are separate rows, one per task and tag, so adding or removing one tag
-never conflicts with another device doing the same to a different tag. The tag tree itself
-follows Catch's ADR 0016 per project and is specified when tags are built.
+never conflicts with another device doing the same to a different tag. See [Tag tree](#tag-tree).
 
 **Identifier.** Shown as the project's key, a hyphen and the number. The server takes the
 next number from the project's counter in the transaction that creates the task, holding a
@@ -136,6 +136,86 @@ deletes it, its subtasks, comments, log entries and tag rows for good.
   position orders it within its parent, and the view that shows subtasks as cards on the
   board reuses the same value.
 - The closed zone is sorted by `closedAt`, newest first.
+
+## Tag tree
+
+Adapted from Catch ADR 0016. Tags belong to a project and its workspace, never a user.
+Every member who can write tasks can manage that project's tags **(default)**; there is
+no separate tag-owner or administrator role.
+
+| Field | Who sets it | Notes |
+| --- | --- | --- |
+| `id` | Client | UUIDv7. |
+| `workspaceId` | Server, fixed | From the project. |
+| `projectId` | Client, fixed | Validated through workspace membership; never moved across projects. |
+| `name` | Client | Trimmed, 1–100 characters, as in Catch. |
+| `parentId` | Client | Nullable; a tag of the same project. No depth limit. |
+| `color` | Client | Nullable palette color, roots only. Descendants inherit. |
+| `icon` | Client | Nullable bundled Lucide name, roots only. Descendants inherit. |
+
+- Siblings sort alphabetically by name, then id for equal names **(default tie-break)**.
+  There is no manual position. Renaming immediately changes that order. Names need not be
+  unique, including among siblings, as in Catch; ids identify tags and full paths provide context.
+- A non-null color belongs to at most one root **per project**, as in Catch per user.
+  Null means no color and may occur on many roots. The primary tag's root determines a
+  task's color; without a complete valid root path, the color helper returns null.
+  Moving a branch or recoloring a root changes derived colors without rewriting tasks.
+- Creation validates the parent, root appearance and color uniqueness. An existing id in
+  the same project is a replay and answers `{ txid: null }`; an id elsewhere answers 409.
+- Rename, recolor, change icon and reparent apply only the fields sent, in server arrival
+  order **(default)**, like statuses. There is no task-style before-value check or log for
+  tree edits. Unchanged edits skip the UPDATE and answer `{ txid: null }`.
+- Moving under self or any descendant is refused with 409. A missing or foreign-project
+  parent is refused. Moving a colored/icon-bearing root under another tag must explicitly
+  clear its color and icon in that write, as in Catch. Promoting a child to root starts
+  with no color/icon unless supplied. Parent and project never silently fall back.
+- A delete removes the entire current branch, including children added by another member
+  before the delete arrives, as in Catch. It never deletes tasks. Primaries in the branch
+  become null and secondary rows for that branch disappear, including on closed/trashed
+  tasks, atomically. Unrelated assignments survive. Deleting an absent/inaccessible id is
+  an idempotent no-op. Each affected task gets a server-written updated activity entry
+  with old tag names and the clearing/removals **(default)**. These entries get server-made
+  UUIDv7 ids, since no task update supplied a change id. The tree edit itself has no log.
+- Hierarchy edits and assignment writes serialize per project with a transaction advisory
+  lock, taken before task locks, so concurrent moves cannot create cycles and assignments
+  cannot race a branch deletion. Purges retain their existing row-lock behavior.
+
+### Secondary task tags
+
+`task_tags` has `taskId` and `tagId` as its composite primary key (no separate UUID), plus
+server-set, fixed `workspaceId` and `projectId` from the task. Task and tag must belong to
+the same project. Task/project/workspace purges and tag deletion cascade these rows.
+
+Creates accept `primaryTagId` and `secondaryTagIds`; absent fields mean null/empty. Updates
+accept a before/after `primaryTagId` and a list of `{ tagId, present }` secondary operations.
+A request may mention each secondary tag only once. Different secondary tags never interfere;
+adds/removes of the same tag apply on arrival, with already-present/absent operations doing
+nothing. Change-id replay protects these operations from being applied again after another
+write. A missing tag is recorded as invalid, even for a remove; creates leave it off.
+
+Unlike Catch's array normalization, secondary ancestors and descendants can coexist
+**(default)**. The same tag may be both primary and secondary **(default)**; badges show it
+once, primary first, but both roles are retained. This preserves the agreed independent
+per-tag conflict rule: selecting or moving one tag never silently removes another member's
+assignment. Picking a primary does not mutate secondary rows.
+
+Activity items use `primaryTagId` and `secondaryTags`. Each secondary operation has its own
+item, with additive `tagId`, previous/requested equal to the tag id or null, and names for
+both values. Invalid create tags are recorded with `applied: false, reason: invalid`.
+Primary changes follow ADR 0005 (including stale before invalid). Tag names are snapshots;
+renames and deletion never rewrite history. This is an additive extension of the entry format.
+
+Task write responses keep `txid` for the tasks shape only, and add `secondaryTagsTxid` only
+when secondary rows changed. Tag-delete responses similarly add `tasksTxid` and
+`secondaryTagsTxid` only for affected shapes. This avoids waiting for a transaction on a
+shape that will never stream it. Tags and secondary rows always sync and persist, even
+without a tag screen open. Tasks' shape schemaVersion is 2; both new collections start at 1.
+
+No plain-color adoption or note-color fallback is ported: Throw tasks have no stored color.
+Protocol remains 1 before the first release (ADR 0003). Old clients work with the new server;
+new tag routes/shapes need the new server, with no old-server fallback. Existing queued task
+writes keep their format and receive null/empty tag defaults; device rows are resynced after
+the task shape version bump, and no outbox is cleared.
 
 ## Task writes
 
@@ -207,7 +287,7 @@ clients, which cannot write to it.
 | `taskId` | |
 | `userId` | The signed-in user who sent the write. |
 | `createdAt` | The server's time when it applied the write. |
-| `kind` | `created` or `updated`. |
+| `kind` | `created` or `updated`. An update that only moved a position is kept as `reordered`, on the server only (see [Implementation notes](#the-log-and-comments)). |
 | Changes | A list; one item per field the write touched, position excepted. |
 
 Each item in the list holds:
@@ -224,6 +304,16 @@ Each item in the list holds:
 
 A description item holds no text otherwise: it says the description changed.
 
+The list is open: a field joins the log by adding items, with no schema change (`changes` is
+a `jsonb` column, synced whole). A device shows an item whose field it does not know
+generically, or skips it; it never drops the entry. Tag items:
+
+- `primaryTagId`: as a status item, with the tags' names.
+- `secondaryTags`: one item per tag added or removed, with that tag's id in an additional
+  `tagId`. `previous` and `requested` are the tag's id or null (added: `null` → id;
+  removed: id → `null`), with names for both. A tag that no longer exists is recorded with
+  `applied: false` and `reason: invalid`, also on a `created` entry that left it off.
+
 The timeline orders entries and comments together by `createdAt`, then `id`. A device may
 show its own queued writes in the timeline as pending, under the ids they will have.
 
@@ -237,7 +327,7 @@ Created, edited and deleted by clients through the outbox, like projects are tod
 | `taskId` | Fixed | |
 | `userId` | Server | The author. |
 | `body` | Client | BlockNote JSON, text only, as the description **(default)**. |
-| `createdAt` | Server | When the server received it. |
+| `createdAt` | Server | When the server received it. Empty on the device until it syncs. |
 | `editedAt` | Server | Empty until the body is edited. |
 
 - Only the author edits or deletes a comment.
@@ -268,8 +358,8 @@ The owner has not reviewed these yet.
   followed by another device's change would let the resend undo that change. That record is
   the activity entry, so `task_activity` is created and each create and update writes its
   entry, with every field it touched, applied or not. An update that only moves a position
-  writes an entry with no changes, which the timeline should skip. The log is not synced
-  yet; its shape, collection and timeline come with comments.
+  writes an entry with no changes, kept on the server only (see
+  [The log and comments](#the-log-and-comments)).
 - **A `created` entry** lists the title, status, priority and, when set, the description
   version and parent, each with no previous value. When the status the device asked for no
   longer existed, the status item names the status the task took and carries the reason
@@ -322,6 +412,77 @@ The owner has not reviewed these yet.
 - **Statuses and tasks always sync**, whether or not anything on screen reads them, so a
   device has them before it goes offline.
 - **Refused fields** reach the client through `onRefusedChanges` in
-  `apps/web/src/lib/refusedChanges.ts`. Nothing listens yet (spec, open question 5).
+  `apps/web/src/lib/refusedChanges.ts`. Descriptions also retain a recovery draft on the
+  sending device when their outbox response reports a refusal; other field notices remain
+  open (spec, open question 5).
+- **Descriptions are directly editable**, without an edit mode or a Save button. Typing
+  keeps a device-local draft; closing the task or opening another task queues it with the
+  version editing began from. Route changes also flush the draft. The board still opens
+  tasks through `openTaskId`; its optional `beforeLeave` action flushes before a close or
+  switch, and can keep the task open if the latest text cannot be stored locally.
+  `saveDescription` requires the captured version and queues nothing if the local row has
+  changed. An untouched editor follows sync; a draft keeps its content and caret. Remote
+  changes require reviewing the latest description, then choosing it or keeping the draft
+  against that reviewed version for the next close. A further change requires a new review.
+  Closing with an unresolved conflict leaves the draft for the next visit.
+  Drafts and pending saves are kept in localStorage, scoped to server, account and task, and
+  survive closing and reloading. The outbox response retains refused text even with the pane
+  closed; an acknowledgement only clears the matching pending save. The server also keeps
+  refused text in its activity entry. Sign-out clears the account's device drafts.
 - **Deleting a project in the shell** now moves it to the trash. There is no trash view yet.
+
+### The log and comments
+
+Decided while building the log's sync and comments (2026-10-14). The owner has not reviewed
+these yet.
+
+- **Updates that only move a position are kept on the server.** The log leaves reordering
+  out, but the entry is still the record of its change id, without which a resent reorder
+  could undo a later one. Such an entry has the kind `reordered`, and the shape syncs only
+  `created` and `updated` entries. (Electric's `where` cannot test a `jsonb` value, so the
+  shape cannot filter on an empty `changes` list.) The migration gave existing entries with
+  an empty list that kind.
+- **Entries and comments are timed under their locks** (`clock_timestamp()`, not the
+  transaction's start time): an entry and a comment's `createdAt` once the task is held, a
+  comment's `editedAt` once the comment is. When one write waits for another, the timeline
+  still lists them in the order they were applied.
+- **No task event was missing an entry.** Trashing and restoring a task are updates, logged
+  as `trashed` items. A purge deletes the task's log with it. Trashing or restoring a
+  project or a parent writes no entry on the tasks under it, as it writes nothing to their
+  rows; the timeline can show that state from the project and parent. Purging a subtask
+  writes nothing in its parent's log.
+- **A refused status that was deleted has no name.** The server no longer has the status, so
+  `requestedName` is null.
+- **The log and comments always sync**, like statuses and tasks, so a task's timeline reads
+  offline. Devices only read the log.
+- **The timeline** orders entries and comments by `createdAt`, then `id`. A comment the
+  server has not received yet has no `createdAt` on the device and goes last, in the order
+  it was written; it will be dated after everything the device has seen. Entries with an
+  empty list are skipped. Queued task changes are not shown as pending: their entries
+  appear when the server writes them. `readTaskTimeline` and `useTaskTimeline` in
+  `apps/web/src/lib/collections.ts` return it; the view is not built.
+- **Device times have millisecond precision**, so two writes to one task in the same
+  millisecond are ordered by id.
+- **Comment body** **(default)**: a BlockNote document like a description, but never empty
+  (at least one block). Text-only is not checked on the server, as for descriptions.
+- **Comment edits apply in arrival order** **(default)**. An edit that leaves the body as it
+  is (including a resend) changes nothing, keeps `editedAt` and answers `{ txid: null }`.
+- **Only the author** edits or deletes a comment; anyone else gets 403, and the outbox drops
+  the write with a notice. A comment whose author's account was deleted can no longer be
+  changed. Deleting a comment that is not there, or not reachable, answers `{ txid: null }`.
+- **A comment on a task in the trash** is accepted, as an update to it would be.
+- **On the device**, a new comment carries the signed-in user as its author, and an edit
+  stamps a placeholder `editedAt`, until the synced row arrives. Purging a task does not
+  delete its comments on the device; the server's cascade streams their removal.
+- **A refusal names its entry.** `onRefusedChanges` listeners also receive the update's
+  change id, which is the id of the entry recording the refused values (spec, open
+  question 5).
+- **Storage, measured** in Chromium's OPFS store (the web app's), 2026-10-14: 2,000 update
+  entries (status changes with names, renames, priority changes, and status with priority)
+  take **0.9 KB each** with the table's indexes, and comments of about 100 characters
+  **1.1 KB each**. Of an entry, about 465 bytes are the row's JSON and 250 the sync metadata
+  Electric stores with it. The persistence layer also keeps a replay log of up to 1,000
+  transactions per collection for a day, which after a large first sync can briefly hold
+  about as much again. ADR 0006 estimated 0.5 KB an entry; at the measured size, its busy
+  solo user adds about 33 MB a year and a team of five about 82 MB, under the 200 MB limit.
 

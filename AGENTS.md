@@ -13,14 +13,31 @@ The repository has the stack end to end (auth, sync, the outbox, local persisten
 task model (workspaces, projects, statuses, tasks and subtasks, with keys, numbers, the trash
 and ADR 0005's conflict rule; see `docs/data-model.md`), and the responsive app shell. The
 shell owns workspace and project management, a desktop navigation rail, a phone dock and
-remembered navigation. Its project/backlog and cross-project board bodies are placeholders.
-Task actions live in `apps/web/src/lib/tasks.ts` and `statuses.ts`. Tags, comments, the
-synced activity log and the board itself are not built yet.
+remembered navigation. Its project board uses the shared Board components on synced tasks
+and statuses; the cross-project board body is a placeholder.
+Task actions live in `apps/web/src/lib/tasks.ts` and `statuses.ts`. The task pane edits
+fields and text-only BlockNote descriptions, keeps recoverable description drafts, and
+opens subtasks through the board's existing `openTaskId`. Its real content is supplied by
+`TaskContentContext` at the project-board boundary; the prototype keeps its mock content.
+On a phone the same boundary hands the board's drawer the open task's dock and pickers
+(`TaskDetails/TaskControls.tsx`); the desktop pane hosts them in its own `TaskDrawer`.
+The activity log syncs to devices and comments are built (`lib/comments.ts`), with a
+timeline query in `collections.ts` but no timeline view yet. Tags have their data layer and
+reusable controls in `components/Tag*`, with a real-data `/prototype/tags` workshop in
+development only. The board colour helper is `taskTagColor` in `@throw/shared`. The task
+pane picks and lists tags; tag management has no product entry point yet, and the timeline
+in the task pane is a separate step. Cards move on the project board by drag, keyboard,
+phone long press, the move drawer and a rightward swipe to close (ADR 0008).
 
 The board's interaction was worked out in a prototype on mock data: `/prototype/board`, in
-development builds only, with its components in `apps/web/src/components/Board`. It has no
-server, schema or sync behind it. Build the real board from those components and from
-ADR 0008 rather than starting again.
+development builds only, with its components in `apps/web/src/components/Board`. It keeps
+mock data and shares the components and the drag engine (`Board/drag.ts`) with the real
+project board. `Board/ProjectBoard.tsx` adapts collections and task actions at the boundary;
+`Board/selection.ts` selects visible rows. `Board/state.ts` holds incoming sync while a card
+is held and turns drops into `moveTask` and `sendTask` calls; `Board/carry.ts` is the
+keyboard carry and `Board/swipe.ts` the phone's swipe to close. The collection hooks hold
+their last rows through a reconnect's full snapshot (`lib/steadyRows.ts`), so the board
+does not unmount while a shape reloads.
 
 ## Layout
 
@@ -326,6 +343,10 @@ ids. Do not add a dependency on Catch's repository; the two release independentl
   insets and keyboard animations on Android;
   Capacitor SystemBars inset handling is disabled to avoid competing owners. Android Back
   dismisses open sheets through `lib/backButton.ts` before navigating history.
+- On a phone every sheet is the drawer (ADR 0009): one shell-owned glass surface whose
+  collapsed header is the dock. Show content in it rather than adding a sheet, overlay or
+  `BottomSheet`. Desktop has no drawer: use the rail, a panel sized to the window or a
+  centred dialog.
 - TanStack DB is pre-1.0. Keep its usage inside `src/lib/collections.ts`, `src/lib/localStore.ts`
   and route files so upgrades stay contained.
 - Bump a collection's `schemaVersion` in `collections.ts` whenever the columns its shape syncs

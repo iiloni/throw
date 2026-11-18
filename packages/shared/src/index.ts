@@ -1,6 +1,7 @@
 export * from './activity';
 export * from './backups';
 export * from './colors';
+export * from './comments';
 export * from './position';
 export * from './priorities';
 export * from './projects';
@@ -8,5 +9,6 @@ export * from './protocol';
 export * from './releases';
 export * from './statuses';
 export * from './sync';
+export * from './tags';
 export * from './tasks';
 export * from './workspaces';

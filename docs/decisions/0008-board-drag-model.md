@@ -1,6 +1,7 @@
 # 0008: The board's drag model
 
-Status: accepted (2026-10-13)
+Status: accepted (2026-10-13); amended 2026-10-19 when the project board was wired to task
+actions
 
 ## Context
 
@@ -86,7 +87,40 @@ already the right size instead of snapping, the way a Catch card springs to a ne
 width.
 
 **Every move has a keyboard equivalent.** A card is picked up, carried with the arrow keys
-across priorities and columns, and set down or put back. Each step is announced.
+across priorities and columns, and set down or put back. Each step is announced. Carrying
+writes nothing: each step is a preview over the synced board, and setting the card down is
+one write for where it ended up. Putting it back writes nothing.
+
+**Sync waits while a card is held.** Rows that arrive while a pointer holds a card are kept
+aside and applied at the drop, so the column, its gap and the place under the pointer do not
+change under the card. The drop is worked out against the board that was shown, and the
+position applies only in the status, priority and parent it was computed for (ADR 0005), so
+a column that changed meanwhile still gets a valid position. A keyboard carry keeps its
+preview over incoming rows instead, since it has no pointer to hold steady.
+
+**A card another device moved while it was held is not moved.** At the drop, a held card
+whose status, priority or parent changed elsewhere, or that was removed, is left where the
+other device put it, and the board announces it. A reorder elsewhere does not count: the move
+still means the same thing. The same check applies to setting down a keyboard carry.
+
+**A move shows before it syncs.** The board applies a placement locally and then queues it
+through `moveTask` or `sendTask`, so the landing card finds its new place at once and never
+flashes back into the column it left. A move that cannot be queued (its status or project
+was deleted meanwhile) reverts to the synced board. A move the server refuses is replaced by
+the server's row when sync brings it back.
+
+**The full-width backlog places with a caret.** The gallery reads left to right, then down,
+in a band per priority, and the engine treats a list marked `data-layout="grid"` by rows: the
+place is the number of cards in earlier rows plus those in the pointer's row whose centre is
+to its left. A caret in the gutter shows the place, the held card stays faded where it was,
+and the column count is frozen while it is held. A parting gap was prototyped too; a whole
+grid reflowing under the pointer was too busy for an overview, so the owner chose the caret.
+
+**On a phone a card swipes right to close.** A rightward swipe that starts on a card in a
+board page closes it into the default done status; leftward swipes and any that start outside
+a card stay with the pager. The card's `touch-action: pan-y pan-right` is what lets the
+browser hand over the rightward finger and keep scrolling otherwise. A long press that
+completes first is a drag, as before.
 
 ## Consequences
 
@@ -98,10 +132,11 @@ across priorities and columns, and set down or put back. Each step is announced.
   for the columns seen so far. A virtualised column would have no element to measure for a
   card that is scrolled out, so long columns need a different answer than virtualisation,
   or the engine needs positions from data for the rows that are not rendered.
-- Rows that arrive from sync while a card is held reorder the column under it. Reading the
-  live page tolerates that, but the gap can jump. The real board has to decide whether a
-  column holds incoming changes until the drop.
+- Holding sync until a drop means a long hold shows slightly stale data. Moves elsewhere are
+  never written over, so the cost is only how current the board looks while a card is held.
 - Two settings (zone labels, Compact or Full) exist because of this model and are part of
   the settings page.
-- The full-width backlog gallery cannot be reordered yet: a drop position in a masonry
-  layout is not designed (spec, open questions).
+- The full-width closed gallery stays masonry: closed work is ordered by time and is never
+  placed.
+- Swipe to close has no undo beyond moving the card back from the closed tasks; the swipe
+  needs about two fifths of a card's width, or a flick, to close.

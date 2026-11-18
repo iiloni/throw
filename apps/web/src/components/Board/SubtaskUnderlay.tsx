@@ -78,7 +78,7 @@ export function SubtaskUnderlay({ parent, subtasks, inert = false, folding = fal
           {subtasks.map((task) => (
             <SubtaskRow key={task.id} project={project} task={task} />
           ))}
-          <li aria-hidden className="h-2" />
+          <li aria-hidden className="h-1.5" />
           <li className="sr-only">{open} still open</li>
         </ul>
       </div>
@@ -92,7 +92,8 @@ function SubtaskRow({ project, task }: { project: Project; task: Task }) {
   if (!status) return null;
   const closed = isClosed(status.category);
   return (
-    <li className="flex items-center pl-1">
+    // One inset row with one hover fill; the glyph lines up under the progress pips above.
+    <li className="mx-1.5 flex min-h-9 items-center rounded-xl transition-colors hover:bg-foreground/[0.05]">
       <StatusMenu
         project={project}
         value={status.id}
@@ -102,7 +103,7 @@ function SubtaskRow({ project, task }: { project: Project; task: Task }) {
           type="button"
           aria-label={`Status: ${status.name}. Change`}
           title={status.name}
-          className="flex size-9 shrink-0 items-center justify-center rounded-full outline-none hover:bg-foreground/[0.07] focus-visible:ring-[3px] focus-visible:ring-ring/60"
+          className="flex size-9 shrink-0 items-center justify-center rounded-xl outline-none hover:bg-foreground/[0.07] focus-visible:ring-[3px] focus-visible:ring-ring/60"
         >
           <StatusGlyph category={status.category} className="size-4" />
         </button>
@@ -110,7 +111,7 @@ function SubtaskRow({ project, task }: { project: Project; task: Task }) {
       <button
         type="button"
         onClick={() => update({ openTaskId: task.id })}
-        className="flex min-h-9 min-w-0 flex-1 items-center rounded-lg pr-3 outline-none hover:bg-foreground/[0.05] focus-visible:ring-[3px] focus-visible:ring-ring/60"
+        className="flex min-h-9 min-w-0 flex-1 items-center self-stretch rounded-xl pr-3 pl-1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
       >
         <span
           className={cn(

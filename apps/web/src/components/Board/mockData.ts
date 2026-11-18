@@ -3,7 +3,9 @@ import type { Category, Priority, Project, Status, Tag, Task } from './model';
 
 /** In-memory data for the board prototype. Nothing here reaches a server. */
 
-export type BoardData = { project: Project; tasks: Task[] };
+export type { BoardData } from './model';
+
+import type { BoardData } from './model';
 
 const DAY = 86_400_000;
 
@@ -55,7 +57,7 @@ function build(
       number,
       title: seed.title,
       statusId: slug(seed.status),
-      priority: seed.priority ?? 2,
+      priority: seed.priority ?? 3,
       position: positions[tasks.length]!,
       primaryTagId: seed.tag ? slug(seed.tag) : null,
       secondaryTagIds: (seed.also ?? []).map(slug),
@@ -70,7 +72,7 @@ function build(
         number,
         title,
         statusId: slug(status),
-        priority: seed.priority ?? 2,
+        priority: seed.priority ?? 3,
         position: positions[tasks.length]!,
         primaryTagId: seed.tag ? slug(seed.tag) : null,
         secondaryTagIds: [],
@@ -109,7 +111,7 @@ const throwApp = () =>
       {
         title: 'Outbox replays a status move twice after a 503',
         status: 'Building',
-        priority: 0,
+        priority: 1,
         tag: 'Outbox',
         also: ['Infra'],
         description:
@@ -118,7 +120,7 @@ const throwApp = () =>
       {
         title: "Priority zones: stretch the dragged card's zone",
         status: 'Building',
-        priority: 1,
+        priority: 2,
         tag: 'Drag',
         also: ['Motion'],
         description:
@@ -134,7 +136,7 @@ const throwApp = () =>
       {
         title: 'Card underlay for subtask progress',
         status: 'Building',
-        priority: 1,
+        priority: 2,
         tag: 'Cards',
         subtasks: [
           ['Tuck the strip under the card', 'Shipped'],
@@ -145,7 +147,7 @@ const throwApp = () =>
       {
         title: 'Tasks table and shape with a membership filter',
         status: 'Building',
-        priority: 1,
+        priority: 2,
         tag: 'Shapes',
       },
       { title: 'Status dropzones in the phone dock', status: 'Building', tag: 'Phone' },
@@ -175,28 +177,28 @@ const throwApp = () =>
       {
         title: 'Reduced-motion pass over every board transition',
         status: 'Building',
-        priority: 3,
+        priority: 4,
         tag: 'Motion',
       },
-      { title: 'Empty column state', status: 'Building', priority: 3, tag: 'Design' },
+      { title: 'Empty column state', status: 'Building', priority: 4, tag: 'Design' },
       {
         title: 'Move a card between columns from the keyboard',
         status: 'Building',
-        priority: 3,
+        priority: 4,
         tag: 'Board',
       },
-      { title: 'Write the self-hosting guide', status: 'Building', priority: 3, tag: 'Docs' },
+      { title: 'Write the self-hosting guide', status: 'Building', priority: 4, tag: 'Docs' },
       {
         title: 'Easter egg: throw a card off the board',
         status: 'Building',
-        priority: 4,
+        priority: 5,
         tag: 'Motion',
       },
 
       {
         title: 'Server assigns task numbers in the create transaction',
         status: 'In review',
-        priority: 1,
+        priority: 2,
         tag: 'Sync',
       },
       { title: 'Jade focus ring on cards', status: 'In review', tag: 'Design' },
@@ -209,23 +211,23 @@ const throwApp = () =>
           ['Refuse deleting the last status', 'In review'],
         ],
       },
-      { title: 'Docker E2E on pull requests', status: 'In review', priority: 3, tag: 'CI' },
-      { title: 'Project key collisions offline', status: 'In review', priority: 3, tag: 'Sync' },
+      { title: 'Docker E2E on pull requests', status: 'In review', priority: 4, tag: 'CI' },
+      { title: 'Project key collisions offline', status: 'In review', priority: 4, tag: 'Sync' },
 
       {
         title: 'Electric shape for statuses',
         status: 'Testing',
-        priority: 1,
+        priority: 2,
         tag: 'Shapes',
       },
       { title: 'Dock clears the keyboard on Android', status: 'Testing', tag: 'Phone' },
       { title: 'Navigation rail remembers its width', status: 'Testing', tag: 'Design' },
-      { title: 'Nightly backup of the dev database', status: 'Testing', priority: 4, tag: 'Infra' },
+      { title: 'Nightly backup of the dev database', status: 'Testing', priority: 5, tag: 'Infra' },
 
       {
         title: 'Cross-project board with priority bands',
         status: 'Planned',
-        priority: 1,
+        priority: 2,
         tag: 'Board',
         subtasks: [
           ['Category columns', 'Planned'],
@@ -233,36 +235,36 @@ const throwApp = () =>
           ['Masonry within a band', 'Ideas'],
         ],
       },
-      { title: 'Command palette', status: 'Planned', priority: 1, tag: 'Design' },
+      { title: 'Command palette', status: 'Planned', priority: 2, tag: 'Design' },
       { title: 'Trash with restore', status: 'Planned', tag: 'Sync' },
       { title: 'Comments in the activity timeline', status: 'Planned', tag: 'Cards' },
       { title: 'Nested tag picker', status: 'Planned', tag: 'Cards' },
       { title: 'Android build from the same code', status: 'Planned', tag: 'Phone', also: ['CI'] },
-      { title: 'Release channels', status: 'Planned', priority: 3, tag: 'Infra' },
+      { title: 'Release channels', status: 'Planned', priority: 4, tag: 'Infra' },
       { title: 'Drag a subtask out to make it a task', status: 'Ideas', tag: 'Drag' },
       { title: 'Drop a card on another to make it a subtask', status: 'Ideas', tag: 'Drag' },
-      { title: 'Promote a Catch note to a task', status: 'Ideas', priority: 3, tag: 'Sync' },
-      { title: 'Milestones', status: 'Ideas', priority: 3, tag: 'Board' },
-      { title: 'Cycle time from the activity log', status: 'Ideas', priority: 4, tag: 'Docs' },
-      { title: 'Sound on drop?', status: 'Ideas', priority: 4, tag: 'Motion' },
-      { title: 'Single sign-on with an OIDC provider', status: 'Ideas', priority: 4, tag: 'Infra' },
+      { title: 'Promote a Catch note to a task', status: 'Ideas', priority: 4, tag: 'Sync' },
+      { title: 'Milestones', status: 'Ideas', priority: 4, tag: 'Board' },
+      { title: 'Cycle time from the activity log', status: 'Ideas', priority: 5, tag: 'Docs' },
+      { title: 'Sound on drop?', status: 'Ideas', priority: 5, tag: 'Motion' },
+      { title: 'Single sign-on with an OIDC provider', status: 'Ideas', priority: 5, tag: 'Infra' },
 
       { title: 'Responsive app shell', status: 'Shipped', tag: 'Design', closed: 1 },
       { title: 'Workspaces and projects sync', status: 'Shipped', tag: 'Sync', closed: 2 },
       { title: 'Throw artwork and jade palette', status: 'Shipped', tag: 'Design', closed: 2 },
-      { title: 'Scaffold from Catch', status: 'Shipped', priority: 1, tag: 'Infra', closed: 6 },
+      { title: 'Scaffold from Catch', status: 'Shipped', priority: 2, tag: 'Infra', closed: 6 },
       { title: 'Settle the task data model', status: 'Shipped', tag: 'Docs', closed: 4 },
-      { title: 'List view', status: "Won't do", priority: 3, tag: 'Board', closed: 5 },
-      { title: 'GitHub issue import', status: "Won't do", priority: 4, tag: 'Infra', closed: 9 },
+      { title: 'List view', status: "Won't do", priority: 4, tag: 'Board', closed: 5 },
+      { title: 'GitHub issue import', status: "Won't do", priority: 5, tag: 'Infra', closed: 9 },
       { title: 'Per-project accent color', status: 'Duplicate', tag: 'Design', closed: 7 },
       // Appended, so the numbers of the tasks above stay as they were.
-      { title: 'Service worker update prompt', status: 'Staging', priority: 1, tag: 'Infra' },
+      { title: 'Service worker update prompt', status: 'Staging', priority: 2, tag: 'Infra' },
       { title: 'Rail tooltip for project names', status: 'Staging', tag: 'Design' },
       { title: 'Keyboard move announcements', status: 'Staging', tag: 'Drag' },
-      { title: 'Shape proxy column allowlist', status: 'Staging', priority: 3, tag: 'Shapes' },
-      { title: 'Protocol version gate', status: 'Releasing', priority: 1, tag: 'Sync' },
+      { title: 'Shape proxy column allowlist', status: 'Staging', priority: 4, tag: 'Shapes' },
+      { title: 'Protocol version gate', status: 'Releasing', priority: 2, tag: 'Sync' },
       { title: 'Safe-area padding for the dock', status: 'Releasing', tag: 'Phone' },
-      { title: 'Changelog for the first release', status: 'Releasing', priority: 3, tag: 'Docs' },
+      { title: 'Changelog for the first release', status: 'Releasing', priority: 4, tag: 'Docs' },
     ],
   );
 
@@ -295,7 +297,7 @@ const catchApp = () =>
       {
         title: 'Semantic search falls back to keywords offline',
         status: 'Doing',
-        priority: 1,
+        priority: 2,
         tag: 'Search',
       },
       {
@@ -309,18 +311,18 @@ const catchApp = () =>
         ],
       },
       { title: 'Checklist drag jitters on a long note', status: 'Doing', tag: 'Checklists' },
-      { title: 'Deck columns remember scroll', status: 'Doing', priority: 3, tag: 'Deck' },
-      { title: 'Vault unlock with a passkey', status: 'Verify', priority: 1, tag: 'Vault' },
+      { title: 'Deck columns remember scroll', status: 'Doing', priority: 4, tag: 'Deck' },
+      { title: 'Vault unlock with a passkey', status: 'Verify', priority: 2, tag: 'Vault' },
       { title: 'Paste an image into a checklist item', status: 'Verify', tag: 'Editor' },
-      { title: 'Search filters as chips', status: 'Next', priority: 1, tag: 'Search' },
+      { title: 'Search filters as chips', status: 'Next', priority: 2, tag: 'Search' },
       { title: 'Share a note read-only', status: 'Next', tag: 'Editor' },
       { title: 'Widget for the quick note', status: 'Next', tag: 'Android' },
       { title: 'Swipe a deck card to archive', status: 'Inbox', tag: 'Deck' },
-      { title: 'Table blocks', status: 'Inbox', priority: 3, tag: 'Editor' },
-      { title: 'Export a tag as Markdown', status: 'Inbox', priority: 4, tag: 'Editor' },
+      { title: 'Table blocks', status: 'Inbox', priority: 4, tag: 'Editor' },
+      { title: 'Export a tag as Markdown', status: 'Inbox', priority: 5, tag: 'Editor' },
       { title: 'Reminders snooze picker', status: 'Released', tag: 'Deck', closed: 1 },
       { title: 'Link previews under cards', status: 'Released', tag: 'Deck', closed: 3 },
-      { title: 'Voice notes', status: 'Dropped', priority: 3, tag: 'Android', closed: 8 },
+      { title: 'Voice notes', status: 'Dropped', priority: 4, tag: 'Android', closed: 8 },
     ],
   );
 
@@ -349,11 +351,11 @@ const flatMove = () =>
       ['Money', 'yellow'],
     ],
     [
-      { title: 'Sign the lease addendum', status: 'Doing', priority: 0, tag: 'Paperwork' },
+      { title: 'Sign the lease addendum', status: 'Doing', priority: 1, tag: 'Paperwork' },
       {
         title: 'Book the movers',
         status: 'Waiting on someone',
-        priority: 1,
+        priority: 2,
         tag: 'Packing',
         subtasks: [
           ['Get three quotes', 'Done'],
@@ -362,11 +364,11 @@ const flatMove = () =>
       },
       { title: 'Pack the books', status: 'Doing', tag: 'Packing' },
       { title: 'Transfer the internet contract', status: 'Waiting on someone', tag: 'Paperwork' },
-      { title: 'Measure the kitchen for shelves', status: 'To do', priority: 1, tag: 'Kitchen' },
+      { title: 'Measure the kitchen for shelves', status: 'To do', priority: 2, tag: 'Kitchen' },
       { title: 'Change address at the bank', status: 'To do', tag: 'Money' },
-      { title: 'Sell the old sofa', status: 'To do', priority: 3, tag: 'Money' },
-      { title: 'Paint the hallway', status: 'Someday', priority: 3, tag: 'New place' },
-      { title: 'Balcony herbs', status: 'Someday', priority: 4, tag: 'New place' },
+      { title: 'Sell the old sofa', status: 'To do', priority: 4, tag: 'Money' },
+      { title: 'Paint the hallway', status: 'Someday', priority: 4, tag: 'New place' },
+      { title: 'Balcony herbs', status: 'Someday', priority: 5, tag: 'New place' },
       { title: 'Deposit paid', status: 'Done', tag: 'Money', closed: 2 },
       { title: 'Give notice on the old flat', status: 'Done', tag: 'Paperwork', closed: 12 },
       { title: 'Hire a van ourselves', status: 'Skipped', tag: 'Packing', closed: 6 },

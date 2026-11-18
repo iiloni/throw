@@ -1,13 +1,19 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { Columns3, Folder, LayoutDashboard, Search } from 'lucide-react';
+import { Folder } from 'lucide-react';
+import { z } from 'zod';
 import { useShell, viewSchema } from '@/components/AppShell/shell';
+import { ProjectBoard } from '@/components/Board/ProjectBoard';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/p/$projectId')({
-  validateSearch: (search) => ({ view: viewSchema.catch('board').parse(search.view) }),
+  validateSearch: (search): { view: z.infer<typeof viewSchema>; task?: string } => ({
+    view: viewSchema.catch('board').parse(search.view),
+    task: z.uuid().optional().catch(undefined).parse(search.task),
+  }),
   component: ProjectPage,
 });
 function ProjectPage() {
+  const { task } = Route.useSearch();
   const shell = useShell();
   if (shell.awaitingWorkspaces || shell.awaitingProjects)
     return (
@@ -21,21 +27,5 @@ function ProjectPage() {
         It may have been deleted. Choose another project from the navigation menu.
       </EmptyState>
     );
-  if (shell.view === 'search')
-    return (
-      <EmptyState key="search" icon={Search} title="Search">
-        Search will help you find work across this workspace.
-      </EmptyState>
-    );
-  if (shell.view === 'backlog')
-    return (
-      <EmptyState key="backlog" icon={LayoutDashboard} title="Backlog">
-        Ideas and work waiting to begin will live here.
-      </EmptyState>
-    );
-  return (
-    <EmptyState key="board" icon={Columns3} title="Project board">
-      Work in progress will live here, arranged by status.
-    </EmptyState>
-  );
+  return <ProjectBoard key={shell.project.id} project={shell.project} initialTaskId={task} />;
 }

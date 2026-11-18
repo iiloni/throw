@@ -9,10 +9,18 @@ import {
   priorityNamesSchema,
   projectKeySchema,
   STARTER_STATUSES,
+  taskTagKey,
   updateProjectSchema,
 } from '@throw/shared';
 import { uuidv7 } from 'uuidv7';
-import { projectsCollection, statusesCollection, tasksCollection, write } from './collections';
+import {
+  projectsCollection,
+  statusesCollection,
+  tagsCollection,
+  tasksCollection,
+  taskTagsCollection,
+  write,
+} from './collections';
 
 /** A workspace's projects outside the trash, in their arranged order. */
 export function projectsIn(projects: readonly Project[], workspaceId: string) {
@@ -130,6 +138,10 @@ export function purgeProject(id: string) {
 export function deleteProjectRows(id: string) {
   const tasks = [...tasksCollection.values()].filter((task) => task.projectId === id);
   const statuses = [...statusesCollection.values()].filter((status) => status.projectId === id);
+  for (const row of taskTagsCollection.values())
+    if (row.projectId === id) taskTagsCollection.delete(taskTagKey(row));
+  for (const tag of tagsCollection.values())
+    if (tag.projectId === id) tagsCollection.delete(tag.id);
   for (const task of tasks) tasksCollection.delete(task.id);
   for (const status of statuses) statusesCollection.delete(status.id);
   projectsCollection.delete(id);
@@ -138,6 +150,9 @@ export function deleteProjectRows(id: string) {
 /** Removes a purged task and its subtasks from the device. Only the task's own delete is sent. */
 export function deleteTaskRows(id: string) {
   const subtasks = [...tasksCollection.values()].filter((task) => task.parentId === id);
+  const removed = new Set([id, ...subtasks.map((task) => task.id)]);
+  for (const row of taskTagsCollection.values())
+    if (removed.has(row.taskId)) taskTagsCollection.delete(taskTagKey(row));
   for (const task of subtasks) tasksCollection.delete(task.id);
   tasksCollection.delete(id);
 }

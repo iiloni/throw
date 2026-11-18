@@ -1,4 +1,4 @@
-# 0009: Release channels and independent deployment
+# 0010: Release channels and independent deployment
 
 Status: accepted (2026-10-15, owner decision)
 
@@ -24,7 +24,7 @@ and availability remain a trust boundary; separate stacks provide stronger isola
 Update/backup helpers target one configurable app service, so updating Throw cannot recreate
 Catch or shared Postgres. Restore/rollback instructions must operate on Throw's database
 and Electric storage, never remove the shared cluster volume. Production instances migrate
-at startup and are backed up before doing so (ADR 0010).
+at startup and are backed up before doing so (ADR 0011).
 
 Web prompts use uncached build IDs and a durable-write barrier before explicit worker
 activation/reload. Native updates target the server's exact newer version in the same

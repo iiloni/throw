@@ -45,7 +45,8 @@ ordered by when the server received them.
 
 **The log and comments sync to the device.** The timeline is readable offline. Estimated at
 about 0.5 KB an entry, a busy solo user adds around 18 MB a year and a team of five around
-45 MB; the owner's limit for this was 200 MB.
+45 MB; the owner's limit for this was 200 MB. Measured later at 0.9 KB an entry, the same
+use comes to about 33 MB and 82 MB (docs/data-model.md, implementation notes).
 
 **The task keeps one time of its own.** `closedAt`, set by the server when a task enters a
 done or cancelled status and cleared when it leaves, because the closed zone sorts by it.
@@ -58,4 +59,5 @@ Anything else, such as when work started, is read from the log when a report nee
 - Description version history is not provided by the log. It is separate, later work.
 - Every device holds its workspaces' full history. If that grows too large, the shape can
   be narrowed to open tasks without a data migration.
-- The storage figures are estimates. The local store's cost per row was not measured.
+- The storage figures were estimates when this was decided. The measured cost per entry is
+  about twice the estimate, still well under the limit.

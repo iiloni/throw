@@ -11,9 +11,11 @@ import { env, NATIVE_APP_ORIGINS } from './env';
 import { CLIENT_IP_HEADER, clientIp, proxyList } from './lib/clientIp';
 import { requireCompatibleProtocol } from './lib/protocol';
 import { backupDownloadRoutes, backupRoutes } from './routes/backups';
+import { commentRoutes } from './routes/comments';
 import { projectRoutes } from './routes/projects';
 import { shapeRoutes } from './routes/shapes';
 import { statusRoutes } from './routes/statuses';
+import { tagRoutes } from './routes/tags';
 import { taskRoutes } from './routes/tasks';
 import { updateRoutes } from './routes/updates';
 import { workspaceRoutes } from './routes/workspaces';
@@ -101,6 +103,8 @@ export function createApp() {
     .route('/projects', projectRoutes)
     .route('/statuses', statusRoutes)
     .route('/tasks', taskRoutes)
+    .route('/comments', commentRoutes)
+    .route('/tags', tagRoutes)
     .route('/shapes', shapeRoutes);
 
   return api;

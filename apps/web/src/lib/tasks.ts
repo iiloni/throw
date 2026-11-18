@@ -15,13 +15,25 @@ import {
   taskTitleSchema,
 } from '@throw/shared';
 import { uuidv7 } from 'uuidv7';
-import { projectsCollection, statusesCollection, tasksCollection, write } from './collections';
+import {
+  projectsCollection,
+  statusesCollection,
+  tasksCollection,
+  taskTagsCollection,
+  write,
+} from './collections';
 import { deleteProjectRows, deleteTaskRows } from './projects';
 import { defaultStatus } from './statuses';
+import { requireTag } from './tags';
 
 // Server times (`closedAt`, `deletedAt`, `createdAt`) get a placeholder from the device's
 // clock here, so a change shows at once; the synced row brings the server's.
 const now = () => new Date().toISOString();
+
+/** The current optimistic row, including changes that arrived after a component rendered. */
+export function getTask(id: string) {
+  return tasksCollection.get(id);
+}
 
 /**
  * A position at the top of a priority in a status column: where a new task or a task sent to
@@ -81,6 +93,8 @@ export interface NewTask {
   /** At the top of its priority, or after its parent's subtasks, when left out. */
   position?: string;
   description?: Description;
+  primaryTagId?: string | null;
+  secondaryTagIds?: string[];
 }
 
 /**
@@ -99,12 +113,17 @@ export function createTask(projectId: string, fields: NewTask = {}) {
   if (parentId !== null) requireParent(parentId, { id, projectId });
   const priority = prioritySchema.parse(fields.priority ?? DEFAULT_PRIORITY);
   const description = descriptionSchema.parse(fields.description ?? null);
+  const primaryTagId = fields.primaryTagId ?? null;
+  if (primaryTagId) requireTag(primaryTagId, projectId);
+  const secondaryTagIds = [...new Set(fields.secondaryTagIds ?? [])];
+  for (const tagId of secondaryTagIds) requireTag(tagId, projectId);
   const created = now();
   const task = taskSchema.parse({
     id,
     workspaceId: project.workspaceId,
     projectId,
     number: null,
+    primaryTagId,
     title: fields.title ?? '',
     description,
     descriptionVersion: description === null ? null : uuidv7(),
@@ -120,11 +139,16 @@ export function createTask(projectId: string, fields: NewTask = {}) {
     deletedAt: null,
     createdAt: created,
   } satisfies Task);
-  write(() => tasksCollection.insert(task));
+  write(() => {
+    tasksCollection.insert(task);
+    for (const tagId of secondaryTagIds)
+      taskTagsCollection.insert({ taskId: id, tagId, projectId, workspaceId: project.workspaceId });
+  });
   return id;
 }
 
 export interface TaskEdit {
+  primaryTagId?: string | null;
   title?: string;
   priority?: Priority;
   statusId?: string;
@@ -146,6 +170,7 @@ export function taskEditChanges(
   time = now(),
 ): Partial<Task> {
   const changes: Partial<Task> = {};
+  if (edit.primaryTagId !== undefined) changes.primaryTagId = edit.primaryTagId;
   if (edit.title !== undefined) changes.title = taskTitleSchema.parse(edit.title);
   if (edit.priority !== undefined) changes.priority = prioritySchema.parse(edit.priority);
   if (edit.statusId !== undefined && edit.statusId !== task.statusId) {
@@ -179,6 +204,7 @@ export function updateTask(id: string, edit: TaskEdit) {
   const task = tasksCollection.get(id);
   if (!task) throw new Error('Task not found');
   if (edit.parentId) requireParent(edit.parentId, task);
+  if (edit.primaryTagId) requireTag(edit.primaryTagId, task.projectId);
   const changes = taskEditChanges(task, edit, statusesCollection, tasksCollection.values());
   if (Object.keys(changes).length === 0) return;
   write(() => tasksCollection.update(id, (draft) => Object.assign(draft, changes)));
@@ -214,14 +240,20 @@ export function sendTask(id: string, statusId: string) {
  * Saves a description under a new version. The server compares versions, so a save made on
  * an older version than the server's is kept in the log instead of applied (ADR 0005).
  */
-export function saveDescription(id: string, document: Description) {
+export function saveDescription(id: string, document: Description, baseVersion: string | null) {
   const valid = descriptionSchema.parse(document);
-  write(() =>
+  const task = tasksCollection.get(id);
+  if (!task) throw new Error('Task not found');
+  // Never attach a draft to a version it was not written against.
+  if (task.descriptionVersion !== baseVersion) return null;
+  const version = uuidv7();
+  const transaction = write(() =>
     tasksCollection.update(id, (task) => {
       task.description = valid;
-      task.descriptionVersion = uuidv7();
+      task.descriptionVersion = version;
     }),
   );
+  return { version, transaction };
 }
 
 /**

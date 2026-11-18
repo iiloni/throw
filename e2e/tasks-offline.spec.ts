@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { expect, type Page, test } from '@playwright/test';
 import { APP_LOAD_TIMEOUT, shapeRows, signUp } from './helpers';
 
-// The board is not built yet, so this drives the app's own task actions in the page instead of
-// clicking. The dev server serves each module at its source path, which the app imported too,
+// This exercises chained conflicts through the app's own actions; board.spec.ts covers UI
+// creation offline. The dev server serves each module at its source path, which the app imported too,
 // so `import()` here returns the same module, with the same collections and outbox.
 
 const json = { 'Content-Type': 'application/json' };
@@ -69,11 +69,12 @@ test('a task created and edited offline syncs correctly beside another device’
   const created = await page.evaluate(
     async ({ projectId, shared, active, document }) => {
       const tasks = await import(/* @vite-ignore */ '/src/lib/tasks.ts');
+      const c = await import(/* @vite-ignore */ '/src/lib/collections.ts');
       const id: string = tasks.createTask(projectId, { title: 'Made offline' });
       tasks.updateTask(id, { title: 'Made and renamed offline' });
       tasks.moveTask(id, { statusId: active, priority: 1, position: 'a5' });
       tasks.updateTask(shared, { title: 'Offline title', priority: 2 });
-      tasks.saveDescription(shared, document);
+      tasks.saveDescription(shared, document, c.tasksCollection.get(shared)!.descriptionVersion);
       return id;
     },
     { projectId, shared, active, document },

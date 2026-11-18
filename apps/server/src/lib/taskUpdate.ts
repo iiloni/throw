@@ -17,6 +17,7 @@ export interface TaskState {
   priority: Priority;
   parentId: string | null;
   position: string;
+  primaryTagId: string | null;
   /** The task's own trash state, not its parent's or project's. */
   trashed: boolean;
 }
@@ -26,6 +27,7 @@ export interface UpdateContext {
   statuses: ReadonlyMap<string, { name: string; category: StatusCategory }>;
   /** Whether the requested parent keeps subtasks one level deep. Unused when none is asked. */
   parentAllowed: boolean;
+  tags?: ReadonlyMap<string, { name: string }>;
 }
 
 /** What to write: only the columns whose value changes. */
@@ -38,6 +40,7 @@ export interface TaskUpdatePlan {
     priority?: Priority;
     parentId?: string | null;
     position?: string;
+    primaryTagId?: string | null;
   };
   /** The task's own trash state when it changes. */
   trashed?: boolean;
@@ -138,6 +141,26 @@ export function planTaskUpdate(
     );
     record('parentId', outcome, { previous: current.parentId, requested: after });
     if (outcome.applied && after !== current.parentId) plan.set.parentId = after;
+  }
+
+  if (changes.primaryTagId) {
+    const { before, after } = changes.primaryTagId;
+    const outcome = decide(
+      current.primaryTagId,
+      before,
+      after,
+      after === null || !!context.tags?.has(after),
+    );
+    record('primaryTagId', outcome, {
+      previous: current.primaryTagId,
+      requested: after,
+      previousName:
+        current.primaryTagId === null
+          ? null
+          : (context.tags?.get(current.primaryTagId)?.name ?? null),
+      requestedName: after === null ? null : (context.tags?.get(after)?.name ?? null),
+    });
+    if (outcome.applied && after !== current.primaryTagId) plan.set.primaryTagId = after;
   }
 
   if (changes.trashed) {

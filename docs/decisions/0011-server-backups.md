@@ -1,4 +1,4 @@
-# 0010: Whole-server backups and restore
+# 0011: Whole-server backups and restore
 
 Status: accepted (2026-10-15)
 

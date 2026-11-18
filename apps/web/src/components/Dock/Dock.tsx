@@ -30,6 +30,10 @@ export function Dock() {
     return TABS[Math.min(2, Math.max(0, Math.floor(((clientX - box.left) / box.width) * 3)))]!.view;
   }
   function go(view: ProjectView) {
+    if (view === 'search') {
+      shell.openPalette();
+      return;
+    }
     if (shell.crossBoard && view !== 'backlog') shell.selectBoardView(view);
     else shell.selectProject(project!.workspaceId, project!.id, view, true);
   }

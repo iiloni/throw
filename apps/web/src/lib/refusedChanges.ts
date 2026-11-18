@@ -1,6 +1,10 @@
 import type { RefusedField } from '@throw/shared';
 
-type Listener = (taskId: string, refused: readonly RefusedField[]) => void;
+/**
+ * `changeId` is also the id of the update's activity entry, which records the refused values
+ * and reaches the device through the log's shape.
+ */
+type Listener = (taskId: string, refused: readonly RefusedField[], changeId: string) => void;
 
 const listeners = new Set<Listener>();
 
@@ -16,7 +20,11 @@ export function onRefusedChanges(listener: Listener) {
   };
 }
 
-export function reportRefusedChanges(taskId: string, refused: readonly RefusedField[]) {
+export function reportRefusedChanges(
+  taskId: string,
+  refused: readonly RefusedField[],
+  changeId: string,
+) {
   if (refused.length === 0) return;
-  for (const listener of listeners) listener(taskId, refused);
+  for (const listener of listeners) listener(taskId, refused, changeId);
 }

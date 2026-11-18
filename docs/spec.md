@@ -47,9 +47,9 @@ integrations.
 - A self-hoster can run either app or both. The intended shape is one Postgres container
   with a separate database per app; each app needs its own Electric and replication slot.
 - Deployment lives in an operator-owned directory, with a combined Compose example in Throw
-  ([deployment guide](deployment.md), ADR 0009). Each app pins and updates its own image.
+  ([deployment guide](deployment.md), ADR 0010). Each app pins and updates its own image.
 - Server admins can make, schedule, download and restore whole-server database backups
-  ([backup guide](backups.md), ADR 0010).
+  ([backup guide](backups.md), ADR 0011).
 - Build starts after Catch reaches maturity.
 
 ## First version
@@ -166,7 +166,9 @@ for that rank.
 | Closed at | Set by the server; see [Status and category](#status-and-category). |
 
 A new task starts in the backlog's default status. A column's own add control creates the
-task in that column.
+task in that column. On desktop, a plain “Add task” control at the foot of a
+column creates it at the top of its default priority and opens its title for editing; the
+backlog also has an add button in its header.
 
 A task stays in the project it was created in.
 
@@ -247,6 +249,11 @@ motion.
 - A card held from the backlog can still be placed in the backlog. Its status filters grow
   into targets for changing status. The closed zone is ordered by time, so cards are sent to
   it and never placed in it.
+- The full-width backlog gallery reads left to right, then down, in a band per priority, so
+  a place between two cards reads as it does in a sentence. A card held there is placed with
+  a caret in the gutter between cards, and nothing moves until it is dropped. Every priority
+  shows a band while a card is placed, so an empty one can take it. Cards from elsewhere are
+  sent to a backlog status through its filters, never placed in the mixed gallery.
 - The board has no title row. The project's name is in the expanded navigation rail, and in
   a tooltip on the project's icon when the rail is collapsed.
 - A list of cards fades out over its last few pixels at the top or bottom while
@@ -266,8 +273,10 @@ How a held card behaves, and why, is recorded in
 
 ### Board settings
 
-The settings page has a section for how the board looks and behaves. These are kept on the
-device.
+The settings page has a section for how the board looks and behaves. The board settings
+button opens the same options in the [drawer](#the-drawer) at full height on a phone, and in
+a panel from the rail on desktop, sized to the window. These are kept on the device. Column backgrounds and the
+rails' placement shape desktop columns, so a phone does not show them.
 
 | Setting | Default | Effect |
 | --- | --- | --- |
@@ -284,7 +293,11 @@ Applying this further is ongoing.
 
 ### Cards
 
-A card shows the title, identifier, tags and subtask progress. It shows its priority only
+A card shows the title, a muted identifier, the primary tag name and subtask progress.
+Until its number and project key sync, the identifier reads “Pending”. The owner chose this
+quiet content when the real board was built (2026-10-14): status appears only in the mixed
+backlog and closed zones; a subtask card has a small marker instead of a parent-title row,
+and a closed card does not add a relative timestamp. It shows its priority only
 when the [setting](#board-settings) asks for it, since the card's place in the column
 already says it. It does not show the description.
 
@@ -298,8 +311,8 @@ Folded, it shows one pip per subtask and a count. Unfolded, it lists the subtask
 ### Subtasks on the board
 
 By default subtasks live with their parent: their statuses are tracked but do not place them
-on the board. A view option shows subtasks as top-level cards, marked as subtasks, in their
-own status columns.
+on the board. A board settings option shows subtasks as top-level cards, marked as subtasks,
+in their own status columns.
 
 Two drag interactions are kept in mind for later: dragging a subtask out to make it a task,
 and dropping a card on another to make it a subtask.
@@ -326,7 +339,17 @@ and the column takes them as a group.
 
 A card can also be moved from the keyboard: Space picks it up, the arrows move it within
 and across columns and priorities, Space or Enter sets it down and Escape puts it back.
-Each step is announced to screen readers.
+Enter on a card at rest opens it. Each step is announced to screen readers, and nothing is
+written until the card is set down.
+
+Escape cancels a drag and puts the card back. With reduced motion a held card does not lean
+or lift, and it lands without flying home.
+
+A move is status, priority and position written together, and shows at once, offline too.
+While a card is held, changes arriving from other devices wait until it is dropped, so the
+column does not change under it. A card another device moved to another status, priority
+or parent in the meantime is not moved, and the board says so; a refused move settles back
+where the server has it.
 
 On desktop, a click with Ctrl, Cmd or Shift selects cards, and a bar offers to move the
 selection to a status.
@@ -340,16 +363,21 @@ own way in and out, so the board is not a row of identical pages.
   under the title: one segment per column in board order, the columns behind the current
   one filled in. Above the track are the current column's name and count, and the next
   column's name, which turns to it. The board opens on the first active column.
-- The backlog is a glass tray at the bottom with three heights:
-  - **Closed**, it is the dock: the backlog's handle (a small stack of cards, its name and
-    count) beside Search and the create button.
+- The backlog lives in the [drawer](#the-drawer), at its three heights:
+  - **Collapsed**, the drawer's header is the dock: the backlog's handle (a small stack of
+    cards, its name and count) beside Search and the create button.
   - **Half open**, it is a supply of work with the board still above it. Lifting a card
-    sinks the tray out of sight, so the whole screen is board to place the card on. Its
-    cards are not reordered at this height. The tray comes back to half open after the drop.
+    sinks the drawer out of sight, so the whole screen is board to place the card on. Its
+    cards are not reordered at this height. The drawer comes back to half open after the drop.
   - **Full**, the backlog is groomed: its cards are reordered in place, and the status
     filters are dropzones for its own cards.
 
-  The tray is pulled between heights by its top, and tapping the handle opens or closes it.
+  The drawer is pulled between heights by its header, and tapping the handle opens or
+  closes it. Vertical pulls also work from the content, including the status filter pills,
+  when it was already at the boundary in that direction when the swipe began. A swipe that
+  starts with room to scroll stays a scroll, even if it reaches the boundary; lifting and
+  swiping again can pull the drawer. A downward pull on the closed tasks returns to the
+  previous drawer content and height.
 - While a card is held, the pages beside the current one peek in at the edges as bare
   rounded surfaces, without their cards: targets that turn the board, kept quiet. The current
   page draws its cards in from the edges to leave room for them. At rest a page fills the
@@ -357,13 +385,16 @@ own way in and out, so the board is not a row of identical pages.
 - Past the last column there is a done pocket instead of a page: a card dropped there moves
   to the project's default done status. The card flies into the header's done count, which
   counts tasks done in the last seven days, and the count bumps.
-- The done count opens the closed tasks as a sheet: grouped by when they were closed (today,
+- The done count opens the closed tasks in the drawer at full height: grouped by when they
+  were closed (today,
   yesterday, this week, earlier) and filtered by closed status. A card held there reopens
   through the move drawer.
 - A long press without movement selects a card. Moving after the press drags it. A touch
-  that moves before the press completes scrolls.
-- While a card is held, from the board, the tray or the closed sheet, a glass move drawer
-  sits at the bottom edge. It opens into a grid of status dropzones under a label for each
+  that moves before the press completes scrolls. On Android the press, a page turn and the
+  drop are felt as light haptic ticks.
+- While a card is held, from the board, the backlog or the closed tasks, the drawer's
+  content sinks and its header becomes the move drawer at the bottom edge. It opens into a
+  grid of status dropzones under a label for each
   category (Backlog, Active, Closed) when the card is brought onto it, and closes when the
   card leaves. This is how a board card goes back to the backlog, and how any card reaches
   any status without scrolling the board. Above the drawer the column scrolls under the held
@@ -372,7 +403,13 @@ own way in and out, so the board is not a row of identical pages.
   surface further in and tints it, and the page turns after about half a second.
 - Card titles are 16 CSS pixels on a phone. A held card's column shows each collapsed
   priority as its name alone, on a fainter bar, so it stays quiet on a small screen.
-- Swipe gestures on cards (to move or close them) are polish for later.
+- A card on a board page swiped to the right closes into the project's default done status:
+  the card follows the finger over a done surface, which fills once letting go will close it,
+  and flies off as the done count bumps. A short swipe springs back. Only rightwards, towards
+  the done pocket: a swipe to the left over a card still turns to the next column, and any
+  swipe that starts outside a card (the gutters, the header) turns the page, so the page
+  swipe wins near the edges. Cards are not swiped while some are selected, and cards in the
+  drawer are not swiped (owner decision, 2026-10-19).
 
 ## The cross-project board
 
@@ -398,10 +435,33 @@ view), comments and activity.
 - On small screens it takes the whole screen, like a note in Catch, and is not a bottom
   drawer. It opens out of its card and closes back into it, on the card's color. Pulling it
   down from the top closes it too.
-- While a task is open on a phone, the dock holds that task's actions, as it does for a note
-  in Catch.
+- While a task is open on a phone, the dock (the collapsed [drawer](#the-drawer)) holds
+  that task's actions, as it does for a note in Catch: Status, Priority, Tags (once the
+  project has any) and More (close or reopen, copy link). The controls act as tabs: each
+  opens its panel in the drawer beneath the dock, which stays as the panel's header, and
+  the drawer holds still until a panel is open. The status panel is the board's grid of
+  statuses by category; the tag picker stays open for several choices. The task's tags
+  are listed under its title. On desktop the pane shows the same controls along its foot
+  and opens their panels in place.
+- The description is a directly editable, text-only BlockNote document. Changes commit
+  when the task view closes or switches tasks; drafts survive reloads and conflicts.
+- The top toolbars follow Catch: back and the parent/task identifier breadcrumb on the
+  left, trash/restore on the right.
+- Subtasks sit on the task pane as a flush list of the same task cards, as Catch lists a
+  note's links below it, with status controls and an add action. A subtask opens in the same view, with its parent in the
+  breadcrumb. Opened from its parent's pane, it goes back there: Back, Escape, a pull and
+  the breadcrumb return to the parent, and on a phone the subtask grows out of its card
+  over the parent's pane and shrinks back into it.
+- Phone opening/closing uses Catch's card-to-note container transform and timing: the
+  surface grows from its card and shrinks into its current position, with a fade when no
+  card is visible. As in Catch, the surface has no shadow of its own,
+  and a card's subtask underlay hides while its task is open and slides out from behind the
+  card as the task lands. When
+  a task opens, the board's dock crossfades into the task's controls as Catch's dock does
+  for a note, and back again as it closes; the drawer stays above the task until it has
+  landed. Desktop panes slide in from the side, as in Catch.
 - The phone dock's create button adds a task at the top of the current column's default
-  priority (the backlog's default status while the backlog tray is open) and opens it with
+  priority (the backlog's default status while the backlog is open) and opens it with
   its title selected.
 
 ## Navigation
@@ -412,34 +472,90 @@ A left-mounted navigation rail, not a bottom dock. Below 1200 CSS pixels it star
 at wider desktop widths it starts expanded. An explicit expand/collapse choice is remembered
 on the device and takes precedence over window width:
 
-- Workspace switcher at the top.
-- One icon per project.
+- Workspace switcher at the top, followed by Search (Ctrl/⌘K).
+- One icon per project. In the expanded rail, a pencil at the right of each project entry
+  appears on hover or keyboard focus and edits that project. It stays visible on touch screens.
 - The cross-project board.
 - Settings at the bottom.
 
-Search is a command palette or an integrated input. There is no search page. The palette
-also covers jumping between projects.
+Search is a command palette, opened from the rail or with Ctrl/⌘K. There is no search
+page. The palette also captures tasks. It takes Catch's search and quick note as they are: a
+dock-shaped glass search field with results as cards above it, highlighted where they match.
+
+Search and capture belong to the board they are opened from (owner decision, 2026-10-17,
+replacing the scope settled on 2026-10-15). A project board searches and captures in that
+project alone, with no project filter, chooser or project jumps. Working across projects is
+the cross-project board's: there search covers every project in the current workspace, jumps
+to projects, and has a filter button beside the field that opens the project scope above it,
+shown as a removable chip while it applies. Open and closed tasks and subtasks are included;
+trash (including children of trashed parents and projects) is excluded. There is no
+cross-workspace search.
+
+Search runs on synced device data, offline too. Every literal query word must appear across
+the title, current identifier or description text, ignoring case and accents. Assigned tag
+names join these fields when the tags integration lands. Exact identifiers rank first, then
+exact titles, title prefixes, all-title matches, and description/tag matches. Ties favor the
+current project, then project name, title and task UUID. A bare number prefers the current
+project when several projects have that number. Up to 30 tasks and eight project jumps are
+shown. Enter opens the selected result; arrows change the selection.
+
+Typing a title also offers Create; Ctrl/⌘Enter captures it directly into the board's
+project, or on the cross-project board the project search is filtered to. With neither, the
+title moves to the capture window, which opens on its project list. The capture window on
+desktop is Catch's quick note: a card-colored window with the title, the board's project (a
+chip that opens a searchable project list in place on the cross-project board), the backlog
+status it lands in, and a create button. A new task appears optimistically with “Pending”
+until numbered, and opens in the existing task pane. Escape, Android Back or a tap outside
+first closes an open list, then dismisses the palette without creating anything, and
+restores focus.
 
 ### Phone
 
-A bottom dock with Search and a create button, as in Catch. On a project board the dock is
-the closed backlog tray, with the backlog's handle beside them. There are no Backlog and
-Board tabs: the backlog is the tray, so a Board tab had nothing to switch to.
+A bottom dock with Search and a create button, as in Catch. The dock is the header of the
+collapsed [drawer](#the-drawer); on a project board the backlog's handle sits beside them.
+There are no Backlog and Board tabs: the backlog is the drawer, so a Board tab had nothing
+to switch to.
 Project switching and the cross-project board live in the header's title menu. The shell's
-three-tab dock is replaced when the board is built.
+three-tab dock is replaced on the project board.
 
 The phone layout applies below 768 CSS pixels. The title menu also switches and manages
 workspaces, and opens settings. The project dock remains on project and cross-project
 boards; settings and an empty workspace use the title menu alone. On the cross-project
-board, Search shows the workspace search placeholder.
+board, Search opens the workspace palette.
+
+On a phone's project board, search and capture live in the drawer (ADR 0009). The dock's
+Search button raises the drawer as a search page: results above, and Catch's glass search
+field at the bottom where the dock was, focused so the keyboard rises right under it. The
+create button opens Catch's quick note for a task: a card above the dock with the title,
+focused, and create. The task lands where a new card would, in the column on screen, or the
+backlog's default status while the backlog is open. While the card is up, the dock holds the
+new task's status, priority and (when the project has tags) tags, as an open task's dock
+does, and the create button turns into its close. Those controls put the keyboard away and
+open their pickers in the drawer beneath the dock, with the card riding above; picking
+returns to the title. Closing the card, Back, Escape or a tap outside creates nothing.
+Elsewhere on a phone (settings, an empty workspace, the cross-project board's dock) the
+palette uses its own full-height surface until the drawer moves to the shell.
+
+### The drawer
+
+The drawer is to Throw what the dock is to Catch: a core part of the interface on a phone,
+not a component each feature draws. It is one glass surface along the bottom edge, and
+every sheet on a phone is the drawer showing that content: the backlog, the closed tasks,
+board settings, search and capture, the move targets, forms, the tag manager and pickers.
+Collapsed, its header is the dock, on boards and open tasks only; elsewhere it stays out of
+sight until something opens in it. Opening something replaces what it shows, and closing
+returns it to what it showed before. Opened content sits above the on-screen keyboard, and
+Back or Escape first closes a list open inside it. Quick capture's card floats above the
+dock rather than opening as a page. Desktop has no drawer. The rules are in
+[ADR 0009](decisions/0009-the-drawer.md).
 
 ### Shell routes and remembered selection
 
 - `/w/:workspaceId/p/:projectId?view=board` is a project. `view=backlog` opens its
-  phone board with the backlog tray half open and `view=search` selects the search placeholder. Search is a view of
-  the current context, not a separate search page.
+  phone board with the backlog half open. Legacy `view=search` links open the palette over
+  the board and replace the view with `board`. The palette has no route of its own.
 - `/w/:workspaceId/board` is the cross-project board for that workspace; `view=search`
-  shows its search placeholder.
+  opens the palette over it and replaces the view with `board`.
 - `/settings` holds account and appearance controls.
 - `/` restores the device's last workspace and project for the signed-in account.
   `/w/:workspaceId` restores that workspace's last project, otherwise its first project
@@ -453,8 +569,17 @@ from navigation opens its board; the shell remembers the last project separately
 workspace. Projects append by position. Deleting a project requires confirmation and moves
 it to the trash (see [Project](#project)); the trash has no view yet.
 
-The shell's backlog and board bodies are placeholders. The backlog page and task-specific
-dock interactions arrive with the board feature; search and the command palette arrive later.
+The project board uses synced tasks, statuses and primary tags, with the backlog in the
+drawer on a phone. Cards resolve their primary tag's root colour with `taskTagColor` and
+show the tag's name; a partially synced tag tree leaves the card neutral. The drawer
+(`components/Drawer`) carries the backlog, the closed tasks, board settings, and search and
+capture, and becomes the move drawer while a card is held or selected; the board owns it
+for now. The shell's project forms still use `BottomSheet` until the drawer moves to the
+shell. The cross-project board remains a placeholder; search and quick capture use the
+command palette. Task panes have a
+title and a placeholder body; their content comes later. Cards move on the project board
+by dragging, from the keyboard, by long press and the move drawer on a phone, and by
+swiping to close; the cross-project board does not move cards yet.
 
 ## Platform and architecture
 
@@ -490,8 +615,9 @@ little as possible; it is not the normal way to use the app (ADR 0005).
 
 ## Open questions
 
-1. **Search scope.** Presumably the current workspace with a project filter. It does not
-   affect the task schema: a workspace's tasks are on the device, so search can run there.
+1. **Search scope — settled (2026-10-17).** The board search is opened from: one project
+   on a project board, every project on the cross-project board; see
+   [Navigation](#navigation).
 2. **Membership.** Whether a future member joins a whole workspace, a single project, or
    either. Tasks and the rows under them carry both a workspace and a project, so either
    answer can filter them without a migration.
@@ -499,8 +625,9 @@ little as possible; it is not the normal way to use the app (ADR 0005).
    login without coupling them. Not decided.
 5. **Refused changes.** How the app tells the user that a change made offline was not
    applied, beyond the entry in the task's log.
-6. **Reordering the full-width backlog.** The gallery lays cards out in several columns per
-   priority. Whether cards can be reordered there, and how a drop position reads in a
-   masonry layout, is not designed.
-7. **The card and the task view.** The board prototype settled how cards move, not what a
-   card or the full task view contains beyond what this spec already lists.
+6. **Reordering the full-width backlog — settled (2026-10-19).** The gallery reads left to
+   right, then down, in a band per priority, and a held card is placed with a caret; nothing
+   reflows until the drop. A gap that parted the cards was prototyped and was too busy for
+   an overview; see [The project board](#the-project-board).
+7. **The task view.** Card content is settled in [Cards](#cards). The full task view
+   still needs its content designed beyond what this spec already lists.

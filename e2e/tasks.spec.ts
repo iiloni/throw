@@ -171,6 +171,7 @@ test('statuses and tasks are visible and writable only to members of their works
     priority: '3',
     position: 'a0',
     parent_id: null,
+    primary_tag_id: null,
     closed_at: null,
     deleted_at: null,
     created_at: expect.any(String),

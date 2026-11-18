@@ -1,10 +1,13 @@
 import type {
   ActivityChange,
   ActivityKind,
+  Color,
+  CommentBody,
   Description,
   Priority,
   PriorityNames,
   StatusCategory,
+  TagIconName,
   WorkspaceRole,
 } from '@throw/shared';
 import { sql } from 'drizzle-orm';
@@ -180,6 +183,30 @@ export const statuses = pgTable(
   ],
 );
 
+/** Project-owned, unbounded tag tree (Catch ADR 0016 adapted in data-model.md). */
+export const tags = pgTable(
+  'tags',
+  {
+    id: uuid().primaryKey(),
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    projectId: uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    name: text().notNull(),
+    parentId: uuid().references((): AnyPgColumn => tags.id, { onDelete: 'cascade' }),
+    icon: text().$type<TagIconName>(),
+    color: text().$type<Color>(),
+  },
+  (table) => [
+    index().on(table.workspaceId),
+    index().on(table.projectId, table.parentId),
+    index().on(table.parentId),
+    uniqueIndex().on(table.projectId, table.color).where(sql`${table.color} IS NOT NULL`),
+  ],
+);
+
 export const tasks = pgTable(
   'tasks',
   {
@@ -204,6 +231,7 @@ export const tasks = pgTable(
     priority: smallint().$type<Priority>().notNull(),
     position: text().notNull(),
     parentId: uuid().references((): AnyPgColumn => tasks.id, { onDelete: 'cascade' }),
+    primaryTagId: uuid().references(() => tags.id, { onDelete: 'set null' }),
     closedAt: timestamp({ withTimezone: true }),
     deletedAt: timestamp({ withTimezone: true }),
     createdAt: createdAt(),
@@ -214,13 +242,15 @@ export const tasks = pgTable(
     uniqueIndex().on(table.projectId, table.number),
     index().on(table.statusId),
     index().on(table.parentId),
+    index().on(table.primaryTagId),
   ],
 );
 
 /**
  * The tasks' activity log (ADR 0006), written only by the server in the transaction of the
  * write it describes. An update's entry is also the record that its change id was applied,
- * which is how a resent update is recognised. Not synced yet.
+ * which is how a resent update is recognised. `reordered` entries are kept for that alone and
+ * are not synced.
  */
 export const taskActivity = pgTable(
   'task_activity',
@@ -243,4 +273,56 @@ export const taskActivity = pgTable(
     createdAt: createdAt(),
   },
   (table) => [index().on(table.workspaceId), index().on(table.taskId)],
+);
+
+/**
+ * Comments on tasks, written by devices through the outbox and applied in the order they
+ * arrive. Not part of the log; the timeline merges the two.
+ */
+export const comments = pgTable(
+  'comments',
+  {
+    id: uuid().primaryKey(),
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    projectId: uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    taskId: uuid()
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    /** The author, the only one who can edit or delete it. Kept as null if the account goes. */
+    userId: text().references(() => user.id, { onDelete: 'set null' }),
+    /** A BlockNote document. */
+    body: jsonb().$type<CommentBody>().notNull(),
+    createdAt: createdAt(),
+    editedAt: timestamp({ withTimezone: true }),
+  },
+  (table) => [index().on(table.workspaceId), index().on(table.taskId)],
+);
+
+/** One independent assignment per task and secondary tag. */
+export const taskTags = pgTable(
+  'task_tags',
+  {
+    taskId: uuid()
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    tagId: uuid()
+      .notNull()
+      .references(() => tags.id, { onDelete: 'cascade' }),
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    projectId: uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.taskId, table.tagId] }),
+    index().on(table.workspaceId),
+    index().on(table.projectId),
+    index().on(table.tagId),
+  ],
 );

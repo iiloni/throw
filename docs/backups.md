@@ -6,7 +6,7 @@ not confer server administration. Every backup route checks the server role; dow
 short-lived signed tickets checked against the current admin role.
 
 The port follows Catch's ADR 0012, with no attachment path because Throw has no attachments.
-See [ADR 0010](decisions/0010-server-backups.md). The entire database is covered, including
+See [ADR 0011](decisions/0011-server-backups.md). The entire database is covered, including
 accounts, workspaces, projects, statuses, tasks, subtasks, counters, tags and activity tables
 when present. No allowlist of application tables needs updating for new features.
 

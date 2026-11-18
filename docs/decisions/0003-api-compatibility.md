@@ -37,4 +37,4 @@ and the server's maximum, with tests at the boundaries and a documented upgrade 
   thinking through old client with new server, and new client with old server.
 
 - Backup downloads are the one read-only data exception: plain browser links use an expiring
-  signed ticket and a current server-admin check instead of protocol/auth headers (ADR 0010).
+  signed ticket and a current server-admin check instead of protocol/auth headers (ADR 0011).
