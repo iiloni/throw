@@ -156,12 +156,19 @@ export function Drawer({
     closedAt.current = at.closed;
     return at;
   };
+  // With reduced motion the drawer is placed at once, in the frame that changed it. A
+  // zero-length animation would still land a frame later, showing the old height first.
+  const slide = (to: number, spring = springs.smooth) => {
+    if (!reduced) return animate(y, to, spring);
+    y.stop();
+    y.jump(to);
+  };
   const restingAt = (at: ReturnType<typeof offsets>) =>
     moveInHead ? at.closed : sunk ? at.sunk : paged ? at.page : at[detent];
 
   function settle(next: Detent) {
     // Let go at the height it was at: there is no new detent to move it.
-    if (next === detent) animate(y, offsets()[next], reduced ? { duration: 0 } : springs.smooth);
+    if (next === detent) slide(offsets()[next]);
     else onDetent(next);
   }
 
@@ -176,7 +183,7 @@ export function Drawer({
       const at = offsets();
       if (paged) {
         if (offset > 100 || velocity > 500) onClosePage();
-        else animate(y, at.page, reduced ? { duration: 0 } : springs.smooth);
+        else slide(at.page);
         return;
       }
       const aim = y.get() + velocity * 0.15;
@@ -185,7 +192,7 @@ export function Drawer({
       );
       settle(nearest);
     },
-    onCancel: () => animate(y, restingAt(offsets()), reduced ? { duration: 0 } : springs.smooth),
+    onCancel: () => slide(restingAt(offsets())),
   });
 
   useBackHandler(detent !== 'closed' && !paged, () => onDetent('closed'));
@@ -211,10 +218,7 @@ export function Drawer({
       // behind it, so the dock only follows the keyboard down to where the picker ends.
       if (opening && carded && !typingInPage)
         y.jump(Math.min(y.get(), at.closed - Math.min(keyboardHeight(), at.closed - at.page)));
-      const settle = () =>
-        run === holding.current
-          ? animate(y, restingAt(at), reduced ? { duration: 0 } : springs.smooth)
-          : undefined;
+      const settle = () => (run === holding.current ? slide(restingAt(at)) : undefined);
       // Closing a picker over the card sends focus back to its field, and the keyboard rises a
       // moment later. The picker holds its room until then, so the card does not dip between.
       const field = latest.current.card?.focus?.current;
@@ -237,9 +241,7 @@ export function Drawer({
   useLayoutEffect(() => {
     const element = head.current;
     if (!moveInHead || !element) return;
-    const observer = new ResizeObserver(() =>
-      animate(y, offsets().closed, reduced ? { duration: 0 } : springs.snappy),
-    );
+    const observer = new ResizeObserver(() => slide(offsets().closed, springs.snappy));
     observer.observe(element);
     return () => observer.disconnect();
   }, [moveInHead, reduced, y]);
