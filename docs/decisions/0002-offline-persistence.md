@@ -37,6 +37,8 @@ writes straight away and need a connection.
 **Signing in or out is a full page load.** Collections open the user's database when their
 module loads, so a page never holds two users' data. Signing out deletes the device's copy
 and its outbox, after a warning when changes are still unsent.
+After session expiry, the sync indicator offers sign-in again. It waits for pending writes
+to reach durable storage and keeps the device's copy so the same account can resume syncing.
 
 **A collection has a `schemaVersion`.** Changing the columns a shape syncs bumps it, and
 devices drop and resync that collection.
