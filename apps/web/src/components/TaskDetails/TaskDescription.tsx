@@ -1,4 +1,4 @@
-import type { Task } from '@throw/shared';
+import { type ActivityEntry, descriptionSchema, type Task } from '@throw/shared';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { uuidv7 } from 'uuidv7';
@@ -14,7 +14,13 @@ import {
 import { commitDescriptionDraft, registerDescriptionEditor } from '@/lib/descriptionEditing';
 import { getTask } from '@/lib/tasks';
 
-export function TaskDescription({ task }: { task: Task }) {
+export function TaskDescription({
+  task,
+  recovery,
+}: {
+  task: Task;
+  recovery?: ActivityEntry | null;
+}) {
   const draft = useDescriptionDraft(task.id);
   const editing = draft && draft.status !== 'pending';
   const [session, setSession] = useState(() => ({
@@ -28,6 +34,43 @@ export function TaskDescription({ task }: { task: Task }) {
   const unstored = useRef<DescriptionDraft | null>(null);
   const stale =
     draft && (draft.status === 'conflict' || descriptionIsStale(draft, task.descriptionVersion));
+
+  // Recovery uses the same review controls as a refused save on the sending device.
+  useEffect(() => {
+    if (!recovery || recovery.taskId !== task.id) return;
+    const change = recovery.changes.find((item) => item.field === 'description' && !item.applied);
+    const parsed = descriptionSchema.safeParse(change?.rejectedDocument);
+    if (!change || !parsed.success) return;
+    const existing = readDescriptionDraft(task.id);
+    if (unstored.current) {
+      setError('Your current draft is kept. Finish it before recovering another description.');
+    } else if (existing) {
+      if (existing.status !== 'conflict' || existing.submittedVersion !== change.requested)
+        setError('Your current draft is kept. Finish it before recovering another description.');
+    } else {
+      const key = uuidv7();
+      try {
+        storeDescriptionDraft(task.id, {
+          document: parsed.data,
+          baseVersion: typeof change.previous === 'string' ? change.previous : null,
+          submittedVersion: typeof change.requested === 'string' ? change.requested : null,
+          editorKey: key,
+          status: 'conflict',
+        });
+        setSession({
+          document: parsed.data,
+          baseVersion: typeof change.previous === 'string' ? change.previous : null,
+          key,
+        });
+        setError(null);
+      } catch {
+        setError('Could not store the recovery draft on this device. Try again.');
+      }
+    }
+    const section = document.getElementById(`description-${task.id}`);
+    section?.scrollIntoView({ block: 'start', behavior: 'instant' });
+    section?.focus({ preventScroll: true });
+  }, [recovery, task.id]);
 
   useEffect(() => {
     // Only an untouched editor follows remote revisions. Typing owns its content and caret.
@@ -48,8 +91,6 @@ export function TaskDescription({ task }: { task: Task }) {
         }
         const result = commitDescriptionDraft(task.id);
         if (result === 'failed') throw new Error('Could not store description');
-        if (result === 'conflict')
-          toast.info('Description changed elsewhere. Your draft is kept for review.');
         return true;
       } catch {
         toast.error('Could not save your description. Keep the task open and copy your text.');
@@ -73,7 +114,12 @@ export function TaskDescription({ task }: { task: Task }) {
   }
 
   return (
-    <section aria-label="Description" className="mt-5 min-h-24">
+    <section
+      id={`description-${task.id}`}
+      tabIndex={-1}
+      aria-label="Description"
+      className="mt-5 min-h-24 scroll-m-5 outline-none focus:ring-2 focus:ring-ring/60"
+    >
       {error && (
         <p role="alert" className="mb-3 text-destructive text-sm">
           {error}

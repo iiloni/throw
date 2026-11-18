@@ -72,7 +72,7 @@ async function open(page: Page) {
 }
 async function openWorkspace(page: Page, workspaceId: string) {
   await page.goto(`/w/${workspaceId}/board`);
-  await expect(page.getByRole('heading', { name: 'One board, every project' })).toBeVisible({
+  await expect(page.getByRole('region', { name: 'Active', exact: true })).toBeVisible({
     timeout: APP_LOAD_TIMEOUT,
   });
   await page.keyboard.press('ControlOrMeta+k');

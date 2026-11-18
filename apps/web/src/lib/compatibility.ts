@@ -102,7 +102,9 @@ export const compatibleShapeFetch: typeof fetch = async (input, init) => {
     signal?.throwIfAborted();
     await waitForSync(() => !getSyncStatus().signedOut, signal);
     try {
-      const response = await compatibleFetch(input, init);
+      // Never from the HTTP cache, whatever headers a server or proxy sent: a cached snapshot
+      // counts as caught up and shows old rows as current (see `routes/shapes.ts`).
+      const response = await compatibleFetch(input, { ...init, cache: 'no-store' });
       // Electric makes a 401 terminal. Keep its local collection alive until reauthentication.
       if (response.status === 401) continue;
       return response;

@@ -1,4 +1,5 @@
 import {
+  type ActivityEntry,
   comparePositions,
   isClosedCategory,
   type Project,
@@ -11,7 +12,7 @@ import {
 import { ChevronLeft, ChevronRight, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useContext, useState } from 'react';
 import { StatusGlyph } from '@/components/Board/glyphs';
-import type { Task as BoardTask } from '@/components/Board/model';
+import { type Task as BoardTask, projectOf } from '@/components/Board/model';
 import { StatusMenu } from '@/components/Board/StatusMenu';
 import { board, current, leaveTask, openSubtask, update } from '@/components/Board/state';
 import { TaskCard } from '@/components/Board/TaskCard';
@@ -26,6 +27,7 @@ import { createTask, restoreTask, sendTask, trashTask } from '@/lib/tasks';
 import { cn } from '@/lib/utils';
 import { TaskDescription } from './TaskDescription';
 import { TaskDrawer } from './TaskDrawer';
+import { TaskRefusalNotice, TaskTimeline } from './TaskTimeline';
 
 function boardTask(task: Task, tags: readonly Tag[]): BoardTask {
   return {
@@ -74,7 +76,9 @@ export function TaskDetails({
   const children = tasks
     .filter((row) => row.parentId === task.id && row.deletedAt === null)
     .sort((a, b) => comparePositions(a.position, b.position) || a.id.localeCompare(b.id));
-  const boardProject = current().project;
+  // On the workspace board, the task's own project: its subtasks move among its statuses.
+  const boardProject = projectOf(current().project, task);
+  const [recovery, setRecovery] = useState<ActivityEntry | null>(null);
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -162,7 +166,8 @@ export function TaskDetails({
               </p>
             )}
             <TaskTagList task={task} tags={tags} />
-            <TaskDescription task={task} />
+            <TaskRefusalNotice key={`notice:${task.id}`} taskId={task.id} />
+            <TaskDescription task={task} recovery={recovery} />
             {task.parentId === null && (
               // Flush with the task, as Catch lists a note's links below it.
               <section aria-label="Subtasks" className="mt-8 flex flex-col gap-2">
@@ -254,8 +259,19 @@ export function TaskDetails({
                 )}
               </section>
             )}
-            {/* Comments and activity mount below the description and subtask column. */}
-            <div data-task-timeline="" />
+            <TaskTimeline
+              key={`timeline:${task.id}`}
+              task={task}
+              project={project}
+              context={{
+                priorityNames: project.priorityNames,
+                parentName: (id) => {
+                  const parent = tasks.find((row) => row.id === id);
+                  return parent ? (taskIdentifier(project, parent) ?? undefined) : undefined;
+                },
+              }}
+              onRecoverDescription={(entry) => setRecovery({ ...entry })}
+            />
           </div>
         </ScrollAreaViewport>
         <ScrollBar />

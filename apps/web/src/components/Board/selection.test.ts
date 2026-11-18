@@ -1,7 +1,7 @@
 import type { Project, Status, Tag, Task } from '@throw/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { compareClosed, compareTasks, identifier, subtasksOf, taskColor } from './model';
-import { projectBoardData } from './selection';
+import { projectBoardData, workspaceBoardData } from './selection';
 import {
   board,
   initialBoard,
@@ -254,5 +254,42 @@ describe('synced project board selection', () => {
     expect(identifier({ ...data.project, key: 'NEW' }, { ...data.tasks[1]!, number: 12 })).toBe(
       'NEW-12',
     );
+  });
+});
+
+describe('workspace board selection', () => {
+  const garden: Project = { ...project, id: 'garden', key: 'GDN', color: 'orange' };
+  const gardenStatuses = statuses.map((row) => ({
+    ...row,
+    id: `garden-${row.id}`,
+    projectId: garden.id,
+  }));
+
+  it('keeps each project’s tasks, statuses and colour, trashed tasks included', () => {
+    const data = workspaceBoardData(
+      'workspace',
+      [project, garden],
+      [...statuses, ...gardenStatuses],
+      [
+        task('kitchen'),
+        task('weeds', { projectId: garden.id, statusId: 'garden-build' }),
+        task('binned', {
+          projectId: garden.id,
+          statusId: 'garden-build',
+          deletedAt: '2026-10-14T12:00:00Z',
+        }),
+      ],
+    );
+    expect(
+      data.tasks.map(({ id, projectId, primaryTagColor }) => [id, projectId, primaryTagColor]),
+    ).toEqual([
+      ['kitchen', project.id, 'teal'],
+      ['weeds', garden.id, 'orange'],
+    ]);
+    // Opened from a link or the palette, a trashed task still wears its project's colour.
+    expect(data.hiddenTasks?.map(({ id, primaryTagColor }) => [id, primaryTagColor])).toEqual([
+      ['binned', 'orange'],
+    ]);
+    expect(data.project.members?.map((member) => member.statuses.length)).toEqual([6, 6]);
   });
 });

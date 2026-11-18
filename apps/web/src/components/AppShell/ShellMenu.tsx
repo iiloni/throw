@@ -1,4 +1,13 @@
-import { Check, ChevronDown, Columns3, Layers, Pencil, Plus, Settings2 } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  Columns3,
+  Layers,
+  Pencil,
+  Plus,
+  Settings2,
+  Trash2,
+} from 'lucide-react';
 import { DropdownMenu } from 'radix-ui';
 import type { ReactNode } from 'react';
 import { useShell } from '@/components/AppShell/shell';
@@ -98,6 +107,12 @@ export function ShellMenu({
               Rename workspace
             </MenuItem>
           )}
+          {shell.workspace && (
+            <MenuItem onSelect={() => shell.goTrash()}>
+              <Trash2 aria-hidden className="size-4" />
+              Workspace trash
+            </MenuItem>
+          )}
           {phone && (
             <>
               <DropdownMenu.Separator className="my-2 border-t" />
@@ -136,11 +151,9 @@ export function ShellMenu({
                 </MenuItem>
               )}
               {shell.project && (
-                <MenuItem
-                  onSelect={() => shell.openForm({ kind: 'edit-project', project: shell.project! })}
-                >
+                <MenuItem onSelect={() => shell.goProjectSettings(shell.project!)}>
                   <Pencil aria-hidden className="size-4" />
-                  Edit project
+                  Project settings
                 </MenuItem>
               )}
               <DropdownMenu.Separator className="my-2 border-t" />

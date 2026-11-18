@@ -206,6 +206,11 @@ appear in the same timeline.
   workspace. Comments can be edited and deleted after posting, and are ordered by when the
   server received them.
 - The log and comments are kept on the device, so the timeline can be read offline.
+- The task view shows one row per server write, with short sentences for its fields.
+  Creation is condensed to the title and status, with any unavailable initial choices
+  stated separately. Separate writes are never grouped across comments or refusals.
+- Comments use the description's text-only editor. Only their author sees edit and delete
+  controls. A comment written offline is marked pending until it receives a server time.
 
 ### Closed and deleted tasks
 
@@ -413,17 +418,36 @@ own way in and out, so the board is not a row of identical pages.
 
 ## The cross-project board
 
-A board over every project in the workspace **(assumed scope)**.
+A board over every project in the workspace **(assumed scope)**, at `/w/:workspaceId/board`.
+It uses the project board's cards, drag, selection, keyboard carry, swipe to close and task
+view, so it reads and moves the same way.
 
 - One column per category instead of per status, since categories are all that projects
-  share. Done is shown open by default. Cancelled is the last column and is collapsed by
-  default.
+  share. Done is shown open by default, with every closed task (no time window). Cancelled
+  is the last column and is collapsed by default. Folding or opening Done or Cancelled is
+  remembered on the device.
 - Cards are colored by project, because tag colors mean different things in each project.
-- Columns are banded vertically by priority rank. On wide displays a column can lay its
-  cards out as a masonry grid within each band.
+  Each card names its own project's status and identifier.
+- Columns are banded vertically by priority rank. A band is labelled with the rank's name
+  when every project names it the same, and with the default name otherwise. On wide
+  displays a column lays its cards out as a masonry grid within each band. Within a band,
+  cards keep their project's order; cards of different projects interleave in no promised
+  order.
 - While a single card is dragged, the target column shows that card's project statuses as
   dropzones. Dropping on the column itself, or moving a selection that spans projects, uses
-  each project's default status for the category.
+  each project's default status for the category; a card already in that category stays
+  where it is.
+- Moving a card here changes its status only. Priority and order belong to the project
+  board, where cards can be placed between others; keyboard carry still moves a card between
+  priority bands, as on the project board **(decision, 2026-11-18)**.
+- A card opens its task in place: beside the board on a desktop, as a task screen on a phone,
+  with the task's own project's statuses, tags and subtasks.
+- New work is captured through the palette, which asks which project it belongs to.
+- On a phone the board pages through the four categories as the project board pages through
+  statuses, opening on Active. Cancelled stays folded behind a "Show cancelled" button until
+  opened. Backlog and Active swipe to close as the project board does, into each card's
+  project's default done status. The move drawer offers the held cards' project statuses
+  when they share one project, and the four categories when they do not.
 
 ## The task view
 
@@ -515,13 +539,14 @@ A bottom dock with Search and a create button, as in Catch. The dock is the head
 collapsed [drawer](#the-drawer); on a project board the backlog's handle sits beside them.
 There are no Backlog and Board tabs: the backlog is the drawer, so a Board tab had nothing
 to switch to.
-Project switching and the cross-project board live in the header's title menu. The shell's
-three-tab dock is replaced on the project board.
+Project switching and the cross-project board live in the header's title menu. There is no
+three-tab dock: every phone board has its own, and other pages use the title menu alone.
 
 The phone layout applies below 768 CSS pixels. The title menu also switches and manages
 workspaces, and opens settings. The project dock remains on project and cross-project
 boards; settings and an empty workspace use the title menu alone. On the cross-project
-board, Search opens the workspace palette.
+board, the dock holds Search, which opens the workspace palette, and a create button that
+opens the palette's capture, where the project is chosen.
 
 On a phone's project board, search and capture live in the drawer (ADR 0009). The dock's
 Search button raises the drawer as a search page: results above, and Catch's glass search
@@ -533,8 +558,8 @@ new task's status, priority and (when the project has tags) tags, as an open tas
 does, and the create button turns into its close. Those controls put the keyboard away and
 open their pickers in the drawer beneath the dock, with the card riding above; picking
 returns to the title. Closing the card, Back, Escape or a tap outside creates nothing.
-Elsewhere on a phone (settings, an empty workspace, the cross-project board's dock) the
-palette uses its own full-height surface until the drawer moves to the shell.
+Elsewhere on a phone (settings, an empty workspace, the cross-project board) the palette
+uses its own full-height surface until the drawer moves to the shell.
 
 ### The drawer
 
@@ -556,7 +581,17 @@ dock rather than opening as a page. Desktop has no drawer. The rules are in
   the board and replace the view with `board`. The palette has no route of its own.
 - `/w/:workspaceId/board` is the cross-project board for that workspace; `view=search`
   opens the palette over it and replaces the view with `board`.
-- `/settings` holds account and appearance controls.
+- `/w/:workspaceId/p/:projectId/settings` manages a project's appearance, statuses,
+  priority names, key and tags. The rail's project menu and the phone board's title menu
+  open it; the appearance form is shared with project creation. The optional `section`
+  search parameter keeps the chosen section across reloads and reconnects.
+- `/w/:workspaceId/p/:projectId/trash` lists that project's independently trashed tasks,
+  with inherited subtasks grouped under their parent. It is reached from project settings
+  and the rail's project menu.
+- `/w/:workspaceId/trash` lists trashed projects and independently trashed tasks across the
+  workspace. The workspace menu and desktop rail open it. Each trash offers restore,
+  confirmed permanent removal and confirmed emptying of that scope.
+- `/settings` holds account, board and appearance controls.
 - `/` restores the device's last workspace and project for the signed-in account.
   `/w/:workspaceId` restores that workspace's last project, otherwise its first project
   by position, otherwise the create-project prompt.
@@ -567,19 +602,20 @@ UUID, not its identifier: a task created offline has no number yet, and a projec
 can change (ADR 0007). A direct project URL keeps its view on reload. Selecting a project
 from navigation opens its board; the shell remembers the last project separately per
 workspace. Projects append by position. Deleting a project requires confirmation and moves
-it to the trash (see [Project](#project)); the trash has no view yet.
+it to the trash (see [Project](#project)), where it can be restored or removed for good.
 
 The project board uses synced tasks, statuses and primary tags, with the backlog in the
 drawer on a phone. Cards resolve their primary tag's root colour with `taskTagColor` and
 show the tag's name; a partially synced tag tree leaves the card neutral. The drawer
 (`components/Drawer`) carries the backlog, the closed tasks, board settings, and search and
 capture, and becomes the move drawer while a card is held or selected; the board owns it
-for now. The shell's project forms still use `BottomSheet` until the drawer moves to the
-shell. The cross-project board remains a placeholder; search and quick capture use the
-command palette. Task panes have a
-title and a placeholder body; their content comes later. Cards move on the project board
-by dragging, from the keyboard, by long press and the move drawer on a phone, and by
-swiping to close; the cross-project board does not move cards yet.
+for now. Away from boards, the shell hosts that same Drawer component for project settings
+and trash forms, with no dock at rest. Tag management uses this host on phones and a
+centred dialog on desktop. The shell's project forms still use `BottomSheet` until the
+drawer moves to the shell. The cross-project board adapts every project's tasks at the same
+kind of boundary (`Board/WorkspaceBoard.tsx`); search and quick capture there use the
+command palette. Cards move on both boards by dragging, from the keyboard, by long press
+and the move drawer on a phone, and by swiping to close.
 
 ## Platform and architecture
 
@@ -623,8 +659,17 @@ little as possible; it is not the normal way to use the app (ADR 0005).
    answer can filter them without a migration.
 3. **Single sign-on.** Accepting an external OIDC provider in both apps would give shared
    login without coupling them. Not decided.
-5. **Refused changes.** How the app tells the user that a change made offline was not
-   applied, beyond the entry in the task's log.
+4. **Deployment — settled (2026-11-18).** Each app ships its own image and Compose file; the
+   combined example in `deploy/combined` runs either or both from one stack on one Postgres,
+   with separate owners and databases (ADR 0010, [docs/deployment.md](deployment.md)).
+5. **Refused changes — settled (2026-10-19).** A quiet notice inside the affected task,
+   with no toast or app-wide notification. It appears from the synced log on every device
+   for the user whose change was refused, stays until dismissed on that device, and links
+   to the exact history entry. One notice summarizes multiple unapplied updates; dismissing
+   it acknowledges those entries, and a later refusal brings it back. The entry says what
+   was wanted, what stood and why. A refused description links to the existing draft
+   recovery and review controls; another device can recover its document from the log.
+   Dismissal does not delete the history or a recovery draft.
 6. **Reordering the full-width backlog — settled (2026-10-19).** The gallery reads left to
    right, then down, in a band per priority, and a held card is placed with a caret; nothing
    reflows until the drop. A gap that parted the cards was prototyped and was too busy for

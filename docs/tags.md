@@ -2,7 +2,7 @@
 
 The tag model and write rules are in [data-model.md](data-model.md#tag-tree), adapted from
 Catch ADR 0016. The board shows primary tag colours and the task pane picks and lists a
-task's tags (`TaskDetails/TaskPickers.tsx`); project settings do not manage tags yet.
+task's tags (`TaskDetails/TaskPickers.tsx`). Project settings mounts `TagManager` in its Tags section.
 
 ## Data and actions
 
@@ -40,7 +40,8 @@ All actions use `write()` and the outbox. Do not mutate collections from compone
   secondary checkboxes and a Clear primary action. Pass the same assignment props plus
   `onPrimaryChange` and `onSecondaryChange`; connect those to the actions above.
 - `TagManager`: takes `projectId`, reads its real collection, and manages creation,
-  rename, recolor, icon, move and whole-branch deletion through forms/sheets.
+  rename, recolor, icon, move and whole-branch deletion through the settings drawer on phones
+  and centred dialogs on desktop.
 - `TagEditor` and `TagDeleteConfirm`: container-free editor and delete confirmation content,
   with no gestures or Back handling. `TagForm` currently hosts the editor in `BottomSheet`.
 - `TagTree`: the underlying searchable/collapsible tree with a `renderTag(tag, path)`
@@ -50,11 +51,12 @@ All actions use `write()` and the outbox. Do not mutate collections from compone
 On a phone, picking is a page of the single drawer from
 [ADR 0009](decisions/0009-the-drawer.md), which owns replacement/restoration, modality,
 gestures, Back and focus. On desktop the task pane opens the picker as a panel of its own
-controls, beside the status and priority pickers. Phone tag management moves into the drawer
-too, and on desktop uses a centred dialog. `TagForm`'s sheet wrapper is temporary until
-management gets a product entry point.
+controls, beside the status and priority pickers. Phone tag management uses the shell's
+`ManagementSurface` host for the existing Drawer; on desktop it uses `BottomSheet`'s centred
+dialog. `TagForm` remains a standalone workshop wrapper; production management mounts its
+container-free `TagEditor` through that host.
 
 The development-only `/prototype/tags` route demonstrates all pieces against real data.
 Sign in first, then choose a project/task or create an example project. Its edits persist.
 It supports the existing app theme and is guarded by `import.meta.env.DEV` like the board
-prototype. Production screens expose no tag-management entry point yet.
+prototype. Production tag management lives in project settings.

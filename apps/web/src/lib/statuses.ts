@@ -4,10 +4,10 @@ import {
   type Status,
   type StatusCategory,
   statusSchema,
-  type Task,
 } from '@throw/shared';
 import { uuidv7 } from 'uuidv7';
 import { statusesCollection, tasksCollection, write } from './collections';
+import { statusDeletionIssue } from './projectSettings';
 
 /** A project's statuses by category (backlog, active, done, cancelled), then position. */
 export function statusesOf(statuses: readonly Status[], projectId: string) {
@@ -88,17 +88,15 @@ export function makeDefaultStatus(id: string) {
  * Why a status cannot be deleted, or null when it can: the default cannot go (which also keeps
  * a status in every category), nor can a status any task uses, counting the trash.
  */
-export function statusDeletionIssue(status: Status, tasks: Iterable<Task>) {
-  if (status.isDefault) return 'Make another status the default first.';
-  for (const task of tasks) if (task.statusId === status.id) return 'Tasks use this status.';
-  return null;
-}
-
 /** Deletes a status, unless `statusDeletionIssue` says it cannot be. Returns the issue. */
 export function deleteStatus(id: string) {
   const status = statusesCollection.get(id);
   if (!status) return null;
-  const issue = statusDeletionIssue(status, tasksCollection.values());
+  const siblings = [...statusesCollection.values()].filter(
+    (other) => other.projectId === status.projectId,
+  );
+  const count = [...tasksCollection.values()].filter((task) => task.statusId === id).length;
+  const issue = statusDeletionIssue(status, siblings, count);
   if (!issue) write(() => statusesCollection.delete(id));
   return issue;
 }

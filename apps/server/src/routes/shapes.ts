@@ -123,41 +123,38 @@ const CLIENT_PARAMS = [
  * Auth proxy in front of Electric. Clients never talk to Electric directly;
  * the server decides which table and rows each user can sync.
  */
-export const shapeRoutes = new Hono<AppEnv>().use(requireUser).get('/:shape', async (c) => {
-  const shape = Object.hasOwn(SHAPES, c.req.param('shape')) ? SHAPES[c.req.param('shape')] : null;
-  if (!shape) return c.json({ error: 'Shape not found' }, 404);
-  const user = c.get('user')!;
-  const incoming = new URL(c.req.url);
-  const upstream = new URL('/v1/shape', env.ELECTRIC_URL);
+export const shapeRoutes = new Hono<AppEnv>()
+  .use(async (c, next) => {
+    await next();
+    // Electric answers as if for a CDN, and a browser would keep its responses too. A reload
+    // then restarts the shape from a snapshot cached days ago, which counts as caught up until
+    // the log replays, so the app shows old rows as current. They are one user's rows besides.
+    // Devices keep their own copy (ADR 0002); the HTTP cache adds nothing.
+    c.res.headers.set('cache-control', 'no-store');
+    // For a cache in front of the server that is set to ignore `no-store`.
+    c.res.headers.set('vary', 'cookie, authorization');
+  })
+  .use(requireUser)
+  .get('/:shape', async (c) => {
+    const shape = Object.hasOwn(SHAPES, c.req.param('shape')) ? SHAPES[c.req.param('shape')] : null;
+    if (!shape) return c.json({ error: 'Shape not found' }, 404);
+    const user = c.get('user')!;
+    const incoming = new URL(c.req.url);
+    const upstream = new URL('/v1/shape', env.ELECTRIC_URL);
 
-  for (const [key, value] of incoming.searchParams) {
-    if (CLIENT_PARAMS.includes(key)) upstream.searchParams.set(key, value);
-  }
-  upstream.searchParams.set('table', shape.table);
-  upstream.searchParams.set('columns', shape.columns.join(','));
-  upstream.searchParams.set('where', shape.where);
-  upstream.searchParams.set('params[1]', user.id);
-  if (env.ELECTRIC_SECRET) upstream.searchParams.set('secret', env.ELECTRIC_SECRET);
+    for (const [key, value] of incoming.searchParams) {
+      if (CLIENT_PARAMS.includes(key)) upstream.searchParams.set(key, value);
+    }
+    upstream.searchParams.set('table', shape.table);
+    upstream.searchParams.set('columns', shape.columns.join(','));
+    upstream.searchParams.set('where', shape.where);
+    upstream.searchParams.set('params[1]', user.id);
+    if (env.ELECTRIC_SECRET) upstream.searchParams.set('secret', env.ELECTRIC_SECRET);
 
-  const response = await fetch(upstream);
-  const headers = new Headers(response.headers);
-  // fetch already decoded the body, so these no longer describe it.
-  headers.delete('content-encoding');
-  headers.delete('content-length');
-  headers.set('vary', 'cookie, authorization');
-  // Electric answers as if for a CDN in front of it. These are one user's rows, and a shared
-  // cache that overlooks `vary` would hand them to the next user to ask.
-  const caching = headers.get('cache-control');
-  if (caching) {
-    headers.set(
-      'cache-control',
-      caching
-        .split(',')
-        .map((directive) => directive.trim())
-        .filter((directive) => directive !== 'public' && !directive.startsWith('s-maxage'))
-        .concat('private')
-        .join(', '),
-    );
-  }
-  return new Response(response.body, { status: response.status, headers });
-});
+    const response = await fetch(upstream);
+    const headers = new Headers(response.headers);
+    // fetch already decoded the body, so these no longer describe it.
+    headers.delete('content-encoding');
+    headers.delete('content-length');
+    return new Response(response.body, { status: response.status, headers });
+  });

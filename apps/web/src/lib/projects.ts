@@ -98,12 +98,19 @@ export function changeProjectKey(id: string, key: string) {
 export function renamePriority(id: string, rank: Priority, name: string) {
   const project = projectsCollection.get(id);
   if (!project) return;
-  const names = priorityNamesSchema.parse(
+  setPriorityNames(
+    id,
     project.priorityNames.map((current, index) => (index === rank - 1 ? name : current)),
   );
+}
+
+/** Every rank's name in one write, so a save is one change in the project's history. */
+export function setPriorityNames(id: string, names: readonly string[]) {
+  if (!projectsCollection.has(id)) return;
+  const parsed = priorityNamesSchema.parse(names);
   write(() =>
     projectsCollection.update(id, (draft) => {
-      draft.priorityNames = names;
+      draft.priorityNames = parsed;
     }),
   );
 }

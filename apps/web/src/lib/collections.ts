@@ -67,6 +67,7 @@ import {
   updateSyncStatus,
 } from './syncStatus';
 import { taskTimeline } from './timeline';
+import { writeRefusalMessage } from './writeRefusal';
 import {
   changeIdFor,
   commentCreateRequest,
@@ -580,7 +581,7 @@ function classifyWriteError(error: unknown): Error {
     }
     // A 404 is an edit to something deleted on another device before it arrived.
     if (error.status === 404) return reject('It was deleted on another device.');
-    return reject('The server turned it down.');
+    return reject(writeRefusalMessage(error.message) ?? 'The server turned it down.');
   }
   // `fetch` rejects when the server cannot be reached.
   updateSyncStatus({ offline: true });
@@ -735,6 +736,12 @@ export function useTags(projectId: string) {
   // Keep the result stable between sync changes: the board adapts it in a layout effect.
   return { tags: data ?? emptyTags, isLoading };
 }
+/** Every tag of the user's projects, for the workspace board's cards. */
+export function useAllTags() {
+  const { data, isLoading } = useLiveQuery((q) => q.from({ tag: tagsCollection }));
+  return { tags: data ?? emptyTags, isLoading };
+}
+
 export function useTaskTags(taskId: string) {
   const { data = [], isLoading } = useLiveQuery((q) => q.from({ assignment: taskTagsCollection }));
   return { taskTags: data.filter((row) => row.taskId === taskId), isLoading };

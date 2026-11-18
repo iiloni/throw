@@ -33,8 +33,9 @@ export type ShellState = {
   /** Opens a task in its project's board, moving to that project first if needed. */
   openTask: (projectId: string, taskId: string, created?: boolean) => void;
   goBoard: () => void;
-  selectBoardView: (view: 'board' | 'search') => void;
   goSettings: () => void;
+  goProjectSettings: (project: Project) => void;
+  goTrash: (project?: Project) => void;
 };
 export const ShellContext = createContext<ShellState | null>(null);
 export function useShell() {
