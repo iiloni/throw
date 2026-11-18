@@ -2,7 +2,7 @@ import { ChevronDown } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { StatusGlyph } from './glyphs';
-import { isClosed, type Project, statusById, type Task } from './model';
+import { isClosed, type Project, projectOf, statusById, type Task } from './model';
 import { StatusMenu } from './StatusMenu';
 import { board, current, setSubtaskStatus, toggleExpanded, update } from './state';
 
@@ -21,7 +21,8 @@ type Props = {
  */
 export function SubtaskUnderlay({ parent, subtasks, inert = false, folding = false }: Props) {
   const state = board.use();
-  const { project } = current(state);
+  // Subtasks share their parent's project, whose statuses they move among.
+  const project = projectOf(current(state).project, parent);
   const [unfolded, setUnfolded] = useState(folding);
   // One painted frame unfolded, so the fold is a transition and not a jump.
   useEffect(() => {

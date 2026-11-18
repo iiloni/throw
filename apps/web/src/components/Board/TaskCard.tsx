@@ -18,6 +18,7 @@ import {
   identifier,
   type Project,
   priorityName,
+  projectOf,
   statusById,
   subtasksOf,
   type Task,
@@ -103,7 +104,10 @@ export function TaskCardFace({
           <span className="shrink-0">{closedAgo(task.closedAt)}</span>
         )}
         {settings.cardPriority && task.closedAt === null && (
-          <PriorityGlyph priority={task.priority} name={priorityName(project, task.priority)} />
+          <PriorityGlyph
+            priority={task.priority}
+            name={priorityName(projectOf(project, task), task.priority)}
+          />
         )}
       </div>
     </div>

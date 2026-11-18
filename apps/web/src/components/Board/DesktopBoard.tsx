@@ -1,6 +1,6 @@
 import { ListTree, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { Button } from '@/components/ui/button';
@@ -35,7 +35,7 @@ const PANE_MARGIN = 24;
  */
 const ZONE_GAP = 20;
 
-function useWidth() {
+export function useWidth() {
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useEffect(() => {
@@ -93,19 +93,14 @@ function RailGap() {
 export function DesktopBoard({ onReset }: { onReset?: () => void }) {
   const state = board.use();
   const held = drag.use();
-  const { project, tasks } = current(state);
+  const { project } = current(state);
   const [settings] = useBoardSettings();
   // Bound rails sit at the two ends of the columns' scroller and scroll away with them.
   const backlogBound = settings.backlogRail === 'bound';
   const closedBound = settings.closedRail === 'bound';
   const [frame, frameWidth] = useWidth();
   const [row, rowWidth] = useWidth();
-  const [paneWidth, setPaneWidth] = useState(440);
-  const [resizing, setResizing] = useState(false);
   const active = project.statuses.filter((status) => status.category === 'active');
-  const openTask = [...tasks, ...(current(state).hiddenTasks ?? [])].find(
-    (task) => task.id === state.openTaskId,
-  );
   const dragging = held?.phase === 'dragging';
   // A gallery covers the columns. A held card still needs somewhere to go, so they come
   // back as dropzones for as long as it is held.
@@ -299,60 +294,87 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
             {!closedBound && closedRail}
           </div>
 
-          <AnimatePresence initial={false}>
-            {openTask && (
-              <motion.div
-                key="pane"
-                className="flex shrink-0 overflow-hidden pt-[calc(var(--safe-top)+1.25rem)] pr-6 pb-6"
-                initial={{ width: 0, opacity: 0 }}
-                animate={{ width: paneWidth + HANDLE_WIDTH + PANE_MARGIN, opacity: 1 }}
-                exit={{ width: 0, opacity: 0 }}
-                transition={resizing ? { duration: 0 } : springs.pane}
-              >
-                <SplitHandle
-                  width={paneWidth}
-                  max={Math.max(PANE_MIN, frameWidth * 0.62)}
-                  onResize={setPaneWidth}
-                  onActive={setResizing}
-                />
-                <div className="min-w-0 flex-1" style={{ width: paneWidth }}>
-                  <TaskPane task={openTask} />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <OpenTaskPane frameWidth={frameWidth} />
         </div>
       </div>
 
-      <AnimatePresence>
-        {state.selection.length > 0 && !dragging && (
-          <motion.div
-            className="glass-thick -translate-x-1/2 fixed bottom-5 left-1/2 z-30 flex h-12 items-center gap-1 rounded-2xl pr-1.5 pl-4"
-            initial={{ y: 24, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 24, opacity: 0 }}
-            transition={springs.snappy}
-          >
-            <span className="pr-2 font-medium text-sm tabular-nums">
-              {state.selection.length} selected
-            </span>
-            <StatusMenu
-              project={project}
-              onSelect={(statusId) => {
-                sendTasks(state.selection, statusId);
-                update({ selection: [] });
-              }}
-            >
-              <Button size="sm" className="rounded-xl">
-                Move to
-              </Button>
-            </StatusMenu>
-            <IconButton label="Clear selection" onClick={() => update({ selection: [] })}>
-              <X />
-            </IconButton>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <SelectionBar>
+        <StatusMenu
+          project={project}
+          onSelect={(statusId) => {
+            sendTasks(state.selection, statusId);
+            update({ selection: [] });
+          }}
+        >
+          <Button size="sm" className="rounded-xl">
+            Move to
+          </Button>
+        </StatusMenu>
+      </SelectionBar>
     </div>
+  );
+}
+
+/**
+ * The open task beside the board, taking width from it, with a handle to adjust the split.
+ */
+export function OpenTaskPane({ frameWidth }: { frameWidth: number }) {
+  const state = board.use();
+  const data = current(state);
+  const [paneWidth, setPaneWidth] = useState(440);
+  const [resizing, setResizing] = useState(false);
+  const openTask = [...data.tasks, ...(data.hiddenTasks ?? [])].find(
+    (task) => task.id === state.openTaskId,
+  );
+  return (
+    <AnimatePresence initial={false}>
+      {openTask && (
+        <motion.div
+          key="pane"
+          className="flex shrink-0 overflow-hidden pt-[calc(var(--safe-top)+1.25rem)] pr-6 pb-6"
+          initial={{ width: 0, opacity: 0 }}
+          animate={{ width: paneWidth + HANDLE_WIDTH + PANE_MARGIN, opacity: 1 }}
+          exit={{ width: 0, opacity: 0 }}
+          transition={resizing ? { duration: 0 } : springs.pane}
+        >
+          <SplitHandle
+            width={paneWidth}
+            max={Math.max(PANE_MIN, frameWidth * 0.62)}
+            onResize={setPaneWidth}
+            onActive={setResizing}
+          />
+          <div className="min-w-0 flex-1" style={{ width: paneWidth }}>
+            <TaskPane task={openTask} />
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+/** What can be done with the cards selected on desktop, floating at the foot of the board. */
+export function SelectionBar({ children }: { children: ReactNode }) {
+  const state = board.use();
+  const held = drag.use();
+  return (
+    <AnimatePresence>
+      {state.selection.length > 0 && held?.phase !== 'dragging' && (
+        <motion.div
+          className="glass-thick -translate-x-1/2 fixed bottom-5 left-1/2 z-30 flex h-12 items-center gap-1 rounded-2xl pr-1.5 pl-4"
+          initial={{ y: 24, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 24, opacity: 0 }}
+          transition={springs.snappy}
+        >
+          <span className="pr-2 font-medium text-sm tabular-nums">
+            {state.selection.length} selected
+          </span>
+          {children}
+          <IconButton label="Clear selection" onClick={() => update({ selection: [] })}>
+            <X />
+          </IconButton>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

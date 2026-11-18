@@ -200,7 +200,9 @@ test('switch projects and workspaces; restore the last project on reload and fir
   await expect(page).toHaveURL(gardenUrl);
   // Let the redirected board finish its lazy imports before loading another document.
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Garden');
-  // A new device has no preference: it opens the first project by position.
+  // A new device has no preference: it opens the first project by position. The storage is
+  // cleared from a static file on the same origin, so no running app can write it back.
+  await page.goto('/icon.svg');
   await page.evaluate(() => {
     for (const key of Object.keys(localStorage))
       if (key.startsWith('throw-navigation-')) localStorage.removeItem(key);
@@ -247,20 +249,15 @@ test('cross-project board and settings are reachable from the shell', async ({
     await openMenu(page, true);
     await page.getByRole('menuitem', { name: 'All projects', exact: true }).click();
   } else await page.getByRole('link', { name: 'All projects', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'One board, every project' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Active', exact: true })).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
   await expect(page).toHaveURL(/\/w\/[^/]+\/board(?:\?view=board)?$/);
   if (isMobile) {
-    const dock = page.getByRole('navigation', { name: 'Project views' });
-    await dock.getByRole('link', { name: 'Search', exact: true }).click();
+    await page.getByRole('button', { name: 'Search all projects' }).click();
     await expect(page.getByRole('dialog', { name: 'Search', exact: true })).toBeVisible();
     await expect(page).toHaveURL(/\/board(?:\?view=board)?$/);
     await page.getByRole('button', { name: 'Close search' }).click();
-    await dock.getByRole('link', { name: 'Backlog', exact: true }).click();
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Kitchen');
-    await expect(page.getByRole('region', { name: 'Backlog', exact: true })).toHaveAttribute(
-      'data-detent',
-      'half',
-    );
   }
   if (isMobile) {
     await openMenu(page, true);

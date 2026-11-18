@@ -48,6 +48,8 @@ export type Task = {
   /** When the task entered a done or cancelled status. */
   closedAt: number | null;
   description?: string;
+  /** Set on the workspace board, which gathers several projects' tasks. */
+  projectId?: string;
 };
 
 export type Project = {
@@ -61,7 +63,65 @@ export type Project = {
   tags: Tag[];
   /** Overrides for the five rank names; an empty entry shows the default. */
   priorityNames: (string | null)[];
+  /**
+   * The projects a workspace board gathers. Its own statuses and tags are theirs together,
+   * and each task belongs to the member its `projectId` names.
+   */
+  members?: Project[];
 };
+
+/** The project a task belongs to: itself, or on the workspace board, the task's member. */
+export function projectOf(project: Project, task: Pick<Task, 'projectId'>): Project {
+  return project.members?.find((member) => member.id === task.projectId) ?? project;
+}
+
+/**
+ * A drop on a whole category rather than one of its statuses, as the workspace board's columns
+ * take it: each task goes to its own project's default status there (spec, "The cross-project
+ * board").
+ */
+export type CategoryTarget = `category:${Category}`;
+
+export function categoryTarget(category: Category): CategoryTarget {
+  return `category:${category}`;
+}
+
+export function targetCategory(statusId: string): Category | null {
+  if (!statusId.startsWith('category:')) return null;
+  const category = statusId.slice('category:'.length) as Category;
+  return CATEGORIES.includes(category) ? category : null;
+}
+
+export function defaultStatus(project: Project, category: Category) {
+  const statuses = project.statuses.filter((status) => status.category === category);
+  return statuses.find((status) => status.isDefault) ?? statuses[0];
+}
+
+/**
+ * Splits a send into one per status it reaches. A category target sends each task to its own
+ * project's default status in that category, and leaves a task already in the category where
+ * it is: putting a card back in its own column is not a move.
+ */
+export function resolveSend(
+  project: Project,
+  tasks: Task[],
+  taskIds: string[],
+  statusId: string,
+): { statusId: string; taskIds: string[] }[] {
+  const category = targetCategory(statusId);
+  if (!category) return [{ statusId, taskIds }];
+  const sends = new Map<string, string[]>();
+  for (const id of taskIds) {
+    const task = tasks.find((item) => item.id === id);
+    if (!task) continue;
+    const own = projectOf(project, task);
+    if (statusById(own, task.statusId)?.category === category) continue;
+    const target = defaultStatus(own, category);
+    if (!target) continue;
+    sends.set(target.id, [...(sends.get(target.id) ?? []), id]);
+  }
+  return [...sends].map(([target, ids]) => ({ statusId: target, taskIds: ids }));
+}
 
 export function priorityName(project: Project, priority: Priority) {
   return project.priorityNames[priority - 1] || DEFAULT_PRIORITY_NAMES[priority - 1]!;
@@ -88,7 +148,7 @@ export function taskColor(project: Project, task: Task): Color | null {
 }
 
 export function identifier(project: Project, task: Task) {
-  return taskIdentifier(project, task);
+  return taskIdentifier(projectOf(project, task), task);
 }
 
 /** Priority first, then manual order. The order of every column and gallery. */
