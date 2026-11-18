@@ -176,6 +176,16 @@ test('priority names, key rules and board identifiers, and tags have a settings 
   if (isMobile) await page.getByRole('button', { name: /^Backlog \d+$/ }).click();
   await expect(page.getByText('NEW-1', { exact: true }).first()).toBeVisible();
   await page.goto(fixture.settings);
+  // After a page load, Electric reloads these subquery shapes from a full snapshot, and the
+  // device's rows can be missing for a moment; a tag needs its project's row to be created.
+  await synced
+    .poll(() =>
+      page.evaluate(
+        async (id) => (await import('/src/lib/collections.ts')).projectsCollection.has(id),
+        fixture.projectId,
+      ),
+    )
+    .toBe(true);
   await section(page, 'Tags');
   await page.getByRole('button', { name: 'New tag', exact: true }).click();
   await page.getByLabel('Name', { exact: true }).fill('Product');
