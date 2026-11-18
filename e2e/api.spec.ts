@@ -80,6 +80,8 @@ test('a shape request cannot choose its own rows or columns @api', async ({ requ
     { headers: stranger.headers },
   );
   expect(response.ok()).toBeTruthy();
+  // A cached snapshot would restart a reload from old rows that count as caught up.
+  expect(response.headers()['cache-control']).toBe('no-store');
   const rows = z
     .array(z.object({ value: z.record(z.string(), z.unknown()).optional() }))
     .parse(await response.json())

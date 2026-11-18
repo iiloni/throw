@@ -144,20 +144,10 @@ export const shapeRoutes = new Hono<AppEnv>().use(requireUser).get('/:shape', as
   // fetch already decoded the body, so these no longer describe it.
   headers.delete('content-encoding');
   headers.delete('content-length');
-  headers.set('vary', 'cookie, authorization');
-  // Electric answers as if for a CDN in front of it. These are one user's rows, and a shared
-  // cache that overlooks `vary` would hand them to the next user to ask.
-  const caching = headers.get('cache-control');
-  if (caching) {
-    headers.set(
-      'cache-control',
-      caching
-        .split(',')
-        .map((directive) => directive.trim())
-        .filter((directive) => directive !== 'public' && !directive.startsWith('s-maxage'))
-        .concat('private')
-        .join(', '),
-    );
-  }
+  // Electric answers as if for a CDN, and a browser would keep these responses too. A reload
+  // then restarts the shape from a snapshot cached days ago, which counts as caught up until
+  // the log replays, so the app shows old rows as current. They are one user's rows besides.
+  // Devices keep their own copy (ADR 0002); the HTTP cache adds nothing.
+  headers.set('cache-control', 'no-store');
   return new Response(response.body, { status: response.status, headers });
 });

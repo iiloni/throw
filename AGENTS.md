@@ -326,6 +326,8 @@ ids. Do not add a dependency on Catch's repository; the two release independentl
   `timestamptz` into `Date`) go in a `parser` option on the collection's `shapeOptions`.
 - A shape's `where` uses a subquery on `workspace_members`. Electric moves rows in and out of
   a shape when membership changes, so do not denormalize a user id onto rows to filter them.
+- The shape proxy answers `no-store`. Electric's responses are cacheable, and a browser that
+  kept them would restart a reload from an old snapshot that counts as caught up.
 - A shape's first response (`offset=-1`) is the shape as Electric first built it, not as it
   is now. Tests read a shape with `shapeRows` in `e2e/helpers.ts`, which follows its log.
 - `throw` is a Java keyword, so the Android application id cannot be `org.iloni.throw`.
