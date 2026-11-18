@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import {
   projectKeyIssue,
   settingsSectionSchema,
-  statusRemovalIssue,
+  statusDeletionIssue,
   statusUsage,
   trashRoots,
 } from './projectSettings';
@@ -78,13 +78,17 @@ describe('project settings rules', () => {
     expect(projectKeyIssue(project(1, { key: null }), 'NEW', [])).toContain('Connect');
   });
   it('counts all tasks and explains both default and usage blockers', () => {
-    const tasks = [task(20), task(21, { deletedAt }), task(22, { projectId: id(2) })];
-    expect(statusUsage(status, tasks)).toBe(2);
-    expect(statusRemovalIssue(status, [status], 2)).toMatch(/at least one.*2 tasks.*trash/);
-    expect(statusRemovalIssue(status, [status, { ...status, id: id(11) }], 0)).toContain(
+    const tasks = [task(20), task(21, { deletedAt }), task(22, { statusId: id(12) })];
+    expect(statusUsage(tasks).get(status.id)).toBe(2);
+    expect(statusDeletionIssue(status, [status], 2)).toMatch(/at least one.*2 tasks.*trash/);
+    expect(statusDeletionIssue(status, [status, { ...status, id: id(11) }], 0)).toContain(
       'another default',
     );
-    expect(statusRemovalIssue({ ...status, isDefault: false }, [status, status], 0)).toBeNull();
+    expect(statusDeletionIssue({ ...status, isDefault: false }, [status, status], 0)).toBeNull();
+    // Another category's statuses do not keep this one's category populated.
+    expect(
+      statusDeletionIssue(status, [status, { ...status, id: id(11), category: 'done' }], 0),
+    ).toContain('at least one');
   });
   it('lists trash roots once and keeps separately trashed children after restoring their parent', () => {
     const projects = [
@@ -106,6 +110,8 @@ describe('project settings rules', () => {
       trashRoots(projects, [{ ...parent, deletedAt: null }, child, inherited], workspaceId, id(1))
         .tasks,
     ).toEqual([child]);
+    // A subtask whose parent has not reached the device is listed, as emptying removes it.
+    expect(trashRoots(projects, [child], workspaceId).tasks).toEqual([child]);
   });
   it('explains recognised server clashes and safely ignores unknown error bodies', () => {
     expect(writeRefusalMessage('{"error":"Another project has this key"}')).toContain(

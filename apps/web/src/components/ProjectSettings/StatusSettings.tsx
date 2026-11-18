@@ -1,11 +1,11 @@
 import { STATUS_CATEGORIES, type Status, type StatusCategory, type Task } from '@throw/shared';
 import { ArrowDown, ArrowUp, Pencil, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { statusRemovalIssue, statusUsage } from '@/lib/projectSettings';
+import { statusDeletionIssue, statusUsage } from '@/lib/projectSettings';
 import {
   createStatus,
   deleteStatus,
@@ -33,9 +33,10 @@ export function StatusSettings({
   const [editor, setEditor] = useState<{ category: StatusCategory; status?: Status } | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const counts = useMemo(() => statusUsage(tasks), [tasks]);
   const removed = statuses.find((status) => status.id === deleting);
   const removalIssue =
-    removed && statusRemovalIssue(removed, statuses, statusUsage(removed, tasks));
+    removed && statusDeletionIssue(removed, statuses, counts.get(removed.id) ?? 0);
   return (
     <section aria-label="Statuses" className="space-y-7">
       <div>
@@ -57,8 +58,8 @@ export function StatusSettings({
             </div>
             <ul className="divide-y border-y">
               {siblings.map((status, index) => {
-                const count = statusUsage(status, tasks);
-                const issue = statusRemovalIssue(status, siblings, count);
+                const count = counts.get(status.id) ?? 0;
+                const issue = statusDeletionIssue(status, statuses, count);
                 return (
                   <li key={status.id} className="py-3" aria-label={status.name}>
                     <div className="flex flex-wrap items-center gap-1">

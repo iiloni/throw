@@ -306,11 +306,12 @@ test('offline settings edits persist and replay; refused renames, keys and delet
     timeout: 40_000,
   });
   await page.reload();
+  // Offline, the page appears once the device's copy has loaded, which can take a while here.
   await expect(
     page
       .getByRole('navigation', { name: 'Project settings sections' })
       .getByRole('button', { name: 'Statuses', exact: true }),
-  ).toHaveAttribute('aria-current', 'page');
+  ).toHaveAttribute('aria-current', 'page', { timeout: APP_LOAD_TIMEOUT });
   await expect(statusRow(page, 'Offline review')).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
   await page.unroute('**/api/**');
   await synced

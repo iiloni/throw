@@ -18,12 +18,18 @@ export function projectKeyIssue(project: Project, key: string, projects: readonl
     : null;
 }
 
-export function statusUsage(status: Status, tasks: readonly Task[]) {
-  return tasks.filter((task) => task.projectId === status.projectId && task.statusId === status.id)
-    .length;
+/** How many tasks, trashed ones included, use each status. */
+export function statusUsage(tasks: readonly Task[]) {
+  const counts = new Map<string, number>();
+  for (const task of tasks) counts.set(task.statusId, (counts.get(task.statusId) ?? 0) + 1);
+  return counts;
 }
 
-export function statusRemovalIssue(status: Status, siblings: readonly Status[], count: number) {
+/**
+ * Why a status cannot be deleted, or null. `deleteStatus` and the settings screen share it,
+ * so the button and the action agree. `siblings` are the project's statuses.
+ */
+export function statusDeletionIssue(status: Status, siblings: readonly Status[], count: number) {
   const reasons: string[] = [];
   if (siblings.filter((other) => other.category === status.category).length === 1)
     reasons.push('Every category keeps at least one status.');
@@ -35,7 +41,11 @@ export function statusRemovalIssue(status: Status, siblings: readonly Status[], 
   return reasons.join(' ') || null;
 }
 
-/** Only independent trash roots have their own restore/purge controls. */
+/**
+ * Only independent trash roots have their own restore/purge controls. Emptying the trash
+ * removes exactly these, so a trashed task whose parent or project row has not reached the
+ * device is listed rather than removed unseen.
+ */
 export function trashRoots(
   projects: readonly Project[],
   tasks: readonly Task[],
@@ -55,8 +65,8 @@ export function trashRoots(
         task.workspaceId === workspaceId &&
         (!projectId || task.projectId === projectId) &&
         task.deletedAt !== null &&
-        projectById.get(task.projectId)?.deletedAt === null &&
-        (!task.parentId || taskById.get(task.parentId)?.deletedAt === null),
+        !projectById.get(task.projectId)?.deletedAt &&
+        (!task.parentId || !taskById.get(task.parentId)?.deletedAt),
     ),
   };
 }

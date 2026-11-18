@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { DEFAULT_PRIORITY_NAMES, type Priority, type Project } from '@throw/shared';
+import { DEFAULT_PRIORITY_NAMES, EMPTY_PRIORITY_NAMES, type Project } from '@throw/shared';
 import { useState } from 'react';
 import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
 import { ManagementForm } from '@/components/ShellForms/ShellForms';
@@ -12,7 +12,7 @@ import {
   type SettingsSection,
   settingsSectionSchema,
 } from '@/lib/projectSettings';
-import { changeProjectKey, renamePriority } from '@/lib/projects';
+import { changeProjectKey, setPriorityNames } from '@/lib/projects';
 import { statusesOf } from '@/lib/statuses';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { StatusSettings } from './StatusSettings';
@@ -205,10 +205,10 @@ function PrioritySettings({ project }: { project: Project }) {
         className="space-y-4"
         onSubmit={(event) => {
           event.preventDefault();
-          names.forEach((name, index) => {
-            if (name !== project.priorityNames[index])
-              renamePriority(project.id, (index + 1) as Priority, name.trim());
-          });
+          setPriorityNames(
+            project.id,
+            names.map((name) => name.trim()),
+          );
           setDraft(null);
         }}
       >
@@ -234,7 +234,7 @@ function PrioritySettings({ project }: { project: Project }) {
           </label>
         ))}
         <div className="flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={() => setDraft(['', '', '', '', ''])}>
+          <Button type="button" variant="ghost" onClick={() => setDraft([...EMPTY_PRIORITY_NAMES])}>
             Use default names
           </Button>
           <Button

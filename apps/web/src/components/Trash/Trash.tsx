@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router';
-import { taskIdentifier } from '@throw/shared';
-import { useState } from 'react';
+import { type Task, taskIdentifier } from '@throw/shared';
+import { useMemo, useState } from 'react';
 import { useShell } from '@/components/AppShell/shell';
 import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,19 @@ export function Trash({ projectId }: { projectId?: string }) {
   const workspaceId = shell.workspace?.id ?? '';
   const roots = trashRoots(projects, tasks, workspaceId, projectId);
   const count = roots.projects.length + roots.tasks.length;
+  // Counted once per render, not once per row.
+  const tally = useMemo(() => {
+    const inProject = new Map<string, number>();
+    const children = new Map<string, Task[]>();
+    for (const task of tasks) {
+      inProject.set(task.projectId, (inProject.get(task.projectId) ?? 0) + 1);
+      if (!task.parentId) continue;
+      const siblings = children.get(task.parentId);
+      if (siblings) siblings.push(task);
+      else children.set(task.parentId, [task]);
+    }
+    return { inProject, children };
+  }, [tasks]);
   const awaiting = useAwaitingSync(loadingProjects || loadingTasks, count);
   const [confirmation, setConfirmation] = useState<{
     kind: 'project' | 'task' | 'all';
@@ -60,11 +73,6 @@ export function Trash({ projectId }: { projectId?: string }) {
           </Link>
         )}
       </div>
-      {project?.deletedAt && (
-        <p className="mb-4 text-sm">
-          This project is in the workspace trash. Restore it there to manage its tasks.
-        </p>
-      )}
       {awaiting ? (
         <p role="status">Loading trash…</p>
       ) : !count ? (
@@ -84,11 +92,8 @@ export function Trash({ projectId }: { projectId?: string }) {
                     <div className="min-w-0 flex-1">
                       <p className="break-words font-medium">{item.name}</p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Includes {tasks.filter((task) => task.projectId === item.id).length}{' '}
-                        {tasks.filter((task) => task.projectId === item.id).length === 1
-                          ? 'task'
-                          : 'tasks'}
-                        , statuses and tags.
+                        Includes {tally.inProject.get(item.id) ?? 0}{' '}
+                        {tally.inProject.get(item.id) === 1 ? 'task' : 'tasks'}, statuses and tags.
                       </p>
                     </div>
                     <TrashActions
@@ -108,7 +113,7 @@ export function Trash({ projectId }: { projectId?: string }) {
               <ul className="divide-y border-y">
                 {roots.tasks.map((item) => {
                   const ownProject = projects.find((row) => row.id === item.projectId);
-                  const children = tasks.filter((row) => row.parentId === item.id);
+                  const children = tally.children.get(item.id) ?? [];
                   return (
                     <li key={item.id} className="py-4" aria-label={item.title || 'Untitled task'}>
                       <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">

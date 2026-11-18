@@ -1,6 +1,5 @@
 import { COLORS, TAG_ICONS, type Tag, tagPath, tagSubtreeIds, tagTree } from '@throw/shared';
-import { type FormEvent, type RefObject, useId, useMemo, useRef, useState } from 'react';
-import { BottomSheet } from '@/components/BottomSheet/BottomSheet';
+import { type FormEvent, type RefObject, useId, useMemo, useState } from 'react';
 import { TAG_ICON_LABELS, TagIcon } from '@/components/TagIcon/TagIcon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,23 +12,6 @@ type TagEditorProps = {
   initial: { tag?: Tag; parentId: string | null };
   onDone: () => void;
 };
-
-/** The tag editor in Throw's shared sheet. On phones it moves into the drawer (ADR 0009). */
-export function TagForm(props: TagEditorProps) {
-  const nameRef = useRef<HTMLInputElement>(null);
-  return (
-    <BottomSheet
-      open
-      initialFocusRef={nameRef}
-      onOpenChange={(open) => {
-        if (!open) props.onDone();
-      }}
-      title={props.initial.tag ? 'Edit tag' : 'New tag'}
-    >
-      <TagEditor {...props} nameRef={nameRef} />
-    </BottomSheet>
-  );
-}
 
 /**
  * Catch's tag editor, adapted to project ownership. It is content only, with no gestures or

@@ -1,6 +1,6 @@
 import { type Tag, tagSubtreeIds } from '@throw/shared';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
 import { TagEditor } from '@/components/TagForm/TagForm';
@@ -19,6 +19,7 @@ export function TagManager({ projectId }: { projectId: string }) {
   const awaiting = useAwaitingSync(isLoading, tags.length);
   const [editing, setEditing] = useState<{ tag?: Tag; parentId: string | null } | null>(null);
   const [deleting, setDeleting] = useState<Tag | null>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
   return (
     <section aria-label="Manage project tags" className="min-w-0">
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -85,12 +86,14 @@ export function TagManager({ projectId }: { projectId: string }) {
           open
           title={editing.tag ? 'Edit tag' : 'New tag'}
           onClose={() => setEditing(null)}
+          initialFocusRef={nameRef}
         >
           <TagEditor
             projectId={projectId}
             tags={tags}
             initial={editing}
             onDone={() => setEditing(null)}
+            nameRef={nameRef}
           />
         </ManagementSurface>
       )}

@@ -22,6 +22,7 @@ import {
   taskTagsCollection,
   write,
 } from './collections';
+import { trashRoots } from './projectSettings';
 import { deleteProjectRows, deleteTaskRows } from './projects';
 import { defaultStatus } from './statuses';
 import { requireTag } from './tags';
@@ -294,17 +295,7 @@ export function purgeTask(id: string) {
  * whose project and parent are not. Everything under a listed item goes with it.
  */
 export function trashedItems(workspaceId: string) {
-  const projects = [...projectsCollection.values()].filter(
-    (project) => project.workspaceId === workspaceId && project.deletedAt !== null,
-  );
-  const tasks = [...tasksCollection.values()].filter(
-    (task) =>
-      task.workspaceId === workspaceId &&
-      task.deletedAt !== null &&
-      !projectsCollection.get(task.projectId)?.deletedAt &&
-      (task.parentId === null || !tasksCollection.get(task.parentId)?.deletedAt),
-  );
-  return { projects, tasks };
+  return trashRoots([...projectsCollection.values()], [...tasksCollection.values()], workspaceId);
 }
 
 /**

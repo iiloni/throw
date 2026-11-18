@@ -1,15 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { Tag } from '@throw/shared';
-import type { ReactNode } from 'react';
 import { expect, it, vi } from 'vitest';
 
 const actions = vi.hoisted(() => ({ createTag: vi.fn(), updateTag: vi.fn() }));
 vi.mock('@/lib/tags', () => actions);
-vi.mock('@/components/BottomSheet/BottomSheet', () => ({
-  BottomSheet: ({ children }: { children: ReactNode }) => <section>{children}</section>,
-}));
 
-import { TagForm } from './TagForm';
+import { TagEditor } from './TagForm';
 
 const root: Tag = {
   id: 'root',
@@ -31,7 +27,7 @@ it('offers accessible parents outside the branch, and clears root appearance whe
   };
   const other = { ...root, id: 'other', name: 'Research', color: null };
   render(
-    <TagForm
+    <TagEditor
       projectId="project"
       tags={[root, child, other]}
       initial={{ tag: root, parentId: null }}

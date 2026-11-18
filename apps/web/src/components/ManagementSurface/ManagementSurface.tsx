@@ -2,6 +2,7 @@ import {
   createContext,
   type KeyboardEvent,
   type ReactNode,
+  type RefObject,
   useContext,
   useEffect,
   useId,
@@ -26,7 +27,9 @@ export function ManagementSurfaceProvider({
   children: ReactNode;
   active: boolean;
 }) {
-  const phone = useMedia('(max-width: 767px)');
+  // The same query the surfaces use, so at a fractional width between the two breakpoints
+  // the host and its surfaces still agree on which one shows.
+  const phone = !useMedia('(min-width: 768px)');
   const [surface, setSurface] = useState<{
     id: string;
     page: DrawerPage;
@@ -78,11 +81,14 @@ export function ManagementSurface({
   title,
   children,
   onClose,
+  initialFocusRef,
 }: {
   open: boolean;
   title: string;
   children: ReactNode;
   onClose: () => void;
+  /** The field the surface opens on, so typing can start at once. */
+  initialFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const host = useContext(SurfaceContext);
   const desktop = useMedia('(min-width: 768px)');
@@ -94,6 +100,7 @@ export function ManagementSurface({
       {
         key: id,
         title,
+        focus: initialFocusRef,
         content: (
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[calc(var(--safe-bottom)+1.5rem)]">
             {children}
@@ -103,12 +110,13 @@ export function ManagementSurface({
       onClose,
     );
     return () => host.hide(id);
-  }, [open, desktop, host, id, title, children, onClose]);
+  }, [open, desktop, host, id, title, children, onClose, initialFocusRef]);
   if (!desktop && host) return null;
   return (
     <BottomSheet
       open={open}
       title={title}
+      initialFocusRef={initialFocusRef}
       onOpenChange={(value) => {
         if (!value) onClose();
       }}
