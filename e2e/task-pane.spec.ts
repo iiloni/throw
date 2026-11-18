@@ -390,6 +390,11 @@ test('reduced motion keeps the drawer, keyboard controls and close-to-save edito
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const { pane } = await fixture(page);
   await editDescription(pane, 'A focused plan for the launch, with room for the details.');
+  // Focus opens the control's tooltip and Enter closes it. Slow tooltip animations make sure a
+  // tooltip lingering after it closes would hold, and swallow, the Escapes below.
+  await page.addStyleTag({
+    content: '[data-slot="tooltip-content"] { animation-duration: 10s !important; }',
+  });
   await controls(page).getByRole('button', { name: 'Priority: Default. Change' }).focus();
   await page.keyboard.press('Enter');
   // A phone opens the picker as a page of the board's drawer; the pane's drawer expands.

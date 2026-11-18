@@ -395,6 +395,14 @@
 .board-slot[hidden] {
   display: none;
 }
+/* A card on a phone's board swipes right to close (Board/swipe.ts); the pager keeps the rest. */
+@supports (touch-action: pan-right) {
+  [data-pager]:not([data-selecting])
+    [data-drop-list^="status:"]
+    [data-card-id]:not([data-overlay]) {
+    touch-action: pan-y pan-right;
+  }
+}
 .board-slot[data-folded] {
   grid-template-rows: 0fr;
   opacity: 0;

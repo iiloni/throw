@@ -224,13 +224,20 @@ case "$command" in
         fix_permissions
         ;;
     reset|destroy)
-        if ! has_yes_flag "$@" && ! confirm "Delete all Docker volumes for $(env_value COMPOSE_PROJECT_NAME)?"; then
+        targets="Docker volumes"
+        [[ "$command" == "destroy" ]] && targets="Docker volumes and built images"
+        if ! has_yes_flag "$@" && ! confirm "Delete all $targets for $(env_value COMPOSE_PROJECT_NAME)?"; then
             echo "Cancelled."
             exit 1
         fi
-        "${compose[@]}" down -v --remove-orphans
         if [[ "$command" == "reset" ]]; then
+            # Keep the built image so the restart does not rebuild it.
+            "${compose[@]}" down -v --remove-orphans
             "$0" up
+        else
+            # --rmi local removes only images Compose built (those without an image: tag),
+            # so pulled ones such as postgres and electric stay.
+            "${compose[@]}" down -v --remove-orphans --rmi local
         fi
         ;;
     help|-h|--help)
@@ -263,7 +270,7 @@ Usage: ./scripts/dev.sh <command>
   psql [args]         Open psql against this worktree's database
   fix-permissions     Return ownership of generated files to the host user
   reset [-y]          Delete this worktree's volumes and start fresh
-  destroy [-y]        Stop the stack and delete its volumes
+  destroy [-y]        Stop the stack and delete its volumes and built images
 USAGE
         ;;
     *)

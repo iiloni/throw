@@ -1,5 +1,6 @@
 import { Tooltip as TooltipPrimitive } from 'radix-ui';
 import type * as React from 'react';
+import { createContext, useContext, useState } from 'react';
 import { cn } from '@/lib/utils';
 
 function TooltipProvider({
@@ -9,8 +10,29 @@ function TooltipProvider({
   return <TooltipPrimitive.Provider delayDuration={delayDuration} {...props} />;
 }
 
-function Tooltip(props: React.ComponentProps<typeof TooltipPrimitive.Root>) {
-  return <TooltipPrimitive.Root data-slot="tooltip" {...props} />;
+const TooltipOpen = createContext(false);
+
+function Tooltip({
+  open: openProp,
+  defaultOpen = false,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof TooltipPrimitive.Root>) {
+  const [uncontrolled, setUncontrolled] = useState(defaultOpen);
+  const open = openProp ?? uncontrolled;
+  return (
+    <TooltipOpen.Provider value={open}>
+      <TooltipPrimitive.Root
+        data-slot="tooltip"
+        open={open}
+        onOpenChange={(next) => {
+          setUncontrolled(next);
+          onOpenChange?.(next);
+        }}
+        {...props}
+      />
+    </TooltipOpen.Provider>
+  );
 }
 
 function TooltipTrigger(props: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
@@ -23,13 +45,17 @@ function TooltipContent({
   variant = 'default',
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content> & { variant?: 'default' | 'glass' }) {
+  // A closed tooltip leaves at once. Radix keeps one mounted until its animation ends, even
+  // its entry when it closes that early, and a mounted tooltip still takes the next Escape:
+  // that Escape would dismiss a tooltip that is already gone instead of what the user meant.
+  if (!useContext(TooltipOpen)) return null;
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
         data-slot="tooltip-content"
         sideOffset={sideOffset}
         className={cn(
-          'fade-in-0 zoom-in-95 data-[state=closed]:fade-out-0 z-50 animate-in rounded-md px-3 py-1.5 text-xs data-[state=closed]:animate-out',
+          'fade-in-0 zoom-in-95 z-50 animate-in rounded-md px-3 py-1.5 text-xs',
           variant === 'glass' ? 'glass text-foreground' : 'bg-primary text-primary-foreground',
           className,
         )}

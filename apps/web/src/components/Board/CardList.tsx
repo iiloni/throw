@@ -3,6 +3,7 @@ import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scrol
 import { cn } from '@/lib/utils';
 import { CARD_SPACING, drag } from './drag';
 import { groupByPriority, type Priority, priorityName, taskColor } from './model';
+import { SwipeReveal } from './SwipeReveal';
 import { board, createTask, current, type ListId, listTasks, useBoardSettings } from './state';
 import { TaskCard } from './TaskCard';
 
@@ -161,6 +162,7 @@ export function CardList({
                         >
                           <div>
                             <div className="relative pb-3">
+                              <SwipeReveal taskId={task.id} />
                               <TaskCard task={task} showStatus={showStatus} />
                             </div>
                           </div>
