@@ -245,6 +245,11 @@ motion.
 - A card held from the backlog can still be placed in the backlog. Its status filters grow
   into targets for changing status. The closed zone is ordered by time, so cards are sent to
   it and never placed in it.
+- The full-width backlog gallery reads left to right, then down, in a band per priority, so
+  a place between two cards reads as it does in a sentence. A card held there is placed with
+  a caret in the gutter between cards, and nothing moves until it is dropped. Every priority
+  shows a band while a card is placed, so an empty one can take it. Cards from elsewhere are
+  sent to a backlog status through its filters, never placed in the mixed gallery.
 - The board has no title row. The project's name is in the expanded navigation rail, and in
   a tooltip on the project's icon when the rail is collapsed.
 - A list of cards fades out over its last few pixels at the top or bottom while
@@ -330,7 +335,17 @@ and the column takes them as a group.
 
 A card can also be moved from the keyboard: Space picks it up, the arrows move it within
 and across columns and priorities, Space or Enter sets it down and Escape puts it back.
-Each step is announced to screen readers.
+Enter on a card at rest opens it. Each step is announced to screen readers, and nothing is
+written until the card is set down.
+
+Escape cancels a drag and puts the card back. With reduced motion a held card does not lean
+or lift, and it lands without flying home.
+
+A move is status, priority and position written together, and shows at once, offline too.
+While a card is held, changes arriving from other devices wait until it is dropped, so the
+column does not change under it. A card another device moved to another status, priority
+or parent in the meantime is not moved, and the board says so; a refused move settles back
+where the server has it.
 
 On desktop, a click with Ctrl, Cmd or Shift selects cards, and a bar offers to move the
 selection to a status.
@@ -371,7 +386,8 @@ own way in and out, so the board is not a row of identical pages.
   yesterday, this week, earlier) and filtered by closed status. A card held there reopens
   through the move drawer.
 - A long press without movement selects a card. Moving after the press drags it. A touch
-  that moves before the press completes scrolls.
+  that moves before the press completes scrolls. On Android the press, a page turn and the
+  drop are felt as light haptic ticks.
 - While a card is held, from the board, the backlog or the closed tasks, the drawer's
   content sinks and its header becomes the move drawer at the bottom edge. It opens into a
   grid of status dropzones under a label for each
@@ -383,7 +399,13 @@ own way in and out, so the board is not a row of identical pages.
   surface further in and tints it, and the page turns after about half a second.
 - Card titles are 16 CSS pixels on a phone. A held card's column shows each collapsed
   priority as its name alone, on a fainter bar, so it stays quiet on a small screen.
-- Swipe gestures on cards (to move or close them) are polish for later.
+- A card on a board page swiped to the right closes into the project's default done status:
+  the card follows the finger over a done surface, which fills once letting go will close it,
+  and flies off as the done count bumps. A short swipe springs back. Only rightwards, towards
+  the done pocket: a swipe to the left over a card still turns to the next column, and any
+  swipe that starts outside a card (the gutters, the header) turns the page, so the page
+  swipe wins near the edges. Cards are not swiped while some are selected, and cards in the
+  drawer are not swiped (owner decision, 2026-10-19).
 
 ## The cross-project board
 
@@ -547,13 +569,13 @@ The project board uses synced tasks, statuses and primary tags, with the backlog
 drawer on a phone. Cards resolve their primary tag's root colour with `taskTagColor` and
 show the tag's name; a partially synced tag tree leaves the card neutral. The drawer
 (`components/Drawer`) carries the backlog, the closed tasks, board settings, and search and
-capture; the board owns it for now. The move drawer is still its own panel until the drag
-step, and the shell's project forms still use `BottomSheet` until the drawer moves to the
+capture, and becomes the move drawer while a card is held or selected; the board owns it
+for now. The shell's project forms still use `BottomSheet` until the drawer moves to the
 shell. The cross-project board remains a placeholder; search and quick capture use the
 command palette. Task panes have a
-title and a placeholder body; their content comes later. Dragging, phone long-press
-selection and keyboard reordering remain in the development prototype until the drag step wires them to
-task actions.
+title and a placeholder body; their content comes later. Cards move on the project board
+by dragging, from the keyboard, by long press and the move drawer on a phone, and by
+swiping to close; the cross-project board does not move cards yet.
 
 ## Platform and architecture
 
@@ -601,8 +623,9 @@ little as possible; it is not the normal way to use the app (ADR 0005).
    separate repositories.
 5. **Refused changes.** How the app tells the user that a change made offline was not
    applied, beyond the entry in the task's log.
-6. **Reordering the full-width backlog.** The gallery lays cards out in several columns per
-   priority. Whether cards can be reordered there, and how a drop position reads in a
-   masonry layout, is not designed.
+6. **Reordering the full-width backlog — settled (2026-10-19).** The gallery reads left to
+   right, then down, in a band per priority, and a held card is placed with a caret; nothing
+   reflows until the drop. A gap that parted the cards was prototyped and was too busy for
+   an overview; see [The project board](#the-project-board).
 7. **The task view.** Card content is settled in [Cards](#cards). The full task view
    still needs its content designed beyond what this spec already lists.

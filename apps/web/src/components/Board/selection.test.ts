@@ -104,7 +104,7 @@ describe('synced project board selection', () => {
     ).toEqual([]);
   });
   it('keeps a trashed task open for restoring without putting it on the board, and closes a purged task', () => {
-    const actions = { create: () => '', rename: () => {}, send: () => {} };
+    const actions = { create: () => '', rename: () => {}, send: () => true, place: () => true };
     receiveBoard(projectBoardData(project, statuses, [task('open')]), actions);
     update({ openTaskId: 'open' });
     const data = projectBoardData(project, statuses, [
@@ -123,7 +123,8 @@ describe('synced project board selection', () => {
     receiveBoard(projectBoardData(project, statuses, [task('first'), task('second')]), {
       create: () => '',
       rename: () => {},
-      send: () => {},
+      send: () => true,
+      place: () => true,
       beforeLeave,
     });
     update({ openTaskId: 'first' });
@@ -143,7 +144,8 @@ describe('synced project board selection', () => {
     receiveBoard(projectBoardData(project, statuses, rows), {
       create: () => '',
       rename: () => {},
-      send: () => {},
+      send: () => true,
+      place: () => true,
     });
     update({ openTaskId: 'parent' });
     openSubtask('child');
@@ -160,7 +162,8 @@ describe('synced project board selection', () => {
     receiveBoard(projectBoardData(project, statuses, [rows[1]!]), {
       create: () => '',
       rename: () => {},
-      send: () => {},
+      send: () => true,
+      place: () => true,
     });
     expect(board.get()).toMatchObject({ openTaskId: 'child', taskTrail: [] });
   });

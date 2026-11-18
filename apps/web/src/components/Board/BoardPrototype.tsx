@@ -1,6 +1,7 @@
 import { AnimatePresence } from 'motion/react';
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { useMedia } from '@/lib/media';
+import { BoardAnnouncer } from './BoardAnnouncer';
 import { putBack } from './carry';
 import { DesktopBoard } from './DesktopBoard';
 import { DragOverlay } from './DragOverlay';
@@ -57,9 +58,7 @@ export function BoardPrototype() {
         {phone && openTask && <TaskScreen key="task" task={openTask} />}
       </AnimatePresence>
       <DragOverlay />
-      <p aria-live="assertive" className="sr-only">
-        {state.announcement}
-      </p>
+      <BoardAnnouncer />
     </>
   );
 }

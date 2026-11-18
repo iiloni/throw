@@ -1,6 +1,7 @@
 # 0009: The drawer
 
-Status: accepted (2026-10-15), amended 2026-10-17 for quick capture's card
+Status: accepted (2026-10-15), amended 2026-10-17 for quick capture's card and 2026-10-19
+for the move drawer
 
 ## Context
 
@@ -52,6 +53,18 @@ onto it opens the grid of status dropzones (ADR 0008). The exception is content 
 reorders its own cards in place: the backlog at full height keeps its place while it is
 groomed.
 
+**The move drawer is the drawer's `move` content (2026-10-19).** A feature passes what to
+show as `move`; while it is set, the header shows it in place of the dock or page title and
+the drawer rests just tall enough for it, following its height as the grid opens and
+closes. The drawer's content fades out but stays mounted, because a touch ends if the element
+it began on is removed, and a card lifted from the half-open backlog began there. Pulls are
+off while it shows. The whole visible drawer is the target that opens the grid
+(`data-drop-expand`), safe area included. While the backlog is groomed at full height, the
+same content floats as a glass panel at the drawer's foot instead, and the backlog keeps its
+place. With cards selected and no finger down, the move drawer shows open with a count and
+Clear, and tapping a status sends the selection; Back clears the selection first. An open
+task, a page or capture take precedence: the board does not pass `move` while one shows.
+
 **Content over the board is modal; the backlog is not.** At half height the backlog is a
 supply of work with the board usable above it. Anything else the drawer shows traps focus,
 takes Escape and Back, and returns focus to whatever opened it. On opening, focus goes to
@@ -82,7 +95,10 @@ and the tag manager are centred dialogs.
   drawer and `BottomSheet` on phones. Its gestures, Back handling, keyboard insets and focus
   rules are written once.
 - The board settings and closed tasks content, and the move targets, become drawer content.
-  The drag step wires held cards to the drawer's move state instead of a separate panel.
+  Held and selected cards use the drawer's `move` content; the separate move panel is gone.
+- The `move` prop was added without changing the drawer's other props or behaviour. The
+  older `sunk` prop is no longer used by the board; it stays until parallel work on the
+  drawer has landed, and can then be removed.
 - Search, the task view's actions and pickers, and the tag manager render into the drawer
   on phones, not into their own sheets or full-screen overlays. Capture is the drawer's card
   and dock.

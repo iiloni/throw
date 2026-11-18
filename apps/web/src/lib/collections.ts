@@ -58,6 +58,7 @@ import { orderQueuedWrites } from './orderQueuedWrites';
 import { reportRefusedChanges } from './refusedChanges';
 import { getServerUrl } from './serverUrl';
 import { shapeFetch } from './shapeFetch';
+import { noteLocalWrite, useSteadyRows } from './steadyRows';
 import { addPendingWrite, getSyncStatus, settlePendingWrite, updateSyncStatus } from './syncStatus';
 import { taskTimeline } from './timeline';
 import {
@@ -630,6 +631,7 @@ export function write(mutate: () => void): Transaction {
     // Ordered within a millisecond, unlike the outbox's own times (see `orderQueuedWrites`).
     idempotencyKey: uuidv7(),
   });
+  noteLocalWrite();
   const transaction = offline.mutate(mutate);
   addPendingWrite(transaction.id);
   offline.commit().then(
@@ -668,22 +670,25 @@ export function useWorkspaces() {
   return { workspaces: data, isLoading };
 }
 
-/** Every project in the user's workspaces, unordered. */
+/**
+ * Every project in the user's workspaces, unordered. Rows stay through a re-fetch on
+ * reconnecting (`useSteadyRows`), as do statuses and tasks.
+ */
 export function useProjects() {
   const { data = [], isLoading } = useLiveQuery((q) => q.from({ project: projectsCollection }));
-  return { projects: data, isLoading };
+  return { projects: useSteadyRows(data), isLoading };
 }
 
 /** Every status of the user's projects, unordered. */
 export function useStatuses() {
   const { data = [], isLoading } = useLiveQuery((q) => q.from({ status: statusesCollection }));
-  return { statuses: data, isLoading };
+  return { statuses: useSteadyRows(data), isLoading };
 }
 
 /** Every task and subtask in the user's projects, unordered, trashed ones included. */
 export function useTasks() {
   const { data = [], isLoading } = useLiveQuery((q) => q.from({ task: tasksCollection }));
-  return { tasks: data, isLoading };
+  return { tasks: useSteadyRows(data), isLoading };
 }
 
 /**
