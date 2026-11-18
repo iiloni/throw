@@ -22,11 +22,12 @@ opens subtasks through the board's existing `openTaskId`. Its real content is su
 On a phone the same boundary hands the board's drawer the open task's dock and pickers
 (`TaskDetails/TaskControls.tsx`); the desktop pane hosts them in its own `TaskDrawer`.
 The activity log syncs to devices and comments are built (`lib/comments.ts`), with a
-timeline query in `collections.ts` but no timeline view yet. Tags have their data layer and
-reusable controls in `components/Tag*`, with a real-data `/prototype/tags` workshop in
+timeline query in `collections.ts` and a task history view in `TaskDetails/TaskTimeline.tsx`.
+Tags have their data layer and reusable controls in `components/Tag*`, with a real-data `/prototype/tags` workshop in
 development only. The board colour helper is `taskTagColor` in `@throw/shared`. The task
-pane picks and lists tags; project settings mounts tag management, and the timeline
-in the task pane is a separate step. Cards move on the project board by drag, keyboard,
+pane picks and lists tags; project settings mounts tag management. The task history
+interleaves server entries and comments; refused changes have a quiet task-only notice and
+description recovery links. Cards move on the project board by drag, keyboard,
 phone long press, the move drawer and a rightward swipe to close (ADR 0008).
 Project settings lives at `/w/:workspaceId/p/:projectId/settings`, with project task
 trash beside it at `/trash`. Workspace trash is `/w/:workspaceId/trash`. Settings and trash

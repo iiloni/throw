@@ -193,3 +193,43 @@ it('keeps the task open if the latest text cannot be stored and retries that exa
     'base',
   );
 });
+
+it('keeps an unstored active draft when recovery is requested from the history', () => {
+  const view = render(<TaskDescription task={row} />);
+  const store = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new Error('Storage full');
+  });
+  fireEvent.change(screen.getByLabelText('Draft text'), {
+    target: { value: 'Do not lose this draft' },
+  });
+  store.mockRestore();
+  HTMLElement.prototype.scrollIntoView = vi.fn();
+  view.rerender(
+    <TaskDescription
+      task={row}
+      recovery={{
+        id: 'refused',
+        workspaceId: row.workspaceId,
+        projectId: row.projectId,
+        taskId: row.id,
+        userId: 'user',
+        kind: 'updated',
+        createdAt: row.createdAt,
+        changes: [
+          {
+            field: 'description',
+            previous: 'base',
+            requested: 'rejected',
+            applied: false,
+            reason: 'stale',
+            rejectedDocument: [{ type: 'paragraph', content: 'Older refused text' }],
+          },
+        ],
+      }}
+    />,
+  );
+  expect(screen.getByLabelText('Draft text')).toHaveValue('Do not lose this draft');
+  expect(screen.getByRole('alert')).toHaveTextContent('Your current draft is kept.');
+  expect(readDescriptionDraft(row.id)).toBeNull();
+  view.unmount();
+});
