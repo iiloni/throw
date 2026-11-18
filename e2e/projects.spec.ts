@@ -200,7 +200,9 @@ test('switch projects and workspaces; restore the last project on reload and fir
   await expect(page).toHaveURL(gardenUrl);
   // Let the redirected board finish its lazy imports before loading another document.
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Garden');
-  // A new device has no preference: it opens the first project by position.
+  // A new device has no preference: it opens the first project by position. The storage is
+  // cleared from a static file on the same origin, so no running app can write it back.
+  await page.goto('/icon.svg');
   await page.evaluate(() => {
     for (const key of Object.keys(localStorage))
       if (key.startsWith('throw-navigation-')) localStorage.removeItem(key);

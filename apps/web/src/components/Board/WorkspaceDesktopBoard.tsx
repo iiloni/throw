@@ -21,7 +21,16 @@ import {
 import { moveTargets } from './PhoneBoard';
 import { CATEGORY_NAMES } from './StatusMenu';
 import { StatusTile } from './StatusTile';
-import { board, countIn, current, type ListId, listTasks, sendTasks, update } from './state';
+import {
+  board,
+  countIn,
+  current,
+  type ListId,
+  listTasks,
+  sendTasks,
+  update,
+  useBoardSettings,
+} from './state';
 import { TaskCard } from './TaskCard';
 
 const foldedSchema = z.object({
@@ -105,6 +114,7 @@ function CategoryColumn({
   onFold?: (folded: boolean) => void;
 }) {
   const state = board.use();
+  const [settings] = useBoardSettings();
   const held = drag.use();
   const reduced = useReducedMotion();
   const { project, tasks } = current(state);
@@ -131,7 +141,7 @@ function CategoryColumn({
       data-drop-status={target}
       data-status-home={target}
       data-over={over ? '' : undefined}
-      data-surface=""
+      data-surface={settings.surfaces ? '' : undefined}
       className={cn(
         'board-column relative mt-[calc(var(--safe-top)+1.25rem)] mb-6 flex min-h-0 shrink-0 flex-col overflow-hidden rounded-3xl',
         strip ? 'w-16' : 'min-w-[18rem] flex-1',
@@ -177,7 +187,10 @@ function CategoryColumn({
               <div className="flex flex-col px-3.5 pt-1 pb-3">
                 {bands.map((band) => (
                   <section key={band.priority} aria-label={priorityName(project, band.priority)}>
-                    <div className="zone-header" data-mode="label">
+                    <div
+                      className="zone-header"
+                      data-mode={settings.zoneLabels ? 'label' : 'hidden'}
+                    >
                       <div className="zone-header-face">
                         <span className="truncate">{priorityName(project, band.priority)}</span>
                       </div>

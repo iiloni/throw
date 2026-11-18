@@ -151,8 +151,8 @@ export function leaveTask() {
 export type BoardActions = {
   /** Flush device-local editor text before closing or opening another task. */
   beforeLeave?(taskId: string): boolean;
-  /** The new task's id, or null when creating happens elsewhere, as in the palette. */
-  create(statusId?: string): string | null;
+  /** The new task's id. The workspace board has none: it captures through the palette. */
+  create?(statusId?: string): string;
   rename(taskId: string, title: string): void;
   /** False when the move could not be queued, such as for a task purged meanwhile. */
   place(taskId: string, place: Place): boolean;
@@ -402,8 +402,8 @@ export function setSubtaskStatus(taskId: string, statusId: string) {
 export function createTask(statusId?: string) {
   const actions = board.get().actions;
   if (actions) {
+    if (!actions.create) return;
     const id = actions.create(statusId);
-    if (id === null) return;
     update({
       openTaskId: id,
       newTaskId: id,

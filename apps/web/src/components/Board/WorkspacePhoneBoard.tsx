@@ -19,7 +19,7 @@ import {
   pageClass,
 } from './PhoneBoard';
 import { CATEGORY_NAMES } from './StatusMenu';
-import { board, countIn, current, listTasks, update } from './state';
+import { board, countIn, current, listTasks, update, useBoardSettings } from './state';
 import { TaskCard } from './TaskCard';
 import { TaskContentContext } from './taskContent';
 import { useTaskSurfaceShown } from './taskTransition';
@@ -83,7 +83,7 @@ export function WorkspacePhoneBoard({
     title: 'Board settings',
     content: (
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[calc(var(--safe-bottom)+1.5rem)]">
-        <BoardSettingsContent />
+        <BoardSettingsContent crossBoard />
       </div>
     ),
   };
@@ -184,6 +184,7 @@ function CategoryPage({ category }: { category: Category }) {
   const held = drag.use();
   const { project } = current(state);
   const [folded, setFolded] = useFoldedColumns();
+  const [settings] = useBoardSettings();
   const target = categoryTarget(category);
   const name = CATEGORY_NAMES[category];
   const bands = groupByPriority(listTasks(state, target)).filter((band) => band.tasks.length > 0);
@@ -220,7 +221,7 @@ function CategoryPage({ category }: { category: Category }) {
         ) : (
           bands.map((band) => (
             <section key={band.priority} aria-label={priorityName(project, band.priority)}>
-              <div className="zone-header" data-mode="label">
+              <div className="zone-header" data-mode={settings.zoneLabels ? 'label' : 'hidden'}>
                 <div className="zone-header-face">
                   <span className="truncate">{priorityName(project, band.priority)}</span>
                 </div>

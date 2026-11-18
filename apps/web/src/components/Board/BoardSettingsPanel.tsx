@@ -88,10 +88,16 @@ function Segmented<T extends string>({
 }
 
 /** Board preferences and, in the prototype, the mock data reset. */
-export function BoardSettingsContent({ onReset }: { onReset?: () => void }) {
+export function BoardSettingsContent({
+  onReset,
+  crossBoard = false,
+}: {
+  onReset?: () => void;
+  crossBoard?: boolean;
+}) {
   return (
     <>
-      <BoardSettingsControls />
+      <BoardSettingsControls crossBoard={crossBoard} />
       {onReset && (
         <button
           type="button"
@@ -114,9 +120,12 @@ export function BoardSettingsContent({ onReset }: { onReset?: () => void }) {
 export function BoardSettingsPanel({
   onReset,
   expanded,
+  crossBoard = false,
 }: {
   onReset?: () => void;
   expanded?: boolean;
+  /** The workspace board has no status columns or side rails, so their settings stay away. */
+  crossBoard?: boolean;
 }) {
   return (
     <Popover.Root>
@@ -156,14 +165,20 @@ export function BoardSettingsPanel({
           className="shell-menu glass-thick z-50 max-h-[var(--radix-popover-content-available-height)] w-[22rem] max-w-[calc(100vw-1.5rem)] overflow-y-auto overscroll-contain rounded-3xl px-5 py-4 outline-none"
         >
           <h2 className="pb-1 font-display font-semibold text-lg tracking-[-0.01em]">Board</h2>
-          <BoardSettingsContent onReset={onReset} />
+          <BoardSettingsContent onReset={onReset} crossBoard={crossBoard} />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
   );
 }
 
-export function BoardSettingsControls({ includeTheme = true }: { includeTheme?: boolean }) {
+export function BoardSettingsControls({
+  includeTheme = true,
+  crossBoard = false,
+}: {
+  includeTheme?: boolean;
+  crossBoard?: boolean;
+}) {
   const state = board.use();
   const [settings, setSettings] = useBoardSettings();
   const [theme, setTheme] = useThemePreference();
@@ -210,43 +225,47 @@ export function BoardSettingsControls({ includeTheme = true }: { includeTheme?: 
           onChange={(value) => set('scrollbars', value)}
         />
       </Row>
-      <Row
-        label="Holding a card"
-        hint="Compact folds the other priorities away. Full keeps the column as it is."
-      >
-        <Segmented
-          label="Holding a card"
-          value={settings.heldColumn}
-          options={[
-            ['compact', 'Compact'],
-            ['full', 'Full'],
-          ]}
-          onChange={(value) => set('heldColumn', value)}
-        />
-      </Row>
-      {!phone &&
-        (
-          [
-            ['backlogRail', 'Backlog'],
-            ['closedRail', 'Closed'],
-          ] as const
-        ).map(([key, label]) => (
+      {!crossBoard && (
+        <>
           <Row
-            key={key}
-            label={label}
-            hint="Sticky stays at the window's edge. With board scrolls with the columns."
+            label="Holding a card"
+            hint="Compact folds the other priorities away. Full keeps the column as it is."
           >
             <Segmented
-              label={label}
-              value={settings[key]}
+              label="Holding a card"
+              value={settings.heldColumn}
               options={[
-                ['sticky', 'Sticky'],
-                ['bound', 'With board'],
+                ['compact', 'Compact'],
+                ['full', 'Full'],
               ]}
-              onChange={(value) => set(key, value)}
+              onChange={(value) => set('heldColumn', value)}
             />
           </Row>
-        ))}
+          {!phone &&
+            (
+              [
+                ['backlogRail', 'Backlog'],
+                ['closedRail', 'Closed'],
+              ] as const
+            ).map(([key, label]) => (
+              <Row
+                key={key}
+                label={label}
+                hint="Sticky stays at the window's edge. With board scrolls with the columns."
+              >
+                <Segmented
+                  label={label}
+                  value={settings[key]}
+                  options={[
+                    ['sticky', 'Sticky'],
+                    ['bound', 'With board'],
+                  ]}
+                  onChange={(value) => set(key, value)}
+                />
+              </Row>
+            ))}
+        </>
+      )}
       {includeTheme && (
         <Row label="Theme">
           <Segmented

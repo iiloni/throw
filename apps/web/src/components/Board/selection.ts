@@ -7,7 +7,7 @@ import {
   type Task as TaskRow,
   taskTagColor,
 } from '@throw/shared';
-import type { BoardData } from './model';
+import type { BoardData, Task as BoardTask } from './model';
 
 /** Select before presenting: a trashed parent hides its children in every board view. */
 export function projectBoardData(
@@ -67,17 +67,30 @@ export function workspaceBoardData(
   tasks: TaskRow[],
   tags: Tag[] = [],
 ): BoardData {
+  // Each project adapts only its own rows, so a sync change costs one pass over the tasks.
+  const byProject = <T extends { projectId: string }>(rows: T[]) => {
+    const groups = new Map<string, T[]>();
+    for (const row of rows) {
+      const group = groups.get(row.projectId);
+      if (group) group.push(row);
+      else groups.set(row.projectId, [row]);
+    }
+    return groups;
+  };
+  const [statusesOf, tasksOf, tagsOf] = [byProject(statuses), byProject(tasks), byProject(tags)];
   const members = projects.map((project) => {
-    const data = projectBoardData(project, statuses, tasks, tags);
-    return {
-      ...data,
-      tasks: data.tasks.map((task) => ({
-        ...task,
-        projectId: project.id,
-        primaryTagColor: project.color,
-      })),
-      hiddenTasks: (data.hiddenTasks ?? []).map((task) => ({ ...task, projectId: project.id })),
-    };
+    const data = projectBoardData(
+      project,
+      statusesOf.get(project.id) ?? [],
+      tasksOf.get(project.id) ?? [],
+      tagsOf.get(project.id) ?? [],
+    );
+    const own = (task: BoardTask) => ({
+      ...task,
+      projectId: project.id,
+      primaryTagColor: project.color,
+    });
+    return { ...data, tasks: data.tasks.map(own), hiddenTasks: (data.hiddenTasks ?? []).map(own) };
   });
   const names = [0, 1, 2, 3, 4].map((rank) => {
     const chosen = new Set(members.map(({ project }) => project.priorityNames[rank] || null));

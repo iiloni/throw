@@ -1,4 +1,5 @@
 import {
+  categoryTarget,
   identifier,
   isClosed,
   moveTo,
@@ -35,13 +36,14 @@ function describe(taskId: string) {
   const task = tasks.find((item) => item.id === taskId);
   const status = task && statusById(project, task.statusId);
   if (!task || !status) return '';
-  const zone = listTasks(state, listOf(taskId) ?? 'closed').filter(
-    (item) => isClosed(status.category) || item.priority === task.priority,
-  );
+  // On the workspace board a card's place is counted in the column it shows in, whose
+  // closed columns are banded by priority as well.
+  const workspace = project.members !== undefined;
+  const banded = workspace || !isClosed(status.category);
+  const list = workspace ? categoryTarget(status.category) : (listOf(taskId) ?? 'closed');
+  const zone = listTasks(state, list).filter((item) => !banded || item.priority === task.priority);
   const place = zone.findIndex((item) => item.id === taskId) + 1;
-  const rank = isClosed(status.category)
-    ? ''
-    : `${priorityName(projectOf(project, task), task.priority)}, `;
+  const rank = banded ? `${priorityName(projectOf(project, task), task.priority)}, ` : '';
   return `${identifier(project, task)}: ${status.name}, ${rank}${place} of ${zone.length}`;
 }
 

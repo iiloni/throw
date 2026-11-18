@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import { expect, type Page, test } from '@playwright/test';
 
 import { card, cardIds, carry, centre, finger, fixture, settled, taskRow } from './board-helpers';
-import { shapeRows } from './helpers';
 
 test.describe('desktop', () => {
   test.skip(({ isMobile }) => isMobile, 'Phone moves have their own tests');

@@ -2,6 +2,7 @@ import type { Status, Task } from '@throw/shared';
 import { ChevronDown } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { projectOf } from '@/components/Board/model';
 import { board, current } from '@/components/Board/state';
 import { traySurface } from '@/components/Board/TraySurface';
 import { IconButton } from '@/components/IconButton/IconButton';
@@ -24,7 +25,7 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
   const trigger = useRef<HTMLButtonElement | null>(null);
   const id = useId();
   const reduced = useReducedMotion();
-  const project = current(board.use()).project;
+  const project = projectOf(current(board.use()).project, task);
   const collapse = useCallback(() => {
     setPanel(null);
     trigger.current?.focus({ preventScroll: true });

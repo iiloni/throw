@@ -1,22 +1,18 @@
 import type { Project as ProjectRow } from '@throw/shared';
 import { AnimatePresence } from 'motion/react';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ShellMenu } from '@/components/AppShell/ShellMenu';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { type TaskPanel, taskDrawerContent } from '@/components/TaskDetails/TaskControls';
 import { TaskDetails } from '@/components/TaskDetails/TaskDetails';
 import { useAllTags, useStatuses, useTasks } from '@/lib/collections';
-import { flushTaskDescription } from '@/lib/descriptionEditing';
 import { useMedia } from '@/lib/media';
 import { useAwaitingSync } from '@/lib/syncStatus';
-import { moveTask, sendTask, updateTask } from '@/lib/tasks';
 import { BoardAnnouncer } from './BoardAnnouncer';
-import { putBack } from './carry';
+import { taskScreens, taskWrites, useBoardBoundary } from './boundary';
 import { DragOverlay } from './DragOverlay';
-import { configureDrag, drag } from './drag';
-import type { Place } from './model';
 import { workspaceBoardData } from './selection';
-import { board, leaveTask, receiveBoard, update, useBoardSettings } from './state';
+import { board } from './state';
 import { TaskScreen } from './TaskView';
 import { TaskContentContext } from './taskContent';
 import { WorkspaceDesktopBoard } from './WorkspaceDesktopBoard';
@@ -31,15 +27,6 @@ function useSameRows<T>(rows: T[]): T[] {
   if (rows.length !== last.current.length || rows.some((row, index) => row !== last.current[index]))
     last.current = rows;
   return last.current;
-}
-
-function attempt(write: () => void) {
-  try {
-    write();
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -64,8 +51,6 @@ export function WorkspaceBoard({
   const { tags } = useAllTags();
   const phone = useMedia('(max-width: 767px)');
   const state = board.use();
-  const [settings] = useBoardSettings();
-  configureDrag({ heldColumn: settings.heldColumn });
   const data = useMemo(
     () => workspaceBoardData(workspaceId, projects, statuses, tasks, tags),
     [workspaceId, projects, statuses, tasks, tags],
@@ -74,48 +59,8 @@ export function WorkspaceBoard({
   const awaitingTasks = useAwaitingSync(loadingTasks, data.tasks.length);
   const [taskPage, setTaskPage] = useState<{ taskId: string; panel: TaskPanel } | null>(null);
   if (taskPage && taskPage.taskId !== state.openTaskId) setTaskPage(null);
-  const actions = useMemo(
-    () => ({
-      beforeLeave: flushTaskDescription,
-      // New work is captured into a project through the palette, which asks which one.
-      create: () => {
-        onCreate();
-        return null;
-      },
-      rename: (id: string, title: string) => updateTask(id, { title }),
-      place: (id: string, place: Place) => attempt(() => moveTask(id, place)),
-      send: (ids: string[], statusId: string) =>
-        [...ids]
-          .reverse()
-          .map((id) => attempt(() => sendTask(id, statusId)))
-          .every(Boolean),
-    }),
-    [onCreate],
-  );
-  useLayoutEffect(() => {
-    receiveBoard(data, actions, awaitingTasks);
-  }, [data, actions, awaitingTasks]);
-  useEffect(() => {
-    document.documentElement.toggleAttribute('data-hide-scrollbars', !settings.scrollbars);
-    return () => document.documentElement.removeAttribute('data-hide-scrollbars');
-  }, [settings.scrollbars]);
-  useEffect(() => {
-    function close(event: KeyboardEvent) {
-      if (
-        event.key !== 'Escape' ||
-        event.defaultPrevented ||
-        drag.get() ||
-        document.querySelector('[role="menu"], [role="dialog"]')
-      )
-        return;
-      const { carrying, selection } = board.get();
-      if (carrying) putBack();
-      else if (selection.length > 0) update({ selection: [] });
-      else leaveTask();
-    }
-    window.addEventListener('keydown', close);
-    return () => window.removeEventListener('keydown', close);
-  }, []);
+  // New work is captured through the palette, which asks which project it belongs to.
+  useBoardBoundary(data, taskWrites, awaitingTasks);
   if (awaiting || state.projectId !== data.project.id || state.actions === null)
     return (
       <p role="status" className="p-6 text-muted-foreground">
@@ -128,12 +73,7 @@ export function WorkspaceBoard({
         Connect to load this board on this device.
       </p>
     );
-  const findTask = (id: string | null) =>
-    [...data.tasks, ...(data.hiddenTasks ?? [])].find((task) => task.id === id);
-  const openTask = findTask(state.openTaskId);
-  const screens = openTask
-    ? [...state.taskTrail.map(findTask), openTask].filter((task) => task !== undefined)
-    : [];
+  const { openTask, screens } = taskScreens(data, state);
   const rowOf = (id: string | undefined) => tasks.find((row) => row.id === id);
   const projectRow = (projectId: string | undefined) =>
     projects.find((project) => project.id === projectId);

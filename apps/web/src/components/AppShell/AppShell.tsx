@@ -207,15 +207,6 @@ export function AppShell() {
       // The cross-project board opens any of its projects' tasks in place.
       if (project?.id !== projectId && !crossBoard) selectProject(workspace.id, projectId);
     },
-    selectBoardView: (view) => {
-      if (workspace)
-        void navigate({
-          to: '/w/$workspaceId/board',
-          params: { workspaceId: workspace.id },
-          search: { view },
-          replace: true,
-        });
-    },
     goSettings: () => {
       void navigate({ to: '/settings' });
     },
@@ -319,7 +310,7 @@ export function AppShell() {
                   <SyncIndicator />
                 </div>
               )}
-              {fullBoard && <BoardSettingsPanel expanded={expanded} />}
+              {fullBoard && <BoardSettingsPanel expanded={expanded} crossBoard={crossBoard} />}
 
               <RailButton
                 label="Settings"
