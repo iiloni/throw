@@ -1,0 +1,231 @@
+import { ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { z } from 'zod';
+import { IconButton } from '@/components/IconButton/IconButton';
+import { Button } from '@/components/ui/button';
+import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
+import { usePersistentState } from '@/lib/storage';
+import { cn } from '@/lib/utils';
+import { OpenTaskPane, SelectionBar, useWidth } from './DesktopBoard';
+import { drag } from './drag';
+import { StatusGlyph } from './glyphs';
+import {
+  CATEGORIES,
+  type Category,
+  categoryTarget,
+  groupByPriority,
+  priorityName,
+  projectOf,
+  statusById,
+} from './model';
+import { moveTargets } from './PhoneBoard';
+import { CATEGORY_NAMES } from './StatusMenu';
+import { StatusTile } from './StatusTile';
+import { board, countIn, current, type ListId, listTasks, sendTasks, update } from './state';
+import { TaskCard } from './TaskCard';
+
+const foldedSchema = z.object({
+  done: z.boolean().default(false),
+  cancelled: z.boolean().default(true),
+});
+
+/** Done starts open and Cancelled folded; a choice to fold or open either stays on the device. */
+export function useFoldedColumns() {
+  return usePersistentState('throw-workspace-board-folded', foldedSchema, foldedSchema.parse({}));
+}
+
+/**
+ * The cross-project board on a wide screen: Backlog, Active, Done and Cancelled side by side,
+ * each banded by priority. A wide column lays each band out as a masonry grid.
+ */
+export function WorkspaceDesktopBoard() {
+  const state = board.use();
+  const { project, tasks } = current(state);
+  const [frame, frameWidth] = useWidth();
+  const [folded, setFolded] = useFoldedColumns();
+  const selected = tasks.filter((task) => state.selection.includes(task.id));
+  return (
+    <div className="flex h-full overflow-hidden">
+      <div ref={frame} className="flex min-w-0 flex-1">
+        <ScrollArea className="min-w-0 flex-1">
+          <ScrollAreaViewport
+            data-autoscroll-x=""
+            className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3 [&>div]:px-6"
+          >
+            {CATEGORIES.map((category) => (
+              <CategoryColumn
+                key={category}
+                category={category}
+                folded={category === 'done' || category === 'cancelled' ? folded[category] : false}
+                onFold={
+                  category === 'done' || category === 'cancelled'
+                    ? (next) => setFolded({ ...folded, [category]: next })
+                    : undefined
+                }
+              />
+            ))}
+          </ScrollAreaViewport>
+          <ScrollBar orientation="horizontal" />
+        </ScrollArea>
+        <OpenTaskPane frameWidth={frameWidth} />
+      </div>
+      <SelectionBar>
+        {moveTargets(project, selected).map((status) => (
+          <Button
+            key={status.id}
+            size="sm"
+            variant="ghost"
+            className="rounded-xl"
+            onClick={() => {
+              sendTasks(state.selection, status.id);
+              update({ selection: [] });
+            }}
+          >
+            <StatusGlyph category={status.category} />
+            {status.name}
+          </Button>
+        ))}
+      </SelectionBar>
+    </div>
+  );
+}
+
+/**
+ * One category across every project. Under a single held card it turns, in place, into that
+ * card's own project's statuses for the category; under several, the column takes them all,
+ * each to its project's default status there.
+ */
+function CategoryColumn({
+  category,
+  folded,
+  onFold,
+}: {
+  category: Category;
+  folded: boolean;
+  onFold?: (folded: boolean) => void;
+}) {
+  const state = board.use();
+  const held = drag.use();
+  const reduced = useReducedMotion();
+  const { project, tasks } = current(state);
+  const target = categoryTarget(category);
+  const listId: ListId = target;
+  const dragging = held?.phase === 'dragging';
+  const aimed = dragging ? held.target : null;
+  const over =
+    aimed?.kind === 'status' &&
+    (aimed.statusId === target || statusById(project, aimed.statusId)?.category === category);
+  const lead = dragging && held.ids.length === 1 ? tasks.find((t) => t.id === held.ids[0]) : null;
+  const choices = lead
+    ? projectOf(project, lead).statuses.filter((status) => status.category === category)
+    : [];
+  const count = countIn(state, target);
+  const name = CATEGORY_NAMES[category];
+  // A folded column opens under a held card for as long as it is over it.
+  const strip = folded && !over;
+  const bands = groupByPriority(listTasks(state, listId)).filter((band) => band.tasks.length > 0);
+
+  return (
+    <section
+      aria-label={name}
+      data-drop-status={target}
+      data-status-home={target}
+      data-over={over ? '' : undefined}
+      data-surface=""
+      className={cn(
+        'board-column relative mt-[calc(var(--safe-top)+1.25rem)] mb-6 flex min-h-0 shrink-0 flex-col overflow-hidden rounded-3xl',
+        strip ? 'w-16' : 'min-w-[18rem] flex-1',
+      )}
+    >
+      {strip ? (
+        <button
+          type="button"
+          aria-label={`Show ${name.toLowerCase()}, ${count}`}
+          aria-expanded={false}
+          onClick={() => onFold?.(false)}
+          className="flex h-full w-16 flex-col items-center gap-3 pt-4 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60"
+        >
+          <ChevronsLeft aria-hidden className="size-4" />
+          <span className="font-display font-semibold text-base tracking-[-0.01em] [writing-mode:vertical-rl]">
+            {name}
+          </span>
+          <span className="text-xs tabular-nums">{count}</span>
+        </button>
+      ) : (
+        <>
+          <div className="flex h-14 shrink-0 items-center gap-2.5 pr-2 pl-5">
+            <StatusGlyph category={category} className="size-4 text-muted-foreground" />
+            <h2 className="truncate font-display font-semibold text-lg tracking-[-0.01em]">
+              {name}
+            </h2>
+            <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-muted-foreground text-xs tabular-nums">
+              {count}
+            </span>
+            <span className="flex-1" />
+            {onFold && !dragging && (
+              <IconButton
+                label={`Fold ${name.toLowerCase()}`}
+                className="size-9"
+                onClick={() => onFold(true)}
+              >
+                <ChevronsRight />
+              </IconButton>
+            )}
+          </div>
+          <ScrollArea edges className="card-scroller min-h-0 flex-1 [--scrollbar-inset:0.5rem]">
+            <ScrollAreaViewport data-autoscroll="">
+              <div className="flex flex-col px-3.5 pt-1 pb-3">
+                {bands.map((band) => (
+                  <section key={band.priority} aria-label={priorityName(project, band.priority)}>
+                    <div className="zone-header" data-mode="label">
+                      <div className="zone-header-face">
+                        <span className="truncate">{priorityName(project, band.priority)}</span>
+                      </div>
+                    </div>
+                    {/* Masonry once the column is wide enough for two cards abreast. */}
+                    <div className="gap-3 [column-width:16rem]">
+                      {band.tasks.map((task) => (
+                        <div key={task.id} data-slot={task.id} className="break-inside-avoid pb-3">
+                          <TaskCard task={task} showStatus />
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+                {bands.length === 0 && (
+                  <p className="px-1 py-10 text-center text-muted-foreground text-sm">
+                    {state.awaitingTasks ? 'Loading tasks…' : 'Nothing here.'}
+                  </p>
+                )}
+              </div>
+            </ScrollAreaViewport>
+            <ScrollBar />
+          </ScrollArea>
+        </>
+      )}
+      <AnimatePresence>
+        {over && (
+          <motion.div
+            key="targets"
+            className="absolute inset-0 flex flex-col gap-2.5 bg-background/70 p-3 pt-4 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: reduced ? 0 : 0.14 }}
+          >
+            <p className="px-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
+              {lead ? `${projectOf(project, lead).name} · ${name}` : name}
+            </p>
+            {lead ? (
+              choices.map((status) => <StatusTile key={status.id} status={status} />)
+            ) : (
+              <p className="flex flex-1 items-center justify-center rounded-2xl border border-brand bg-accent px-4 text-center font-medium text-sm">
+                Move {held?.ids.length} to {name.toLowerCase()}
+              </p>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </section>
+  );
+}

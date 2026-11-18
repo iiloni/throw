@@ -53,3 +53,49 @@ export function projectBoardData(
       .map(present),
   };
 }
+
+/**
+ * Every project of a workspace as one board (spec, "The cross-project board"). Its statuses
+ * and tags are its projects' together, each task names its project, and cards take their
+ * project's colour, since tag colours mean different things in each project. A rank's name
+ * is shown where every project agrees on it; otherwise the default.
+ */
+export function workspaceBoardData(
+  workspaceId: string,
+  projects: ProjectRow[],
+  statuses: StatusRow[],
+  tasks: TaskRow[],
+  tags: Tag[] = [],
+): BoardData {
+  const members = projects.map((project) => {
+    const data = projectBoardData(project, statuses, tasks, tags);
+    return {
+      ...data,
+      tasks: data.tasks.map((task) => ({
+        ...task,
+        projectId: project.id,
+        primaryTagColor: project.color,
+      })),
+      hiddenTasks: (data.hiddenTasks ?? []).map((task) => ({ ...task, projectId: project.id })),
+    };
+  });
+  const names = [0, 1, 2, 3, 4].map((rank) => {
+    const chosen = new Set(members.map(({ project }) => project.priorityNames[rank] || null));
+    return chosen.size === 1 ? [...chosen][0]! : null;
+  });
+  return {
+    project: {
+      id: `workspace:${workspaceId}`,
+      key: null,
+      name: 'All projects',
+      color: 'gray',
+      icon: null,
+      priorityNames: names,
+      statuses: members.flatMap(({ project }) => project.statuses),
+      tags: members.flatMap(({ project }) => project.tags),
+      members: members.map(({ project }) => project),
+    },
+    tasks: members.flatMap((data) => data.tasks),
+    hiddenTasks: members.flatMap((data) => data.hiddenTasks ?? []),
+  };
+}

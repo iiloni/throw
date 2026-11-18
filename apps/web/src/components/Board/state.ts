@@ -16,8 +16,10 @@ import {
   type Project,
   placementPlace,
   placeOf,
+  resolveSend,
   sendToStatus,
   type Task,
+  targetCategory,
 } from './model';
 import { rememberTaskOrigin } from './taskTransition';
 
@@ -149,7 +151,8 @@ export function leaveTask() {
 export type BoardActions = {
   /** Flush device-local editor text before closing or opening another task. */
   beforeLeave?(taskId: string): boolean;
-  create(statusId?: string): string;
+  /** The new task's id, or null when creating happens elsewhere, as in the palette. */
+  create(statusId?: string): string | null;
   rename(taskId: string, title: string): void;
   /** False when the move could not be queued, such as for a task purged meanwhile. */
   place(taskId: string, place: Place): boolean;
@@ -275,10 +278,15 @@ export function selectProject(projectId: string) {
  * Lists are where cards can be placed: one per active status, plus the backlog gallery.
  * The closed zone is ordered by time, so cards are sent to it, never placed in it.
  */
-export type ListId = 'backlog' | 'closed' | `status:${string}`;
+export type ListId = 'backlog' | 'closed' | `status:${string}` | `category:${Category}`;
 
 export function listStatusId(listId: ListId) {
   return listId.startsWith('status:') ? listId.slice('status:'.length) : undefined;
+}
+
+/** Within a priority, closed work reads newest first; the workspace board bands it so. */
+function compareBanded(a: Task, b: Task) {
+  return a.priority - b.priority || compareClosed(a, b);
 }
 
 function statusIdsIn(project: Project, categories: Category[], filter: string | null) {
@@ -291,19 +299,31 @@ function statusIdsIn(project: Project, categories: Category[], filter: string | 
 /** The cards a list shows, in order. */
 export function listTasks(state: BoardState, listId: ListId): Task[] {
   const { project, tasks } = current(state);
+  const category = targetCategory(listId);
   const statusIds =
     listId === 'backlog'
       ? statusIdsIn(project, ['backlog'], state.backlogFilter)
       : listId === 'closed'
         ? statusIdsIn(project, ['done', 'cancelled'], state.closedFilter)
-        : [listStatusId(listId)];
+        : category
+          ? statusIdsIn(project, [category], null)
+          : [listStatusId(listId)];
   return tasks
     .filter((task) => statusIds.includes(task.statusId))
     .filter((task) => state.subtasksAsCards || task.parentId === null)
-    .sort(listId === 'closed' ? compareClosed : compareTasks);
+    .sort(
+      listId === 'closed'
+        ? compareClosed
+        : category && isClosed(category)
+          ? compareBanded
+          : compareTasks,
+    );
 }
 
+/** The cards in a status, or in every status of a category target. */
 export function countIn(state: BoardState, statusId: string) {
+  const category = targetCategory(statusId);
+  if (category) return listTasks(state, `category:${category}`).length;
   return current(state).tasks.filter(
     (task) => task.statusId === statusId && (state.subtasksAsCards || task.parentId === null),
   ).length;
@@ -353,16 +373,22 @@ export function moveToPlace(taskId: string, place: Place) {
   if (board.get().actions?.place(taskId, to) === false) revert();
 }
 
-export function sendTasks(taskIds: string[], statusId: string) {
+export function sendTasks(taskIds: string[], target: string) {
   const { project } = current();
-  const tasks = syncedTasks();
-  // A card already in the status stays where it is.
-  const moving = taskIds.filter(
-    (id) => tasks.find((task) => task.id === id)?.statusId !== statusId,
-  );
-  if (moving.length === 0) return;
-  setTasks(sendToStatus(project, tasks, moving, statusId));
-  if (board.get().actions?.send(moving, statusId) === false) revert();
+  let tasks = syncedTasks();
+  const sends = resolveSend(project, tasks, taskIds, target).flatMap(({ statusId, taskIds }) => {
+    // A card already in the status stays where it is.
+    const moving = taskIds.filter(
+      (id) => tasks.find((task) => task.id === id)?.statusId !== statusId,
+    );
+    if (moving.length === 0) return [];
+    tasks = sendToStatus(project, tasks, moving, statusId);
+    return [{ statusId, moving }];
+  });
+  if (sends.length === 0) return;
+  setTasks(tasks);
+  const actions = board.get().actions;
+  if (actions && !sends.every(({ statusId, moving }) => actions.send(moving, statusId))) revert();
 }
 
 export function setSubtaskStatus(taskId: string, statusId: string) {
@@ -377,6 +403,7 @@ export function createTask(statusId?: string) {
   const actions = board.get().actions;
   if (actions) {
     const id = actions.create(statusId);
+    if (id === null) return;
     update({
       openTaskId: id,
       newTaskId: id,

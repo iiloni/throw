@@ -21,8 +21,18 @@ import { cn } from '@/lib/utils';
 import { BoardSettingsContent } from './BoardSettingsPanel';
 import { CardList } from './CardList';
 import { drag, holding, pageStride } from './drag';
-import { byCategory, isClosed, type Status, type Task } from './model';
+import {
+  byCategory,
+  CATEGORIES,
+  categoryTarget,
+  isClosed,
+  type Project,
+  projectOf,
+  type Status,
+  type Task,
+} from './model';
 import { StatusFilter, zoneStatuses } from './SideZone';
+import { CATEGORY_NAMES } from './StatusMenu';
 import { StatusTile } from './StatusTile';
 import {
   board,
@@ -39,7 +49,7 @@ import { TaskContentContext } from './taskContent';
 import { useTaskSurfaceShown } from './taskTransition';
 
 /** Clear space at the end of a column, for the collapsed drawer resting over it. */
-const DOCK_SPACE = 'calc(var(--dock-height) + var(--safe-bottom) + 3rem)';
+export const DOCK_SPACE = 'calc(var(--dock-height) + var(--safe-bottom) + 3rem)';
 const DAY = 86_400_000;
 
 /**
@@ -200,14 +210,14 @@ export function PhoneBoard({
   );
 }
 
-const pageClass = 'flex w-full shrink-0 snap-center flex-col px-[var(--page-inset)]';
+export const pageClass = 'flex w-full shrink-0 snap-center flex-col px-[var(--page-inset)]';
 
 /**
  * The current column by name, and the active columns as one track in the order work moves
  * through them: the ones behind are filled in, so the header says how far along the board
  * the page is. The next column is named at the end, a step further along.
  */
-function FlowTrack({
+export function FlowTrack({
   statuses,
   page,
   onTurn,
@@ -339,7 +349,7 @@ function DoneCount({ onOpen }: { onOpen: () => void }) {
  * the page itself, so the pages keep their width and scroll position under a finger, which
  * Chrome on Android does not re-snap.
  */
-function PeekEdge({ side, shown }: { side: -1 | 1; shown: boolean }) {
+export function PeekEdge({ side, shown }: { side: -1 | 1; shown: boolean }) {
   const held = drag.use();
   const visible = held?.phase === 'dragging' && shown;
   const waiting = visible && held.page === side;
@@ -392,7 +402,7 @@ function DonePocket({ status, shown }: { status: Status; shown: boolean }) {
 
 type BoardPage = 'closed' | 'settings' | 'search';
 
-const dockButton =
+export const dockButton =
   'relative flex size-[var(--dock-height)] shrink-0 items-center justify-center rounded-[var(--dock-radius)] outline-none focus-visible:ring-2 focus-visible:ring-ring/70';
 
 /**
@@ -580,7 +590,7 @@ function BoardDrawer({
 }
 
 /** The board's dock and an open task's trade places, as Catch's dock does for a note. */
-function DockFace({ children }: { children: ReactNode }) {
+export function DockFace({ children }: { children: ReactNode }) {
   const present = useIsPresent();
   const reduced = useReducedMotion();
   return (
@@ -626,11 +636,16 @@ function CardStack({ count }: { count: number }) {
  * into a grid of every status when the card is brought onto it and closes when it leaves.
  * With cards selected it is open, and tapping a status moves them (ADR 0009).
  */
-function MovePanel({ pick }: { pick: boolean }) {
+export function MovePanel({ pick }: { pick: boolean }) {
   const state = board.use();
   const held = drag.use();
-  const { project } = current(state);
+  const { project, tasks } = current(state);
   const selected = state.selection.length;
+  const moving = held?.ids ?? state.selection;
+  const statuses = moveTargets(
+    project,
+    tasks.filter((task) => moving.includes(task.id)),
+  );
   const open = pick || (held?.phase === 'dragging' && held.over);
   const send = (statusId: string) => {
     sendTasks(state.selection, statusId);
@@ -653,7 +668,7 @@ function MovePanel({ pick }: { pick: boolean }) {
       )}
       {open ? (
         <div className="space-y-2.5 pt-1">
-          {byCategory(project.statuses).map((group) => (
+          {byCategory(statuses).map((group) => (
             <section key={group.name}>
               <h3 className="px-1 pb-1.5 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
                 {group.name}
@@ -678,6 +693,23 @@ function MovePanel({ pick }: { pick: boolean }) {
       )}
     </motion.div>
   );
+}
+
+/**
+ * The statuses cards can be sent to: their project's. On the workspace board, cards from
+ * several projects share no status, so they are sent to a category, and each lands in its
+ * own project's default status there.
+ */
+export function moveTargets(project: Project, moving: Task[]): Status[] {
+  if (!project.members) return project.statuses;
+  const owners = new Set(moving.map((task) => task.projectId));
+  if (owners.size === 1) return projectOf(project, moving[0]!).statuses;
+  return CATEGORIES.map((category) => ({
+    id: categoryTarget(category),
+    name: CATEGORY_NAMES[category],
+    category,
+    isDefault: true,
+  }));
 }
 
 /** Closed tasks by when they were closed, newest first. */

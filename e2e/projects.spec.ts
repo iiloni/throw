@@ -247,20 +247,15 @@ test('cross-project board and settings are reachable from the shell', async ({
     await openMenu(page, true);
     await page.getByRole('menuitem', { name: 'All projects', exact: true }).click();
   } else await page.getByRole('link', { name: 'All projects', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'One board, every project' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Active', exact: true })).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
   await expect(page).toHaveURL(/\/w\/[^/]+\/board(?:\?view=board)?$/);
   if (isMobile) {
-    const dock = page.getByRole('navigation', { name: 'Project views' });
-    await dock.getByRole('link', { name: 'Search', exact: true }).click();
+    await page.getByRole('button', { name: 'Search all projects' }).click();
     await expect(page.getByRole('dialog', { name: 'Search', exact: true })).toBeVisible();
     await expect(page).toHaveURL(/\/board(?:\?view=board)?$/);
     await page.getByRole('button', { name: 'Close search' }).click();
-    await dock.getByRole('link', { name: 'Backlog', exact: true }).click();
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Kitchen');
-    await expect(page.getByRole('region', { name: 'Backlog', exact: true })).toHaveAttribute(
-      'data-detent',
-      'half',
-    );
   }
   if (isMobile) {
     await openMenu(page, true);

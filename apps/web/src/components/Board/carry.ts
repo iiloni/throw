@@ -4,6 +4,7 @@ import {
   moveTo,
   type Priority,
   priorityName,
+  projectOf,
   sendToStatus,
   statusById,
 } from './model';
@@ -38,7 +39,9 @@ function describe(taskId: string) {
     (item) => isClosed(status.category) || item.priority === task.priority,
   );
   const place = zone.findIndex((item) => item.id === taskId) + 1;
-  const rank = isClosed(status.category) ? '' : `${priorityName(project, task.priority)}, `;
+  const rank = isClosed(status.category)
+    ? ''
+    : `${priorityName(projectOf(project, task), task.priority)}, `;
   return `${identifier(project, task)}: ${status.name}, ${rank}${place} of ${zone.length}`;
 }
 
@@ -47,7 +50,9 @@ function listOf(taskId: string): ListId | null {
   const task = tasks.find((item) => item.id === taskId);
   const status = task && statusById(project, task.statusId);
   if (!status) return null;
-  if (status.category === 'active') return `status:${status.id}`;
+  // The workspace board mixes projects in a column, so a card is ordered within its status.
+  if (status.category === 'active' || (project.members && !isClosed(status.category)))
+    return `status:${status.id}`;
   return status.category === 'backlog' ? 'backlog' : 'closed';
 }
 
@@ -119,8 +124,10 @@ export function carryAcross(direction: -1 | 1) {
   const { project, tasks } = current();
   const task = tasks.find((item) => item.id === taskId);
   if (!taskId || !task) return;
-  const index = project.statuses.findIndex((status) => status.id === task.statusId);
-  const next = project.statuses[index + direction];
+  // A card walks its own project's statuses.
+  const { statuses } = projectOf(project, task);
+  const index = statuses.findIndex((status) => status.id === task.statusId);
+  const next = statuses[index + direction];
   if (!next) return;
   const moved = sendToStatus(project, tasks, [taskId], next.id).find((item) => item.id === taskId);
   if (moved) carryTo(moved);
