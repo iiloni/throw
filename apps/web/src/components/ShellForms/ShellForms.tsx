@@ -2,8 +2,8 @@ import { COLORS, type Color, type Project, type Workspace } from '@throw/shared'
 import { Trash2 } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useShell } from '@/components/AppShell/shell';
-import { BottomSheet } from '@/components/BottomSheet/BottomSheet';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
+import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
 import { PROJECT_ICON_LABELS, ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,13 +27,7 @@ export function ShellForms({ form, onClose }: { form: ShellForm | null; onClose:
           ? 'New workspace'
           : 'Rename workspace';
   return (
-    <BottomSheet
-      open={form !== null}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-      title={title}
-    >
+    <ManagementSurface open={form !== null} onClose={onClose} title={title}>
       {form && (
         <ManagementForm
           key={
@@ -44,10 +38,10 @@ export function ShellForms({ form, onClose }: { form: ShellForm | null; onClose:
           onClose={onClose}
         />
       )}
-    </BottomSheet>
+    </ManagementSurface>
   );
 }
-function ManagementForm({ form, onClose }: { form: ShellForm; onClose: () => void }) {
+export function ManagementForm({ form, onClose }: { form: ShellForm; onClose: () => void }) {
   const shell = useShell();
   const project = form.kind === 'edit-project' ? form.project : undefined;
   const isProject = form.kind === 'new-project' || form.kind === 'edit-project';

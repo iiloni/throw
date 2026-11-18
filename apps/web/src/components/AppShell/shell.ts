@@ -34,6 +34,8 @@ export type ShellState = {
   openTask: (projectId: string, taskId: string, created?: boolean) => void;
   goBoard: () => void;
   goSettings: () => void;
+  goProjectSettings: (project: Project) => void;
+  goTrash: (project?: Project) => void;
 };
 export const ShellContext = createContext<ShellState | null>(null);
 export function useShell() {

@@ -22,6 +22,7 @@ import {
   taskTagsCollection,
   write,
 } from './collections';
+import { trashRoots } from './projectSettings';
 import { deleteProjectRows, deleteTaskRows } from './projects';
 import { defaultStatus } from './statuses';
 import { requireTag } from './tags';
@@ -294,17 +295,7 @@ export function purgeTask(id: string) {
  * whose project and parent are not. Everything under a listed item goes with it.
  */
 export function trashedItems(workspaceId: string) {
-  const projects = [...projectsCollection.values()].filter(
-    (project) => project.workspaceId === workspaceId && project.deletedAt !== null,
-  );
-  const tasks = [...tasksCollection.values()].filter(
-    (task) =>
-      task.workspaceId === workspaceId &&
-      task.deletedAt !== null &&
-      !projectsCollection.get(task.projectId)?.deletedAt &&
-      (task.parentId === null || !tasksCollection.get(task.parentId)?.deletedAt),
-  );
-  return { projects, tasks };
+  return trashRoots([...projectsCollection.values()], [...tasksCollection.values()], workspaceId);
 }
 
 /**
@@ -318,5 +309,18 @@ export function emptyTrash(workspaceId: string) {
   write(() => {
     for (const task of tasks) deleteTaskRows(task.id);
     for (const project of projects) deleteProjectRows(project.id);
+  });
+}
+
+/** Empties only the independent task roots in this project, as this device sees them. */
+export function emptyProjectTrash(projectId: string) {
+  const project = projectsCollection.get(projectId);
+  if (!project || project.deletedAt !== null) return;
+  const tasks = trashedItems(project.workspaceId).tasks.filter(
+    (task) => task.projectId === projectId,
+  );
+  if (!tasks.length) return;
+  write(() => {
+    for (const task of tasks) deleteTaskRows(task.id);
   });
 }

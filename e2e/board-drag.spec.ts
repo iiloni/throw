@@ -457,9 +457,12 @@ test.describe('phone swipes', () => {
       .toBe(board.status('Done'));
     await expect(page.getByRole('button', { name: /^3 done this week/ })).toBeVisible();
     // Leftwards over a card is still the page.
-    const low = await centre(await settled(card(page, 'Low priority')));
+    // From the card's right edge across most of the page, so the pager's snap cannot
+    // settle back under a slow runner's late fling.
+    const box = (await (await settled(card(page, 'Low priority'))).boundingBox())!;
+    const low = { x: box.x + box.width - 24, y: box.y + box.height / 2 };
     await touch.press(low, 30);
-    await touch.move({ x: low.x - 220, y: low.y }, 250);
+    await touch.move({ x: box.x + 24, y: low.y }, 250);
     await touch.lift();
     await expect(columns.getByRole('button', { name: 'Review' })).toHaveAttribute(
       'aria-current',

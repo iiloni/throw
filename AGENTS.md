@@ -28,10 +28,14 @@ The activity log syncs to devices and comments are built (`lib/comments.ts`), wi
 timeline query in `collections.ts` and a task history view in `TaskDetails/TaskTimeline.tsx`.
 Tags have their data layer and reusable controls in `components/Tag*`, with a real-data `/prototype/tags` workshop in
 development only. The board colour helper is `taskTagColor` in `@throw/shared`. The task
-pane picks and lists tags; tag management has no product entry point yet. The task history
+pane picks and lists tags; project settings mounts tag management. The task history
 interleaves server entries and comments; refused changes have a quiet task-only notice and
 description recovery links. Cards move on both boards by drag, keyboard,
 phone long press, the move drawer and a rightward swipe to close (ADR 0008).
+Project settings lives at `/w/:workspaceId/p/:projectId/settings`, with project task
+trash beside it at `/trash`. Workspace trash is `/w/:workspaceId/trash`. Settings and trash
+forms use the shell's `ManagementSurface` host for the shared Drawer on phones and centred
+dialogs on desktop; project appearance reuses `ManagementForm`.
 
 The board's interaction was worked out in a prototype on mock data: `/prototype/board`, in
 development builds only, with its components in `apps/web/src/components/Board`. It keeps
