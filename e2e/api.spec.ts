@@ -80,8 +80,6 @@ test('a shape request cannot choose its own rows or columns @api', async ({ requ
     { headers: stranger.headers },
   );
   expect(response.ok()).toBeTruthy();
-  // A cached snapshot would restart a reload from old rows that count as caught up.
-  expect(response.headers()['cache-control']).toBe('no-store');
   const rows = z
     .array(z.object({ value: z.record(z.string(), z.unknown()).optional() }))
     .parse(await response.json())
@@ -91,4 +89,22 @@ test('a shape request cannot choose its own rows or columns @api', async ({ requ
   ]);
   const [own] = await shapeRows(request, 'workspaces', owner.headers);
   expect(rows[0]?.id).not.toBe(own?.id);
+});
+
+test('no shape response may be cached @api', async ({ request }) => {
+  // A cached snapshot would restart a reload from old rows that count as caught up.
+  const { headers } = await createAccount(request);
+  const snapshot = await request.get('/api/shapes/projects?offset=-1', { headers });
+  expect(snapshot.ok()).toBeTruthy();
+  const query = new URLSearchParams({
+    offset: snapshot.headers()['electric-offset']!,
+    handle: snapshot.headers()['electric-handle']!,
+  });
+  const caughtUp = await request.get(`/api/shapes/projects?${query}`, { headers });
+  const unknown = await request.get('/api/shapes/users?offset=-1', { headers });
+  expect(unknown.status()).toBe(404);
+  for (const response of [snapshot, caughtUp, unknown]) {
+    expect(response.headers()['cache-control']).toBe('no-store');
+    expect(response.headers().vary).toContain('authorization');
+  }
 });
