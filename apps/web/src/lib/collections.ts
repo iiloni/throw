@@ -58,7 +58,7 @@ import { orderQueuedWrites } from './orderQueuedWrites';
 import { reportRefusedChanges } from './refusedChanges';
 import { getServerUrl } from './serverUrl';
 import { shapeFetch } from './shapeFetch';
-import { useSteadyRows } from './steadyRows';
+import { noteLocalWrite, useSteadyRows } from './steadyRows';
 import { addPendingWrite, getSyncStatus, settlePendingWrite, updateSyncStatus } from './syncStatus';
 import { taskTimeline } from './timeline';
 import {
@@ -631,6 +631,7 @@ export function write(mutate: () => void): Transaction {
     // Ordered within a millisecond, unlike the outbox's own times (see `orderQueuedWrites`).
     idempotencyKey: uuidv7(),
   });
+  noteLocalWrite();
   const transaction = offline.mutate(mutate);
   addPendingWrite(transaction.id);
   offline.commit().then(

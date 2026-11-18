@@ -34,7 +34,7 @@ export function canSwipe(element: HTMLElement) {
   );
 }
 
-function doneStatus() {
+export function doneStatus() {
   const done = current().project.statuses.filter((status) => status.category === 'done');
   return done.find((status) => status.isDefault) ?? done[0];
 }
@@ -73,19 +73,37 @@ export function endSwipe() {
   if (done && (state.armed || (dx > FLICK_MIN && velocity() > FLICK))) {
     haptics.success();
     const close = () => {
+      settling = null;
       sendTasks([state.taskId], done.id);
       swipe.set(null);
       swipeX.jump(0);
     };
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) close();
-    else void animate(swipeX, width + 32, { ...springs.snappy, onComplete: close });
+    else {
+      settling = close;
+      void animate(swipeX, width + 32, { ...springs.snappy, onComplete: close });
+    }
   } else cancelSwipe();
 }
 
+/** What finishes the swipe that is still springing home or away, if one is. */
+let settling: (() => void) | null = null;
+
 export function cancelSwipe() {
   if (!swipe.get()) return;
-  void animate(swipeX, 0, {
-    ...springs.snappy,
-    onComplete: () => swipe.set(null),
-  });
+  const done = () => {
+    settling = null;
+    swipe.set(null);
+    swipeX.jump(0);
+  };
+  settling = done;
+  void animate(swipeX, 0, { ...springs.snappy, onComplete: done });
+}
+
+/** Lands a swipe that is still settling at once, so a new touch starts from rest. */
+export function settleSwipe() {
+  const finish = settling;
+  if (!finish) return;
+  swipeX.stop();
+  finish();
 }

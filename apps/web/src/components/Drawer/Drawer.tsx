@@ -235,6 +235,21 @@ export function Drawer({
     placed.current = true;
   }, [sunk, detent, paged, page?.key, y, reduced, moveInHead]);
 
+  // The move target floating over a groomed backlog covers its foot, so the list keeps that
+  // much room clear at its end too.
+  const footer = useRef<HTMLDivElement>(null);
+  const [footerHeight, setFooterHeight] = useState(0);
+  useLayoutEffect(() => {
+    const element = footer.current;
+    if (!grooming || !element) {
+      setFooterHeight(0);
+      return;
+    }
+    const observer = new ResizeObserver(() => setFooterHeight(element.offsetHeight));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [grooming]);
+
   // The move target opens into a grid and closes again under the card; the drawer rises and
   // falls with it so exactly the target shows.
   // biome-ignore lint/correctness/useExhaustiveDependencies: offsets reads refs
@@ -414,7 +429,7 @@ export function Drawer({
             // Sunk under the move target; still mounted, so a touch begun in it carries on.
             moveInHead && 'opacity-0',
           )}
-          style={{ '--drawer-hidden': `${hidden}px` } as CSSProperties}
+          style={{ '--drawer-hidden': `${hidden + footerHeight}px` } as CSSProperties}
         >
           {shown ? (
             // biome-ignore lint/a11y/noStaticElementInteractions: notes where focus went, without handling it
@@ -435,6 +450,7 @@ export function Drawer({
           {grooming && (
             <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col justify-end">
               <div
+                ref={footer}
                 data-drop-expand=""
                 className="glass-thick pointer-events-auto rounded-t-[1.75rem] px-3 pt-3 pb-[calc(var(--safe-bottom)+0.5rem)] shadow-[0_-8px_24px_-12px_oklch(0_0_0/0.25)]"
               >

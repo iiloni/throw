@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RESET_HOLD_MS, steadyRows } from './steadyRows';
+import { LOCAL_WRITE_MS, RESET_HOLD_MS, steadyRows } from './steadyRows';
 
 describe('steadyRows', () => {
   it('keeps the rows shown while a collection is emptied and refilled', () => {
@@ -25,5 +25,14 @@ describe('steadyRows', () => {
       rows: [],
       emptySince: null,
     });
+  });
+
+  it('lets rows go at once when this device emptied the collection itself', () => {
+    const state = steadyRows({ rows: ['a'], emptySince: null }, [], 5000, 4800);
+    expect(state).toEqual({ rows: [], emptySince: null });
+    // A reset long after the last local write is still held.
+    expect(
+      steadyRows({ rows: ['a'], emptySince: null }, [], 5000 + LOCAL_WRITE_MS, 4800).rows,
+    ).toEqual(['a']);
   });
 });

@@ -66,8 +66,11 @@ export function ProjectBoard({
       // falls back to what sync has.
       place: (id: string, place: Place) => attempt(() => moveTask(id, place)),
       send: (ids: string[], statusId: string) =>
-        // Last first, so the first lands on top.
-        [...ids].reverse().every((id) => attempt(() => sendTask(id, statusId))),
+        // Last first, so the first lands on top. Every card is tried, whichever fail.
+        [...ids]
+          .reverse()
+          .map((id) => attempt(() => sendTask(id, statusId)))
+          .every(Boolean),
     }),
     [project.id],
   );

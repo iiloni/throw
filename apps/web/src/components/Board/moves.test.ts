@@ -135,6 +135,8 @@ describe('placing a held card', () => {
       priority: 2,
       position: 'Zz',
     });
+    // The write keeps that position too, so the server and the device agree.
+    expect(actions.place.mock.calls[0]![1]).toMatchObject({ position: 'Zz' });
   });
 
   it('falls back to the synced board when the move cannot be queued', () => {
@@ -225,6 +227,16 @@ describe('carrying a card from the keyboard', () => {
     });
     expect(board.get().carrying).toBeNull();
     expect(ids('status:review')).toEqual(['a', 'r']);
+  });
+
+  it('writes nothing for a card carried away and back to where it started', () => {
+    pickUp('a');
+    carryVertically(1);
+    carryVertically(-1);
+    expect(ids('status:build')).toEqual(['urgent', 'a', 'b', 'c']);
+    setDown();
+    expect(actions.place).not.toHaveBeenCalled();
+    expect(board.get().announcement).toMatch(/^Set down where it was/);
   });
 
   it('puts the card back with Escape and writes nothing', () => {

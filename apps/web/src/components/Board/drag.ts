@@ -17,7 +17,15 @@ import {
   toggleSelected,
   update,
 } from './state';
-import { beginSwipe, cancelSwipe, canSwipe, endSwipe, moveSwipe, swipe } from './swipe';
+import {
+  beginSwipe,
+  cancelSwipe,
+  canSwipe,
+  endSwipe,
+  moveSwipe,
+  settleSwipe,
+  swipe,
+} from './swipe';
 
 /**
  * The board's drag engine, on raw pointer events.
@@ -178,6 +186,8 @@ export function isPrimed() {
  */
 export function pressCard(event: ReactPointerEvent<HTMLElement>, taskId: string) {
   if (event.button !== 0 || drag.get() || press) return;
+  // A swipe still springing home or away lands now: this touch is a new one.
+  settleSwipe();
   if (event.target instanceof Element && event.target.closest('[data-no-drag]')) return;
   press = {
     taskId,
@@ -597,15 +607,18 @@ function finish(commit: boolean) {
       ? placeInList(lead, target.listId, target.priority, target.index)
       : null;
   const movable = releaseBoard(state.ids);
-  if (target && movable.length < state.ids.length) {
+  // A card moved elsewhere goes back to where the server has it; the others still move. A
+  // place is the lead card's alone.
+  if (target && (movable.length === 0 || (target.kind === 'place' && !movable.includes(lead))))
+    target = null;
+  if (commit && state.target && movable.length < state.ids.length) {
+    const stale = state.ids.length - movable.length;
     update({
       announcement:
         state.ids.length === 1
           ? 'Not moved: it changed on another device while it was held.'
-          : `${state.ids.length - movable.length} not moved: they changed on another device while they were held.`,
+          : `${stale} not moved: ${stale === 1 ? 'it' : 'they'} changed on another device while ${stale === 1 ? 'it was' : 'they were'} held.`,
     });
-    // The card under the finger goes back to where the server has it.
-    if (!movable.includes(lead)) target = null;
   }
   if (target?.kind === 'place') {
     if (place) moveToPlace(lead, place);
@@ -613,7 +626,7 @@ function finish(commit: boolean) {
     const statusId = target.kind === 'status' ? target.statusId : listStatusId(target.listId);
     if (statusId) sendTasks(movable, statusId);
   }
-  if (target && state.ids.length > 1) update({ selection: [] });
+  if (commit && state.target && state.ids.length > 1) update({ selection: [] });
   if (!wasTouch) swallowClick();
   if (target) feel('success');
   drag.set({ ...state, phase: 'landing', target: null, rail: null });

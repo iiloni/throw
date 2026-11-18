@@ -6,7 +6,20 @@ import { useEffect, useReducer, useRef } from 'react';
  */
 export const RESET_HOLD_MS = 5000;
 
+/** How soon after a write of this device's own an emptied collection counts as that write. */
+export const LOCAL_WRITE_MS = 1000;
+
 export type Steady<T> = { rows: T[]; emptySince: number | null };
+
+let localWriteAt = Number.NEGATIVE_INFINITY;
+
+/**
+ * Called for each write made on this device. A purge that removes a collection's last rows
+ * empties it on purpose, and those rows should leave at once.
+ */
+export function noteLocalWrite(now = performance.now()) {
+  localWriteAt = now;
+}
 
 /**
  * Reconnecting after a reload can make Electric fetch a shape again from scratch, and the
@@ -15,8 +28,15 @@ export type Steady<T> = { rows: T[]; emptySince: number | null };
  * once are almost always such a reset: what was shown stays until the rows return, or for
  * `RESET_HOLD_MS` if they never do.
  */
-export function steadyRows<T>(last: Steady<T>, rows: T[], now: number): Steady<T> {
+export function steadyRows<T>(
+  last: Steady<T>,
+  rows: T[],
+  now: number,
+  wroteAt = localWriteAt,
+): Steady<T> {
   if (rows.length > 0 || last.rows.length === 0) return { rows, emptySince: null };
+  // Emptied by this device's own write, such as purging the last project: not a reset.
+  if (last.emptySince === null && now - wroteAt < LOCAL_WRITE_MS) return { rows, emptySince: null };
   const emptySince = last.emptySince ?? now;
   return now - emptySince < RESET_HOLD_MS
     ? { rows: last.rows, emptySince }

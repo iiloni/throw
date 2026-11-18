@@ -320,7 +320,12 @@ export function placeInList(
   index: number,
 ): Place | null {
   const state = board.get();
-  const task = current(state).tasks.find((item) => item.id === taskId);
+  // A carried card is placed as it was picked up, so carrying it back to where it started
+  // finds its own position again rather than a new one beside it.
+  const task =
+    state.carrying?.taskId === taskId
+      ? state.carrying.seen
+      : current(state).tasks.find((item) => item.id === taskId);
   if (!task) return null;
   const peers = listTasks(state, listId).filter((item) => item.priority === priority);
   return placementPlace(task, { statusId: listStatusId(listId), priority, index, peers });
@@ -340,11 +345,12 @@ export function moveToPlace(taskId: string, place: Place) {
   const tasks = syncedTasks();
   const task = tasks.find((item) => item.id === taskId);
   if (!task) return;
+  // A subtask's position orders it among its parent's subtasks; a column does not change it.
+  const to = task.parentId === null ? place : { ...place, position: task.position };
   const { statusId, priority, position } = task;
-  if (place.statusId === statusId && place.priority === priority && place.position === position)
-    return;
-  setTasks(tasks.map((item) => (item.id === taskId ? moveTo(project, item, place) : item)));
-  if (board.get().actions?.place(taskId, place) === false) revert();
+  if (to.statusId === statusId && to.priority === priority && to.position === position) return;
+  setTasks(tasks.map((item) => (item.id === taskId ? moveTo(project, item, to) : item)));
+  if (board.get().actions?.place(taskId, to) === false) revert();
 }
 
 export function sendTasks(taskIds: string[], statusId: string) {
