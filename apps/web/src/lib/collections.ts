@@ -730,6 +730,12 @@ export function useTags(projectId: string) {
   // Keep the result stable between sync changes: the board adapts it in a layout effect.
   return { tags: data ?? emptyTags, isLoading };
 }
+/** Every tag of the user's projects, for the workspace board's cards. */
+export function useAllTags() {
+  const { data, isLoading } = useLiveQuery((q) => q.from({ tag: tagsCollection }));
+  return { tags: data ?? emptyTags, isLoading };
+}
+
 export function useTaskTags(taskId: string) {
   const { data = [], isLoading } = useLiveQuery((q) => q.from({ assignment: taskTagsCollection }));
   return { taskTags: data.filter((row) => row.taskId === taskId), isLoading };

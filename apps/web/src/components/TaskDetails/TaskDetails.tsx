@@ -12,7 +12,7 @@ import {
 import { ChevronLeft, ChevronRight, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useContext, useState } from 'react';
 import { StatusGlyph } from '@/components/Board/glyphs';
-import type { Task as BoardTask } from '@/components/Board/model';
+import { type Task as BoardTask, projectOf } from '@/components/Board/model';
 import { StatusMenu } from '@/components/Board/StatusMenu';
 import { board, current, leaveTask, openSubtask, update } from '@/components/Board/state';
 import { TaskCard } from '@/components/Board/TaskCard';
@@ -76,7 +76,8 @@ export function TaskDetails({
   const children = tasks
     .filter((row) => row.parentId === task.id && row.deletedAt === null)
     .sort((a, b) => comparePositions(a.position, b.position) || a.id.localeCompare(b.id));
-  const boardProject = current().project;
+  // On the workspace board, the task's own project: its subtasks move among its statuses.
+  const boardProject = projectOf(current().project, task);
   const [recovery, setRecovery] = useState<ActivityEntry | null>(null);
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState('');

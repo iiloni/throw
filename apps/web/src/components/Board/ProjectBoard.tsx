@@ -1,36 +1,24 @@
 import type { Project } from '@throw/shared';
 import { AnimatePresence } from 'motion/react';
-import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ShellMenu } from '@/components/AppShell/ShellMenu';
 import { useShell } from '@/components/AppShell/shell';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { type TaskPanel, taskDrawerContent } from '@/components/TaskDetails/TaskControls';
 import { TaskDetails } from '@/components/TaskDetails/TaskDetails';
 import { useStatuses, useTags, useTasks } from '@/lib/collections';
-import { flushTaskDescription } from '@/lib/descriptionEditing';
 import { useMedia } from '@/lib/media';
 import { useAwaitingSync } from '@/lib/syncStatus';
-import { createTask, moveTask, sendTask, updateTask } from '@/lib/tasks';
+import { createTask } from '@/lib/tasks';
 import { BoardAnnouncer } from './BoardAnnouncer';
-import { putBack } from './carry';
+import { taskScreens, taskWrites, useBoardBoundary } from './boundary';
 import { DesktopBoard } from './DesktopBoard';
 import { DragOverlay } from './DragOverlay';
-import { configureDrag, drag } from './drag';
-import type { Place } from './model';
 import { PhoneBoard } from './PhoneBoard';
 import { projectBoardData } from './selection';
-import { board, leaveTask, receiveBoard, update, useBoardSettings } from './state';
+import { board, update } from './state';
 import { TaskScreen } from './TaskView';
 import { TaskContentContext } from './taskContent';
-
-function attempt(write: () => void) {
-  try {
-    write();
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /** Only this boundary knows collections and writes; the prototype shares the whole board. */
 export function ProjectBoard({
@@ -46,8 +34,6 @@ export function ProjectBoard({
   const { tags } = useTags(project.id);
   const phone = useMedia('(max-width: 767px)');
   const state = board.use();
-  const [settings] = useBoardSettings();
-  configureDrag({ heldColumn: settings.heldColumn });
   const data = useMemo(
     () => projectBoardData(project, statuses, tasks, tags),
     [project, statuses, tasks, tags],
@@ -59,51 +45,18 @@ export function ProjectBoard({
   if (taskPage && taskPage.taskId !== state.openTaskId) setTaskPage(null);
   const actions = useMemo(
     () => ({
-      beforeLeave: flushTaskDescription,
+      ...taskWrites,
       create: (statusId?: string) => createTask(project.id, { statusId, title: 'New task' }),
-      rename: (id: string, title: string) => updateTask(id, { title }),
-      // A task purged or a status deleted on another device cannot be moved to; the board
-      // falls back to what sync has.
-      place: (id: string, place: Place) => attempt(() => moveTask(id, place)),
-      send: (ids: string[], statusId: string) =>
-        // Last first, so the first lands on top. Every card is tried, whichever fail.
-        [...ids]
-          .reverse()
-          .map((id) => attempt(() => sendTask(id, statusId)))
-          .every(Boolean),
     }),
     [project.id],
   );
-  useLayoutEffect(() => {
-    receiveBoard(data, actions, awaitingTasks);
-  }, [data, actions, awaitingTasks]);
+  useBoardBoundary(data, actions, awaitingTasks);
   const linkedTaskExists = tasks.some(
     (task) => task.projectId === project.id && task.id === initialTaskId,
   );
   useEffect(() => {
     if (initialTaskId && linkedTaskExists) update({ openTaskId: initialTaskId });
   }, [initialTaskId, linkedTaskExists]);
-  useEffect(() => {
-    document.documentElement.toggleAttribute('data-hide-scrollbars', !settings.scrollbars);
-    return () => document.documentElement.removeAttribute('data-hide-scrollbars');
-  }, [settings.scrollbars]);
-  useEffect(() => {
-    function close(event: KeyboardEvent) {
-      if (
-        event.key !== 'Escape' ||
-        event.defaultPrevented ||
-        drag.get() ||
-        document.querySelector('[role="menu"], [role="dialog"]')
-      )
-        return;
-      const { carrying, selection } = board.get();
-      if (carrying) putBack();
-      else if (selection.length > 0) update({ selection: [] });
-      else leaveTask();
-    }
-    window.addEventListener('keydown', close);
-    return () => window.removeEventListener('keydown', close);
-  }, []);
   if (awaiting || state.projectId !== project.id || state.actions === null)
     return (
       <p role="status" className="p-6 text-muted-foreground">
@@ -116,13 +69,7 @@ export function ProjectBoard({
         Connect to load this board on this device.
       </p>
     );
-  const findTask = (id: string | null) =>
-    [...data.tasks, ...(data.hiddenTasks ?? [])].find((task) => task.id === id);
-  const openTask = findTask(state.openTaskId);
-  // A subtask opened from its parent's pane covers that pane, which stays to go back to.
-  const screens = openTask
-    ? [...state.taskTrail.map(findTask), openTask].filter((task) => task !== undefined)
-    : [];
+  const { openTask, screens } = taskScreens(data, state);
   const openRow = phone ? tasks.find((row) => row.id === openTask?.id) : undefined;
   const taskContent = {
     drawer:

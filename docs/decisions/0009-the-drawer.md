@@ -27,8 +27,9 @@ search and capture, the move targets, project create and edit, the tag manager a
 are all content the drawer shows. Nothing slides up over the drawer as a second sheet.
 `BottomSheet` is not used on phones.
 
-**The collapsed drawer's header is the dock.** On a project or cross-project board it holds
-the backlog's handle, Search and the create button. While a task is open it holds that
+**The collapsed drawer's header is the dock.** On a project board it holds the backlog's
+handle, Search and the create button; the cross-project board has no backlog, so its dock
+holds Search and the create button. While a task is open it holds that
 task's actions, and while a new task is written above it, that task's controls. The dock appears only on boards and open tasks. Settings and an empty
 workspace keep the title menu alone: there the drawer is out of sight until something opens
 in it, and it goes away again when that closes.

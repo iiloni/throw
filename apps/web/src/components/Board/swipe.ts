@@ -2,6 +2,7 @@ import { animate, motionValue } from 'motion/react';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { createStore } from '@/lib/store';
+import { categoryTarget, defaultStatus } from './model';
 import { board, current, sendTasks } from './state';
 
 /**
@@ -29,14 +30,15 @@ const FLICK_MIN = 56;
 export function canSwipe(element: HTMLElement) {
   const list = element.closest<HTMLElement>('[data-drop-list]')?.dataset.dropList;
   const pager = element.closest('[data-pager]');
-  return Boolean(
-    pager && list?.startsWith('status:') && board.get().selection.length === 0 && doneStatus(),
-  );
+  const open = list?.startsWith('status:') || element.closest('[data-swipe-close]') !== null;
+  return Boolean(pager && open && board.get().selection.length === 0 && doneStatus());
 }
 
+/** On the workspace board, each card closes into its own project's default done status. */
 export function doneStatus() {
-  const done = current().project.statuses.filter((status) => status.category === 'done');
-  return done.find((status) => status.isDefault) ?? done[0];
+  const { project } = current();
+  if (project.members) return { id: categoryTarget('done'), name: 'Done' };
+  return defaultStatus(project, 'done');
 }
 
 export function beginSwipe(taskId: string, element: HTMLElement, x: number) {

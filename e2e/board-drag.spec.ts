@@ -1,46 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { expect, type Locator, type Page, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 
-import { cardIds, fixture } from './board-helpers';
-import { shapeRows } from './helpers';
-
-type Point = { x: number; y: number };
-
-async function centre(target: Locator | Point): Promise<Point> {
-  if (!('boundingBox' in target)) return target;
-  const box = (await target.boundingBox())!;
-  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-}
-
-/**
- * Carries a card with the mouse through `path`, pausing at each point so the board can
- * respond (a rail's dwell, a column folding), then drops it unless told to keep holding.
- */
-async function carry(
-  page: Page,
-  card: Locator,
-  path: (Locator | Point)[],
-  { pause = 120, drop = true }: { pause?: number; drop?: boolean } = {},
-) {
-  const start = await centre(card);
-  await page.mouse.move(start.x, start.y);
-  await page.mouse.down();
-  // Past the slop, so the press becomes a drag.
-  await page.mouse.move(start.x + 4, start.y + 8, { steps: 4 });
-  for (const point of path) {
-    const { x, y } = await centre(point);
-    await page.mouse.move(x, y, { steps: 14 });
-    await page.waitForTimeout(pause);
-  }
-  if (drop) await page.mouse.up();
-}
-
-async function taskRow(page: Page, headers: Record<string, string>, id: string) {
-  return (await shapeRows(page.request, 'tasks', headers)).find((row) => row.id === id);
-}
-
-const card = (page: Page, title: string) =>
-  page.getByRole('article', { name: new RegExp(`${title}$`) });
+import { card, cardIds, carry, centre, finger, fixture, settled, taskRow } from './board-helpers';
 
 test.describe('desktop', () => {
   test.skip(({ isMobile }) => isMobile, 'Phone moves have their own tests');
@@ -348,58 +309,6 @@ test.describe('sync', () => {
 });
 
 /** Where a target comes to rest, once the drawer or pager carrying it has stopped moving. */
-async function settled(target: Locator) {
-  let last = '';
-  for (;;) {
-    const box = await target.boundingBox();
-    const now = JSON.stringify(box);
-    if (box && now === last) return target;
-    last = now;
-    await target.page().waitForTimeout(100);
-  }
-}
-
-/** A finger on the screen, through Chromium's touch input, so long presses are real touches. */
-async function finger(page: Page) {
-  const session = await page.context().newCDPSession(page);
-  let at: Point = { x: 0, y: 0 };
-  const send = (type: string, point?: Point) =>
-    session.send('Input.dispatchTouchEvent', { type, touchPoints: point ? [point] : [] });
-  return {
-    async press(target: Locator | Point, ms = 500) {
-      at = await centre('boundingBox' in target ? await settled(target) : target);
-      await send('touchStart', at);
-      await page.waitForTimeout(ms);
-    },
-    async move(target: Locator | Point, ms = 400) {
-      const to = await centre('boundingBox' in target ? await settled(target) : target);
-      const from = at;
-      const frames = Math.max(2, Math.round(ms / 16));
-      for (let frame = 1; frame <= frames; frame++) {
-        const t = frame / frames;
-        await send('touchMove', {
-          x: from.x + (to.x - from.x) * t,
-          y: from.y + (to.y - from.y) * t,
-        });
-        await page.waitForTimeout(16);
-      }
-      at = to;
-    },
-    async hold(ms: number) {
-      await page.waitForTimeout(ms);
-    },
-    async lift() {
-      await send('touchEnd');
-    },
-    async tap(target: Locator | Point) {
-      at = await centre('boundingBox' in target ? await settled(target) : target);
-      await send('touchStart', at);
-      await page.waitForTimeout(60);
-      await send('touchEnd');
-    },
-  };
-}
-
 test.describe('phone', () => {
   test.skip(({ isMobile, browserName }) => !isMobile || browserName !== 'chromium', 'Touch input');
 

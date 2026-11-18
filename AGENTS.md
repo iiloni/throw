@@ -12,9 +12,12 @@ longer holds, update it in the same change rather than working around it.
 The repository has the stack end to end (auth, sync, the outbox, local persistence), the
 task model (workspaces, projects, statuses, tasks and subtasks, with keys, numbers, the trash
 and ADR 0005's conflict rule; see `docs/data-model.md`), and the responsive app shell. The
-shell owns workspace and project management, a desktop navigation rail, a phone dock and
-remembered navigation. Its project board uses the shared Board components on synced tasks
-and statuses; the cross-project board body is a placeholder.
+shell owns workspace and project management, a desktop navigation rail and remembered
+navigation; each phone board brings its own dock. Its project board uses the shared Board
+components on synced tasks and statuses, and the cross-project board
+(`Board/WorkspaceBoard.tsx`) adapts every project of the workspace into one virtual project
+whose columns are categories (`workspaceBoardData` in `Board/selection.ts`; a task's own
+project comes from `projectOf`, and category drop targets are `category:<name>`).
 Task actions live in `apps/web/src/lib/tasks.ts` and `statuses.ts`. The task pane edits
 fields and text-only BlockNote descriptions, keeps recoverable description drafts, and
 opens subtasks through the board's existing `openTaskId`. Its real content is supplied by
@@ -27,7 +30,7 @@ Tags have their data layer and reusable controls in `components/Tag*`, with a re
 development only. The board colour helper is `taskTagColor` in `@throw/shared`. The task
 pane picks and lists tags; project settings mounts tag management. The task history
 interleaves server entries and comments; refused changes have a quiet task-only notice and
-description recovery links. Cards move on the project board by drag, keyboard,
+description recovery links. Cards move on both boards by drag, keyboard,
 phone long press, the move drawer and a rightward swipe to close (ADR 0008).
 Project settings lives at `/w/:workspaceId/p/:projectId/settings`, with project task
 trash beside it at `/trash`. Workspace trash is `/w/:workspaceId/trash`. Settings and trash

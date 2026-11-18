@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { z } from 'zod';
 import { ShellMenu } from '@/components/AppShell/ShellMenu';
 import {
@@ -26,7 +26,6 @@ import { BoardSettingsPanel } from '@/components/Board/BoardSettingsPanel';
 import { board, update } from '@/components/Board/state';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { CommandPalette, type PaletteMode } from '@/components/CommandPalette/CommandPalette';
-import { Dock } from '@/components/Dock/Dock';
 import { ManagementSurfaceProvider } from '@/components/ManagementSurface/ManagementSurface';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
@@ -50,12 +49,11 @@ const paramsSchema = z.object({
 export function AppShell() {
   const navigate = useNavigate();
   const rawParams = useRouterState({ select: (state) => state.matches.at(-1)?.params });
+  // From the rendered match, as the params are: the location moves first while a navigation
+  // loads, and reading it would swap the shell's layout before its page.
+  const routeId = useRouterState({ select: (state) => state.matches.at(-1)?.routeId });
   const params = paramsSchema.parse(rawParams ?? {});
   const location = useRouterState({ select: (state) => state.location });
-  // Keep the shell with the rendered route while its replacement loads.
-  const displayedPath = useRouterState({
-    select: (state) => state.matches.at(-1)?.pathname ?? state.location.pathname,
-  });
   const navigating = useRouterState({ select: (state) => state.isLoading });
   const { workspaces: allWorkspaces, isLoading: loadingWorkspaces } = useWorkspaces();
   const { projects: allProjects, isLoading: loadingProjects } = useProjects();
@@ -93,10 +91,13 @@ export function AppShell() {
       : allProjects.length,
   );
   const view = viewSchema.catch('board').parse((location.search as { view?: unknown }).view);
-  const crossBoard = displayedPath.endsWith('/board');
-  const projectBoard = !!project && !/\/(settings|trash)$/.test(displayedPath);
+  const crossBoard = routeId === '/_app/w/$workspaceId/board';
+  const projectBoard = !!project && routeId === '/_app/w/$workspaceId/p/$projectId';
+  // Both boards fill the window under their own header and dock.
+  const fullBoard = projectBoard || (crossBoard && !!workspace && projects.length > 0);
+  const openPalette = useCallback((mode: PaletteMode = 'search') => setPalette(mode), []);
   const boardState = board.use();
-  const settings = displayedPath === '/settings';
+  const settings = routeId === '/_app/settings';
 
   useEffect(() => {
     if (navigating || !workspace || !params.workspaceId) return;
@@ -156,8 +157,8 @@ export function AppShell() {
     return () => window.removeEventListener('keydown', shortcut);
   }, [workspace, form, palette]);
   useEffect(() => {
-    if (!pendingTask || boardState.projectId !== pendingTask.projectId || !boardState.actions)
-      return;
+    const here = crossBoard ? `workspace:${workspace?.id}` : pendingTask?.projectId;
+    if (!pendingTask || boardState.projectId !== here || !boardState.actions) return;
     if (
       !boardState.boards.some((data) => data.tasks.some((task) => task.id === pendingTask.taskId))
     )
@@ -167,7 +168,7 @@ export function AppShell() {
       ...(pendingTask.created ? { backlogFilter: null } : {}),
     });
     setPendingTask(null);
-  }, [pendingTask, boardState]);
+  }, [pendingTask, boardState, crossBoard, workspace?.id]);
   // Old shell links still open the palette without replacing the board with a search page.
   useEffect(() => {
     if (view !== 'search' || !workspace) return;
@@ -202,20 +203,13 @@ export function AppShell() {
     selectWorkspace,
     openForm: setForm,
     goBoard,
-    openPalette: (mode = 'search') => setPalette(mode),
+    openPalette,
     openTask: (projectId, taskId, created) => {
       if (!workspace) return;
       setPendingTask({ projectId, taskId, created });
-      if (project?.id !== projectId || !projectBoard) selectProject(workspace.id, projectId);
-    },
-    selectBoardView: (view) => {
-      if (workspace)
-        void navigate({
-          to: '/w/$workspaceId/board',
-          params: { workspaceId: workspace.id },
-          search: { view },
-          replace: true,
-        });
+      // The cross-project board opens any of its projects' tasks in place.
+      if (!crossBoard && (project?.id !== projectId || !projectBoard))
+        selectProject(workspace.id, projectId);
     },
     goProjectSettings: (project) => {
       void navigate({
@@ -245,7 +239,7 @@ export function AppShell() {
       >
         Skip to content
       </a>
-      <ManagementSurfaceProvider active={!projectBoard}>
+      <ManagementSurfaceProvider active={!fullBoard}>
         <div className="flex min-h-dvh">
           {desktop && (
             <motion.aside
@@ -368,12 +362,12 @@ export function AppShell() {
                     <Trash2 aria-hidden className="size-5" />
                   </RailButton>
                 )}
-                {projectBoard && (
+                {fullBoard && (
                   <div className="px-2">
                     <SyncIndicator />
                   </div>
                 )}
-                {projectBoard && <BoardSettingsPanel expanded={expanded} />}
+                {fullBoard && <BoardSettingsPanel expanded={expanded} crossBoard={crossBoard} />}
 
                 <RailButton
                   label="Settings"
@@ -399,20 +393,19 @@ export function AppShell() {
             </motion.aside>
           )}
           <div className="flex min-w-0 flex-1 flex-col pr-[var(--safe-right)]">
-            {!projectBoard && <PageHeader desktop={desktop} />}
+            {!fullBoard && <PageHeader desktop={desktop} />}
             <main
               id="main-content"
               tabIndex={-1}
               className={cn(
                 'min-h-0 flex-1 outline-none',
-                projectBoard ? 'h-dvh flex-none' : 'pb-[var(--dock-space)] md:pb-8',
+                fullBoard ? 'h-dvh flex-none' : 'pb-[var(--dock-space)] md:pb-8',
               )}
             >
               <Outlet />
             </main>
           </div>
         </div>
-        {!desktop && !projectBoard && crossBoard && <Dock />}
         <CommandPalette
           key={workspace?.id ?? 'none'}
           mode={palette}

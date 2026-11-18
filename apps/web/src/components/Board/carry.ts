@@ -1,9 +1,11 @@
 import {
+  categoryTarget,
   identifier,
   isClosed,
   moveTo,
   type Priority,
   priorityName,
+  projectOf,
   sendToStatus,
   statusById,
 } from './model';
@@ -34,11 +36,14 @@ function describe(taskId: string) {
   const task = tasks.find((item) => item.id === taskId);
   const status = task && statusById(project, task.statusId);
   if (!task || !status) return '';
-  const zone = listTasks(state, listOf(taskId) ?? 'closed').filter(
-    (item) => isClosed(status.category) || item.priority === task.priority,
-  );
+  // On the workspace board a card's place is counted in the column it shows in, whose
+  // closed columns are banded by priority as well.
+  const workspace = project.members !== undefined;
+  const banded = workspace || !isClosed(status.category);
+  const list = workspace ? categoryTarget(status.category) : (listOf(taskId) ?? 'closed');
+  const zone = listTasks(state, list).filter((item) => !banded || item.priority === task.priority);
   const place = zone.findIndex((item) => item.id === taskId) + 1;
-  const rank = isClosed(status.category) ? '' : `${priorityName(project, task.priority)}, `;
+  const rank = banded ? `${priorityName(projectOf(project, task), task.priority)}, ` : '';
   return `${identifier(project, task)}: ${status.name}, ${rank}${place} of ${zone.length}`;
 }
 
@@ -47,7 +52,9 @@ function listOf(taskId: string): ListId | null {
   const task = tasks.find((item) => item.id === taskId);
   const status = task && statusById(project, task.statusId);
   if (!status) return null;
-  if (status.category === 'active') return `status:${status.id}`;
+  // The workspace board mixes projects in a column, so a card is ordered within its status.
+  if (status.category === 'active' || (project.members && !isClosed(status.category)))
+    return `status:${status.id}`;
   return status.category === 'backlog' ? 'backlog' : 'closed';
 }
 
@@ -119,8 +126,10 @@ export function carryAcross(direction: -1 | 1) {
   const { project, tasks } = current();
   const task = tasks.find((item) => item.id === taskId);
   if (!taskId || !task) return;
-  const index = project.statuses.findIndex((status) => status.id === task.statusId);
-  const next = project.statuses[index + direction];
+  // A card walks its own project's statuses.
+  const { statuses } = projectOf(project, task);
+  const index = statuses.findIndex((status) => status.id === task.statusId);
+  const next = statuses[index + direction];
   if (!next) return;
   const moved = sendToStatus(project, tasks, [taskId], next.id).find((item) => item.id === taskId);
   if (moved) carryTo(moved);

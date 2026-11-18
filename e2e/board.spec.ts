@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { cardIds, fixture } from './board-helpers';
-import { APP_LOAD_TIMEOUT, shapeRows, signUp, waitForCachedProject } from './helpers';
+import { APP_LOAD_TIMEOUT, shapeRows, waitForCachedProject } from './helpers';
 import { newTag, tagTaskUpdate } from './tag-helpers';
 
 async function openBacklog(page: Page, isMobile: boolean) {
