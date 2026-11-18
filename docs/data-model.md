@@ -413,8 +413,9 @@ The owner has not reviewed these yet.
   device has them before it goes offline.
 - **Refused fields** reach the client through `onRefusedChanges` in
   `apps/web/src/lib/refusedChanges.ts`. Descriptions also retain a recovery draft on the
-  sending device when their outbox response reports a refusal; other field notices remain
-  open (spec, open question 5).
+  sending device when their outbox response reports a refusal. A task-only notice derives
+  from the signed-in user's refusals in the synced log, on every device. Its dismissal is
+  a device-local preference scoped to server/account/task; new refusal ids bring it back.
 - **Descriptions are directly editable**, without an edit mode or a Save button. Typing
   keeps a device-local draft; closing the task or opening another task queues it with the
   version editing began from. Route changes also flush the draft. The board still opens
@@ -460,7 +461,11 @@ these yet.
   it was written; it will be dated after everything the device has seen. Entries with an
   empty list are skipped. Queued task changes are not shown as pending: their entries
   appear when the server writes them. `readTaskTimeline` and `useTaskTimeline` in
-  `apps/web/src/lib/collections.ts` return it; the view is not built.
+  `apps/web/src/lib/collections.ts` return it. The task view renders one row per write with compact field sentences,
+  interleaved with comments. Creation condenses the title and status plus unavailable initial
+  choices. It does not combine separate writes. Refused descriptions link to the existing
+  recovery controls, which can also load the rejected document on another device without
+  overwriting an existing draft.
 - **Device times have millisecond precision**, so two writes to one task in the same
   millisecond are ordered by id.
 - **Comment body** **(default)**: a BlockNote document like a description, but never empty
