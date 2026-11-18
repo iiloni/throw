@@ -11,15 +11,9 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { IconButton } from '@/components/IconButton/IconButton';
+import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
 import { SettingsRow, SettingsSection } from '@/components/SettingsSection/SettingsSection';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -80,6 +74,8 @@ export function ServerBackups({ onAccessDenied }: { onAccessDenied: () => void }
   );
   const [restoring, setRestoring] = useState<BackupItem | null>(null);
   const [deleting, setDeleting] = useState<BackupItem | null>(null);
+  const closeRestore = () => setRestoring(null);
+  const closeDelete = () => setDeleting(null);
 
   const overview = state.status === 'ready' ? state.overview : null;
   useAnnounceResults(overview);
@@ -293,63 +289,55 @@ export function ServerBackups({ onAccessDenied }: { onAccessDenied: () => void }
 
       <Schedule schedule={overview.schedule} onSaved={refresh} />
 
-      <Dialog open={restoring !== null} onOpenChange={(open) => !open && setRestoring(null)}>
-        <DialogContent>
-          <DialogTitle>Restore this backup?</DialogTitle>
-          <DialogDescription>
-            The server goes back to {restoring && made(restoring)} for everyone: tasks, accounts and
-            passwords. Changes made since then are lost, on every device.
-          </DialogDescription>
-          {restoring && (
-            <ul className="flex list-disc flex-col gap-1 pl-5 text-muted-foreground text-sm">
-              <li>Throw is unavailable while it restores, then every device syncs again.</li>
-              <li>The database as it is now is kept as a backup, to undo this with.</li>
-              <li>
-                Everyone else has to sign in again, and so do you if this backup is from before your
-                account.
-              </li>
-            </ul>
-          )}
-          <div className="flex justify-end gap-2">
-            <DialogClose asChild>
-              <Button variant="ghost" className="rounded-full">
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button
-              variant="destructive"
-              className="rounded-full"
-              onClick={() => restoring && void restore(restoring)}
-            >
-              Restore
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ManagementSurface
+        open={restoring !== null}
+        title="Restore this backup?"
+        onClose={closeRestore}
+      >
+        <p className="mb-3 text-muted-foreground text-sm">
+          The server goes back to {restoring && made(restoring)} for everyone: tasks, accounts and
+          passwords. Changes made since then are lost, on every device.
+        </p>
+        <ul className="mb-5 flex list-disc flex-col gap-1 pl-5 text-muted-foreground text-sm">
+          <li>Throw is unavailable while it restores, then every device syncs again.</li>
+          <li>The database as it is now is kept as a backup, to undo this with.</li>
+          <li>
+            Everyone else has to sign in again, and so do you if this backup is from before your
+            account.
+          </li>
+        </ul>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" className="rounded-full" onClick={closeRestore}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            className="rounded-full"
+            onClick={() => restoring && void restore(restoring)}
+          >
+            Restore
+          </Button>
+        </div>
+      </ManagementSurface>
 
-      <Dialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
-        <DialogContent>
-          <DialogTitle>Delete this backup?</DialogTitle>
-          <DialogDescription>
-            The backup from {deleting && made(deleting)} is removed from the server. Copies you
-            downloaded are not affected.
-          </DialogDescription>
-          <div className="flex justify-end gap-2">
-            <DialogClose asChild>
-              <Button variant="ghost" className="rounded-full">
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button
-              variant="destructive"
-              className="rounded-full"
-              onClick={() => deleting && void remove(deleting)}
-            >
-              Delete
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ManagementSurface open={deleting !== null} title="Delete this backup?" onClose={closeDelete}>
+        <p className="mb-5 text-muted-foreground text-sm">
+          The backup from {deleting && made(deleting)} is removed from the server. Copies you
+          downloaded are not affected.
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" className="rounded-full" onClick={closeDelete}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            className="rounded-full"
+            onClick={() => deleting && void remove(deleting)}
+          >
+            Delete
+          </Button>
+        </div>
+      </ManagementSurface>
     </div>
   );
 }

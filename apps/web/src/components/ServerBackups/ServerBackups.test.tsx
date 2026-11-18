@@ -12,6 +12,7 @@ vi.mock('@/lib/serverBackups', () => ({
     saveSchedule: vi.fn().mockResolvedValue({}),
   },
 }));
+vi.mock('@/lib/media', () => ({ useMedia: () => true }));
 describe('backup settings', () => {
   it('shows the storage warning and starts a database backup', async () => {
     const refresh = vi.fn().mockResolvedValue(undefined);
