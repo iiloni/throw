@@ -1,4 +1,4 @@
-import { Plus, Search, SearchX, SlidersHorizontal, X } from 'lucide-react';
+import { Plus, Search, SearchX, SlidersHorizontal, Tag as TagGlyph, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
   type KeyboardEvent,
@@ -12,17 +12,19 @@ import {
 import { useShell } from '@/components/AppShell/shell';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
-import { useTasks } from '@/lib/collections';
+import { useAllTags, useAllTaskTags, useTasks } from '@/lib/collections';
 import { springs } from '@/lib/motion';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import {
   descriptionSnippet,
   highlight,
   indexTasks,
+  matchedTags,
   SEARCH_LIMIT,
   type Segment,
   searchProjects,
   searchTasks,
+  taskTagNames,
 } from '@/lib/taskSearch';
 import { cn } from '@/lib/utils';
 import { backlogOf, type Dismiss, focusPaletteInput, type PaletteActions } from './actions';
@@ -57,9 +59,12 @@ export function useSearch({
   const [error, setError] = useState('');
   const list = useRef<HTMLDivElement>(null);
   const id = useId();
+  const { tags } = useAllTags();
+  const { taskTags } = useAllTaskTags();
+  const tagNames = useMemo(() => taskTagNames(tasks, tags, taskTags), [tasks, tags, taskTags]);
   const indexed = useMemo(
-    () => indexTasks(tasks, shell.projects, actions.statuses, shell.workspace?.id ?? ''),
-    [tasks, shell.projects, actions.statuses, shell.workspace?.id],
+    () => indexTasks(tasks, shell.projects, actions.statuses, shell.workspace?.id ?? '', tagNames),
+    [tasks, shell.projects, actions.statuses, shell.workspace?.id, tagNames],
   );
   const results = useMemo(
     () =>
@@ -73,7 +78,8 @@ export function useSearch({
     () => (board ? [] : searchProjects(shell.projects, query)),
     [board, shell.projects, query],
   );
-  const awaiting = useAwaitingSync(isLoading, indexed.length);
+  // Projects are jump targets too, until a board narrows search to its own.
+  const awaiting = useAwaitingSync(isLoading, indexed.length) || (!board && shell.awaitingProjects);
   const scope = board ? undefined : shell.projects.find((p) => p.id === projectFilter);
   const destination = board ?? scope;
   const backlog = backlogOf(actions.statuses, destination?.id);
@@ -98,16 +104,26 @@ export function useSearch({
     setError(actions.create(destination.id, title) ?? '');
   }
 
-  const options = [
-    ...results.map((row) => ({
-      key: row.task.id,
-      choose: () => actions.openTask(row.project.id, row.task.id),
-    })),
-    ...projects.map((project) => ({ key: project.id, choose: () => actions.jump(project) })),
-  ];
-  if (title) options.push({ key: 'create', choose: create });
+  // Only what is on screen: while tasks load, Enter must not choose a project or Create the
+  // list has not shown, when the task being typed may be about to appear. It waits instead.
+  const options = awaiting
+    ? []
+    : [
+        ...results.map((row) => ({
+          key: row.task.id,
+          choose: () => actions.openTask(row.project.id, row.task.id),
+        })),
+        ...projects.map((project) => ({ key: project.id, choose: () => actions.jump(project) })),
+      ];
+  if (title && !awaiting) options.push({ key: 'create', choose: create });
   const activeOption = options[Math.min(active, options.length - 1)];
   const activeKey = activeOption?.key;
+  const [enterPending, setEnterPending] = useState(false);
+  useEffect(() => {
+    if (!enterPending || awaiting) return;
+    setEnterPending(false);
+    activeOption?.choose();
+  }, [enterPending, awaiting, activeOption]);
   useEffect(() => {
     if (!activeKey) return;
     const row = document.getElementById(`${id}-${activeKey}`);
@@ -153,6 +169,7 @@ export function useSearch({
     setQuery(value: string) {
       setQuery(value);
       setActive(0);
+      setEnterPending(false);
       setError('');
       if (list.current) list.current.scrollTop = 0;
     },
@@ -168,6 +185,7 @@ export function useSearch({
       } else if (event.key === 'Enter') {
         event.preventDefault();
         if (event.metaKey || event.ctrlKey) create();
+        else if (awaiting) setEnterPending(true);
         else activeOption?.choose();
       }
     },
@@ -355,7 +373,7 @@ export function SearchResults({ search }: { search: SearchState }) {
       <div id={`${search.id}-results`} role="listbox" aria-label="Tasks, projects and capture">
         {!title ? (
           <p className="px-1 pb-5 text-muted-foreground text-sm">
-            Search titles and descriptions, or go straight to a task with its identifier.
+            Search titles, descriptions and tags, or go straight to a task with its identifier.
           </p>
         ) : search.awaiting ? (
           <p role="status" className="px-1 pb-5 text-muted-foreground text-sm">
@@ -372,6 +390,7 @@ export function SearchResults({ search }: { search: SearchState }) {
               <AnimatePresence initial={false} mode="popLayout">
                 {results.map((row) => {
                   const snippet = descriptionSnippet(row.task.description, query);
+                  const tags = matchedTags(row.tags, query);
                   return (
                     <motion.li key={row.task.id} layout={!reduced} {...listMotion}>
                       <button
@@ -409,6 +428,14 @@ export function SearchResults({ search }: { search: SearchState }) {
                               <span className="truncate">{row.project.name}</span>
                             </span>
                           )}
+                          {tags.map((name) => (
+                            <span key={name} className="flex min-w-0 items-center gap-1">
+                              <TagGlyph className="size-3 shrink-0" aria-label="Tag" />
+                              <span className="truncate">
+                                <Highlighted segments={highlight(name, query)} />
+                              </span>
+                            </span>
+                          ))}
                           <span className="flex-1" />
                           <span className="shrink-0 rounded-full bg-foreground/[0.08] px-2 py-0.5 font-medium text-[0.6875rem] text-muted-foreground">
                             {row.status?.name ?? 'No status'}

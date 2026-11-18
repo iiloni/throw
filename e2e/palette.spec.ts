@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, type Page, test } from '@playwright/test';
 import { APP_LOAD_TIMEOUT, shapeRows, signUp, waitForDeviceSync } from './helpers';
+import { newTag, taggedTask } from './tag-helpers';
 
 async function fixture(page: Page) {
   const account = await signUp(page);
@@ -142,6 +143,34 @@ test('a project board searches titles, identifiers, descriptions, closed tasks a
   await expect(taskPane(page, isMobile).getByRole('textbox', { name: 'Task title' })).toHaveValue(
     'Review workspace search',
   );
+});
+
+test('search finds a task by its tag or the tag above it, and shows the tag', async ({ page }) => {
+  const account = await fixture(page);
+  const home = await newTag(page.request, account, account.catchProject.id, { name: 'Home' });
+  const garden = await newTag(page.request, account, account.catchProject.id, {
+    name: 'Garden',
+    parentId: home.id,
+  });
+  await taggedTask(page.request, account, account.catchProject.id, {
+    title: 'Weed the beds',
+    statusId: account.catchProject.statuses[1]?.id,
+    primaryTagId: garden.id,
+  });
+  await expect(page.getByRole('article', { name: /Weed the beds/ })).toBeVisible();
+  for (const [query, tag] of [
+    ['garden', 'Garden'],
+    ['home', 'Home'],
+  ] as const) {
+    await open(page);
+    await input(page).fill(query);
+    const result = palette(page).getByRole('option', { name: /Weed the beds/ });
+    await expect(result).toBeVisible();
+    await expect(result.getByLabel('Tag')).toHaveCount(1);
+    await expect(result).toContainText(tag);
+    await page.keyboard.press('Escape');
+    await expect(palette(page)).toHaveCount(0);
+  }
 });
 
 test('project jump on the workspace board, arrow selection, Escape and focus return', async ({
