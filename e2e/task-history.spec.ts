@@ -117,6 +117,34 @@ async function compose(page: Page, text: string) {
   await page.getByRole('button', { name: 'Post comment', exact: true }).click();
 }
 
+test('comment drafts survive closing and reloading, and can be posted from the keyboard', async ({
+  page,
+}) => {
+  const { pane, history, path } = await fixture(page);
+  await history.getByRole('button', { name: 'Write a comment…' }).click();
+  await editor(page).fill('An unfinished comment');
+  await pane.getByRole('button', { name: 'Back to the board' }).click();
+  await expect(pane).toHaveCount(0);
+
+  await page.goto(path);
+  await history.getByRole('button', { name: 'Resume comment draft' }).click();
+  await expect(editor(page)).toHaveText('An unfinished comment');
+  await editor(page).press('ControlOrMeta+Enter');
+  const comment = history.getByRole('article', { name: 'You commented' });
+  await expect(comment).toContainText('An unfinished comment');
+  await expect(comment.getByText('Pending sync')).toHaveCount(0);
+  await expect(history.getByRole('button', { name: 'Write a comment…' })).toBeVisible();
+
+  await comment.getByRole('button', { name: 'Edit comment' }).click();
+  await editor(page).fill('An unfinished edit');
+  await page.reload();
+  await comment.getByRole('button', { name: 'Resume editing comment' }).click();
+  await expect(editor(page)).toHaveText('An unfinished edit');
+  await history.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(comment).toContainText('An unfinished comment');
+  await expect(comment.getByRole('button', { name: 'Edit comment' })).toBeVisible();
+});
+
 test('history words every field in server order, preserving comments between writes', async ({
   page,
 }) => {

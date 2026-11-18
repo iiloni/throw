@@ -469,6 +469,8 @@ view), comments and activity.
   and opens their panels in place.
 - The description is a directly editable, text-only BlockNote document. Changes commit
   when the task view closes or switches tasks; drafts survive reloads and conflicts.
+- Unfinished comments and comment edits can be resumed on the same device after closing the
+  task or reloading. Cancel discards the draft, and Ctrl/Cmd+Enter posts or saves it.
 - The top toolbars follow Catch: back and the parent/task identifier breadcrumb on the
   left, trash/restore on the right.
 - Subtasks sit on the task pane as a flush list of the same task cards, as Catch lists a

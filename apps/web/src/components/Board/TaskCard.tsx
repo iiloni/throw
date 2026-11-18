@@ -80,8 +80,13 @@ export function TaskCardFace({
           {identifier(project, task) ?? 'Pending'}
         </span>
         {tag && <span className="min-w-0 truncate text-tint-accent">{tag.name}</span>}
-        {task.secondaryTagIds.length > 0 && !state.actions && (
-          <span className="shrink-0 tabular-nums">+{task.secondaryTagIds.length}</span>
+        {task.secondaryTagIds.length > 0 && (
+          <span
+            className="shrink-0 tabular-nums"
+            title={`${task.secondaryTagIds.length} secondary tags`}
+          >
+            +{task.secondaryTagIds.length}
+          </span>
         )}
         {parent && state.actions && (
           <span
