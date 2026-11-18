@@ -1,4 +1,5 @@
 import {
+  type ActivityEntry,
   comparePositions,
   isClosedCategory,
   type Project,
@@ -26,6 +27,7 @@ import { createTask, restoreTask, sendTask, trashTask } from '@/lib/tasks';
 import { cn } from '@/lib/utils';
 import { TaskDescription } from './TaskDescription';
 import { TaskDrawer } from './TaskDrawer';
+import { TaskRefusalNotice, TaskTimeline } from './TaskTimeline';
 
 function boardTask(task: Task, tags: readonly Tag[]): BoardTask {
   return {
@@ -76,6 +78,7 @@ export function TaskDetails({
     .sort((a, b) => comparePositions(a.position, b.position) || a.id.localeCompare(b.id));
   // On the workspace board, the task's own project: its subtasks move among its statuses.
   const boardProject = projectOf(current().project, task);
+  const [recovery, setRecovery] = useState<ActivityEntry | null>(null);
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -163,7 +166,8 @@ export function TaskDetails({
               </p>
             )}
             <TaskTagList task={task} tags={tags} />
-            <TaskDescription task={task} />
+            <TaskRefusalNotice key={`notice:${task.id}`} taskId={task.id} />
+            <TaskDescription task={task} recovery={recovery} />
             {task.parentId === null && (
               // Flush with the task, as Catch lists a note's links below it.
               <section aria-label="Subtasks" className="mt-8 flex flex-col gap-2">
@@ -255,8 +259,19 @@ export function TaskDetails({
                 )}
               </section>
             )}
-            {/* Comments and activity mount below the description and subtask column. */}
-            <div data-task-timeline="" />
+            <TaskTimeline
+              key={`timeline:${task.id}`}
+              task={task}
+              project={project}
+              context={{
+                priorityNames: project.priorityNames,
+                parentName: (id) => {
+                  const parent = tasks.find((row) => row.id === id);
+                  return parent ? (taskIdentifier(project, parent) ?? undefined) : undefined;
+                },
+              }}
+              onRecoverDescription={(entry) => setRecovery({ ...entry })}
+            />
           </div>
         </ScrollAreaViewport>
         <ScrollBar />
