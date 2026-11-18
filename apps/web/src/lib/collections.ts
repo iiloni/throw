@@ -742,6 +742,13 @@ export function useAllTags() {
   return { tags: data ?? emptyTags, isLoading };
 }
 
+/** Every secondary tag assignment, for search. */
+export function useAllTaskTags() {
+  const { data, isLoading } = useLiveQuery((q) => q.from({ assignment: taskTagsCollection }));
+  return { taskTags: data ?? emptyTaskTags, isLoading };
+}
+const emptyTaskTags: TaskTag[] = [];
+
 export function useTaskTags(taskId: string) {
   const { data = [], isLoading } = useLiveQuery((q) => q.from({ assignment: taskTagsCollection }));
   return { taskTags: data.filter((row) => row.taskId === taskId), isLoading };

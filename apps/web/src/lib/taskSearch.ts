@@ -1,4 +1,13 @@
-import { isTaskTrashed, type Project, type Status, type Task, taskIdentifier } from '@throw/shared';
+import {
+  isTaskTrashed,
+  type Project,
+  type Status,
+  type Tag,
+  type Task,
+  type TaskTag,
+  tagPath,
+  taskIdentifier,
+} from '@throw/shared';
 
 export const SEARCH_LIMIT = 30;
 
@@ -36,10 +45,42 @@ export type IndexedTask = {
   status: Status | undefined;
   identifier: string | null;
   title: string;
+  /** Its tags' names, to show which one a search matched. */
+  tags: readonly string[];
   text: string;
 };
 
-/** Prepared only when collections change, never once per keystroke. Tag names plug in here. */
+/**
+ * Each task's tag names, primary and secondary, with their ancestors' names: a task tagged
+ * Garden under Home is found by either. A tag that has not synced adds nothing.
+ */
+export function taskTagNames(
+  tasks: readonly Task[],
+  tags: readonly Tag[],
+  assignments: readonly TaskTag[],
+): Map<string, string[]> {
+  const pathNames = new Map<string, string[]>();
+  const namesOf = (tagId: string) => {
+    let names = pathNames.get(tagId);
+    if (!names) {
+      names = tagPath(tags, tagId).map((tag) => tag.name);
+      pathNames.set(tagId, names);
+    }
+    return names;
+  };
+  const tagIds = new Map<string, string[]>();
+  for (const task of tasks) if (task.primaryTagId) tagIds.set(task.id, [task.primaryTagId]);
+  for (const { taskId, tagId } of assignments) {
+    const ids = tagIds.get(taskId);
+    if (ids) ids.push(tagId);
+    else tagIds.set(taskId, [tagId]);
+  }
+  const result = new Map<string, string[]>();
+  for (const [taskId, ids] of tagIds) result.set(taskId, [...new Set(ids.flatMap(namesOf))]);
+  return result;
+}
+
+/** Prepared only when collections change, never once per keystroke. */
 export function indexTasks(
   tasks: readonly Task[],
   projects: readonly Project[],
@@ -63,19 +104,16 @@ export function indexTasks(
       continue;
     const identifier = taskIdentifier(project, task);
     const title = normalizeSearch(task.title);
+    const tags = tagNames.get(task.id) ?? [];
     indexed.push({
       task,
       project,
       status: statusById.get(task.statusId),
       identifier,
       title,
+      tags,
       text: normalizeSearch(
-        [
-          task.title,
-          identifier ?? '',
-          descriptionText(task.description),
-          ...(tagNames.get(task.id) ?? []),
-        ].join(' '),
+        [task.title, identifier ?? '', descriptionText(task.description), ...tags].join(' '),
       ),
     });
   }
@@ -140,6 +178,15 @@ export function searchProjects(projects: readonly Project[], query: string): Pro
         a.name.localeCompare(b.name),
     )
     .slice(0, 8);
+}
+
+/** The tag names a search matched, so a result found by its tag says so. */
+export function matchedTags(tags: readonly string[], query: string) {
+  const words = normalizeSearch(query).split(/\s+/).filter(Boolean);
+  return tags.filter((name) => {
+    const normalized = normalizeSearch(name);
+    return words.some((word) => normalized.includes(word));
+  });
 }
 
 export type Segment = { text: string; match: boolean };

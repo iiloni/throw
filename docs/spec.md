@@ -516,12 +516,16 @@ trash (including children of trashed parents and projects) is excluded. There is
 cross-workspace search.
 
 Search runs on synced device data, offline too. Every literal query word must appear across
-the title, current identifier or description text, ignoring case and accents. Assigned tag
-names join these fields when the tags integration lands. Exact identifiers rank first, then
+the title, current identifier, description text or tag names, ignoring case and accents. A
+task's tags are its primary and secondary tags with their ancestors' names, so a task tagged
+Garden under Home is found by either, and a result found by a tag shows the tag that matched
+(2026-11-18). Exact identifiers rank first, then
 exact titles, title prefixes, all-title matches, and description/tag matches. Ties favor the
 current project, then project name, title and task UUID. A bare number prefers the current
 project when several projects have that number. Up to 30 tasks and eight project jumps are
-shown. Enter opens the selected result; arrows change the selection.
+shown. Enter opens the selected result; arrows change the selection. An Enter pressed while
+tasks or projects are still loading waits and chooses the selected result once they appear,
+rather than choosing a jump or Create the list has not shown (2026-11-18).
 
 Typing a title also offers Create; Ctrl/⌘Enter captures it directly into the board's
 project, or on the cross-project board the project search is filtered to. With neither, the
@@ -674,5 +678,7 @@ little as possible; it is not the normal way to use the app (ADR 0005).
    right, then down, in a band per priority, and a held card is placed with a caret; nothing
    reflows until the drop. A gap that parted the cards was prototyped and was too busy for
    an overview; see [The project board](#the-project-board).
-7. **The task view.** Card content is settled in [Cards](#cards). The full task view
-   still needs its content designed beyond what this spec already lists.
+7. **The task view — settled for the first version (2026-11-18).** It holds what
+   [The task view](#the-task-view) lists: the title and identifier, status, priority and
+   tags, the description, subtasks, and the timeline of comments and activity. More fields
+   arrive with the out-of-scope items that need them, such as dates.

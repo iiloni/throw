@@ -24,10 +24,16 @@ const status: Status = {
   isDefault: true,
   position: 'a0',
 };
-const mocks = vi.hoisted(() => ({ create: vi.fn(), shell: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  create: vi.fn(),
+  shell: vi.fn(),
+  tasks: { tasks: [] as unknown[], isLoading: false },
+}));
 vi.mock('@/components/AppShell/shell', () => ({ useShell: () => mocks.shell() }));
 vi.mock('@/lib/collections', () => ({
-  useTasks: () => ({ tasks: [], isLoading: false }),
+  useTasks: () => mocks.tasks,
+  useAllTags: () => ({ tags: [], isLoading: false }),
+  useAllTaskTags: () => ({ taskTags: [], isLoading: false }),
   useStatuses: () => ({ statuses: [status], isLoading: false }),
 }));
 vi.mock('@/lib/tasks', () => ({ createTask: (...args: unknown[]) => mocks.create(...args) }));
@@ -38,6 +44,7 @@ vi.mock('motion/react', async (importOriginal) => ({
 vi.mock('@/lib/media', () => ({ useMedia: () => true }));
 vi.mock('@/lib/backButton', () => ({ useBackHandler: () => {} }));
 beforeEach(() => {
+  mocks.tasks = { tasks: [], isLoading: false };
   mocks.create.mockReset().mockReturnValue('new-task');
   mocks.shell.mockReturnValue({
     project,
@@ -128,4 +135,55 @@ it('hands a title search cannot place to the capture window', () => {
   fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true });
   expect(onModeChange).toHaveBeenCalledWith('capture');
   expect(mocks.create).not.toHaveBeenCalled();
+});
+it('holds an Enter pressed while tasks load, then opens the task it finds', () => {
+  mocks.shell.mockReturnValue({
+    projects: [project],
+    workspace: { id: 'workspace', name: 'Personal' },
+  });
+  mocks.tasks = { tasks: [], isLoading: true };
+  const onOpenTask = vi.fn();
+  const onModeChange = vi.fn();
+  // A new element each time, so React renders it again rather than reusing the last result.
+  const palette = () => (
+    <TooltipProvider>
+      <CommandPalette
+        mode="search"
+        onClose={() => {}}
+        onOpenTask={onOpenTask}
+        onModeChange={onModeChange}
+      />
+    </TooltipProvider>
+  );
+  const { rerender } = render(palette());
+  const input = screen.getByRole('combobox', { name: 'Search tasks and projects' });
+  fireEvent.change(input, { target: { value: 'water' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(onModeChange).not.toHaveBeenCalled();
+  expect(onOpenTask).not.toHaveBeenCalled();
+  mocks.tasks = {
+    isLoading: false,
+    tasks: [
+      {
+        id: 'water',
+        workspaceId: 'workspace',
+        projectId: 'project',
+        number: 4,
+        title: 'Water tomatoes',
+        description: null,
+        descriptionVersion: null,
+        parentId: null,
+        deletedAt: null,
+        closedAt: null,
+        createdAt: '2026-10-15T00:00:00Z',
+        statusId: 'status',
+        priority: 3,
+        position: 'a0',
+        primaryTagId: null,
+      },
+    ],
+  };
+  rerender(palette());
+  expect(onOpenTask).toHaveBeenCalledWith('project', 'water', false);
+  expect(onModeChange).not.toHaveBeenCalled();
 });
