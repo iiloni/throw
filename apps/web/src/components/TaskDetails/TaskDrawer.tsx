@@ -8,7 +8,13 @@ import { IconButton } from '@/components/IconButton/IconButton';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
 import { springs } from '@/lib/motion';
-import { panelTitle, TaskControls, type TaskPanel, TaskPanelContent } from './TaskControls';
+import {
+  panelTitle,
+  TaskControls,
+  TaskDockRow,
+  type TaskPanel,
+  TaskPanelContent,
+} from './TaskControls';
 
 const panelHeight: Record<TaskPanel, number> = {
   status: 304,
@@ -68,21 +74,19 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
   // after the controls in the DOM so Tab reaches it from the control that opened it.
   return (
     <div ref={root} data-task-drawer="" className="relative mt-3 shrink-0">
-      <div
-        role="toolbar"
-        aria-label="Task controls"
-        className="glass flex flex-col rounded-[calc(var(--dock-radius)+0.25rem)] p-1"
-      >
-        <TaskControls
-          task={task}
-          statuses={statuses}
-          project={project}
-          onOpen={toggle}
-          controlProps={(name) => ({
-            'aria-expanded': panel === name,
-            'aria-controls': `${id}-${name}`,
-          })}
-        />
+      <div className="glass rounded-[calc(var(--dock-radius)+0.25rem)] p-1">
+        <TaskDockRow>
+          <TaskControls
+            task={task}
+            statuses={statuses}
+            project={project}
+            onOpen={toggle}
+            controlProps={(name) => ({
+              'aria-expanded': panel === name,
+              'aria-controls': `${id}-${name}`,
+            })}
+          />
+        </TaskDockRow>
       </div>
       <AnimatePresence initial={false}>
         {panel && (

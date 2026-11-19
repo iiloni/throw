@@ -206,24 +206,26 @@ export function taskDrawerContent({
   const closePage = () => onPage(null);
   return {
     dock: (
-      <TaskDockRow
-        onKeyDown={(event) => {
-          // The dock belongs to the open task, so Escape there leaves it as it does in it. With
-          // a panel open, the drawer takes Escape to close the panel.
-          if (event.key !== 'Escape' || event.defaultPrevented || page) return;
-          event.preventDefault();
-          leaveTask();
-        }}
-      >
-        <TaskControls
-          task={task}
-          statuses={statuses}
-          project={project}
-          onOpen={(panel) => onPage(panel === page ? null : panel)}
-          controlProps={(panel) => ({ 'aria-expanded': panel === page })}
-          tooltips={false}
-        />
-      </TaskDockRow>
+      <div data-task-drawer="">
+        <TaskDockRow
+          onKeyDown={(event) => {
+            // The dock belongs to the open task, so Escape there leaves it as it does in it. With
+            // a panel open, the drawer takes Escape to close the panel.
+            if (event.key !== 'Escape' || event.defaultPrevented || page) return;
+            event.preventDefault();
+            leaveTask();
+          }}
+        >
+          <TaskControls
+            task={task}
+            statuses={statuses}
+            project={project}
+            onOpen={(panel) => onPage(panel === page ? null : panel)}
+            controlProps={(panel) => ({ 'aria-expanded': panel === page })}
+            tooltips={false}
+          />
+        </TaskDockRow>
+      </div>
     ),
     page: page && {
       key: page,
@@ -261,7 +263,7 @@ export function TaskDockRow({
   const reduced = useReducedMotion();
   const transition = reduced ? { duration: 0 } : springs.snappy;
   return (
-    <div data-task-drawer="" className="relative h-[var(--dock-height)]">
+    <div className="relative h-[var(--dock-height)]">
       <AnimatePresence initial={false} mode="popLayout">
         {editor ? (
           <motion.div

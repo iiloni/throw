@@ -531,6 +531,7 @@ test('a finger formats the description from the dock while typing, as in Catch',
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await expect(controls(page)).toBeVisible();
   await expect(formatting).toHaveCount(0);
+});
 
 test('the desktop dock sits below the card, its panels open above it and follow it for Tab', async ({
   page,
