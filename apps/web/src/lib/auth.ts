@@ -41,6 +41,30 @@ export function clearAuthToken() {
   localStorage.removeItem(sessionKey(USER_KEY));
 }
 
+const EXPIRED_KEY = 'throw-expired-user';
+
+/**
+ * Ends a session the server turned down while keeping the account's copy and outbox on the
+ * device, and goes to sign in, so the same account picks them up again (ADR 0002). Signing
+ * in returns to the page it was on.
+ */
+export function endExpiredSession() {
+  const id = getSignedInUser()?.id;
+  if (id) localStorage.setItem(sessionKey(EXPIRED_KEY), id);
+  clearAuthToken();
+  const { pathname, search, hash } = window.location;
+  const params = new URLSearchParams({ redirect: pathname + search });
+  window.location.assign(`/login?${params}${hash}`);
+}
+
+/** The account whose session expired before this sign-in, read once. */
+export function takeExpiredUser(): string | null {
+  const key = sessionKey(EXPIRED_KEY);
+  const id = localStorage.getItem(key);
+  localStorage.removeItem(key);
+  return id;
+}
+
 function userOf(data: unknown): SignedInUser | null {
   if (!data || typeof data !== 'object' || !('user' in data)) return null;
   const parsed = signedInUserSchema.safeParse(data.user);

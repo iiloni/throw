@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { webBuildSchema } from '@throw/shared';
+import { prepareToLeavePage } from './leavePage';
 import { createStore } from './store';
 import { isUpdateReloadBlocked } from './useUpdateReloadBlocked';
 
@@ -94,8 +95,7 @@ export async function reloadForWebUpdate() {
     if (isUpdateReloadBlocked()) throw new Error('Close the open task or draft before reloading.');
     // Do not leave the page when connectivity was lost after the prompt appeared.
     await latestBuild();
-    const { waitForPendingWritesStored } = await import('./collections');
-    await waitForPendingWritesStored();
+    await prepareToLeavePage();
     const worker = await registration;
     if (worker) {
       await worker.update();
