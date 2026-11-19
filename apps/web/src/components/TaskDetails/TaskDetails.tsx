@@ -15,7 +15,7 @@ import { type Task as BoardTask, projectOf } from '@/components/Board/model';
 import { StatusMenu } from '@/components/Board/StatusMenu';
 import { board, current, leaveTask, openSubtask, update } from '@/components/Board/state';
 import { TaskCard } from '@/components/Board/TaskCard';
-import { TaskTitle } from '@/components/Board/TaskView';
+import { cardSurface, TaskTitle } from '@/components/Board/TaskView';
 import { TaskScrollContext } from '@/components/Board/taskMotionContext';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { TaskTags } from '@/components/TaskTags/TaskTags';
@@ -101,8 +101,20 @@ export function TaskDetails({
     (child) => statuses.find((row) => row.id === child.statusId)?.category === 'done',
   ).length;
   return (
-    <div className="flex min-h-0 flex-1 flex-col pt-[var(--safe-top)] pb-[var(--keyboard)]">
-      <header className="flex shrink-0 items-start justify-between gap-3 px-3 py-3">
+    <div
+      className={cn(
+        'flex min-h-0 flex-1 flex-col pb-[var(--keyboard)]',
+        phone && 'pt-[var(--safe-top)]',
+      )}
+    >
+      {/* Beside the board, the toolbars sit above the task's card and line up with its edges,
+          and its controls are a dock below it, as Catch's split view holds a note. */}
+      <header
+        className={cn(
+          'flex shrink-0 items-start justify-between gap-3',
+          phone ? 'px-3 py-3' : 'pb-3',
+        )}
+      >
         <div
           role="toolbar"
           aria-label="Task navigation"
@@ -166,7 +178,7 @@ export function TaskDetails({
           </IconButton>
         </div>
       </header>
-      <ScrollArea className="min-h-0 flex-1 [--scrollbar-inset:1rem]">
+      <ScrollArea className={cn('min-h-0 flex-1 [--scrollbar-inset:1rem]', !phone && cardSurface)}>
         <ScrollAreaViewport
           ref={attachScroll ?? undefined}
           // The dock rests over the content's end; focus and the caret stay clear of it.
@@ -174,8 +186,8 @@ export function TaskDetails({
         >
           <div
             className={cn(
-              'px-6 pt-5 sm:px-8',
-              phone ? 'pb-[calc(var(--dock-height)+var(--safe-bottom)+3rem)]' : 'pb-10',
+              'px-6 sm:px-8',
+              phone ? 'pt-5 pb-[calc(var(--dock-height)+var(--safe-bottom)+3rem)]' : 'pt-7 pb-10',
             )}
           >
             <TaskTitle task={boardTask(task, tags)} />

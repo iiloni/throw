@@ -477,8 +477,12 @@ view), comments and activity.
   picking one opens its children to pick a more specific one, and uncoloured top-level
   tags sit one step away. Tags lists the secondary tags with the primary marked, since a
   tag may hold both roles. Both pickers stay open for further choices. The task's tags
-  are listed under its title. On desktop the pane shows the same controls along its foot
-  and opens their panels in place.
+  are listed under its title. On desktop the pane follows Catch's split view (2026-11-19):
+  the navigation and trash toolbars sit above the task's card, lined up with its edges, and
+  the same controls are a glass dock below it. A panel opens above the dock over the
+  card's foot without moving the card, and closes from its own button, Escape, Back or a
+  tap outside. The desktop dock has no drag gestures: a pointer does not need them, and
+  the phone keeps its drawer's drags.
 - The description is a directly editable, text-only BlockNote document. Changes commit
   when the task view closes or switches tasks; drafts survive reloads and conflicts.
   Formatting follows Catch (2026-11-19): a mouse formats from BlockNote's floating toolbar,

@@ -331,7 +331,7 @@ export function OpenTaskPane({ frameWidth }: { frameWidth: number }) {
       {openTask && (
         <motion.div
           key="pane"
-          className="flex shrink-0 overflow-hidden pt-[calc(var(--safe-top)+1.25rem)] pr-6 pb-6"
+          className="flex shrink-0 overflow-hidden pt-[calc(var(--safe-top)+1.25rem)] pr-6 pb-[max(1.5rem,calc(var(--safe-bottom)+0.75rem))]"
           initial={{ width: 0, opacity: 0 }}
           animate={{ width: paneWidth + HANDLE_WIDTH + PANE_MARGIN, opacity: 1 }}
           exit={{ width: 0, opacity: 0 }}

@@ -4,12 +4,10 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { projectOf } from '@/components/Board/model';
 import { board, current } from '@/components/Board/state';
-import { traySurface } from '@/components/Board/TraySurface';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
 import { springs } from '@/lib/motion';
-import { cn } from '@/lib/utils';
 import { panelTitle, TaskControls, type TaskPanel, TaskPanelContent } from './TaskControls';
 
 const panelHeight: Record<TaskPanel, number> = {
@@ -21,9 +19,10 @@ const panelHeight: Record<TaskPanel, number> = {
 };
 
 /**
- * The task pane's own drawer on desktop, where the shell has none (ADR 0009). It owns the
- * chrome, gestures, Escape and Back around the same controls and panels a phone shows in the
- * board's drawer.
+ * The task's dock on desktop, below its card, as Catch's split view docks a note's controls
+ * (ADR 0009: desktop has no drawer). A panel opens above the dock, over the card's foot. It owns
+ * the Escape, Back and outside-tap dismissal around the same controls and panels a phone
+ * shows in the board's drawer.
  */
 export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] }) {
   const [panel, setPanel] = useState<TaskPanel | null>(null);
@@ -64,23 +63,15 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
     trigger.current = element;
     setPanel(panel === next ? null : next);
   }
+  // The dock stays in the pane's flow below the card, so it rises with the keyboard and the
+  // safe area; a panel opens above it over the card's foot without moving it. The panel comes
+  // after the controls in the DOM so Tab reaches it from the control that opened it.
   return (
-    <div
-      ref={root}
-      data-task-drawer=""
-      className={cn(
-        traySurface,
-        'z-10 shrink-0 overflow-hidden pb-[max(var(--safe-bottom),0.5rem)]',
-      )}
-    >
-      <motion.div
-        onPanEnd={(_, info) => {
-          if (info.offset.y > 35 || info.velocity.y > 300) collapse();
-          else if (info.offset.y < -25) setPanel(panel ?? 'status');
-        }}
+    <div ref={root} data-task-drawer="" className="relative mt-3 shrink-0">
+      <div
         role="toolbar"
         aria-label="Task controls"
-        className="flex touch-none flex-col px-3 pt-3 pb-2"
+        className="glass flex flex-col rounded-[calc(var(--dock-radius)+0.25rem)] p-1"
       >
         <TaskControls
           task={task}
@@ -92,7 +83,7 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
             'aria-controls': `${id}-${name}`,
           })}
         />
-      </motion.div>
+      </div>
       <AnimatePresence initial={false}>
         {panel && (
           <motion.div
@@ -104,11 +95,11 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
             animate={{ height: panelHeight[panel], opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={reduced ? { duration: 0 } : springs.smooth}
-            className="flex max-h-[min(50dvh,24rem)] flex-col overflow-hidden border-border border-t"
+            className="glass-thick absolute inset-x-0 bottom-full z-10 mb-2 flex max-h-[min(50dvh,24rem)] flex-col overflow-hidden rounded-[calc(var(--dock-radius)+0.25rem)]"
           >
-            <div className="flex h-11 shrink-0 items-center justify-between px-5">
+            <div className="flex h-11 shrink-0 items-center justify-between pr-2 pl-5">
               <h2 className="font-semibold text-sm">{panelTitle[panel]}</h2>
-              <IconButton label="Collapse task drawer" onClick={collapse}>
+              <IconButton label="Close panel" onClick={collapse}>
                 <ChevronDown />
               </IconButton>
             </div>
