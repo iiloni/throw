@@ -63,8 +63,8 @@ export function TagEditor({
     <form onSubmit={save} className="flex min-w-0 flex-col gap-4 pb-2">
       <p className="text-sm text-muted-foreground">
         {parentId
-          ? 'Inherits its root’s colour and icon.'
-          : 'A primary tag gives its task this root’s colour.'}
+          ? 'Inherits its root’s color and icon.'
+          : 'A primary tag gives its task this root’s color.'}
       </p>
       <label htmlFor={nameId} className="flex flex-col gap-1.5 text-sm font-medium">
         Name
@@ -99,11 +99,11 @@ export function TagEditor({
       {!parentId && (
         <>
           <fieldset>
-            <legend className="mb-2 text-sm font-medium">Colour</legend>
+            <legend className="mb-2 text-sm font-medium">Color</legend>
             <div className="grid grid-cols-6 justify-items-center gap-2">
               <button
                 type="button"
-                aria-label="No colour"
+                aria-label="No color"
                 aria-pressed={color === null}
                 onClick={() => setColor(null)}
                 className={cn(

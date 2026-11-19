@@ -14,7 +14,7 @@ const band = (page: Page, name: string, priority: string) =>
 test.describe('desktop', () => {
   test.skip(({ isMobile }) => isMobile, 'The phone has its own test');
 
-  test('every project meets in category columns, banded by priority and coloured by project', async ({
+  test('every project meets in category columns, banded by priority and colored by project', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 });

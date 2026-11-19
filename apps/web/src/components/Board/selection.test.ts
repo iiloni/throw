@@ -64,7 +64,7 @@ function view(tasks: Task[]) {
 }
 
 describe('synced project board selection', () => {
-  it('keeps primary tag names and resolves their root colour safely during partial sync', () => {
+  it('keeps primary tag names and resolves their root color safely during partial sync', () => {
     const root: Tag = {
       id: 'root',
       projectId: project.id,
@@ -302,7 +302,7 @@ describe('workspace board selection', () => {
     projectId: garden.id,
   }));
 
-  it('keeps each project’s tasks, statuses and colour, trashed tasks included', () => {
+  it('keeps each project’s tasks, statuses and color, trashed tasks included', () => {
     const data = workspaceBoardData(
       'workspace',
       [project, garden],
@@ -323,7 +323,7 @@ describe('workspace board selection', () => {
       ['kitchen', project.id, 'teal'],
       ['weeds', garden.id, 'orange'],
     ]);
-    // Opened from a link or the palette, a trashed task still wears its project's colour.
+    // Opened from a link or the palette, a trashed task still wears its project's color.
     expect(data.hiddenTasks?.map(({ id, primaryTagColor }) => [id, primaryTagColor])).toEqual([
       ['binned', 'orange'],
     ]);

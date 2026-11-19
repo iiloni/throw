@@ -1,11 +1,8 @@
 import type { Status, Task } from '@throw/shared';
-import { ChevronDown } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { projectOf } from '@/components/Board/model';
 import { board, current } from '@/components/Board/state';
-import { IconButton } from '@/components/IconButton/IconButton';
-import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
 import { springs } from '@/lib/motion';
 import {
@@ -16,17 +13,9 @@ import {
   TaskPanelContent,
 } from './TaskControls';
 
-const panelHeight: Record<TaskPanel, number> = {
-  status: 304,
-  priority: 304,
-  color: 304,
-  tags: 384,
-  more: 176,
-};
-
 /**
  * The task's dock on desktop, below its card, as Catch's split view docks a note's controls
- * (ADR 0009: desktop has no drawer). A panel opens above the dock, over the card's foot. It owns
+ * (ADR 0009: desktop has no drawer). A panel grows the dock upward, over the card's foot. It owns
  * the Escape, Back and outside-tap dismissal around the same controls and panels a phone
  * shows in the board's drawer.
  */
@@ -69,46 +58,46 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
     trigger.current = element;
     setPanel(panel === next ? null : next);
   }
-  // The dock stays in the pane's flow below the card, so it rises with the keyboard and the
-  // safe area; a panel opens above it over the card's foot without moving it. The panel comes
-  // after the controls in the DOM so Tab reaches it from the control that opened it.
+  // The dock keeps its place in the pane's flow below the card, so it rises with the keyboard
+  // and the safe area. As Catch's split view docks a note, it is one glass surface of a fixed
+  // width that grows upward over the card's foot to show a panel, with no header of its own.
+  // The panel comes after the controls in the DOM so Tab reaches it from the control that
+  // opened it.
   return (
-    <div ref={root} data-task-drawer="" className="relative mt-3 shrink-0">
-      <div className="glass rounded-[calc(var(--dock-radius)+0.25rem)] p-1">
-        <TaskDockRow>
-          <TaskControls
-            task={task}
-            statuses={statuses}
-            project={project}
-            onOpen={toggle}
-            controlProps={(name) => ({
-              'aria-expanded': panel === name,
-              'aria-controls': `${id}-${name}`,
-            })}
-          />
-        </TaskDockRow>
-      </div>
-      <AnimatePresence initial={false}>
-        {panel && (
-          <motion.div
-            key={panel}
-            id={`${id}-${panel}`}
-            role="region"
-            aria-label={panelTitle[panel]}
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: panelHeight[panel], opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={reduced ? { duration: 0 } : springs.smooth}
-            className="glass-thick absolute inset-x-0 bottom-full z-10 mb-2 flex max-h-[min(50dvh,24rem)] flex-col overflow-hidden rounded-[calc(var(--dock-radius)+0.25rem)]"
-          >
-            <div className="flex h-11 shrink-0 items-center justify-between pr-2 pl-5">
-              <h2 className="font-semibold text-sm">{panelTitle[panel]}</h2>
-              <IconButton label="Close panel" onClick={collapse}>
-                <ChevronDown />
-              </IconButton>
-            </div>
-            <ScrollArea className="min-h-0 flex-1">
-              <ScrollAreaViewport>
+    <div
+      ref={root}
+      data-task-drawer=""
+      className="relative mt-3 flex h-[var(--dock-height)] shrink-0 justify-center"
+    >
+      <div className="glass absolute bottom-0 z-10 flex w-full max-w-md flex-col overflow-hidden rounded-[var(--dock-radius)]">
+        <div className="order-last">
+          <TaskDockRow>
+            <TaskControls
+              task={task}
+              statuses={statuses}
+              project={project}
+              onOpen={toggle}
+              controlProps={(name) => ({
+                'aria-expanded': panel === name,
+                'aria-controls': `${id}-${name}`,
+              })}
+            />
+          </TaskDockRow>
+        </div>
+        <AnimatePresence initial={false}>
+          {panel && (
+            <motion.div
+              key={panel}
+              id={`${id}-${panel}`}
+              role="region"
+              aria-label={panelTitle[panel]}
+              className="flex flex-col justify-end overflow-hidden"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={reduced ? { duration: 0 } : springs.smooth}
+            >
+              <div className="max-h-[min(55dvh,28rem)] shrink-0 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
                 <TaskPanelContent
                   panel={panel}
                   task={task}
@@ -116,12 +105,11 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
                   project={project}
                   onDone={collapse}
                 />
-              </ScrollAreaViewport>
-              <ScrollBar />
-            </ScrollArea>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

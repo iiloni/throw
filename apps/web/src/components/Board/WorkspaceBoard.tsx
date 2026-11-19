@@ -32,7 +32,7 @@ function useSameRows<T>(rows: T[]): T[] {
 
 /**
  * Every project of a workspace on one board, adapted at this boundary as the project board
- * is: one column per category, cards in their project's colour, and moves that go to each
+ * is: one column per category, cards in their project's color, and moves that go to each
  * card's own project's statuses (spec, "The cross-project board").
  */
 export function WorkspaceBoard({

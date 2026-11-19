@@ -45,15 +45,15 @@ test('tag workshop manages a real tree and both task roles with touch and keyboa
   await expect(picker.getByRole('checkbox', { name: 'Research', exact: true })).toBeChecked();
   // Research has children, so picking it opens them.
   await picker.getByRole('button', { name: 'Back from Research' }).click();
-  await picker.getByRole('button', { name: 'Tags without a colour' }).click();
+  await picker.getByRole('button', { name: 'Tags without a color' }).click();
   await picker.getByRole('button', { name: 'Accessibility', exact: true }).click();
   await expect(picker.getByRole('button', { name: 'Accessibility', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-  await picker.getByRole('button', { name: 'Back to colours' }).click();
-  await picker.getByRole('button', { name: 'No colour tag' }).click();
-  await expect(picker.getByRole('button', { name: 'No colour tag' })).toHaveAttribute(
+  await picker.getByRole('button', { name: 'Back to colors' }).click();
+  await picker.getByRole('button', { name: 'No color tag' }).click();
+  await expect(picker.getByRole('button', { name: 'No color tag' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
@@ -82,7 +82,7 @@ test('tag workshop manages a real tree and both task roles with touch and keyboa
   });
   await quality.check();
   await expect(quality).toBeChecked();
-  // The colour picker reaches it through its root's children.
+  // The color picker reaches it through its root's children.
   await picker.getByRole('button', { name: 'Teal: Product', exact: true }).click();
   await picker.getByRole('button', { name: 'Product / Features', exact: true }).click();
   await picker

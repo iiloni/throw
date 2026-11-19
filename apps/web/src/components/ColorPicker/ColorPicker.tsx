@@ -19,7 +19,7 @@ export function ColorPicker({
   const reduced = useReducedMotion();
   return (
     <fieldset className="grid grid-cols-6 justify-items-center gap-2">
-      <legend className="mb-2 text-sm font-medium">Project colour</legend>
+      <legend className="mb-2 text-sm font-medium">Project color</legend>
       {COLORS.map((color) => (
         <motion.button
           key={color}

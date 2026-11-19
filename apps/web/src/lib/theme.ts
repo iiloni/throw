@@ -28,7 +28,7 @@ export function useResolvedTheme(): 'light' | 'dark' {
 }
 
 /**
- * Points the browser's and installed app's bars at the chosen theme's colour: index.html
+ * Points the browser's and installed app's bars at the chosen theme's color: index.html
  * holds one `theme-color` per scheme, and an explicit theme overrides the OS setting.
  */
 export function applyThemeColor(preference: ThemePreference) {

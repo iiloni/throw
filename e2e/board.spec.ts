@@ -719,7 +719,7 @@ test('drawer pulls require the scroll boundary at gesture start, including after
   await expect(closed).toHaveCount(0);
 });
 
-test('synced primary tags show their quiet name and root colour on cards', async ({ page }) => {
+test('synced primary tags show their quiet name and root color on cards', async ({ page }) => {
   const account = await fixture(page);
   const card = page.getByRole('article', { name: /Board parent$/ });
   await expect(card).not.toHaveAttribute('data-color');

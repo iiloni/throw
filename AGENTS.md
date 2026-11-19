@@ -30,9 +30,9 @@ Catch's split view does (`TaskDrawer`).
 The activity log syncs to devices and comments are built (`lib/comments.ts`), with a
 timeline query in `collections.ts` and a task history view in `TaskDetails/TaskTimeline.tsx`.
 Tags have their data layer and reusable controls in `components/Tag*`, with a real-data `/prototype/tags` workshop in
-development only. The board colour helper is `taskTagColor` in `@throw/shared`. The task
-pane picks and lists tags; project settings mounts tag management. The task history
-interleaves server entries and comments; refused changes have a quiet task-only notice and
+development only. The board color helper is `taskTagColor` in `@throw/shared`. The task
+pane picks and lists tags; project settings mounts tag management. The task pane shows
+comments and server history under separate tabs (`SegmentedTabs`); refused changes have a quiet task-only notice and
 description recovery links. Cards move on both boards by drag, keyboard,
 phone long press, the move drawer and a rightward swipe to close (ADR 0008).
 Settings (`/settings/*`) and project settings (`/w/:workspaceId/p/:projectId/settings`,

@@ -119,7 +119,7 @@ describe('tree operations ported from Catch', () => {
     expect(tagTree([child, leaf])).toHaveLength(2);
   });
 });
-describe('board colour helper', () => {
+describe('board color helper', () => {
   const task = { primaryTagId: leaf.id, projectId: root.projectId };
   it('derives from the root and follows recolors and branch moves without rewriting tasks', () => {
     expect(taskTagColor(task, tags)).toBe('teal');

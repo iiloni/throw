@@ -1,4 +1,5 @@
 import { compareStatuses, PRIORITIES, type Priority, type Status, type Task } from '@throw/shared';
+import { Check } from 'lucide-react';
 import { useId } from 'react';
 import { PriorityGlyph, StatusGlyph } from '@/components/Board/glyphs';
 import { byCategory, type Project, priorityName } from '@/components/Board/model';
@@ -9,14 +10,24 @@ import { feelStatusChange, haptics } from '@/lib/haptics';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { setPrimaryTag, setSecondaryTag } from '@/lib/tags';
 import { sendTask, updateTask } from '@/lib/tasks';
+import { cn } from '@/lib/utils';
 
 /*
  * Picker content only. Whatever hosts a picker (the phone drawer, a desktop popover) owns its
  * surface, gestures, Escape and Back, and closes it from `onPicked` (ADR 0009).
  */
 
-const option =
-  'flex min-h-12 cursor-pointer items-center gap-3 rounded-xl px-3 text-sm hover:bg-foreground/[0.06] has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/60';
+/*
+ * Catch's move picker: rows and tiles on a faint surface, the current one outlined and
+ * checked. The whole row is the radio, so a tap anywhere on it picks.
+ */
+const target =
+  'relative flex min-w-0 cursor-pointer select-none items-center gap-2.5 rounded-[calc(var(--dock-radius)-0.25rem)] border-2 font-medium text-sm outline-none transition-colors duration-200 has-[:checked]:border-brand has-[:checked]:bg-foreground/[0.08] has-[:checked]:text-foreground has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/70 border-transparent bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.07]';
+const radio = 'absolute inset-0 cursor-pointer appearance-none rounded-[inherit] opacity-0';
+
+function Picked({ checked }: { checked: boolean }) {
+  return checked ? <Check className="size-4 shrink-0 text-foreground" aria-hidden /> : null;
+}
 
 /** The board's status grid, as the phone's move drawer shows it, with the current one picked. */
 export function StatusPicker({
@@ -126,11 +137,11 @@ export function PriorityOptions({
 }) {
   const name = useId();
   return (
-    <div role="radiogroup" aria-label="Priority" className="px-3 pb-3">
+    <div role="radiogroup" aria-label="Priority" className="flex flex-col gap-1.5 px-2 pt-2 pb-1">
       {PRIORITIES.map((priority) => (
-        <label key={priority} className={option}>
+        <label key={priority} className={cn(target, 'h-12 shrink-0 px-4')}>
           <input
-            className="order-last size-4 shrink-0 accent-brand"
+            className={radio}
             aria-label={priorityName(project, priority)}
             type="radio"
             name={name}
@@ -138,8 +149,12 @@ export function PriorityOptions({
             onChange={() => onChange(priority)}
             onClick={() => value === priority && onChange(priority)}
           />
-          <PriorityGlyph priority={priority} name={priorityName(project, priority)} />
+          {/* A slot even for the default, which has no glyph, so the names line up. */}
+          <span className="flex size-4 shrink-0 items-center justify-center">
+            <PriorityGlyph priority={priority} name={priorityName(project, priority)} />
+          </span>
           <span className="flex-1">{priorityName(project, priority)}</span>
+          <Picked checked={value === priority} />
         </label>
       ))}
     </div>
@@ -155,25 +170,25 @@ function useTaskTagsReady(task: Task) {
 }
 
 const loadingTags = (
-  <p role="status" className="px-6 py-3 text-muted-foreground text-sm">
+  <p role="status" className="px-1 py-3 text-muted-foreground text-sm">
     Loading tags…
   </p>
 );
 
 /**
- * The primary tag, picked by colour as in Catch. Picking leaves the picker open, since a
+ * The primary tag, picked by color as in Catch. Picking leaves the picker open, since a
  * tag with children opens them to pick a more specific one.
  */
 export function ColorTagsPicker({ task }: { task: Task }) {
   const { tags, isLoading } = useTags(task.projectId);
-  // The colour reads the project's tags only, not the task's secondary assignments.
-  if (useAwaitingSync(isLoading, tags.length)) return loadingTags;
+  // The color reads the project's tags only, not the task's secondary assignments.
+  if (useAwaitingSync(isLoading, tags.length)) return <div className="px-3">{loadingTags}</div>;
   return (
     <ColorTagPicker
       tags={tags}
       primaryTagId={task.primaryTagId}
       onChange={(id) => setPrimaryTag(task.id, id)}
-      className="px-2 pb-2"
+      className="w-full pt-1 pb-1"
     />
   );
 }
@@ -181,15 +196,19 @@ export function ColorTagsPicker({ task }: { task: Task }) {
 /** Secondary tags take several choices, so picking one leaves the picker open. */
 export function TagsPicker({ task }: { task: Task }) {
   const { tags, taskTags, ready } = useTaskTagsReady(task);
-  if (!ready) return loadingTags;
   return (
-    <div className="px-5 pt-1 pb-3">
-      <TagPicker
-        tags={tags}
-        primaryTagId={task.primaryTagId}
-        secondaryTagIds={taskTags.map((row) => row.tagId)}
-        onChange={(id, present) => setSecondaryTag(task.id, id, present)}
-      />
+    <div className="px-3 pt-3 pb-1">
+      <p className="mb-1 px-1 font-medium text-sm">Secondary tags</p>
+      {ready ? (
+        <TagPicker
+          tags={tags}
+          primaryTagId={task.primaryTagId}
+          secondaryTagIds={taskTags.map((row) => row.tagId)}
+          onChange={(id, present) => setSecondaryTag(task.id, id, present)}
+        />
+      ) : (
+        loadingTags
+      )}
     </div>
   );
 }

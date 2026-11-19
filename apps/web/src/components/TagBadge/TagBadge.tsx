@@ -28,7 +28,7 @@ export function TagBadge({
   primary?: boolean;
   interactive?: boolean;
   morph?: boolean;
-  /** Off where tag colours would mislead, as beside other projects' tags. */
+  /** Off where tag colors would mislead, as beside other projects' tags. */
   colored?: boolean;
   /** Without the blur, on a surface that is already opaque, such as a card. */
   flat?: boolean;

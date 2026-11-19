@@ -46,15 +46,15 @@ function Harness({ onChange }: { onChange: (id: string | null) => void }) {
   );
 }
 
-it('offers only colours a tag holds, and opens a picked tag’s children', async () => {
+it('offers only colors a tag holds, and opens a picked tag’s children', async () => {
   const onChange = vi.fn();
   render(<Harness onChange={onChange} />);
   const swatches = screen
     .getAllByRole('button')
     .flatMap((button) => (button.title.includes(':') ? [button.title] : []));
-  // In palette order, as the project colour picker lists them.
+  // In palette order, as the project color picker lists them.
   expect(swatches).toEqual(['Amber: Research', 'Teal: Product']);
-  expect(screen.getByRole('button', { name: 'No colour tag' })).toHaveAttribute(
+  expect(screen.getByRole('button', { name: 'No color tag' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
@@ -74,13 +74,13 @@ it('offers only colours a tag holds, and opens a picked tag’s children', async
   expect(onChange).not.toHaveBeenCalled();
 });
 
-it('reaches uncoloured tags one step away and clears the primary', async () => {
+it('reaches uncolored tags one step away and clears the primary', async () => {
   const onChange = vi.fn();
   render(<Harness onChange={onChange} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Tags without a colour' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Tags without a color' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Chores' }));
   expect(onChange).toHaveBeenLastCalledWith('chores');
-  fireEvent.click(screen.getByRole('button', { name: 'Back to colours' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'No colour tag' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Back to colors' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'No color tag' }));
   expect(onChange).toHaveBeenLastCalledWith(null);
 });

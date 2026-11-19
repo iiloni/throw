@@ -38,7 +38,7 @@ Android app.
 - **Works offline.** Everything is kept on the device. Changes made without a connection are
   sent when it comes back, and a change that conflicts with newer work is never applied
   over it.
-- **Tags and colours.** Nested tags per project. A task's colour comes from its primary tag,
+- **Tags and colors.** Nested tags per project. A task's color comes from its primary tag,
   and further tags sit on its card.
 - **Every project at once.** A cross-project board shows the whole workspace by category.
 - **Search everywhere.** A command palette finds tasks, projects and actions.

@@ -41,7 +41,7 @@ it('on a card, shows a few badges with a count of the rest, without a landmark o
   expect(screen.getByText('+2')).toHaveAttribute('title', 'D, E');
 });
 
-it('leaves tag colours out where they would mislead', () => {
+it('leaves tag colors out where they would mislead', () => {
   const { container, rerender } = render(
     <TaskTags tags={[tag]} primaryTagId={tag.id} secondaryTagIds={[]} card />,
   );

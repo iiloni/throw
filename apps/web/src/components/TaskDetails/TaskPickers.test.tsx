@@ -101,7 +101,7 @@ it('assigns tags in both roles without closing', () => {
     'aria-pressed',
     'true',
   );
-  fireEvent.click(screen.getByRole('button', { name: 'No colour tag' }));
+  fireEvent.click(screen.getByRole('button', { name: 'No color tag' }));
   expect(fake.primary).toHaveBeenCalledWith('task', null);
   unmount();
   render(<TagsPicker task={{ ...task, primaryTagId: 'work' }} />);

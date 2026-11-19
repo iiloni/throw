@@ -9,6 +9,10 @@ import { feelStatusChange } from '@/lib/haptics';
 import { getServerUrl } from '@/lib/serverUrl';
 import { sendTask } from '@/lib/tasks';
 
+// The rows of the dock's other panels, as Catch's move picker draws them.
+const action =
+  'h-12 justify-start gap-2.5 rounded-[calc(var(--dock-radius)-0.25rem)] bg-foreground/[0.04] px-4 text-foreground/80 hover:bg-foreground/[0.07] hover:text-foreground [&_svg]:size-4';
+
 /**
  * Close or reopen the task and copy its link. Content only: whatever hosts it closes it from
  * `onDone` and returns focus to what opened it.
@@ -32,11 +36,11 @@ export function TaskActions({
   );
   return (
     <>
-      <div className="flex flex-col gap-1 p-3">
+      <div className="flex flex-col gap-1.5 px-2 pt-2 pb-1">
         {target && (
           <Button
             variant="ghost"
-            className="min-h-12 justify-start gap-3 rounded-xl"
+            className={action}
             onClick={() => {
               sendTask(task.id, target.id);
               feelStatusChange(target.category);
@@ -49,7 +53,7 @@ export function TaskActions({
         )}
         <Button
           variant="ghost"
-          className="min-h-12 justify-start gap-3 rounded-xl"
+          className={action}
           onClick={() => {
             const href = new URL(
               `/w/${task.workspaceId}/p/${task.projectId}?view=board&task=${task.id}`,

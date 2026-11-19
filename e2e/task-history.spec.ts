@@ -143,7 +143,7 @@ test('comment drafts survive closing and reloading, and can be posted from the k
   await expect(comment.getByRole('button', { name: 'Edit comment' })).toBeVisible();
 });
 
-test('history words every field in server order, preserving comments between writes', async ({
+test('history words every field in server order, with comments under their own tab', async ({
   page,
 }) => {
   const f = await fixture(page);
@@ -200,9 +200,18 @@ test('history words every field in server order, preserving comments between wri
   await expect(f.history).toContainText('Moved to the trash.');
   await f.update({ trashed: { before: true, after: false } });
   await expect(f.history).toContainText('Restored from the trash.');
-  const rows = await f.history.locator('ol > li').allTextContents();
-  expect(rows.findIndex((text) => text.includes('Ready for the final checks.'))).toBe(2);
-  expect(rows[3]).toContain('Changed status');
+  // Comments open first; the history sits under its own tab, in server order.
+  const comments = f.history.getByRole('tabpanel', { name: /^Comments/ });
+  await expect(comments.getByRole('article', { name: 'You commented' })).toContainText(
+    'Ready for the final checks.',
+  );
+  await f.history.getByRole('tab', { name: 'History' }).click();
+  const history = f.history.getByRole('tabpanel', { name: 'History' });
+  await expect(history).not.toContainText('Ready for the final checks.');
+  const rows = await history.locator('ol > li').allTextContents();
+  expect(rows[0]).toContain('Created the task');
+  expect(rows[1]).toContain('Renamed from');
+  expect(rows[2]).toContain('Changed status');
 });
 
 test('comments add, edit and delete; another workspace member has no editing controls', async ({
@@ -344,6 +353,7 @@ test('refused descriptions recover through the existing controls on a device wit
   });
   await expect(f.history).toContainText('Description not applied');
   await expect(f.history).not.toContainText('Recover this description');
+  await f.history.getByRole('tab', { name: 'History' }).click();
   await f.history.getByRole('button', { name: 'Recover description' }).click();
   const description = f.pane.getByRole('region', { name: 'Description', exact: true });
   await expect(description).toContainText('Your description was not applied.');

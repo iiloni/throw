@@ -10,14 +10,14 @@ import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
-/** The open branch: the swatches, the roots without a colour, or a tag's children. */
+/** The open branch: the swatches, the roots without a color, or a tag's children. */
 type Branch = null | 'uncolored' | string;
 
 /**
- * Picks a task's primary tag by its colour, as Catch's colour picker does: each top-level tag
- * with a colour is a swatch. Picking one makes it primary and, when it has children, opens
+ * Picks a task's primary tag by its color, as Catch's color picker does: each top-level tag
+ * with a color is a swatch. Picking one makes it primary and, when it has children, opens
  * them to pick a more specific one; leaving keeps what was picked. Top-level tags without a
- * colour sit one step away. A task has no colour of its own, so a colour no tag holds is not
+ * color sit one step away. A task has no color of its own, so a color no tag holds is not
  * offered.
  */
 export function ColorTagPicker({
@@ -45,7 +45,7 @@ export function ColorTagPicker({
   const hasChildren = (id: string) => parents.has(id);
   // Moving between views replaces the focused control, so focus follows into the new view.
   const refocus = useRef(false);
-  // A colour belongs to at most one top-level tag (`tagWriteIssue`).
+  // A color belongs to at most one top-level tag (`tagWriteIssue`).
   const roots = COLORS.flatMap((color) => {
     const root = tags.find((tag) => tag.parentId === null && tag.color === color);
     return root ? [{ root, color }] : [];
@@ -121,7 +121,7 @@ export function ColorTagPicker({
                   <div className="px-3 pt-2">{badge}</div>
                   <div className="grid grid-cols-6 justify-items-center gap-2 p-3">
                     <Swatch
-                      label="No colour tag"
+                      label="No color tag"
                       pressed={primaryTagId === null}
                       onClick={() => {
                         if (primaryTagId === null) return;
@@ -150,7 +150,7 @@ export function ColorTagPicker({
                         onClick={() => open('uncolored', 1)}
                         className="flex min-h-11 w-full items-center justify-between rounded-xl px-3 text-sm outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
                       >
-                        Tags without a colour
+                        Tags without a color
                         <ChevronRight className="size-4" aria-hidden />
                       </button>
                     </div>
@@ -163,7 +163,7 @@ export function ColorTagPicker({
                   <div className="mb-2 grid grid-cols-[4.5rem_minmax(0,1fr)_4.5rem] items-center border-foreground/10 border-b pb-2">
                     <button
                       type="button"
-                      aria-label={current ? `Back from ${current.name}` : 'Back to colours'}
+                      aria-label={current ? `Back from ${current.name}` : 'Back to colors'}
                       onClick={() =>
                         open(
                           current

@@ -135,7 +135,7 @@ export function ProjectSettings({
 }
 
 /**
- * Name, colour and icon, saved as they change, as the app's settings are. A name is saved
+ * Name, color and icon, saved as they change, as the app's settings are. A name is saved
  * when it is left or entered, and Escape returns to the saved one.
  */
 function ProjectAppearance({ project }: { project: Project }) {
