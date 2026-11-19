@@ -19,6 +19,8 @@ it('colors the leaf badge and lets touch reveal its full hierarchy without bubbl
   render(<TagBadge tag={leaf} tags={[root, leaf]} />, { wrapper: TooltipProvider });
   const badge = screen.getByRole('button', { name: 'Work / Catch' });
   expect(badge).toHaveAttribute('data-color', 'blue');
+  // The glass takes the root's tint (see `glass-badge` in styles.css).
+  expect(badge.className).toContain('[--badge-glass:');
   expect(badge).toHaveTextContent('Catch');
   document.body.addEventListener('click', onCardClick);
   fireEvent.click(badge);
@@ -50,4 +52,21 @@ it('keeps removal inside the badge as a separate action from revealing its hiera
   expect(onRemove).not.toHaveBeenCalled();
   fireEvent.click(remove);
   expect(onRemove).toHaveBeenCalledOnce();
+});
+
+it('draws a flat, uncoloured badge where asked', () => {
+  const root: Tag = {
+    id: 'root',
+    workspaceId: 'workspace',
+    projectId: 'project',
+    name: 'Work',
+    parentId: null,
+    color: 'blue',
+    icon: null,
+  };
+  render(<TagBadge tag={root} tags={[root]} interactive={false} colored={false} flat />);
+  const badge = screen.getByTitle('Work');
+  expect(badge).not.toHaveAttribute('data-color');
+  expect(badge.className).not.toContain('[--badge-glass:');
+  expect(badge.className).toContain('[backdrop-filter:none]!');
 });

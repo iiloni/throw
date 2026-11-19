@@ -7,23 +7,36 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
+/** What a badge shows of a tag, so the board's lighter tags can be drawn too. */
+export type BadgeTag = Pick<Tag, 'id' | 'name' | 'parentId'> & {
+  icon?: Tag['icon'];
+  color?: Tag['color'] | undefined;
+};
+
 export function TagBadge({
   tag,
   tags,
   primary = false,
   interactive = true,
   morph = false,
+  colored = true,
+  flat = false,
   onRemove,
 }: {
-  tag: Tag;
-  tags: readonly Tag[];
+  tag: BadgeTag;
+  tags: readonly BadgeTag[];
   primary?: boolean;
   interactive?: boolean;
   morph?: boolean;
+  /** Off where tag colours would mislead, as beside other projects' tags. */
+  colored?: boolean;
+  /** Without the blur, on a surface that is already opaque, such as a card. */
+  flat?: boolean;
   onRemove?: () => void;
 }) {
   const path = tagPath(tags, tag.id);
-  const root = path[0] ?? tag;
+  const pathRoot = path[0] ?? tag;
+  const root = colored ? pathRoot : { ...pathRoot, color: null };
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const reducedMotion = useReducedMotion();
@@ -62,9 +75,11 @@ export function TagBadge({
     </>
   );
   const className = cn(
-    'glass relative inline-flex max-w-full items-center gap-1 overflow-hidden rounded-md px-2.5 py-1 text-xs font-medium',
-    root.color && 'bg-tint/70 border-tint-accent/30',
+    'glass-badge relative inline-flex max-w-full items-center gap-1 overflow-hidden rounded-md px-2.5 py-1 text-xs font-medium',
+    root.color &&
+      'border-tint-accent/30 [--badge-glass:color-mix(in_oklab,var(--tint)_70%,transparent)] [--badge-solid:var(--tint)]',
     primary && 'border-foreground/25 font-semibold',
+    flat && '[backdrop-filter:none]!',
     morph && !reducedMotion && 'transition-colors duration-300',
   );
   const badgeContents = morph ? (
