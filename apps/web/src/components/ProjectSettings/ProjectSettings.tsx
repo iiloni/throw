@@ -9,6 +9,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { useShell } from '@/components/AppShell/shell';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
@@ -26,7 +27,13 @@ import {
   projectKeyIssue,
   settingsSectionSchema,
 } from '@/lib/projectSettings';
-import { changeProjectKey, setPriorityNames, trashProject, updateProject } from '@/lib/projects';
+import {
+  changeProjectKey,
+  restoreProject,
+  setPriorityNames,
+  trashProject,
+  updateProject,
+} from '@/lib/projects';
 import { statusesOf } from '@/lib/statuses';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { holdUpdateReload } from '@/lib/useUpdateReloadBlocked';
@@ -226,6 +233,18 @@ function DeleteProject({ project }: { project: Project }) {
               trashProject(project.id);
               setConfirming(false);
               shell.selectWorkspace(project.workspaceId);
+              // Deleting leaves the project, so the way back is offered where the user lands.
+              const { id, workspaceId } = project;
+              toast(`${project.name} moved to the trash`, {
+                action: {
+                  label: 'Undo',
+                  onClick: () => {
+                    haptics.success();
+                    restoreProject(id);
+                    shell.selectProject(workspaceId, id);
+                  },
+                },
+              });
             }}
           >
             Delete project

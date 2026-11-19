@@ -110,7 +110,9 @@ shows no key until then. The key can be changed later, and every task shows the 
 once; old identifiers are not kept as aliases (ADR 0007).
 
 Deleting a project sends it to the trash with everything in it. It is not a permanent
-delete.
+delete. Deleting leaves the project for its workspace, so a notice there offers Undo,
+which restores the project and returns to it. A task trashed from its pane stays open with
+Restore in place of Trash, so it needs no notice.
 
 ### Status and category
 
