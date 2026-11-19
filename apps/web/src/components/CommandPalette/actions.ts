@@ -2,6 +2,7 @@ import type { Project, Status } from '@throw/shared';
 import { type RefObject, useRef } from 'react';
 import { useShell } from '@/components/AppShell/shell';
 import { useStatuses } from '@/lib/collections';
+import { haptics } from '@/lib/haptics';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { createTask, type NewTask } from '@/lib/tasks';
 
@@ -87,6 +88,7 @@ export function usePaletteActions({
           : 'Connect to load this project’s backlog before capturing.';
       try {
         const taskId = createTask(projectId, { ...fields, title: trimmed });
+        haptics.success();
         openTask(projectId, taskId, true);
         return null;
       } catch (error) {

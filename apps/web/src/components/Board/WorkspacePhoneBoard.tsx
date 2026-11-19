@@ -5,6 +5,7 @@ import { Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
+import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { BoardSettingsContent } from './BoardSettingsPanel';
@@ -25,6 +26,7 @@ import { board, countIn, current, listTasks, update, useBoardSettings } from './
 import { TaskCard } from './TaskCard';
 import { TaskContentContext } from './taskContent';
 import { useTaskSurfaceShown } from './taskTransition';
+import { usePagerPage } from './usePagerPage';
 import { foldableCategory, useFoldedColumns } from './WorkspaceDesktopBoard';
 
 const COLUMNS = CATEGORIES.map((category) => ({
@@ -57,8 +59,8 @@ export function WorkspacePhoneBoard({
   const held = drag.use();
   const fingerDown = holding.use();
   const reduced = useReducedMotion();
-  const pager = useRef<HTMLDivElement>(null);
-  const [page, setPage] = useState(FIRST_PAGE);
+  const pagerRef = useRef<HTMLDivElement>(null);
+  const [page, pager, quietPager] = usePagerPage(FIRST_PAGE);
   const [settings, setSettings] = useState(false);
   const task = useContext(TaskContentContext)?.drawer;
   const raised = useTaskSurfaceShown();
@@ -68,12 +70,13 @@ export function WorkspacePhoneBoard({
   useBackHandler(state.selection.length > 0, () => update({ selection: [] }));
 
   useLayoutEffect(() => {
-    const element = pager.current;
+    const element = pagerRef.current;
     if (element) element.scrollLeft = FIRST_PAGE * pageStride(element);
   }, []);
 
   function turnTo(index: number) {
-    const element = pager.current;
+    quietPager();
+    const element = pagerRef.current;
     element?.scrollTo({
       left: index * pageStride(element),
       behavior: reduced ? 'instant' : 'smooth',
@@ -94,7 +97,10 @@ export function WorkspacePhoneBoard({
     <div className="flex items-center gap-2">
       <motion.button
         type="button"
-        onClick={onSearch}
+        onClick={() => {
+          haptics.toggle();
+          onSearch();
+        }}
         whileTap={{ scale: 0.97 }}
         transition={springs.snappy}
         className="flex h-[var(--dock-height)] min-w-0 flex-1 items-center gap-3 rounded-[var(--dock-radius)] bg-foreground/[0.06] px-4 text-left text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
@@ -105,7 +111,10 @@ export function WorkspacePhoneBoard({
       <motion.button
         type="button"
         aria-label="New task"
-        onClick={onCreate}
+        onClick={() => {
+          haptics.toggle();
+          onCreate();
+        }}
         whileTap={{ scale: 0.88 }}
         transition={springs.snappy}
         className={cn(
@@ -136,12 +145,10 @@ export function WorkspacePhoneBoard({
 
       <div className="relative flex min-h-0 flex-1" inert={covered}>
         <div
-          ref={pager}
+          ref={pagerRef}
           data-pager=""
           data-selecting={state.selection.length > 0 ? '' : undefined}
-          onScroll={(event) =>
-            setPage(Math.round(event.currentTarget.scrollLeft / pageStride(event.currentTarget)))
-          }
+          {...pager}
           className="phone-pager flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
         >
           {CATEGORIES.map((category) => (

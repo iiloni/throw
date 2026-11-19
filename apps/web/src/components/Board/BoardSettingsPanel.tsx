@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Popover } from 'radix-ui';
 import type { ReactNode } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
+import { haptics } from '@/lib/haptics';
 import { useDesktop } from '@/lib/media';
 import { springs } from '@/lib/motion';
 import { useThemePreference } from '@/lib/theme';
@@ -36,7 +37,10 @@ function Switch({
       role="switch"
       aria-checked={checked}
       aria-label={label}
-      onClick={() => onChange(!checked)}
+      onClick={() => {
+        haptics.toggle();
+        onChange(!checked);
+      }}
       className={cn(
         'flex h-7 w-12 shrink-0 items-center rounded-full p-0.5 outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/60',
         checked ? 'justify-end bg-brand' : 'justify-start bg-foreground/15',
@@ -72,7 +76,11 @@ function Segmented<T extends string>({
           key={option}
           type="button"
           aria-pressed={option === value}
-          onClick={() => onChange(option)}
+          onClick={() => {
+            if (option === value) return;
+            haptics.selection();
+            onChange(option);
+          }}
           className={cn(
             'h-8 rounded-lg px-3 text-xs outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/60',
             option === value

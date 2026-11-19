@@ -1,6 +1,7 @@
 import { Check } from 'lucide-react';
 import { DropdownMenu } from 'radix-ui';
 import type { ReactNode } from 'react';
+import { feelStatusChange } from '@/lib/haptics';
 import { StatusGlyph } from './glyphs';
 import { CATEGORIES, type Category, type Project } from './model';
 
@@ -43,7 +44,11 @@ export function StatusMenu({
                 .map((status) => (
                   <DropdownMenu.Item
                     key={status.id}
-                    onSelect={() => onSelect(status.id)}
+                    onSelect={() => {
+                      onSelect(status.id);
+                      // Picking the status it already has changes nothing, and is not felt.
+                      if (status.id !== value) feelStatusChange(status.category);
+                    }}
                     className="flex min-h-10 cursor-pointer items-center gap-2.5 rounded-xl px-3 text-sm outline-none data-[highlighted]:bg-accent"
                   >
                     <StatusGlyph category={status.category} />

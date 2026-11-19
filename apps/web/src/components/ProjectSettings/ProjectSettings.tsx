@@ -307,6 +307,7 @@ function ProjectKey({ project }: { project: Project }) {
             disabled={!!issue || key === project.key}
             onClick={() => {
               changeProjectKey(project.id, key);
+              haptics.success();
               setDraft(null);
               setConfirming(false);
             }}
@@ -334,6 +335,7 @@ function PrioritySettings({ project }: { project: Project }) {
             project.id,
             names.map((name) => name.trim()),
           );
+          haptics.success();
           setDraft(null);
         }}
       >

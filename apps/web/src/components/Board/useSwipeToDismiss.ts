@@ -1,5 +1,6 @@
 import { animate, type MotionValue } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
+import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 
 /** Finger travel past this distance dismisses the surface on release. */
@@ -79,6 +80,8 @@ export function useSwipeToDismiss({
       const past = distance > DISMISS_DISTANCE;
       if (past !== armed) {
         armed = past;
+        // Crossing the line either way: letting go now dismisses, or no longer does.
+        haptics.threshold();
       }
     }
 
