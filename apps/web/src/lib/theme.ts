@@ -28,13 +28,32 @@ export function useResolvedTheme(): 'light' | 'dark' {
 }
 
 /**
- * Mirrors the preference onto <html data-theme>, which the CSS tokens read.
- * index.html applies the stored value before first paint to avoid a flash.
+ * Points the browser's and installed app's bars at the chosen theme's colour: index.html
+ * holds one `theme-color` per scheme, and an explicit theme overrides the OS setting.
+ */
+export function applyThemeColor(preference: ThemePreference) {
+  for (const meta of document.querySelectorAll<HTMLMetaElement>(
+    'meta[name="theme-color"][data-scheme]',
+  )) {
+    const scheme = meta.dataset.scheme;
+    meta.media =
+      preference === 'system'
+        ? `(prefers-color-scheme: ${scheme})`
+        : preference === scheme
+          ? 'all'
+          : 'not all';
+  }
+}
+
+/**
+ * Mirrors the preference onto <html data-theme>, which the CSS tokens read, and onto the
+ * `theme-color` tags. index.html applies the stored value before first paint to avoid a flash.
  */
 export function useApplyTheme() {
   const [preference] = useThemePreference();
   useEffect(() => {
     if (preference === 'system') delete document.documentElement.dataset.theme;
     else document.documentElement.dataset.theme = preference;
+    applyThemeColor(preference);
   }, [preference]);
 }

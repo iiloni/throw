@@ -20,6 +20,7 @@ import {
   current,
   selectProject,
   sendTasks,
+  setSubtasksAsCards,
   update,
   useBoardSettings,
 } from './state';
@@ -203,7 +204,7 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
               state.subtasksAsCards ? 'Keep subtasks with their parent' : 'Show subtasks as cards'
             }
             aria-pressed={state.subtasksAsCards}
-            onClick={() => update({ subtasksAsCards: !state.subtasksAsCards })}
+            onClick={() => setSubtasksAsCards(!state.subtasksAsCards)}
             className={cn('size-10', state.subtasksAsCards && 'bg-accent')}
           >
             <ListTree />
