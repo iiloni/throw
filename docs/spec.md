@@ -301,7 +301,11 @@ Applying this further is ongoing.
 A card shows the title, its tags, a muted identifier and subtask progress. Tags are Catch's
 badges under the title, as on Catch's note cards (2026-11-19): the primary tag first and
 bolder, then the secondary tags, each in its root's colour and icon. Catch heads its card
-tags with a "Tags" label; a task card leaves it out to keep the board dense.
+tags with a "Tags" label; a task card leaves it out, and shows at most three badges and a
+count of the rest, to keep the board dense. Card badges are flat (no backdrop blur), since
+a card is opaque and a board may hold hundreds of them. On the cross-project board, badges
+are neutral: cards there take their project's colour, and tag colours mean different
+things in each project.
 Until its number and project key sync, the identifier reads “Pending”. The owner chose this
 quiet content when the real board was built (2026-10-14): status appears only in the mixed
 backlog and closed zones; a subtask card has a small marker instead of a parent-title row,
@@ -430,6 +434,7 @@ view, so it reads and moves the same way.
   is the last column and is collapsed by default. Folding or opening Done or Cancelled is
   remembered on the device.
 - Cards are colored by project, because tag colors mean different things in each project.
+  For the same reason their tag badges are neutral (2026-11-19).
   Each card names its own project's status and identifier.
 - Columns are banded vertically by priority rank. A band is labelled with the rank's name
   when every project names it the same, and with the default name otherwise. On wide
@@ -620,7 +625,7 @@ from navigation opens its board; the shell remembers the last project separately
 workspace. Projects append by position. Deleting a project requires confirmation and moves
 it to the trash (see [Project](#project)), where it can be restored or removed for good.
 
-The project board uses synced tasks, statuses and primary tags, with the backlog in the
+The project board uses synced tasks, statuses and tags, with the backlog in the
 drawer on a phone. Cards resolve their primary tag's root colour with `taskTagColor` and
 show its tags as badges; a partially synced tag tree leaves the card neutral. The drawer
 (`components/Drawer`) carries the backlog, the closed tasks, board settings, and search and

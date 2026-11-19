@@ -19,6 +19,8 @@ export function TagBadge({
   primary = false,
   interactive = true,
   morph = false,
+  colored = true,
+  flat = false,
   onRemove,
 }: {
   tag: BadgeTag;
@@ -26,10 +28,15 @@ export function TagBadge({
   primary?: boolean;
   interactive?: boolean;
   morph?: boolean;
+  /** Off where tag colours would mislead, as beside other projects' tags. */
+  colored?: boolean;
+  /** Without the blur, on a surface that is already opaque, such as a card. */
+  flat?: boolean;
   onRemove?: () => void;
 }) {
   const path = tagPath(tags, tag.id);
-  const root = path[0] ?? tag;
+  const pathRoot = path[0] ?? tag;
+  const root = colored ? pathRoot : { ...pathRoot, color: null };
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const reducedMotion = useReducedMotion();
@@ -72,6 +79,7 @@ export function TagBadge({
     root.color &&
       'border-tint-accent/30 [--badge-glass:color-mix(in_oklab,var(--tint)_70%,transparent)] [--badge-solid:var(--tint)]',
     primary && 'border-foreground/25 font-semibold',
+    flat && '[backdrop-filter:none]!',
     morph && !reducedMotion && 'transition-colors duration-300',
   );
   const badgeContents = morph ? (

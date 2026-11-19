@@ -75,13 +75,16 @@ export function TaskCardFace({
       <p className="line-clamp-4 font-medium text-[0.9375rem] leading-snug [overflow-wrap:anywhere] max-md:text-base">
         {task.title || 'Untitled task'}
       </p>
-      {/* As on Catch's cards: the primary tag first and bolder, every tag in its root's color. */}
+      {/*
+        As on Catch's cards: the primary tag first and bolder, each in its root's colour. The
+        workspace board colours cards by project, and so leaves tag colours out (spec).
+      */}
       <TaskTags
         tags={projectOf(project, task).tags}
         primaryTagId={task.primaryTagId}
         secondaryTagIds={task.secondaryTagIds}
-        interactive={false}
-        region={false}
+        card
+        colored={!project.members}
         className="mt-2.5"
       />
       <div className="mt-3 flex min-h-5 items-center gap-2.5 text-foreground/55 text-xs max-md:text-[0.8125rem]">

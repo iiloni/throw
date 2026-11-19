@@ -554,7 +554,6 @@ test('tags are picked from the task controls and listed on the task', async ({
   const card = page.getByRole('article', { name: 'TASK-1 Write the launch plan', exact: true });
   await expect(card.getByText('Launch', { exact: true })).toBeVisible();
   await expect(card.getByText('Press', { exact: true })).toBeVisible();
-  await card.screenshot({ path: test.info().outputPath('card-tags.png') });
 });
 
 test('the phone surface grows from its card without scaling text and lands back in it', async ({
