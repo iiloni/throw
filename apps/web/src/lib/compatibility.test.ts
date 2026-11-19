@@ -51,6 +51,24 @@ describe('client compatibility transport', () => {
     expect(getSyncStatus().signedOut).toBe(true);
   });
 
+  it('retries a shape refused for a replaced token with the current one', async () => {
+    auth.token = 'old';
+    fetcher.mockResolvedValueOnce(json(compatible)).mockImplementationOnce(async () => {
+      auth.token = 'new';
+      return json({}, 401);
+    });
+    fetcher.mockResolvedValueOnce(json([]));
+    const { compatibleShapeFetch } = await import('./compatibility');
+    const { getSyncStatus } = await import('./syncStatus');
+    const response = await compatibleShapeFetch('https://throw.example/api/shapes/projects', {
+      headers: { Authorization: 'Bearer old' },
+    });
+    expect(response.status).toBe(200);
+    expect(getSyncStatus().signedOut).toBe(false);
+    const sent = fetcher.mock.calls.slice(1).map(([, init]) => init.headers.get('Authorization'));
+    expect(sent).toEqual(['Bearer old', 'Bearer new']);
+  });
+
   it('aborts a refused shape while waiting for sign-in', async () => {
     fetcher.mockResolvedValueOnce(json(compatible)).mockResolvedValueOnce(json({}, 401));
     const { compatibleShapeFetch } = await import('./compatibility');

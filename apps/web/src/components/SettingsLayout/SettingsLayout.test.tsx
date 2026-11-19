@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { Settings, UserRound } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import { beforeEach, expect, it, vi } from 'vitest';
 
 const dock = vi.hoisted(() => ({ current: null as ReactNode }));
@@ -10,12 +10,14 @@ vi.mock('@tanstack/react-router', () => ({
     to,
     onClick,
     replace,
+    activeOptions: _activeOptions,
     ...props
   }: {
     children: ReactNode;
     to: string;
-    onClick?: () => void;
+    onClick?: (event: MouseEvent) => void;
     replace?: boolean;
+    activeOptions?: unknown;
     'aria-current'?: 'page';
     className?: string;
   }) => (
@@ -88,6 +90,9 @@ it('names the open page in the phone dock, which lists the pages and closes on a
   fireEvent.click(screen.getByRole('button', { name: 'Project settings page: General' }));
   const picker = screen.getByRole('dialog', { name: 'Project settings' });
   expect(picker).toContainElement(screen.getByRole('link', { name: 'Back to board' }));
+  // Opening a page in a new tab leaves the picker open on this one.
+  fireEvent.click(screen.getByRole('link', { name: 'Account' }), { ctrlKey: true });
+  expect(screen.getByRole('dialog', { name: 'Project settings' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('link', { name: 'Account' }));
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });

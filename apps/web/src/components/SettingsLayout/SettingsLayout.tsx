@@ -95,10 +95,16 @@ function PageLink({
       {...link}
       {...props}
       replace={replace}
-      // Selection is drawn from the open page, not the router's idea of an active link.
+      // Selection is drawn from the open page. The router also marks a link active, which it
+      // can only do for this exact location, so the two agree.
       activeOptions={{ exact: true, includeSearch: true }}
       className={className}
-      onClick={() => onNavigate?.()}
+      onClick={(event) => {
+        // A click that opens a new tab or window leaves this page where it is.
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+          return;
+        onNavigate?.();
+      }}
     >
       {children}
     </Link>

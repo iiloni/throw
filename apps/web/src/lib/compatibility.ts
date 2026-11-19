@@ -76,18 +76,48 @@ function sentStaleToken(headers: Headers) {
   return sent !== null && token !== null && sent !== `Bearer ${token}`;
 }
 
-export const compatibleFetch: typeof fetch = async (input, init) => {
-  await ensureCompatible();
+function headersOf(input: Parameters<typeof fetch>[0], init?: RequestInit) {
   const headers = new Headers(input instanceof Request ? input.headers : undefined);
   new Headers(init?.headers).forEach((value, key) => {
     headers.set(key, value);
   });
+  return headers;
+}
+
+export const compatibleFetch: typeof fetch = async (input, init) => {
+  await ensureCompatible();
+  const headers = headersOf(input, init);
   headers.set(API_PROTOCOL_HEADER, String(API_PROTOCOL_VERSION));
   const response = await fetch(input, { ...init, headers });
   if (response.status === 401 && !sentStaleToken(headers)) updateSyncStatus({ signedOut: true });
   await observeProtocolResponse(response);
   return response;
 };
+
+/**
+ * Each attempt carries the token this device holds when it is sent: Electric works its headers
+ * out once per call, and a retry with a replaced token would only be refused again.
+ */
+function withCurrentToken(input: Parameters<typeof fetch>[0], init?: RequestInit): RequestInit {
+  const headers = headersOf(input, init);
+  const token = getAuthToken();
+  if (token && headers.has('authorization')) headers.set('authorization', `Bearer ${token}`);
+  return { ...init, headers };
+}
+
+function pause(ms: number, signal?: AbortSignal | null) {
+  return new Promise<void>((resolve, reject) => {
+    const abort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason);
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', abort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', abort, { once: true });
+  });
+}
 
 function waitForSync(ready: () => boolean, signal?: AbortSignal | null) {
   return new Promise<void>((resolve, reject) => {
@@ -115,9 +145,17 @@ export const compatibleShapeFetch: typeof fetch = async (input, init) => {
     try {
       // Never from the HTTP cache, whatever headers a server or proxy sent: a cached snapshot
       // counts as caught up and shows old rows as current (see `routes/shapes.ts`).
-      const response = await compatibleFetch(input, { ...init, cache: 'no-store' });
-      // Electric makes a 401 terminal. Keep its local collection alive until reauthentication.
-      if (response.status === 401) continue;
+      const response = await compatibleFetch(input, {
+        ...withCurrentToken(input, init),
+        cache: 'no-store',
+      });
+      // Electric makes a 401 terminal. Keep its local collection alive until reauthentication:
+      // a refused current token waits for sign-in above, and a token replaced meanwhile is
+      // retried with the new one after a breath.
+      if (response.status === 401) {
+        await pause(1000, signal);
+        continue;
+      }
       return response;
     } catch (error) {
       if (!(error instanceof CompatibilityError)) throw error;
