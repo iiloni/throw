@@ -27,8 +27,7 @@ export function ManagementSurfaceProvider({
   children: ReactNode;
   active: boolean;
 }) {
-  // The same query the surfaces use, so at a fractional width between the two breakpoints
-  // the host and its surfaces still agree on which one shows.
+  // The same query the surfaces use, so the host and its surfaces agree on which one shows.
   const phone = !useDesktop();
   const [surface, setSurface] = useState<{
     id: string;

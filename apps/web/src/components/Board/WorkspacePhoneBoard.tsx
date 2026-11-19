@@ -25,7 +25,7 @@ import { board, countIn, current, listTasks, update, useBoardSettings } from './
 import { TaskCard } from './TaskCard';
 import { TaskContentContext } from './taskContent';
 import { useTaskSurfaceShown } from './taskTransition';
-import { useFoldedColumns } from './WorkspaceDesktopBoard';
+import { foldableCategory, useFoldedColumns } from './WorkspaceDesktopBoard';
 
 const COLUMNS = CATEGORIES.map((category) => ({
   id: categoryTarget(category),
@@ -192,8 +192,10 @@ function CategoryPage({ category }: { category: Category }) {
   const bands = groupByPriority(listTasks(state, target)).filter((band) => band.tasks.length > 0);
   const over = held?.phase === 'dragging' && held.target?.kind === 'status';
   const aimed = over && held.target?.kind === 'status' && held.target.statusId === target;
-  const foldable = category === 'done' || category === 'cancelled' ? category : null;
-  const hidden = foldable !== null && folded[foldable];
+  const foldable = foldableCategory(category);
+  const dragging = held?.phase === 'dragging';
+  // A folded page opens under a held card, as a folded desktop column does.
+  const hidden = foldable !== null && folded[foldable] && !dragging;
   const open = category === 'backlog' || category === 'active';
   return (
     <section
@@ -209,14 +211,16 @@ function CategoryPage({ category }: { category: Category }) {
       <ScrollArea edges className="flex-1">
         <ScrollAreaViewport data-autoscroll="">
           <div className="px-[var(--gutter)] pt-1" style={{ paddingBottom: DOCK_SPACE }}>
-            {foldable && (
+            {foldable && !dragging && (
               <button
                 type="button"
                 aria-expanded={!hidden}
                 onClick={() => setFolded({ ...folded, [foldable]: !hidden })}
                 className="mt-2 mb-1 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-foreground/[0.06] px-4 text-muted-foreground text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
               >
-                {hidden ? `Show ${countIn(state, target)} ${foldable}` : `Hide ${foldable}`}
+                {hidden
+                  ? `Show ${countIn(state, target)} ${name.toLowerCase()}`
+                  : `Fold ${name.toLowerCase()}`}
                 {hidden ? (
                   <ChevronDown aria-hidden className="size-4" />
                 ) : (

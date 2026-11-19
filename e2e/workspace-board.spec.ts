@@ -179,14 +179,14 @@ test('the phone remembers folding and reopening both closed categories', async (
   };
   await turn('Done');
   await expect(card(page, 'Wash up')).toBeInViewport();
-  await column(page, 'Done').getByRole('button', { name: 'Hide done' }).click();
+  await column(page, 'Done').getByRole('button', { name: 'Fold done' }).click();
   await expect(card(page, 'Wash up')).toHaveCount(0);
 
   await turn('Cancelled');
   const cancelled = column(page, 'Cancelled');
   await cancelled.getByRole('button', { name: 'Show 1 cancelled' }).click();
   await expect(card(page, 'Flambé')).toBeInViewport();
-  await cancelled.getByRole('button', { name: 'Hide cancelled' }).click();
+  await cancelled.getByRole('button', { name: 'Fold cancelled' }).click();
   await expect(card(page, 'Flambé')).toHaveCount(0);
 
   await page.reload();
