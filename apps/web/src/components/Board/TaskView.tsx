@@ -200,7 +200,14 @@ function TaskHeader({ task }: { task: Task }) {
 
 export const PANE_MIN = 340;
 
-/** Wide screens: the task beside the board, on the card's own color. */
+/** The open task's card beside the board, between its toolbars and dock. */
+export const cardSurface =
+  'overflow-hidden rounded-3xl bg-[var(--tint,var(--card))] shadow-[0_1px_2px_oklch(0_0_0/0.06),0_12px_32px_-16px_oklch(0_0_0/0.18)]';
+
+/**
+ * Wide screens: the task beside the board, as a card on its own colour between its toolbars
+ * and its dock (Catch's split view).
+ */
 export function TaskPane({ task }: { task: Task }) {
   const present = useIsPresent();
   const content = useContext(TaskContentContext);
@@ -211,7 +218,11 @@ export function TaskPane({ task }: { task: Task }) {
       aria-label="Task"
       inert={!present}
       data-color={taskColor(project, task) ?? undefined}
-      className="flex h-full min-w-0 flex-col overflow-hidden rounded-3xl bg-[var(--tint,var(--card))] shadow-[0_1px_2px_oklch(0_0_0/0.06)]"
+      className={cn(
+        'flex h-full min-w-0 flex-col',
+        // The real task draws its own card between its toolbars and dock.
+        !content && cardSurface,
+      )}
       style={{ minWidth: PANE_MIN }}
     >
       {content ? (
