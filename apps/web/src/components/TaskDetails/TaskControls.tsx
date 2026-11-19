@@ -1,5 +1,5 @@
 import { type Priority, type Status, type Task, taskTagColor } from '@throw/shared';
-import { Flag, MoreHorizontal, Tag } from 'lucide-react';
+import { Flag, MoreHorizontal, Palette, Tag } from 'lucide-react';
 import type { ButtonHTMLAttributes } from 'react';
 import { PriorityGlyph, StatusGlyph } from '@/components/Board/glyphs';
 import { type Project, priorityName } from '@/components/Board/model';
@@ -8,13 +8,14 @@ import type { TaskDrawerContent } from '@/components/Board/taskContent';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { useTags, useTaskTags } from '@/lib/collections';
 import { TaskActions } from './TaskActions';
-import { PriorityPicker, StatusPicker, TagsPicker } from './TaskPickers';
+import { ColorTagsPicker, PriorityPicker, StatusPicker, TagsPicker } from './TaskPickers';
 
-export type TaskPanel = 'status' | 'priority' | 'tags' | 'more';
+export type TaskPanel = 'status' | 'priority' | 'color' | 'tags' | 'more';
 
 export const panelTitle: Record<TaskPanel, string> = {
   status: 'Status',
   priority: 'Priority',
+  color: 'Colour',
   tags: 'Tags',
   more: 'More',
 };
@@ -46,18 +47,23 @@ export function TaskControls({
   const { tags } = useTags(task.projectId);
   const { taskTags } = useTaskTags(task.id);
   const secondary = new Set(taskTags.map((row) => row.tagId));
-  const tagNames = [
-    ...tags.filter((tag) => tag.id === task.primaryTagId),
-    ...tags
-      .filter((tag) => secondary.has(tag.id) && tag.id !== task.primaryTagId)
-      .sort((a, b) => a.name.localeCompare(b.name)),
-  ].map((tag) => tag.name);
   return (
     <ControlButtons
       status={statuses.find((row) => row.id === task.statusId)}
       priority={task.priority}
       project={project}
-      tags={tags.length > 0 ? { names: tagNames, color: taskTagColor(task, tags) } : null}
+      tags={
+        tags.length > 0
+          ? {
+              primary: tags.find((tag) => tag.id === task.primaryTagId)?.name ?? null,
+              secondary: tags
+                .filter((tag) => secondary.has(tag.id))
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((tag) => tag.name),
+              color: taskTagColor(task, tags),
+            }
+          : null
+      }
       onOpen={onOpen}
       controlProps={controlProps}
       tooltips={tooltips}
@@ -68,7 +74,8 @@ export function TaskControls({
 
 /**
  * The control buttons themselves, for a task or one still being written: status, priority,
- * tags when the project has any, and optionally the rest of the task's actions.
+ * and when the project has tags, its colour (the primary tag) and its other tags, as Catch
+ * keeps a note's colour and tags apart; optionally the rest of the task's actions.
  */
 export function ControlButtons({
   status,
@@ -84,7 +91,7 @@ export function ControlButtons({
   priority: Priority;
   project: Project;
   /** Tags are made in the project's tag manager; with none, there is nothing to pick. */
-  tags: { names: string[]; color: string | null } | null;
+  tags: { primary: string | null; secondary: string[]; color: string | null } | null;
   onOpen(panel: TaskPanel, element: HTMLButtonElement): void;
   controlProps(panel: TaskPanel): ControlProps;
   tooltips?: boolean;
@@ -116,16 +123,27 @@ export function ControlButtons({
       </IconButton>
       {tags && (
         <IconButton
-          label={`Tags: ${tags.names.join(', ') || 'none'}. Change`}
+          label={`Colour: ${tags.primary ?? 'none'}. Change`}
+          className={control}
+          tooltip={tooltips}
+          {...controlProps('color')}
+          onClick={(event) => onOpen('color', event.currentTarget)}
+        >
+          <Palette
+            data-color={tags.color ?? undefined}
+            className={tags.color ? 'text-tint-accent' : ''}
+          />
+        </IconButton>
+      )}
+      {tags && (
+        <IconButton
+          label={`Tags: ${tags.secondary.join(', ') || 'none'}. Change`}
           className={control}
           tooltip={tooltips}
           {...controlProps('tags')}
           onClick={(event) => onOpen('tags', event.currentTarget)}
         >
-          <Tag
-            data-color={tags.color ?? undefined}
-            className={tags.color ? 'text-tint-accent' : ''}
-          />
+          <Tag />
         </IconButton>
       )}
       {more && (
@@ -159,6 +177,7 @@ export function TaskPanelContent({
   if (panel === 'status') return <StatusPicker task={task} statuses={statuses} onPicked={onDone} />;
   if (panel === 'priority')
     return <PriorityPicker task={task} project={project} onPicked={onDone} />;
+  if (panel === 'color') return <ColorTagsPicker task={task} />;
   if (panel === 'tags') return <TagsPicker task={task} />;
   return <TaskActions task={task} statuses={statuses} onDone={onDone} />;
 }

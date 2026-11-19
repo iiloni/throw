@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { type ReactNode, type RefObject, useRef, useState } from 'react';
 import { useShell } from '@/components/AppShell/shell';
 import type { Project } from '@/components/Board/model';
+import { ColorTagPicker } from '@/components/ColorTagPicker/ColorTagPicker';
 import type { DrawerCard, DrawerPage } from '@/components/Drawer/Drawer';
 import { TagPicker } from '@/components/TagPicker/TagPicker';
 import { ControlButtons, panelTitle } from '@/components/TaskDetails/TaskControls';
@@ -23,7 +24,7 @@ type Draft = {
   secondaryTagIds: string[];
 };
 
-export type CapturePanel = 'status' | 'priority' | 'tags';
+export type CapturePanel = 'status' | 'priority' | 'color' | 'tags';
 
 export type PhoneCapture = {
   /** The card above the dock while a task is being written. */
@@ -279,12 +280,7 @@ function CaptureControls({
   onPanel: (panel: CapturePanel) => void;
 }) {
   const { projectId, status, tags } = useCaptureOptions(draft);
-  const chosen = [
-    ...tags.filter((tag) => tag.id === draft.primaryTagId),
-    ...tags
-      .filter((tag) => draft.secondaryTagIds.includes(tag.id) && tag.id !== draft.primaryTagId)
-      .sort((a, b) => a.name.localeCompare(b.name)),
-  ];
+
   return (
     <div role="toolbar" aria-label="New task controls">
       <ControlButtons
@@ -294,7 +290,11 @@ function CaptureControls({
         tags={
           tags.length > 0
             ? {
-                names: chosen.map((tag) => tag.name),
+                primary: tags.find((tag) => tag.id === draft.primaryTagId)?.name ?? null,
+                secondary: tags
+                  .filter((tag) => draft.secondaryTagIds.includes(tag.id))
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((tag) => tag.name),
                 color: taskTagColor(
                   { primaryTagId: draft.primaryTagId, projectId: projectId ?? '' },
                   tags,
@@ -349,19 +349,22 @@ function CapturePanelContent({
         }}
       />
     );
+  if (panel === 'color')
+    return (
+      <ColorTagPicker
+        tags={tags}
+        primaryTagId={draft.primaryTagId}
+        onChange={(primaryTagId) => onChange({ primaryTagId })}
+        className="px-2 pb-2"
+      />
+    );
   return (
     <div className="px-5 pt-1 pb-3">
       <TagPicker
         tags={tags}
         primaryTagId={draft.primaryTagId}
         secondaryTagIds={draft.secondaryTagIds}
-        onPrimaryChange={(primaryTagId) =>
-          onChange({
-            primaryTagId,
-            secondaryTagIds: draft.secondaryTagIds.filter((id) => id !== primaryTagId),
-          })
-        }
-        onSecondaryChange={(id, present) =>
+        onChange={(id, present) =>
           onChange({
             secondaryTagIds: present
               ? [...new Set([...draft.secondaryTagIds, id])]

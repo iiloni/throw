@@ -36,9 +36,14 @@ All actions use `write()` and the outbox. Do not mutate collections from compone
   for surfaces that already own interaction.
 - `TaskTags`: a wrapping primary-first list; takes `tags`, `primaryTagId` and
   `secondaryTagIds`. A tag assigned in both roles is shown once without changing data.
-- `TagPicker`: a controlled, searchable tree with primary radio buttons, independent
-  secondary checkboxes and a Clear primary action. Pass the same assignment props plus
-  `onPrimaryChange` and `onSecondaryChange`; connect those to the actions above.
+- `ColorTagPicker`: picks the primary tag by colour, after Catch's colour picker. Each
+  coloured top-level tag is a swatch; picking a tag makes it primary and opens its children,
+  uncoloured top-level tags sit behind "Tags without a colour", and the slashed swatch
+  clears it. Picking the primary or one of its ancestors again only opens it. Pass `tags`,
+  `primaryTagId` and `onChange(id | null)`.
+- `TagPicker`: a controlled, searchable tree of secondary-tag checkboxes, with the primary
+  marked (a tag may hold both roles). Pass `tags`, `primaryTagId`, `secondaryTagIds` and
+  `onChange(id, present)`; connect the callbacks to the actions above.
 - `TagManager`: takes `projectId`, reads its real collection, and manages creation,
   rename, recolor, icon, move and whole-branch deletion through the settings drawer on phones
   and centred dialogs on desktop.

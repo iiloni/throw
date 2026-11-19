@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { Status, Tag, Task } from '@throw/shared';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { Project } from '@/components/Board/model';
-import { PriorityPicker, StatusPicker, TagsPicker } from './TaskPickers';
+import { ColorTagsPicker, PriorityPicker, StatusPicker, TagsPicker } from './TaskPickers';
 
 const fake = vi.hoisted(() => ({
   send: vi.fn(),
@@ -96,12 +96,17 @@ it('assigns tags in both roles without closing', () => {
   });
   fake.tags = [tag('work', 'Work'), tag('mobile', 'Mobile', 'work')];
   fake.taskTags = [{ taskId: 'task', tagId: 'work' }];
-  render(<TagsPicker task={{ ...task, primaryTagId: 'work' }} />);
-  expect(screen.getByRole('radio', { name: 'Primary: Work' })).toBeChecked();
-  expect(screen.getByRole('checkbox', { name: 'Secondary: Work' })).toBeChecked();
-  fireEvent.click(screen.getByRole('button', { name: 'Clear primary' }));
+  const { unmount } = render(<ColorTagsPicker task={{ ...task, primaryTagId: 'work' }} />);
+  expect(screen.getByRole('button', { name: 'Teal: Work' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'No colour tag' }));
   expect(fake.primary).toHaveBeenCalledWith('task', null);
-  fireEvent.click(screen.getByRole('checkbox', { name: 'Secondary: Work' }));
+  unmount();
+  render(<TagsPicker task={{ ...task, primaryTagId: 'work' }} />);
+  expect(screen.getByRole('checkbox', { name: 'Work' })).toBeChecked();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Work' }));
   expect(fake.secondary).toHaveBeenCalledWith('task', 'work', false);
 });
 
