@@ -29,12 +29,13 @@ async function contrast(locator: Locator, ink: 'color' | 'borderColor', surface:
 /** The selected surface on desktop, or the board tray's primary action on a phone. */
 async function paintedWithToken(
   locator: Locator,
-  token: '--accent' | '--brand' | '--card' = '--accent',
+  token: '--accent' | '--brand' | '--card' | '--tint' = '--accent',
 ) {
   return locator.evaluate((element, token) => {
     const probe = document.createElement('span');
     probe.style.backgroundColor = `var(${token})`;
-    document.body.append(probe);
+    // Inside the element, so a token it sets for itself (a project's tint) resolves as it does.
+    element.append(probe);
     const expected = getComputedStyle(probe).backgroundColor;
     probe.remove();
     return getComputedStyle(element).backgroundColor === expected;
@@ -173,7 +174,8 @@ test('brand surfaces preserve artwork, contrast and usable layout on light and d
     : page
         .getByRole('navigation', { name: 'Projects', exact: true })
         .getByRole('link', { name: 'Brand check', exact: true });
-  await expect.poll(() => paintedWithToken(selected, isMobile ? '--brand' : '--accent')).toBe(true);
+  // The open project's row takes the project's own tint, as its icon takes its color.
+  await expect.poll(() => paintedWithToken(selected, isMobile ? '--brand' : '--tint')).toBe(true);
   expect(await contrast(selected, 'color', 'self')).toBeGreaterThanOrEqual(4.5);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
@@ -188,7 +190,7 @@ test('brand surfaces preserve artwork, contrast and usable layout on light and d
     await settings.click();
     await expect.poll(() => paintedWithToken(settings)).toBe(true);
     // Selection moves with the route: the project left behind returns to the neutral rail.
-    await expect.poll(() => paintedWithToken(selected)).toBe(false);
+    await expect.poll(() => paintedWithToken(selected, '--tint')).toBe(false);
   }
   // The chosen theme sits on a raised card, as Catch's theme picker has it.
   const theme = page
