@@ -14,6 +14,28 @@ function subscribe(listener: () => void) {
 
 export { subscribe as watchPreferences };
 
+/** Reads a stored preference outside React; a missing or invalid value gives the fallback. */
+export function readPreference<T extends z.ZodType>(
+  key: string,
+  schema: T,
+  fallback: z.infer<T>,
+): z.infer<T> {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return fallback;
+    const parsed = schema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** Stores a preference and tells every reader in this tab. */
+export function writePreference(key: string, value: unknown) {
+  localStorage.setItem(key, JSON.stringify(value));
+  for (const listener of listeners) listener();
+}
+
 /**
  * A UI preference persisted in localStorage and shared by every component that
  * reads the same key. Stored values that fail the schema fall back to the default.
@@ -35,13 +57,7 @@ export function usePersistentState<T extends z.ZodType>(
     }
   }
 
-  const setValue = useCallback(
-    (next: z.infer<T>) => {
-      localStorage.setItem(key, JSON.stringify(next));
-      for (const listener of listeners) listener();
-    },
-    [key],
-  );
+  const setValue = useCallback((next: z.infer<T>) => writePreference(key, next), [key]);
 
   return [value, setValue];
 }

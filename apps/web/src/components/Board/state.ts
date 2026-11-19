@@ -1,7 +1,7 @@
 import { positionBetween } from '@throw/shared';
 import { z } from 'zod';
 import { isDesktop } from '@/lib/media';
-import { usePersistentState } from '@/lib/storage';
+import { readPreference, usePersistentState, writePreference } from '@/lib/storage';
 import { createStore } from '@/lib/store';
 import type { BoardData } from './model';
 import {
@@ -50,15 +50,28 @@ export const boardSettingsSchema = z.object({
    * bar itself.
    */
   scrollbars: z.boolean().default(false),
+  /** Subtasks as top-level cards in their own statuses, rather than with their parent. */
+  subtasksAsCards: z.boolean().default(false),
 });
 export type BoardSettings = z.infer<typeof boardSettingsSchema>;
 
+const BOARD_SETTINGS_KEY = 'throw-board-settings';
+
 export function useBoardSettings() {
-  return usePersistentState(
-    'throw-board-settings',
-    boardSettingsSchema,
-    boardSettingsSchema.parse({}),
-  );
+  return usePersistentState(BOARD_SETTINGS_KEY, boardSettingsSchema, boardSettingsSchema.parse({}));
+}
+
+function storedBoardSettings() {
+  return readPreference(BOARD_SETTINGS_KEY, boardSettingsSchema, boardSettingsSchema.parse({}));
+}
+
+/**
+ * Shows subtasks as cards on every board, and keeps the choice on the device. The board
+ * state carries it so its selections stay pure functions of that state.
+ */
+export function setSubtasksAsCards(value: boolean) {
+  writePreference(BOARD_SETTINGS_KEY, { ...storedBoardSettings(), subtasksAsCards: value });
+  update({ subtasksAsCards: value });
 }
 
 /** A side zone is a strip, a single column, or a gallery across the whole board. */
@@ -102,7 +115,7 @@ export function initialBoard(boards: BoardData[] = []): BoardState {
     closed: 'strip',
     backlogFilter: null,
     closedFilter: null,
-    subtasksAsCards: false,
+    subtasksAsCards: storedBoardSettings().subtasksAsCards,
     selection: [],
     openTaskId: null,
     taskTrail: [],

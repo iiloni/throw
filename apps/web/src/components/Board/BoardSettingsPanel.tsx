@@ -7,7 +7,7 @@ import { useDesktop } from '@/lib/media';
 import { springs } from '@/lib/motion';
 import { useThemePreference } from '@/lib/theme';
 import { cn } from '@/lib/utils';
-import { type BoardSettings, board, update, useBoardSettings } from './state';
+import { type BoardSettings, board, setSubtasksAsCards, useBoardSettings } from './state';
 
 function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
@@ -192,7 +192,7 @@ export function BoardSettingsControls({
         <Switch
           label="Subtasks as cards"
           checked={state.subtasksAsCards}
-          onChange={(value) => update({ subtasksAsCards: value })}
+          onChange={setSubtasksAsCards}
         />
       </Row>
       <Row label="Priority labels" hint="Name each priority zone in a column.">
