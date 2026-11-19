@@ -406,6 +406,46 @@ test('settings forms preserve focus, scroll and a single modal with reduced moti
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test('opening a task while settings are still loading goes to its project board', async ({
+  page,
+  isMobile,
+}) => {
+  const fixture = await setup(page, isMobile);
+  const taskId = await page.evaluate(
+    async (projectId) =>
+      (await import('/src/lib/tasks.ts')).createTask(projectId, { title: 'Open while loading' }),
+    fixture.projectId,
+  );
+  await page.goto(`${fixture.board}?view=board`);
+  await expect(page.getByRole('article', { name: /Open while loading/ })).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
+  // A slow network holds the settings page's code, so the board stays on screen meanwhile.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(/settings\.tsx/, async (route) => {
+    await held;
+    await route.continue();
+  });
+  if (isMobile) {
+    await page.getByRole('button', { name: 'Switch project or workspace', exact: true }).click();
+  } else await page.getByRole('button', { name: 'Project menu for Workshop', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Project settings', exact: true }).click();
+  await expect.poll(() => new URL(page.url()).pathname).toBe(fixture.settings);
+  await page.keyboard.press('ControlOrMeta+k');
+  await page.getByRole('combobox', { name: /^Search tasks/ }).fill('Open while loading');
+  await page.getByRole('option', { name: /^Open while loading/ }).click();
+  release();
+  await expect(page).toHaveURL(
+    `${new URL(page.url()).origin}${fixture.board}?view=board&task=${taskId}`,
+  );
+  await expect(page.getByRole('textbox', { name: 'Task title', exact: true })).toHaveValue(
+    'Open while loading',
+  );
+});
+
 test('opening a task from settings search returns to its project board', async ({
   page,
   isMobile,

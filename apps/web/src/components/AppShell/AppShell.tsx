@@ -214,9 +214,10 @@ export function AppShell() {
     openTask: (projectId, taskId, created) => {
       if (!workspace) return;
       setPendingTask({ projectId, taskId, created });
-      // The cross-project board opens any of its projects' tasks in place.
-      if (!crossBoard && (project?.id !== projectId || !projectBoard))
-        selectProject(workspace.id, projectId);
+      // The cross-project board opens any of its projects' tasks in place. While a navigation
+      // loads, the board still on screen is leaving, so the task goes to its own board.
+      const inPlace = !navigating && (crossBoard || (project?.id === projectId && projectBoard));
+      if (!inPlace) selectProject(workspace.id, projectId);
     },
     goProjectSettings: (project) => {
       void navigate({
