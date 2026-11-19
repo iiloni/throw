@@ -27,5 +27,5 @@ function ProjectPage() {
         It may have been deleted. Choose another project from the navigation menu.
       </EmptyState>
     );
-  return <ProjectBoard key={shell.project.id} project={shell.project} initialTaskId={task} />;
+  return <ProjectBoard key={shell.project.id} project={shell.project} task={task} />;
 }

@@ -1,6 +1,6 @@
 import type { Project } from '@throw/shared';
 import { AnimatePresence } from 'motion/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ShellMenu } from '@/components/AppShell/ShellMenu';
 import { useShell } from '@/components/AppShell/shell';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
@@ -16,17 +16,19 @@ import { DesktopBoard } from './DesktopBoard';
 import { DragOverlay } from './DragOverlay';
 import { PhoneBoard } from './PhoneBoard';
 import { projectBoardData } from './selection';
-import { board, update } from './state';
+import { board } from './state';
 import { TaskScreen } from './TaskView';
 import { TaskContentContext } from './taskContent';
+import { useTaskUrl } from './taskUrl';
 
 /** Only this boundary knows collections and writes; the prototype shares the whole board. */
 export function ProjectBoard({
   project,
-  initialTaskId,
+  task,
 }: {
   project: Project;
-  initialTaskId?: string;
+  /** The task in the URL's `task` parameter. */
+  task?: string;
 }) {
   const shell = useShell();
   const { statuses, isLoading: loadingStatuses } = useStatuses();
@@ -51,12 +53,10 @@ export function ProjectBoard({
     [project.id],
   );
   useBoardBoundary(data, actions, awaitingTasks);
-  const linkedTaskExists = tasks.some(
-    (task) => task.projectId === project.id && task.id === initialTaskId,
+  const ready = state.projectId === project.id && state.actions !== null && !awaitingTasks;
+  useTaskUrl(task, ready, (id) =>
+    [...data.tasks, ...(data.hiddenTasks ?? [])].some((row) => row.id === id),
   );
-  useEffect(() => {
-    if (initialTaskId && linkedTaskExists) update({ openTaskId: initialTaskId });
-  }, [initialTaskId, linkedTaskExists]);
   if (awaiting || state.projectId !== project.id || state.actions === null)
     return (
       <p role="status" className="p-6 text-muted-foreground">

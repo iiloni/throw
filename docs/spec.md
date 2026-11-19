@@ -601,9 +601,12 @@ dock rather than opening as a page. Desktop has no drawer. The rules are in
   by position, otherwise the create-project prompt.
 
 Workspace and project segments are UUIDs so names and future task prefixes can change
-without breaking bookmarks. A future task path has its own segment holding the task's
-UUID, not its identifier: a task created offline has no number yet, and a project's key
-can change (ADR 0007). A direct project URL keeps its view on reload. Selecting a project
+without breaking bookmarks. The open task is the `task` search parameter on either board,
+holding the task's UUID rather than its identifier: a task created offline has no number
+yet, and a project's key can change (ADR 0007). As with Catch's `note`, opening a task
+pushes one history entry and switching between a task and its subtasks replaces it, so a
+reload keeps the task open, browser Back closes it and a link opens it. A link to a task
+that is gone says so once the board has loaded, and drops the parameter (2026-11-19). A direct project URL keeps its view on reload. Selecting a project
 from navigation opens its board; the shell remembers the last project separately per
 workspace. Projects append by position. Deleting a project requires confirmation and moves
 it to the trash (see [Project](#project)), where it can be restored or removed for good.
