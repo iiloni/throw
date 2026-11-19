@@ -157,8 +157,9 @@ const loadingTags = (
  * tag with children opens them to pick a more specific one.
  */
 export function ColorTagsPicker({ task }: { task: Task }) {
-  const { tags, ready } = useTaskTagsReady(task);
-  if (!ready) return loadingTags;
+  const { tags, isLoading } = useTags(task.projectId);
+  // The colour reads the project's tags only, not the task's secondary assignments.
+  if (useAwaitingSync(isLoading, tags.length)) return loadingTags;
   return (
     <ColorTagPicker
       tags={tags}

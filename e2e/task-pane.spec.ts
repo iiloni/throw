@@ -517,11 +517,17 @@ test('tags are picked from the task controls and listed on the task', async ({
   };
   const launch = await tag('Launch', null);
   const press = await tag('Press', launch);
+  // Enough children that the colour picker's list is taller than its swatches.
+  for (const name of ['Blog', 'Events', 'Partners', 'Social', 'Video']) await tag(name, launch);
   // The colour picks the primary tag, as Catch's palette does, and opens its children.
   await controls(page).getByRole('button', { name: 'Colour: none. Change', exact: true }).click();
   const colour = page.getByRole(isMobile ? 'dialog' : 'region', { name: 'Colour', exact: true });
   await colour.getByRole('button', { name: 'Amber: Launch', exact: true }).click();
-  await expect(colour.getByRole('button', { name: 'Launch / Press', exact: true })).toBeVisible();
+  // On a phone the drawer grows with the picker's child list, so all of it is on screen; the
+  // desktop panel keeps its height and scrolls.
+  const last = colour.getByRole('button', { name: 'Launch / Video', exact: true });
+  if (isMobile) await expect(last).toBeInViewport({ ratio: 1 });
+  else await expect(last).toBeVisible();
   await page.screenshot({ path: test.info().outputPath('colour-picker.png') });
   await page.keyboard.press('Escape');
   await expect(colour).toHaveCount(0);

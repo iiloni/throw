@@ -1,4 +1,5 @@
 import type { Tag } from '@throw/shared';
+import { useId } from 'react';
 import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { TagTree } from '@/components/TagTree/TagTree';
 import { haptics } from '@/lib/haptics';
@@ -18,6 +19,7 @@ export function TagPicker({
   secondaryTagIds: readonly string[];
   onChange: (id: string, present: boolean) => void;
 }) {
+  const marker = useId();
   return (
     <section aria-label="Secondary tags" className="min-w-0">
       {!tags.length ? (
@@ -43,11 +45,14 @@ export function TagPicker({
                   {tag.name}
                 </span>
                 {tag.id === primaryTagId && (
-                  <span className="text-muted-foreground text-xs">Primary</span>
+                  <span id={marker} className="text-muted-foreground text-xs">
+                    Primary
+                  </span>
                 )}
                 <input
                   type="checkbox"
                   aria-label={label}
+                  aria-describedby={tag.id === primaryTagId ? marker : undefined}
                   checked={secondaryTagIds.includes(tag.id)}
                   onChange={(event) => {
                     haptics.selection();

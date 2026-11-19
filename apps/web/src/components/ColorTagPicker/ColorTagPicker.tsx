@@ -1,7 +1,7 @@
 import { COLORS, type Tag, tagPath } from '@throw/shared';
 import { Check, ChevronLeft, ChevronRight, Slash } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useMemo, useRef, useState } from 'react';
 import { AnimatedHeight } from '@/components/AnimatedHeight/AnimatedHeight';
 import { colorName } from '@/components/ColorPicker/ColorPicker';
 import { TagBadge } from '@/components/TagBadge/TagBadge';
@@ -35,9 +35,16 @@ export function ColorTagPicker({
   const [direction, setDirection] = useState(1);
   const reducedMotion = useReducedMotion();
   const selected = tags.find((tag) => tag.id === primaryTagId);
-  const selectedRoot = selected ? tagPath(tags, selected.id)[0] : undefined;
+  const selectedPath = useMemo(
+    () => (primaryTagId ? tagPath(tags, primaryTagId).map((tag) => tag.id) : []),
+    [tags, primaryTagId],
+  );
+  const selectedRoot = selected && tags.find((tag) => tag.id === selectedPath[0]);
   const current = tags.find((tag) => tag.id === branch);
-  const hasChildren = (id: string) => tags.some((tag) => tag.parentId === id);
+  const parents = useMemo(() => new Set(tags.map((tag) => tag.parentId)), [tags]);
+  const hasChildren = (id: string) => parents.has(id);
+  // Moving between views replaces the focused control, so focus follows into the new view.
+  const refocus = useRef(false);
   // A colour belongs to at most one top-level tag (`tagWriteIssue`).
   const roots = COLORS.flatMap((color) => {
     const root = tags.find((tag) => tag.parentId === null && tag.color === color);
@@ -53,11 +60,17 @@ export function ColorTagPicker({
     .sort((a, b) => a.name.localeCompare(b.name));
 
   function open(next: Branch, travel: number) {
+    refocus.current = true;
     setDirection(travel);
     setBranch(next);
   }
+  /**
+   * As in Catch, a tag is primary once picked, and one with children then opens them to pick
+   * a more specific one. The primary or one of its ancestors only opens: picking it again
+   * would replace a more specific primary with a broader one.
+   */
   function select(tag: Tag) {
-    if (tag.id !== primaryTagId) {
+    if (!selectedPath.includes(tag.id)) {
       haptics.selection();
       onChange(tag.id);
     }
@@ -78,6 +91,14 @@ export function ColorTagPicker({
       exit="leave"
       transition={{ duration: reducedMotion ? 0 : 0.16 }}
       className={viewClassName}
+      ref={(element: HTMLDivElement | null) => {
+        if (!element || !refocus.current) return;
+        refocus.current = false;
+        const target =
+          element.querySelector<HTMLElement>('button[aria-pressed="true"]') ??
+          element.querySelector<HTMLElement>('button');
+        target?.focus({ preventScroll: true });
+      }}
     >
       {children}
     </motion.div>
@@ -163,24 +184,20 @@ export function ColorTagPicker({
                       branch,
                       children.map((tag) => {
                         const chosen = tag.id === primaryTagId;
+                        const path = tagPath(tags, tag.id);
                         return (
                           <button
                             type="button"
                             key={tag.id}
                             aria-pressed={chosen}
-                            aria-label={tagPath(tags, tag.id)
-                              .map((item) => item.name)
-                              .join(' / ')}
+                            aria-label={path.map((item) => item.name).join(' / ')}
                             onClick={() => select(tag)}
                             className={cn(
                               'flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-left text-sm outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring',
                               chosen && 'bg-foreground/[0.08] font-medium',
                             )}
                           >
-                            <TagIcon
-                              name={tagPath(tags, tag.id)[0]?.icon}
-                              className="size-4 shrink-0"
-                            />
+                            <TagIcon name={path[0]?.icon} className="size-4 shrink-0" />
                             <span className="min-w-0 flex-1 truncate">{tag.name}</span>
                             {chosen && <Check className="size-4 shrink-0" aria-hidden />}
                             {hasChildren(tag.id) && (
@@ -189,7 +206,6 @@ export function ColorTagPicker({
                           </button>
                         );
                       }),
-                      'max-h-[min(20rem,40dvh)] overflow-y-auto overscroll-contain',
                     )}
                   </AnimatePresence>
                 </>,
@@ -214,6 +230,7 @@ function Swatch({
   onClick: () => void;
   children: ReactNode;
 }) {
+  const reduced = useReducedMotion();
   return (
     <motion.button
       type="button"
@@ -221,7 +238,7 @@ function Swatch({
       aria-label={label}
       aria-pressed={pressed}
       title={label}
-      whileTap={{ scale: 0.85 }}
+      whileTap={reduced ? undefined : { scale: 0.85 }}
       transition={springs.snappy}
       onClick={onClick}
       className={cn(

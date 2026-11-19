@@ -63,10 +63,15 @@ it('offers only colours a tag holds, and opens a picked tag’s children', async
   fireEvent.click(await screen.findByRole('button', { name: 'Product / Mobile' }));
   expect(onChange).toHaveBeenLastCalledWith('mobile');
   fireEvent.click(screen.getByRole('button', { name: 'Back from Product' }));
-  expect(await screen.findByRole('button', { name: 'Teal: Product' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  const swatch = await screen.findByRole('button', { name: 'Teal: Product' });
+  expect(swatch).toHaveAttribute('aria-pressed', 'true');
+  // Focus follows into the new view, onto what is picked there.
+  expect(swatch).toHaveFocus();
+  // Picking the primary's root again only opens it, keeping the more specific primary.
+  onChange.mockClear();
+  fireEvent.click(swatch);
+  expect(await screen.findByRole('button', { name: 'Back from Product' })).toBeInTheDocument();
+  expect(onChange).not.toHaveBeenCalled();
 });
 
 it('reaches uncoloured tags one step away and clears the primary', async () => {

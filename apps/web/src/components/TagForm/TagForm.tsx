@@ -1,5 +1,6 @@
 import { COLORS, TAG_ICONS, type Tag, tagPath, tagSubtreeIds, tagTree } from '@throw/shared';
 import { type FormEvent, type RefObject, useId, useMemo, useState } from 'react';
+import { colorName } from '@/components/ColorPicker/ColorPicker';
 import { TAG_ICON_LABELS, TagIcon } from '@/components/TagIcon/TagIcon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -115,11 +116,7 @@ export function TagEditor({
                   key={value}
                   type="button"
                   data-color={value}
-                  aria-label={
-                    value === 'dark-blue'
-                      ? 'Indigo'
-                      : value.charAt(0).toUpperCase() + value.slice(1)
-                  }
+                  aria-label={colorName(value)}
                   aria-pressed={color === value}
                   disabled={usedColors.has(value)}
                   title={usedColors.has(value) ? 'Already used by another root' : value}

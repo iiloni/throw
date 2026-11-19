@@ -45,7 +45,7 @@ it('assigns secondary tags independently of the primary, with full path labels',
   // The primary is marked, and may be secondary too.
   const primary = screen.getByRole('checkbox', { name: 'Product / Mobile' });
   expect(primary).not.toBeChecked();
-  expect(primary.closest('label')).toHaveTextContent('Primary');
+  expect(primary).toHaveAccessibleDescription('Primary');
   fireEvent.click(primary);
   expect(onChange).toHaveBeenCalledWith(child.id, true);
   fireEvent.click(screen.getByRole('checkbox', { name: 'Product' }));
