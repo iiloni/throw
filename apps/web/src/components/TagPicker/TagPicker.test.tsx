@@ -31,56 +31,44 @@ beforeEach(() =>
   ),
 );
 afterEach(() => vi.unstubAllGlobals());
-it('keeps primary, ancestor and descendant selections independently usable with full path labels', () => {
-  const onPrimaryChange = vi.fn();
-  const onSecondaryChange = vi.fn();
+it('assigns secondary tags independently of the primary, with full path labels', () => {
+  const onChange = vi.fn();
   render(
     <TagPicker
       tags={[root, child]}
       primaryTagId={child.id}
       secondaryTagIds={[root.id]}
-      onPrimaryChange={onPrimaryChange}
-      onSecondaryChange={onSecondaryChange}
+      onChange={onChange}
     />,
   );
-  expect(screen.getByRole('radio', { name: 'Primary: Product / Mobile' })).toBeChecked();
-  expect(screen.getByRole('checkbox', { name: 'Secondary: Product' })).toBeChecked();
-  fireEvent.click(screen.getByRole('checkbox', { name: 'Secondary: Product / Mobile' }));
-  expect(onSecondaryChange).toHaveBeenCalledWith(child.id, true);
-  expect(onPrimaryChange).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('radio', { name: /^Primary: Product$/ }));
-  expect(onPrimaryChange).toHaveBeenCalledWith(root.id);
-  fireEvent.click(screen.getByRole('button', { name: 'Clear primary' }));
-  expect(onPrimaryChange).toHaveBeenLastCalledWith(null);
+  expect(screen.getByRole('checkbox', { name: 'Product' })).toBeChecked();
+  // The primary is marked, and may be secondary too.
+  const primary = screen.getByRole('checkbox', { name: 'Product / Mobile' });
+  expect(primary).not.toBeChecked();
+  expect(primary.closest('label')).toHaveTextContent('Primary');
+  fireEvent.click(primary);
+  expect(onChange).toHaveBeenCalledWith(child.id, true);
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Product' }));
+  expect(onChange).toHaveBeenLastCalledWith(root.id, false);
 });
 it('searches full ancestry and lets users collapse and reopen branches', async () => {
   render(
-    <TagPicker
-      tags={[root, child]}
-      primaryTagId={null}
-      secondaryTagIds={[]}
-      onPrimaryChange={() => {}}
-      onSecondaryChange={() => {}}
-    />,
+    <TagPicker tags={[root, child]} primaryTagId={null} secondaryTagIds={[]} onChange={() => {}} />,
   );
   fireEvent.click(screen.getByRole('button', { name: 'Collapse Product' }));
   // Exiting rows are inert while their height animation finishes.
-  expect(screen.queryByRole('radio', { name: 'Primary: Product / Mobile' })).toBeNull();
+  expect(screen.queryByRole('checkbox', { name: 'Product / Mobile' })).toBeNull();
   fireEvent.change(screen.getByRole('textbox', { name: 'Find tags' }), {
     target: { value: 'product' },
   });
-  expect(
-    await screen.findByRole('radio', { name: 'Primary: Product / Mobile' }),
-  ).toBeInTheDocument();
+  expect(await screen.findByRole('checkbox', { name: 'Product / Mobile' })).toBeInTheDocument();
   const collapse = screen.getByRole('button', { name: 'Collapse Product' });
   expect(collapse).toBeDisabled();
   expect(collapse).toHaveAttribute('aria-expanded', 'true');
   fireEvent.change(screen.getByRole('textbox', { name: 'Find tags' }), {
     target: { value: '' },
   });
-  expect(screen.queryByRole('radio', { name: 'Primary: Product / Mobile' })).toBeNull();
+  expect(screen.queryByRole('checkbox', { name: 'Product / Mobile' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Expand Product' }));
-  expect(
-    await screen.findByRole('radio', { name: 'Primary: Product / Mobile' }),
-  ).toBeInTheDocument();
+  expect(await screen.findByRole('checkbox', { name: 'Product / Mobile' })).toBeInTheDocument();
 });

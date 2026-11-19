@@ -4,6 +4,10 @@ import { motion, useReducedMotion } from 'motion/react';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
+export function colorName(color: Color) {
+  return color === 'dark-blue' ? 'Indigo' : color.charAt(0).toUpperCase() + color.slice(1);
+}
+
 export function ColorPicker({
   value,
   onChange,
@@ -20,9 +24,7 @@ export function ColorPicker({
           key={color}
           type="button"
           data-color={color}
-          aria-label={
-            color === 'dark-blue' ? 'Indigo' : color.charAt(0).toUpperCase() + color.slice(1)
-          }
+          aria-label={colorName(color)}
           aria-pressed={value === color}
           whileTap={reduced ? undefined : { scale: 0.85 }}
           transition={springs.snappy}
