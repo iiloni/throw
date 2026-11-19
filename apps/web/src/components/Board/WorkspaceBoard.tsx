@@ -15,6 +15,7 @@ import { secondaryTagsByTask, workspaceBoardData } from './selection';
 import { board } from './state';
 import { TaskScreen } from './TaskView';
 import { TaskContentContext } from './taskContent';
+import { useTaskUrl } from './taskUrl';
 import { WorkspaceDesktopBoard } from './WorkspaceDesktopBoard';
 import { WorkspacePhoneBoard } from './WorkspacePhoneBoard';
 
@@ -37,11 +38,14 @@ function useSameRows<T>(rows: T[]): T[] {
 export function WorkspaceBoard({
   workspaceId,
   projects: given,
+  task,
   onCreate,
   onSearch,
 }: {
   workspaceId: string;
   projects: ProjectRow[];
+  /** The task in the URL's `task` parameter. */
+  task?: string;
   onCreate: () => void;
   onSearch: () => void;
 }) {
@@ -63,6 +67,9 @@ export function WorkspaceBoard({
   if (taskPage && taskPage.taskId !== state.openTaskId) setTaskPage(null);
   // New work is captured through the palette, which asks which project it belongs to.
   useBoardBoundary(data, taskWrites, awaitingTasks);
+  // Whether the board holds this page's data, and whether its tasks have caught up.
+  const ready = state.projectId === data.project.id && state.actions !== null && !awaitingTasks;
+  useTaskUrl(task, ready, !loadingTasks);
   if (awaiting || state.projectId !== data.project.id || state.actions === null)
     return (
       <p role="status" className="p-6 text-muted-foreground">
