@@ -122,9 +122,17 @@ test('rail project menu opens the selected project settings and keeps board sett
   await page.getByRole('link', { name: 'Back to board', exact: true }).click();
   const boardSettings = rail.getByRole('button', { name: 'Board settings', exact: true });
   await boardSettings.click();
-  await expect(page.getByRole('switch', { name: 'Subtasks as cards', exact: true })).toBeVisible();
+  const subtasks = page.getByRole('switch', { name: 'Subtasks as cards', exact: true });
+  await expect(subtasks).not.toBeChecked();
+  await subtasks.click();
+  await expect(subtasks).toBeChecked();
   await page.keyboard.press('Escape');
   await expect(boardSettings).toBeFocused();
+  // The choice is kept on the device.
+  await page.reload();
+  await expect(boardSettings).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
+  await boardSettings.click();
+  await expect(subtasks).toBeChecked();
 });
 
 test('switch projects and workspaces; restore the last project on reload and first load', async ({

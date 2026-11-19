@@ -289,6 +289,7 @@ rails' placement shape desktop columns, so a phone does not show them.
 | Priority on cards | Off | Marks a card's priority on the card. A card of the default priority is never marked. |
 | Column backgrounds | On | Gives each active column a faint surface. |
 | Backlog rail, Closed rail | Sticky | One setting for each. Sticky keeps the rail at the window's edge with the columns scrolling beneath it. With board puts it at its end of the columns, and it scrolls away with them. |
+| Subtasks as cards | Off | Shows subtasks as top-level cards; see [Subtasks on the board](#subtasks-on-the-board). |
 | Scrollbars | Off | Draws scrollbars. Off, a faded edge shows where a list goes on. |
 | Holding a card | Compact | Compact or Full; see [Ordering and priority](#ordering-and-priority). |
 | Theme | System | System, Light or Dark. The browser and installed app bars follow the chosen theme. |
@@ -324,7 +325,8 @@ Folded, it shows one pip per subtask and a count. Unfolded, it lists the subtask
 
 By default subtasks live with their parent: their statuses are tracked but do not place them
 on the board. A board settings option shows subtasks as top-level cards, marked as subtasks,
-in their own status columns.
+in their own status columns. Like the other board settings it is kept on the device and
+applies to every board.
 
 Two drag interactions are kept in mind for later: dragging a subtask out to make it a task,
 and dropping a card on another to make it a subtask.
