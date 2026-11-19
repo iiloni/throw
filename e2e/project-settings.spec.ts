@@ -411,13 +411,18 @@ test('opening a task from settings search returns to its project board', async (
   isMobile,
 }) => {
   const fixture = await setup(page, isMobile);
-  await page.evaluate(async (projectId) => {
-    (await import('/src/lib/tasks.ts')).createTask(projectId, { title: 'Open from settings' });
-  }, fixture.projectId);
+  const taskId = await page.evaluate(
+    async (projectId) =>
+      (await import('/src/lib/tasks.ts')).createTask(projectId, { title: 'Open from settings' }),
+    fixture.projectId,
+  );
   await page.keyboard.press('ControlOrMeta+k');
   await page.getByRole('combobox', { name: /^Search tasks/ }).fill('Open from settings');
   await page.getByRole('option', { name: /^Open from settings/ }).click();
-  await expect(page).toHaveURL(`${new URL(page.url()).origin}${fixture.board}?view=board`);
+  // The open task is in the URL, so a reload keeps it.
+  await expect(page).toHaveURL(
+    `${new URL(page.url()).origin}${fixture.board}?view=board&task=${taskId}`,
+  );
   await expect(page.getByRole('textbox', { name: 'Task title', exact: true })).toHaveValue(
     'Open from settings',
   );

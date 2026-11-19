@@ -621,3 +621,45 @@ test('the phone surface grows from its card without scaling text and lands back 
   ).toBe(true);
   await expect(card).toBeVisible();
 });
+
+test('the open task lives in the URL: reload keeps it, Back closes it, a stale link says so', async ({
+  page,
+}) => {
+  const account = await fixture(page);
+  const { pane } = account;
+  await expect(page).toHaveURL(new RegExp(`task=${account.taskId}`));
+  await page.reload();
+  await expect(page.getByLabel('Task', { exact: true })).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
+  await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue(
+    'Write the launch plan',
+  );
+  // Opened in this session, the task's history entry is gone once it closes.
+  await closeTask(pane);
+  await expect(page).not.toHaveURL(/task=/);
+  await page.getByRole('article', { name: 'TASK-1 Write the launch plan', exact: true }).click();
+  await expect(pane).toBeVisible();
+  await page.goBack();
+  await expect(pane).toHaveCount(0);
+  await expect(page).not.toHaveURL(/task=/);
+  await expect(page).toHaveURL(new RegExp(`/p/${account.projectId}`));
+
+  // A subtask opened from its parent replaces the entry: Back closes both in one step.
+  await page.getByRole('article', { name: 'TASK-1 Write the launch plan', exact: true }).click();
+  await pane.getByRole('button', { name: 'Add subtask', exact: true }).click();
+  await pane.getByRole('textbox', { name: 'Subtask title' }).fill('Draft the outline');
+  await pane.getByRole('textbox', { name: 'Subtask title' }).press('Enter');
+  await pane.getByRole('article', { name: /Draft the outline/ }).click();
+  await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue('Draft the outline');
+  await expect(page).not.toHaveURL(new RegExp(`task=${account.taskId}`));
+  await page.goBack();
+  await expect(page.locator('[data-task-screen]')).toHaveCount(0);
+  await expect(pane).toHaveCount(0);
+  await expect(page).not.toHaveURL(/task=/);
+
+  await page.goto(`${account.path}&task=${randomUUID()}`);
+  await expect(page.getByText('That task is not available')).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
+  await expect(page).not.toHaveURL(/task=/);
+  await expect(pane).toHaveCount(0);
+});

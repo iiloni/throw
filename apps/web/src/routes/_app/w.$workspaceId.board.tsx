@@ -1,17 +1,20 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { Columns3 } from 'lucide-react';
 import { useCallback } from 'react';
+import { z } from 'zod';
 import { useShell, viewSchema } from '@/components/AppShell/shell';
 import { WorkspaceBoard } from '@/components/Board/WorkspaceBoard';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/board')({
-  validateSearch: (search) => ({
+  validateSearch: (search): { view: z.infer<typeof viewSchema>; task?: string } => ({
     view: viewSchema.exclude(['backlog']).catch('board').parse(search.view),
+    task: z.uuid().optional().catch(undefined).parse(search.task),
   }),
   component: CrossProjectBoard,
 });
 function CrossProjectBoard() {
+  const { task } = Route.useSearch();
   const shell = useShell();
   const { openPalette } = shell;
   const onCreate = useCallback(() => openPalette('capture'), [openPalette]);
@@ -39,6 +42,7 @@ function CrossProjectBoard() {
       key={shell.workspace.id}
       workspaceId={shell.workspace.id}
       projects={shell.projects}
+      task={task}
       onCreate={onCreate}
       onSearch={onSearch}
     />
