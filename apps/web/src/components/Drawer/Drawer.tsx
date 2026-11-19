@@ -171,7 +171,8 @@ export function Drawer({
     // Let go at the height it was at: there is no new detent to move it.
     if (next === detent) slide(offsets()[next]);
     else {
-      haptics.threshold();
+      // Coming to rest at another height is a choice among the drawer's heights.
+      haptics.selection();
       onDetent(next);
     }
   }
@@ -187,7 +188,7 @@ export function Drawer({
       const at = offsets();
       if (paged) {
         if (offset > 100 || velocity > 500) {
-          haptics.threshold();
+          haptics.selection();
           onClosePage();
         } else slide(at.page);
         return;

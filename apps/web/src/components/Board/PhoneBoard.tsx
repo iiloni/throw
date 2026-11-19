@@ -10,14 +10,14 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
-import { type ReactNode, type UIEvent, useCallback, useContext, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useContext, useRef, useState } from 'react';
 import { type PhoneCapture, usePhonePalette } from '@/components/CommandPalette/PhonePalette';
 import { type Detent, Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
-import { haptics } from '@/lib/haptics';
+import { feelStatusChange, haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { BoardSettingsContent } from './BoardSettingsPanel';
@@ -32,6 +32,7 @@ import {
   projectOf,
   type Status,
   type Task,
+  targetCategory,
 } from './model';
 import { StatusFilter, zoneStatuses } from './SideZone';
 import { CATEGORY_NAMES } from './StatusMenu';
@@ -49,6 +50,7 @@ import {
 import { TaskCard } from './TaskCard';
 import { TaskContentContext } from './taskContent';
 import { useTaskSurfaceShown } from './taskTransition';
+import { usePagerPage } from './usePagerPage';
 
 /** Clear space at the end of a column, for the collapsed drawer resting over it. */
 export const DOCK_SPACE = 'calc(var(--dock-height) + var(--safe-bottom) + 3rem)';
@@ -86,8 +88,8 @@ export function PhoneBoard({
     project.statuses.find((status) => status.category === 'done' && status.isDefault) ??
     project.statuses.find((status) => status.category === 'done');
   const reduced = useReducedMotion();
-  const pager = useRef<HTMLDivElement>(null);
-  const [page, pagerScrolled] = usePagerPage();
+  const pagerRef = useRef<HTMLDivElement>(null);
+  const [page, pager, quietPager] = usePagerPage();
   const [drawerPage, setDrawerPage] = useState<BoardPage | null>(null);
   const closePage = useCallback(() => setDrawerPage(null), []);
   const phonePalette = usePhonePalette({
@@ -102,7 +104,8 @@ export function PhoneBoard({
   useBackHandler(state.selection.length > 0, () => update({ selection: [] }));
 
   function turnTo(index: number, behavior: ScrollBehavior = 'smooth') {
-    const element = pager.current;
+    quietPager();
+    const element = pagerRef.current;
     element?.scrollTo({
       left: index * pageStride(element),
       behavior: reduced ? 'instant' : behavior,
@@ -168,10 +171,10 @@ export function PhoneBoard({
 
       <div className="relative flex min-h-0 flex-1" inert={covered}>
         <div
-          ref={pager}
+          ref={pagerRef}
           data-pager=""
           data-selecting={state.selection.length > 0 ? '' : undefined}
-          onScroll={pagerScrolled}
+          {...pager}
           className="phone-pager flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
         >
           {active.map((status) => (
@@ -599,23 +602,6 @@ function BoardDrawer({
   );
 }
 
-/**
- * The page a phone pager rests on, from its scroll. Each new page ticks, as Catch's pager
- * does, unless a held card is turning it, which the drag feels on its own.
- */
-export function usePagerPage(first = 0) {
-  const [page, setPage] = useState(first);
-  const seen = useRef(first);
-  const scrolled = useCallback((event: UIEvent<HTMLElement>) => {
-    const next = Math.round(event.currentTarget.scrollLeft / pageStride(event.currentTarget));
-    if (next === seen.current) return;
-    seen.current = next;
-    if (!drag.get()) haptics.selection();
-    setPage(next);
-  }, []);
-  return [page, scrolled] as const;
-}
-
 /** The board's dock and an open task's trade places, as Catch's dock does for a note. */
 export function DockFace({ children }: { children: ReactNode }) {
   const present = useIsPresent();
@@ -675,9 +661,13 @@ export function MovePanel({ pick }: { pick: boolean }) {
   );
   const open = pick || (held?.phase === 'dragging' && held.over);
   const send = (statusId: string) => {
-    haptics.success();
     sendTasks(state.selection, statusId);
     update({ selection: [] });
+    // As every status change is felt: finishing lands as success, anything else as a choice.
+    const category =
+      targetCategory(statusId) ??
+      project.statuses.find((status) => status.id === statusId)?.category;
+    if (category) feelStatusChange(category);
   };
   return (
     <motion.div

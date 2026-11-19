@@ -12,8 +12,10 @@ const native = Capacitor.isNativePlatform();
 
 function perform(effect: Effect) {
   if (native) void HapticFeedback.perform({ effect }).catch(() => {});
-  // A browser on a phone has only raw vibration, which Android Chrome honours after a touch.
-  else navigator.vibrate?.(effect === 'medium' ? 12 : effect === 'success' ? 14 : 8);
+  // A browser on a phone has only raw vibration, which Android Chrome honours only once the
+  // page has been tapped; before that it blocks each call with a console warning.
+  else if (navigator.userActivation?.hasBeenActive ?? true)
+    navigator.vibrate?.(effect === 'medium' ? 12 : effect === 'success' ? 14 : 8);
 }
 
 /**

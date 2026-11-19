@@ -152,12 +152,13 @@ export function TaskDetails({
             label={task.deletedAt ? 'Restore task' : 'Move to trash'}
             className="size-10 text-destructive hover:text-destructive [&_svg]:size-5"
             onClick={() => {
+              // Felt once it is done: either can throw if the task went meanwhile.
               if (task.deletedAt) {
-                haptics.success();
                 restoreTask(task.id);
+                haptics.success();
               } else {
-                haptics.warning();
                 trashTask(task.id);
+                haptics.warning();
               }
             }}
           >

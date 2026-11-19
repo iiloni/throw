@@ -5,7 +5,7 @@ import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useBackHandler } from '@/lib/backButton';
-import { haptics } from '@/lib/haptics';
+import { feelStatusChange } from '@/lib/haptics';
 import { getServerUrl } from '@/lib/serverUrl';
 import { sendTask } from '@/lib/tasks';
 
@@ -38,9 +38,8 @@ export function TaskActions({
             variant="ghost"
             className="min-h-12 justify-start gap-3 rounded-xl"
             onClick={() => {
-              if (closed) haptics.toggle();
-              else haptics.success();
               sendTask(task.id, target.id);
+              feelStatusChange(target.category);
               onDone();
             }}
           >

@@ -34,8 +34,8 @@ export function StatusPicker({
       onChange={(statusId) => {
         const next = statuses.find((status) => status.id === statusId);
         if (next && statusId !== task.statusId) {
-          feelStatusChange(next.category);
           sendTask(task.id, statusId);
+          feelStatusChange(next.category);
         }
         onPicked();
       }}
