@@ -5,6 +5,7 @@ import { useShell } from '@/components/AppShell/shell';
 import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
 import { Button } from '@/components/ui/button';
 import { useProjects, useTasks } from '@/lib/collections';
+import { haptics } from '@/lib/haptics';
 import { trashRoots } from '@/lib/projectSettings';
 import { purgeProject, restoreProject } from '@/lib/projects';
 import { useAwaitingSync } from '@/lib/syncStatus';
@@ -111,7 +112,10 @@ export function Trash({
                       </p>
                     </div>
                     <TrashActions
-                      onRestore={() => restoreProject(item.id)}
+                      onRestore={() => {
+                        haptics.success();
+                        restoreProject(item.id);
+                      }}
                       onRemove={() =>
                         setConfirmation({ kind: 'project', id: item.id, name: item.name })
                       }
@@ -140,7 +144,10 @@ export function Trash({
                           </p>
                         </div>
                         <TrashActions
-                          onRestore={() => restoreTask(item.id)}
+                          onRestore={() => {
+                            haptics.success();
+                            restoreTask(item.id);
+                          }}
                           onRemove={() =>
                             setConfirmation({
                               kind: 'task',
@@ -203,6 +210,7 @@ export function Trash({
             variant="destructive"
             disabled={!canRemove}
             onClick={() => {
+              haptics.warning();
               if (confirmation?.kind === 'all') {
                 if (projectId) emptyProjectTrash(projectId);
                 else emptyTrash(workspaceId);
