@@ -16,6 +16,13 @@ import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as PrototypeBoardRouteImport } from './routes/prototype.board'
 import { Route as PrototypeTagsRouteImport } from './routes/prototype.tags'
+import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
+import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/account'
+import { Route as AppSettingsAdminRouteImport } from './routes/_app/settings/admin'
+import { Route as AppSettingsGeneralRouteImport } from './routes/_app/settings/general'
+import { Route as AppSettingsUpdateRouteImport } from './routes/_app/settings/update'
+import { Route as AppSettingsAdminIndexRouteImport } from './routes/_app/settings/admin/index'
+import { Route as AppSettingsAdminBackupsRouteImport } from './routes/_app/settings/admin/backups'
 import { Route as AppWWorkspaceIdIndexRouteImport } from './routes/_app/w.$workspaceId.index'
 import { Route as AppWWorkspaceIdBoardRouteImport } from './routes/_app/w.$workspaceId.board'
 import { Route as AppWWorkspaceIdTrashRouteImport } from './routes/_app/w.$workspaceId.trash'
@@ -57,6 +64,41 @@ const PrototypeTagsRoute = PrototypeTagsRouteImport.update({
   path: '/prototype/tags',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppSettingsAccountRoute = AppSettingsAccountRouteImport.update({
+  id: '/account',
+  path: '/account',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppSettingsAdminRoute = AppSettingsAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppSettingsGeneralRoute = AppSettingsGeneralRouteImport.update({
+  id: '/general',
+  path: '/general',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppSettingsUpdateRoute = AppSettingsUpdateRouteImport.update({
+  id: '/update',
+  path: '/update',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppSettingsAdminIndexRoute = AppSettingsAdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppSettingsAdminRoute,
+} as any)
+const AppSettingsAdminBackupsRoute = AppSettingsAdminBackupsRouteImport.update({
+  id: '/backups',
+  path: '/backups',
+  getParentRoute: () => AppSettingsAdminRoute,
+} as any)
 const AppWWorkspaceIdIndexRoute = AppWWorkspaceIdIndexRouteImport.update({
   id: '/w/$workspaceId/',
   path: '/w/$workspaceId/',
@@ -95,11 +137,18 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
-  '/settings': typeof AppSettingsRoute
+  '/settings': typeof AppSettingsRouteWithChildren
   '/prototype/board': typeof PrototypeBoardRoute
   '/prototype/tags': typeof PrototypeTagsRoute
+  '/settings/account': typeof AppSettingsAccountRoute
+  '/settings/admin': typeof AppSettingsAdminRouteWithChildren
+  '/settings/general': typeof AppSettingsGeneralRoute
+  '/settings/update': typeof AppSettingsUpdateRoute
+  '/settings/': typeof AppSettingsIndexRoute
+  '/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
   '/w/$workspaceId/board': typeof AppWWorkspaceIdBoardRoute
   '/w/$workspaceId/trash': typeof AppWWorkspaceIdTrashRoute
+  '/settings/admin/': typeof AppSettingsAdminIndexRoute
   '/w/$workspaceId/': typeof AppWWorkspaceIdIndexRoute
   '/w/$workspaceId/p/$projectId': typeof AppWWorkspaceIdPProjectIdRoute
   '/w/$workspaceId/p/$projectId/settings': typeof AppWWorkspaceIdPProjectIdSettingsRoute
@@ -108,12 +157,17 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
-  '/settings': typeof AppSettingsRoute
   '/prototype/board': typeof PrototypeBoardRoute
   '/prototype/tags': typeof PrototypeTagsRoute
   '/': typeof AppIndexRoute
+  '/settings/account': typeof AppSettingsAccountRoute
+  '/settings/general': typeof AppSettingsGeneralRoute
+  '/settings/update': typeof AppSettingsUpdateRoute
+  '/settings': typeof AppSettingsIndexRoute
+  '/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
   '/w/$workspaceId/board': typeof AppWWorkspaceIdBoardRoute
   '/w/$workspaceId/trash': typeof AppWWorkspaceIdTrashRoute
+  '/settings/admin': typeof AppSettingsAdminIndexRoute
   '/w/$workspaceId': typeof AppWWorkspaceIdIndexRoute
   '/w/$workspaceId/p/$projectId': typeof AppWWorkspaceIdPProjectIdRoute
   '/w/$workspaceId/p/$projectId/settings': typeof AppWWorkspaceIdPProjectIdSettingsRoute
@@ -124,12 +178,19 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
-  '/_app/settings': typeof AppSettingsRoute
+  '/_app/settings': typeof AppSettingsRouteWithChildren
   '/prototype/board': typeof PrototypeBoardRoute
   '/prototype/tags': typeof PrototypeTagsRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/settings/account': typeof AppSettingsAccountRoute
+  '/_app/settings/admin': typeof AppSettingsAdminRouteWithChildren
+  '/_app/settings/general': typeof AppSettingsGeneralRoute
+  '/_app/settings/update': typeof AppSettingsUpdateRoute
+  '/_app/settings/': typeof AppSettingsIndexRoute
+  '/_app/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
   '/_app/w/$workspaceId/board': typeof AppWWorkspaceIdBoardRoute
   '/_app/w/$workspaceId/trash': typeof AppWWorkspaceIdTrashRoute
+  '/_app/settings/admin/': typeof AppSettingsAdminIndexRoute
   '/_app/w/$workspaceId/': typeof AppWWorkspaceIdIndexRoute
   '/_app/w/$workspaceId/p/$projectId': typeof AppWWorkspaceIdPProjectIdRoute
   '/_app/w/$workspaceId/p/$projectId_/settings': typeof AppWWorkspaceIdPProjectIdSettingsRoute
@@ -144,8 +205,15 @@ export interface FileRouteTypes {
     | '/settings'
     | '/prototype/board'
     | '/prototype/tags'
+    | '/settings/account'
+    | '/settings/admin'
+    | '/settings/general'
+    | '/settings/update'
+    | '/settings/'
+    | '/settings/admin/backups'
     | '/w/$workspaceId/board'
     | '/w/$workspaceId/trash'
+    | '/settings/admin/'
     | '/w/$workspaceId/'
     | '/w/$workspaceId/p/$projectId'
     | '/w/$workspaceId/p/$projectId/settings'
@@ -154,12 +222,17 @@ export interface FileRouteTypes {
   to:
     | '/login'
     | '/setup'
-    | '/settings'
     | '/prototype/board'
     | '/prototype/tags'
     | '/'
+    | '/settings/account'
+    | '/settings/general'
+    | '/settings/update'
+    | '/settings'
+    | '/settings/admin/backups'
     | '/w/$workspaceId/board'
     | '/w/$workspaceId/trash'
+    | '/settings/admin'
     | '/w/$workspaceId'
     | '/w/$workspaceId/p/$projectId'
     | '/w/$workspaceId/p/$projectId/settings'
@@ -173,8 +246,15 @@ export interface FileRouteTypes {
     | '/prototype/board'
     | '/prototype/tags'
     | '/_app/'
+    | '/_app/settings/account'
+    | '/_app/settings/admin'
+    | '/_app/settings/general'
+    | '/_app/settings/update'
+    | '/_app/settings/'
+    | '/_app/settings/admin/backups'
     | '/_app/w/$workspaceId/board'
     | '/_app/w/$workspaceId/trash'
+    | '/_app/settings/admin/'
     | '/_app/w/$workspaceId/'
     | '/_app/w/$workspaceId/p/$projectId'
     | '/_app/w/$workspaceId/p/$projectId_/settings'
@@ -240,6 +320,55 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PrototypeTagsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/settings/': {
+      id: '/_app/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AppSettingsIndexRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
+    '/_app/settings/account': {
+      id: '/_app/settings/account'
+      path: '/account'
+      fullPath: '/settings/account'
+      preLoaderRoute: typeof AppSettingsAccountRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
+    '/_app/settings/admin': {
+      id: '/_app/settings/admin'
+      path: '/admin'
+      fullPath: '/settings/admin'
+      preLoaderRoute: typeof AppSettingsAdminRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
+    '/_app/settings/general': {
+      id: '/_app/settings/general'
+      path: '/general'
+      fullPath: '/settings/general'
+      preLoaderRoute: typeof AppSettingsGeneralRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
+    '/_app/settings/update': {
+      id: '/_app/settings/update'
+      path: '/update'
+      fullPath: '/settings/update'
+      preLoaderRoute: typeof AppSettingsUpdateRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
+    '/_app/settings/admin/': {
+      id: '/_app/settings/admin/'
+      path: '/'
+      fullPath: '/settings/admin/'
+      preLoaderRoute: typeof AppSettingsAdminIndexRouteImport
+      parentRoute: typeof AppSettingsAdminRoute
+    }
+    '/_app/settings/admin/backups': {
+      id: '/_app/settings/admin/backups'
+      path: '/backups'
+      fullPath: '/settings/admin/backups'
+      preLoaderRoute: typeof AppSettingsAdminBackupsRouteImport
+      parentRoute: typeof AppSettingsAdminRoute
+    }
     '/_app/w/$workspaceId/': {
       id: '/_app/w/$workspaceId/'
       path: '/w/$workspaceId'
@@ -285,8 +414,41 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AppSettingsAdminRouteChildren {
+  AppSettingsAdminBackupsRoute: typeof AppSettingsAdminBackupsRoute
+  AppSettingsAdminIndexRoute: typeof AppSettingsAdminIndexRoute
+}
+
+const AppSettingsAdminRouteChildren: AppSettingsAdminRouteChildren = {
+  AppSettingsAdminBackupsRoute: AppSettingsAdminBackupsRoute,
+  AppSettingsAdminIndexRoute: AppSettingsAdminIndexRoute,
+}
+
+const AppSettingsAdminRouteWithChildren =
+  AppSettingsAdminRoute._addFileChildren(AppSettingsAdminRouteChildren)
+
+interface AppSettingsRouteChildren {
+  AppSettingsAccountRoute: typeof AppSettingsAccountRoute
+  AppSettingsAdminRoute: typeof AppSettingsAdminRouteWithChildren
+  AppSettingsGeneralRoute: typeof AppSettingsGeneralRoute
+  AppSettingsUpdateRoute: typeof AppSettingsUpdateRoute
+  AppSettingsIndexRoute: typeof AppSettingsIndexRoute
+}
+
+const AppSettingsRouteChildren: AppSettingsRouteChildren = {
+  AppSettingsAccountRoute: AppSettingsAccountRoute,
+  AppSettingsAdminRoute: AppSettingsAdminRouteWithChildren,
+  AppSettingsGeneralRoute: AppSettingsGeneralRoute,
+  AppSettingsUpdateRoute: AppSettingsUpdateRoute,
+  AppSettingsIndexRoute: AppSettingsIndexRoute,
+}
+
+const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(
+  AppSettingsRouteChildren,
+)
+
 interface AppRouteChildren {
-  AppSettingsRoute: typeof AppSettingsRoute
+  AppSettingsRoute: typeof AppSettingsRouteWithChildren
   AppIndexRoute: typeof AppIndexRoute
   AppWWorkspaceIdBoardRoute: typeof AppWWorkspaceIdBoardRoute
   AppWWorkspaceIdTrashRoute: typeof AppWWorkspaceIdTrashRoute
@@ -297,7 +459,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
-  AppSettingsRoute: AppSettingsRoute,
+  AppSettingsRoute: AppSettingsRouteWithChildren,
   AppIndexRoute: AppIndexRoute,
   AppWWorkspaceIdBoardRoute: AppWWorkspaceIdBoardRoute,
   AppWWorkspaceIdTrashRoute: AppWWorkspaceIdTrashRoute,

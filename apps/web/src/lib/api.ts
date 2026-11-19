@@ -25,6 +25,8 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** Refused because it went with a token this device has since replaced. */
+    readonly staleToken = false,
   ) {
     super(message);
   }
@@ -40,7 +42,10 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
       ...init.headers,
     },
   });
-  if (!response.ok) throw new ApiError(response.status, await response.text());
+  if (!response.ok) {
+    const stale = response.status === 401 && token !== getAuthToken();
+    throw new ApiError(response.status, await response.text(), stale);
+  }
   return response.json() as Promise<T>;
 }
 

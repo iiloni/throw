@@ -104,7 +104,7 @@ export function AppShell() {
   const fullBoard = projectBoard || (crossBoard && !!workspace && projects.length > 0);
   const openPalette = useCallback((mode: PaletteMode = 'search') => setPalette(mode), []);
   const boardState = board.use();
-  const settings = routeId === '/_app/settings';
+  const settings = routeId?.startsWith('/_app/settings') ?? false;
 
   useEffect(() => {
     if (navigating || !workspace || !params.workspaceId) return;

@@ -45,7 +45,8 @@ async function editProject(page: Page, isMobile: boolean) {
     }
     await page.getByRole('menuitem', { name: 'Project settings', exact: true }).click();
   }
-  await page.getByRole('button', { name: 'Edit project', exact: true }).click();
+  // The general page edits the project in place.
+  await expect(page.getByLabel('Project name', { exact: true })).toBeVisible();
 }
 
 test('create, edit and confirm deletion of a project from the shell', async ({
@@ -62,9 +63,7 @@ test('create, edit and confirm deletion of a project from the shell', async ({
   await page.getByLabel('Project name', { exact: true }).fill('New kitchen');
   await page.getByRole('button', { name: 'Blue', exact: true }).click();
   await page.getByRole('button', { name: 'Home icon', exact: true }).click();
-  await page.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('New kitchen');
-  await expect(page.getByRole('button', { name: 'Edit project', exact: true })).toBeFocused();
   expect(new URL(page.url()).pathname).toBe(`${new URL(projectUrl).pathname}/settings`);
   await expect
     .poll(async () =>
@@ -83,8 +82,12 @@ test('create, edit and confirm deletion of a project from the shell', async ({
   await page.getByRole('button', { name: 'Delete project', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Delete New kitchen?' })).toBeVisible();
   await page.getByRole('button', { name: 'Keep project' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('button', { name: 'Delete project', exact: true }).click();
-  await page.getByRole('button', { name: 'Delete project', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Delete New kitchen?' })
+    .getByRole('button', { name: 'Delete project', exact: true })
+    .click();
   await expect(page.getByRole('heading', { name: 'Your first project' })).toBeVisible();
   // Deleting moves the project to the trash, which keeps it.
   await expect
@@ -109,14 +112,13 @@ test('rail project menu opens the selected project settings and keeps board sett
   const rail = page.getByRole('complementary', { name: 'Navigation rail' });
   await rail.getByRole('button', { name: 'Project menu for Kitchen', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Project settings', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Project settings', exact: true })).toBeVisible({
+  await expect(page.getByRole('heading', { name: 'General', exact: true })).toBeVisible({
     timeout: APP_LOAD_TIMEOUT,
   });
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Kitchen');
-  await page.getByRole('button', { name: 'Edit project', exact: true }).click();
   await page.getByLabel('Project name', { exact: true }).fill('Kitchen refit');
-  await page.getByRole('button', { name: 'Save changes' }).click();
-  await expect(page.getByRole('button', { name: 'Edit project', exact: true })).toBeFocused();
+  await page.getByLabel('Project name', { exact: true }).press('Enter');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Kitchen refit');
   await page.getByRole('link', { name: 'Back to board', exact: true }).click();
   const boardSettings = rail.getByRole('button', { name: 'Board settings', exact: true });
   await boardSettings.click();
@@ -242,7 +244,7 @@ test('cross-project board and settings are reachable from the shell', async ({
     await openMenu(page, true);
     await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
   } else await page.getByRole('link', { name: 'Settings', exact: true }).click();
-  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page).toHaveURL(/\/settings\/general$/);
   await page.getByRole('button', { name: 'Dark', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await selectProject(page, 'Kitchen', isMobile);
@@ -301,7 +303,6 @@ test('offline workspace and project edits survive reload and replay in order', a
   await page.getByLabel('Project name', { exact: true }).fill('Edited offline');
   await page.getByRole('button', { name: 'Teal', exact: true }).click();
   await page.getByRole('button', { name: 'Launch icon', exact: true }).click();
-  await page.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByRole('status')).toContainText('unsaved', { timeout: 40_000 });
   await page.reload();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Edited offline', {

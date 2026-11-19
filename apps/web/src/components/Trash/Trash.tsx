@@ -11,7 +11,14 @@ import { purgeProject, restoreProject } from '@/lib/projects';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { emptyProjectTrash, emptyTrash, purgeTask, restoreTask } from '@/lib/tasks';
 
-export function Trash({ projectId }: { projectId?: string }) {
+export function Trash({
+  projectId,
+  embedded = false,
+}: {
+  projectId?: string;
+  /** Shown as a page of project settings, which supplies its title and frame. */
+  embedded?: boolean;
+}) {
   const shell = useShell();
   const { projects, isLoading: loadingProjects } = useProjects();
   const { tasks, isLoading: loadingTasks } = useTasks();
@@ -44,26 +51,31 @@ export function Trash({ projectId }: { projectId?: string }) {
       : confirmation?.kind === 'project'
         ? roots.projects.some((item) => item.id === confirmation.id)
         : roots.tasks.some((item) => item.id === confirmation?.id);
+  const emptyButton = (
+    <Button
+      variant="outline"
+      disabled={awaiting || !count}
+      onClick={() => setConfirmation({ kind: 'all', name: 'Empty the trash?' })}
+    >
+      Empty trash
+    </Button>
+  );
   return (
-    <div className="mx-auto max-w-3xl px-5 pb-10 md:px-8">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-display text-2xl font-semibold">
-          {projectId ? 'Project trash' : 'Workspace trash'}
-        </h2>
-        <Button
-          variant="outline"
-          disabled={awaiting || !count}
-          onClick={() => setConfirmation({ kind: 'all', name: 'Empty the trash?' })}
-        >
-          Empty trash
-        </Button>
-      </div>
-      <p className="mb-4 text-sm text-muted-foreground">
+    <div className={embedded ? 'pb-10' : 'mx-auto max-w-3xl px-5 pb-10 md:px-8'}>
+      {!embedded && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-display text-2xl font-semibold">
+            {projectId ? 'Project trash' : 'Workspace trash'}
+          </h2>
+          {emptyButton}
+        </div>
+      )}
+      <p className="mb-4 px-1 text-sm text-muted-foreground">
         Nothing is removed automatically. Restoring a project or parent brings its tasks back; a
         subtask trashed separately stays in the trash.
       </p>
-      <div className="mb-6 flex flex-wrap gap-4 text-sm text-brand-link">
-        {projectId && project && (
+      <div className="mb-6 flex flex-wrap items-center gap-4 px-1 text-sm text-brand-link">
+        {projectId && project && !embedded && (
           <Link to="/w/$workspaceId/p/$projectId/settings" params={{ workspaceId, projectId }}>
             Project settings
           </Link>
@@ -73,6 +85,8 @@ export function Trash({ projectId }: { projectId?: string }) {
             Workspace trash
           </Link>
         )}
+        {/* Inside project settings the page's own title names it, so this sits with the links. */}
+        {embedded && <span className="ml-auto text-foreground">{emptyButton}</span>}
       </div>
       {awaiting ? (
         <p role="status">Loading trash…</p>

@@ -179,7 +179,7 @@ export function receiveBoard(data: BoardData, actions: BoardActions, awaitingTas
     board.set({ ...initialBoard([data]), actions, awaitingTasks });
   } else {
     const exists = (id: string) => data.tasks.some((task) => task.id === id);
-    const canOpen = (id: string) => exists(id) || data.hiddenTasks?.some((task) => task.id === id);
+    const canOpen = (id: string) => canOpenTask(id, data);
     const open = before.openTaskId && canOpen(before.openTaskId) ? before.openTaskId : null;
     update({
       boards: [data],
@@ -226,6 +226,14 @@ export function releaseBoard(taskIds: string[]): string[] {
       )
     );
   });
+}
+
+/** A task opens when the board shows it, or keeps it (trashed) for restoring. */
+export function canOpenTask(id: string, data: BoardData = shown(board.get())) {
+  return (
+    data.tasks.some((task) => task.id === id) ||
+    (data.hiddenTasks?.some((task) => task.id === id) ?? false)
+  );
 }
 
 function shown(state: BoardState): BoardData {

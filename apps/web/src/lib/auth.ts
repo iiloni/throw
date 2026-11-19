@@ -94,6 +94,20 @@ export const authClient = createAuthClient({
 });
 
 /**
+ * Renames the signed-in account. The server answers without the user, so the remembered one
+ * takes the new name here, unless another tab signed this account out meanwhile.
+ */
+export async function changeAccountName(name: string) {
+  const user = getSignedInUser();
+  if (!user) throw new Error('No signed-in account');
+  const result = await authClient.updateUser({ name });
+  if (!result.error && getSignedInUser()?.id === user.id) {
+    localStorage.setItem(sessionKey(USER_KEY), JSON.stringify({ ...user, name }));
+  }
+  return result;
+}
+
+/**
  * The signed-in user, asking the server when this device has a token but has not remembered
  * the user yet. Null when signed out, or when that lookup fails offline.
  */

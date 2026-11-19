@@ -106,6 +106,21 @@ test.describe('desktop', () => {
     await page.keyboard.press('Escape');
     await expect(pane).toHaveCount(0);
   });
+
+  test('the open task lives in the URL here too: reload keeps it, Back closes it', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const fixture = await workspaceFixture(page);
+    await card(page, 'Prune roses').click();
+    const pane = page.getByLabel('Task', { exact: true });
+    await expect(page).toHaveURL(new RegExp(`/w/${fixture.workspaceId}/board\\?.*task=`));
+    await page.reload();
+    await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue('Prune roses');
+    await page.goBack();
+    await expect(pane).toHaveCount(0);
+    await expect(page).not.toHaveURL(/task=/);
+  });
 });
 
 test.describe('phone', () => {
