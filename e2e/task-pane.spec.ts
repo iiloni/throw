@@ -599,6 +599,14 @@ test('tags are picked from the task controls and listed on the task', async ({
   const press = await tag('Press', launch);
   // Enough children that the color picker's list is taller than its swatches.
   for (const name of ['Blog', 'Events', 'Partners', 'Social', 'Video']) await tag(name, launch);
+  // The children reach the device after the root; the picker can only open what it has.
+  await controls(page).getByRole('button', { name: 'Tags: none. Change', exact: true }).click();
+  await expect(
+    page
+      .getByRole(isMobile ? 'dialog' : 'region', { name: 'Tags', exact: true })
+      .getByRole('checkbox', { name: 'Launch / Video', exact: true }),
+  ).toBeAttached();
+  await page.keyboard.press('Escape');
   // The color picks the primary tag, as Catch's palette does, and opens its children.
   await controls(page).getByRole('button', { name: 'Color: none. Change', exact: true }).click();
   const color = page.getByRole(isMobile ? 'dialog' : 'region', { name: 'Color', exact: true });

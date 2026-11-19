@@ -66,55 +66,38 @@ export function StatusOptions({
   onChange(statusId: string): void;
 }) {
   const name = useId();
-  const [backlog, active, closed] = byCategory([...statuses].sort(compareStatuses));
-  // The board's columns are rows, as Catch lists the Deck's; the backlog and closed statuses
-  // sit beside them as tiles, as Catch's Gallery does. In category order for the keyboard.
-  const tile = (row: Status, rows: boolean) => (
-    <label
-      key={row.id}
-      className={cn(
-        target,
-        rows ? 'h-12 shrink-0 px-4' : 'min-h-12 flex-1 flex-col justify-center gap-1 px-2 py-2.5',
-      )}
-    >
-      <input
-        className={radio}
-        type="radio"
-        name={name}
-        checked={value === row.id}
-        onChange={() => onChange(row.id)}
-        // A checked radio fires no change; picking it again still closes the picker.
-        onClick={() => value === row.id && onChange(row.id)}
-      />
-      <StatusGlyph category={row.category} className={rows ? 'size-4' : 'size-5'} />
-      <span className={cn('min-w-0 truncate', rows ? 'flex-1' : 'max-w-full text-[0.8125rem]')}>
-        {row.name}
-      </span>
-      {rows && <Picked checked={value === row.id} />}
-    </label>
-  );
-  const side = (group: typeof backlog, row: string) =>
-    group && group.statuses.length > 0 ? (
-      <section aria-label={group.name} className={cn('col-start-2 flex flex-col gap-1.5', row)}>
-        {group.statuses.map((status) => tile(status, false))}
-      </section>
-    ) : null;
   return (
-    <div
-      role="radiogroup"
-      aria-label="Status"
-      className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-1.5 px-2 pt-2 pb-1"
-    >
-      {side(backlog, 'row-start-1')}
-      {active && active.statuses.length > 0 && (
-        <section
-          aria-label={active.name}
-          className="col-start-1 row-span-2 row-start-1 flex max-h-[50dvh] flex-col gap-1.5 overflow-y-auto [scrollbar-width:none]"
-        >
-          {active.statuses.map((status) => tile(status, true))}
-        </section>
-      )}
-      {side(closed, 'row-start-2')}
+    <div role="radiogroup" aria-label="Status" className="space-y-2.5 px-3 pt-1 pb-3">
+      {byCategory([...statuses].sort(compareStatuses))
+        .filter((group) => group.statuses.length > 0)
+        .map((group) => (
+          <section key={group.name} aria-label={group.name}>
+            <h3 className="px-1 pb-1.5 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
+              {group.name}
+            </h3>
+            <div className="grid grid-cols-3 gap-2">
+              {group.statuses.map((row) => (
+                <label
+                  key={row.id}
+                  className="relative flex h-12 min-w-0 cursor-pointer select-none items-center gap-2 rounded-2xl border border-transparent bg-foreground/[0.06] px-2.5 text-foreground/75 outline-none transition-colors duration-150 has-[:checked]:border-brand has-[:checked]:bg-accent has-[:checked]:text-foreground has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/60"
+                >
+                  {/* The whole tile is the radio, so a tap anywhere on it picks. */}
+                  <input
+                    className="absolute inset-0 cursor-pointer appearance-none rounded-2xl opacity-0"
+                    type="radio"
+                    name={name}
+                    checked={value === row.id}
+                    onChange={() => onChange(row.id)}
+                    // A checked radio fires no change; picking it again still closes the picker.
+                    onClick={() => value === row.id && onChange(row.id)}
+                  />
+                  <StatusGlyph category={row.category} className="size-4 shrink-0" />
+                  <span className="min-w-0 truncate font-medium text-[0.8125rem]">{row.name}</span>
+                </label>
+              ))}
+            </div>
+          </section>
+        ))}
     </div>
   );
 }
