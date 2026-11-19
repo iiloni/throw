@@ -4,20 +4,19 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { projectOf } from '@/components/Board/model';
 import { board, current } from '@/components/Board/state';
-import { traySurface } from '@/components/Board/TraySurface';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
 import { springs } from '@/lib/motion';
-import { cn } from '@/lib/utils';
 import { panelTitle, TaskControls, type TaskPanel, TaskPanelContent } from './TaskControls';
 
 const panelHeight: Record<TaskPanel, number> = { status: 304, priority: 304, tags: 384, more: 176 };
 
 /**
- * The task pane's own drawer on desktop, where the shell has none (ADR 0009). It owns the
- * chrome, gestures, Escape and Back around the same controls and panels a phone shows in the
- * board's drawer.
+ * The task's dock on desktop, below its card, as Catch's split view docks a note's controls
+ * (ADR 0009: desktop has no drawer). A panel grows out of the dock above its controls. It owns
+ * the Escape, Back and outside-tap dismissal around the same controls and panels a phone
+ * shows in the board's drawer.
  */
 export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] }) {
   const [panel, setPanel] = useState<TaskPanel | null>(null);
@@ -62,31 +61,8 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
     <div
       ref={root}
       data-task-drawer=""
-      className={cn(
-        traySurface,
-        'z-10 shrink-0 overflow-hidden pb-[max(var(--safe-bottom),0.5rem)]',
-      )}
+      className="glass absolute inset-x-0 bottom-0 z-10 flex flex-col overflow-hidden rounded-[calc(var(--dock-radius)+0.25rem)]"
     >
-      <motion.div
-        onPanEnd={(_, info) => {
-          if (info.offset.y > 35 || info.velocity.y > 300) collapse();
-          else if (info.offset.y < -25) setPanel(panel ?? 'status');
-        }}
-        role="toolbar"
-        aria-label="Task controls"
-        className="flex touch-none flex-col px-3 pt-3 pb-2"
-      >
-        <TaskControls
-          task={task}
-          statuses={statuses}
-          project={project}
-          onOpen={toggle}
-          controlProps={(name) => ({
-            'aria-expanded': panel === name,
-            'aria-controls': `${id}-${name}`,
-          })}
-        />
-      </motion.div>
       <AnimatePresence initial={false}>
         {panel && (
           <motion.div
@@ -98,11 +74,11 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
             animate={{ height: panelHeight[panel], opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={reduced ? { duration: 0 } : springs.smooth}
-            className="flex max-h-[min(50dvh,24rem)] flex-col overflow-hidden border-border border-t"
+            className="flex max-h-[min(50dvh,24rem)] flex-col overflow-hidden border-foreground/10 border-b"
           >
-            <div className="flex h-11 shrink-0 items-center justify-between px-5">
+            <div className="flex h-11 shrink-0 items-center justify-between pr-2 pl-5">
               <h2 className="font-semibold text-sm">{panelTitle[panel]}</h2>
-              <IconButton label="Collapse task drawer" onClick={collapse}>
+              <IconButton label="Close panel" onClick={collapse}>
                 <ChevronDown />
               </IconButton>
             </div>
@@ -121,6 +97,18 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
           </motion.div>
         )}
       </AnimatePresence>
+      <div role="toolbar" aria-label="Task controls" className="flex flex-col p-1">
+        <TaskControls
+          task={task}
+          statuses={statuses}
+          project={project}
+          onOpen={toggle}
+          controlProps={(name) => ({
+            'aria-expanded': panel === name,
+            'aria-controls': `${id}-${name}`,
+          })}
+        />
+      </div>
     </div>
   );
 }

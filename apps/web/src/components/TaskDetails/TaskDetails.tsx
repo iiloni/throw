@@ -100,8 +100,20 @@ export function TaskDetails({
     (child) => statuses.find((row) => row.id === child.statusId)?.category === 'done',
   ).length;
   return (
-    <div className="flex min-h-0 flex-1 flex-col pt-[var(--safe-top)] pb-[var(--keyboard)]">
-      <header className="flex shrink-0 items-start justify-between gap-3 px-3 py-3">
+    <div
+      className={cn(
+        'flex min-h-0 flex-1 flex-col pb-[var(--keyboard)]',
+        phone ? 'pt-[var(--safe-top)]' : 'relative',
+      )}
+    >
+      {/* Beside the board, the toolbars sit above the task's card and line up with its edges,
+          and its controls are a dock below it, as Catch's split view holds a note. */}
+      <header
+        className={cn(
+          'flex shrink-0 items-start justify-between gap-3',
+          phone ? 'px-3 py-3' : 'pb-3',
+        )}
+      >
         <div
           role="toolbar"
           aria-label="Task navigation"
@@ -156,148 +168,160 @@ export function TaskDetails({
           </IconButton>
         </div>
       </header>
-      <ScrollArea className="min-h-0 flex-1 [--scrollbar-inset:1rem]">
-        <ScrollAreaViewport
-          ref={attachScroll ?? undefined}
-          // The dock rests over the content's end; focus and the caret stay clear of it.
-          className={cn(phone && 'scroll-pb-[calc(var(--dock-height)+var(--safe-bottom)+2.5rem)]')}
-        >
-          <div
+      <div
+        className={cn(
+          'flex min-h-0 flex-1 flex-col',
+          // The card stops above the dock, whose panels then rise over it without moving it.
+          !phone &&
+            'mb-[calc(var(--dock-height)+1.25rem)] overflow-hidden rounded-3xl bg-[var(--tint,var(--card))] shadow-[0_1px_2px_oklch(0_0_0/0.06),0_12px_32px_-16px_oklch(0_0_0/0.18)]',
+        )}
+      >
+        <ScrollArea className="min-h-0 flex-1 [--scrollbar-inset:1rem]">
+          <ScrollAreaViewport
+            ref={attachScroll ?? undefined}
+            // The dock rests over the content's end; focus and the caret stay clear of it.
             className={cn(
-              'px-6 pt-5 sm:px-8',
-              phone ? 'pb-[calc(var(--dock-height)+var(--safe-bottom)+3rem)]' : 'pb-10',
+              phone && 'scroll-pb-[calc(var(--dock-height)+var(--safe-bottom)+2.5rem)]',
             )}
           >
-            <TaskTitle task={boardTask(task, tags)} />
-            {task.deletedAt && (
-              <p role="status" className="mt-4 text-muted-foreground text-sm">
-                This task is in the trash. Restore it from the toolbar.
-              </p>
-            )}
-            {parent?.deletedAt && (
-              <p className="mt-4 text-muted-foreground text-sm">
-                This subtask is in the trash with its parent. Restore the parent to bring it back.
-              </p>
-            )}
-            <TaskTagList task={task} tags={tags} />
-            <TaskRefusalNotice key={`notice:${task.id}`} taskId={task.id} />
-            <TaskDescription task={task} recovery={recovery} />
-            {task.parentId === null && (
-              // Flush with the task, as Catch lists a note's links below it.
-              <section aria-label="Subtasks" className="mt-8 flex flex-col gap-2">
-                <h2 className="px-1 font-medium text-muted-foreground text-xs tabular-nums">
-                  {children.length ? `Subtasks · ${done}/${children.length}` : 'Subtasks'}
-                </h2>
-                <div className="flex flex-col gap-2">
-                  {children.map((child) => {
-                    const childStatus = statuses.find((row) => row.id === child.statusId);
-                    return (
-                      <TaskCard
-                        key={child.id}
-                        task={{
-                          ...boardTask(child, tags),
-                          secondaryTagIds: boardTasks.get(child.id)?.secondaryTagIds ?? [],
-                        }}
-                        showStatus
-                        onOpen={() => openSubtask(child.id)}
-                        statusControl={
-                          childStatus && (
-                            <StatusMenu
-                              project={boardProject}
-                              value={child.statusId}
-                              onSelect={(id) => sendTask(child.id, id)}
-                            >
-                              <button
-                                type="button"
-                                data-no-drag=""
-                                aria-label={`Status of ${child.title || 'Untitled subtask'}: ${childStatus.name}. Change`}
-                                className="-my-2 flex min-h-10 min-w-0 items-center gap-1 rounded-lg px-1 outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/60"
+            <div
+              className={cn(
+                'px-6 sm:px-8',
+                phone ? 'pt-5' : 'pt-7',
+                phone ? 'pb-[calc(var(--dock-height)+var(--safe-bottom)+3rem)]' : 'pb-10',
+              )}
+            >
+              <TaskTitle task={boardTask(task, tags)} />
+              {task.deletedAt && (
+                <p role="status" className="mt-4 text-muted-foreground text-sm">
+                  This task is in the trash. Restore it from the toolbar.
+                </p>
+              )}
+              {parent?.deletedAt && (
+                <p className="mt-4 text-muted-foreground text-sm">
+                  This subtask is in the trash with its parent. Restore the parent to bring it back.
+                </p>
+              )}
+              <TaskTagList task={task} tags={tags} />
+              <TaskRefusalNotice key={`notice:${task.id}`} taskId={task.id} />
+              <TaskDescription task={task} recovery={recovery} />
+              {task.parentId === null && (
+                // Flush with the task, as Catch lists a note's links below it.
+                <section aria-label="Subtasks" className="mt-8 flex flex-col gap-2">
+                  <h2 className="px-1 font-medium text-muted-foreground text-xs tabular-nums">
+                    {children.length ? `Subtasks · ${done}/${children.length}` : 'Subtasks'}
+                  </h2>
+                  <div className="flex flex-col gap-2">
+                    {children.map((child) => {
+                      const childStatus = statuses.find((row) => row.id === child.statusId);
+                      return (
+                        <TaskCard
+                          key={child.id}
+                          task={{
+                            ...boardTask(child, tags),
+                            secondaryTagIds: boardTasks.get(child.id)?.secondaryTagIds ?? [],
+                          }}
+                          showStatus
+                          onOpen={() => openSubtask(child.id)}
+                          statusControl={
+                            childStatus && (
+                              <StatusMenu
+                                project={boardProject}
+                                value={child.statusId}
+                                onSelect={(id) => sendTask(child.id, id)}
                               >
-                                <StatusGlyph category={childStatus.category} className="size-3" />
-                                <span className="truncate">{childStatus.name}</span>
-                              </button>
-                            </StatusMenu>
-                          )
-                        }
-                      />
-                    );
-                  })}
-                </div>
-                {adding ? (
-                  <form
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      if (!title.trim()) return;
-                      try {
-                        createTask(project.id, { parentId: task.id, title: title.trim() });
-                        closeSubtaskForm();
-                      } catch {
-                        setError('The subtask could not be added. Try again.');
-                      }
-                    }}
-                  >
-                    <label className="sr-only" htmlFor={`subtask-${task.id}`}>
-                      Subtask title
-                    </label>
-                    <input
-                      id={`subtask-${task.id}`}
-                      value={title}
-                      onChange={(event) => setTitle(event.target.value)}
-                      maxLength={500}
-                      // biome-ignore lint/a11y/noAutofocus: the field appears because Add subtask was chosen.
-                      autoFocus
-                      onKeyDown={(event) => {
-                        // Escape leaves the new subtask first, and the task on the next press.
-                        // An Escape during IME composition cancels the conversion, not the field.
-                        if (event.key !== 'Escape' || event.nativeEvent.isComposing) return;
+                                <button
+                                  type="button"
+                                  data-no-drag=""
+                                  aria-label={`Status of ${child.title || 'Untitled subtask'}: ${childStatus.name}. Change`}
+                                  className="-my-2 flex min-h-10 min-w-0 items-center gap-1 rounded-lg px-1 outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/60"
+                                >
+                                  <StatusGlyph category={childStatus.category} className="size-3" />
+                                  <span className="truncate">{childStatus.name}</span>
+                                </button>
+                              </StatusMenu>
+                            )
+                          }
+                        />
+                      );
+                    })}
+                  </div>
+                  {adding ? (
+                    <form
+                      onSubmit={(event) => {
                         event.preventDefault();
-                        closeSubtaskForm();
+                        if (!title.trim()) return;
+                        try {
+                          createTask(project.id, { parentId: task.id, title: title.trim() });
+                          closeSubtaskForm();
+                        } catch {
+                          setError('The subtask could not be added. Try again.');
+                        }
                       }}
-                      placeholder="What needs doing?"
-                      className="h-12 w-full rounded-xl border border-input bg-card px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
-                    />
-                    {error && (
-                      <p role="alert" className="mt-2 text-destructive text-sm">
-                        {error}
-                      </p>
-                    )}
-                    <div className="mt-2 flex gap-2">
-                      <Button disabled={!title.trim()}>Add subtask</Button>
-                      <Button type="button" variant="ghost" onClick={closeSubtaskForm}>
-                        Cancel
-                      </Button>
-                    </div>
-                  </form>
-                ) : (
-                  <button
-                    ref={addSubtask}
-                    type="button"
-                    onClick={() => setAdding(true)}
-                    className="flex min-h-11 w-full items-center gap-1 rounded-xl px-1 text-muted-foreground text-sm outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60"
-                  >
-                    <Plus className="size-3" />
-                    Add subtask
-                  </button>
-                )}
-              </section>
-            )}
-            <TaskTimeline
-              key={`timeline:${task.id}`}
-              task={task}
-              project={project}
-              context={{
-                priorityNames: project.priorityNames,
-                parentName: (id) => {
-                  const parent = tasks.find((row) => row.id === id);
-                  return parent ? (taskIdentifier(project, parent) ?? undefined) : undefined;
-                },
-              }}
-              onRecoverDescription={(entry) => setRecovery({ ...entry })}
-            />
-          </div>
-        </ScrollAreaViewport>
-        <ScrollBar />
-      </ScrollArea>
+                    >
+                      <label className="sr-only" htmlFor={`subtask-${task.id}`}>
+                        Subtask title
+                      </label>
+                      <input
+                        id={`subtask-${task.id}`}
+                        value={title}
+                        onChange={(event) => setTitle(event.target.value)}
+                        maxLength={500}
+                        // biome-ignore lint/a11y/noAutofocus: the field appears because Add subtask was chosen.
+                        autoFocus
+                        onKeyDown={(event) => {
+                          // Escape leaves the new subtask first, and the task on the next press.
+                          // An Escape during IME composition cancels the conversion, not the field.
+                          if (event.key !== 'Escape' || event.nativeEvent.isComposing) return;
+                          event.preventDefault();
+                          closeSubtaskForm();
+                        }}
+                        placeholder="What needs doing?"
+                        className="h-12 w-full rounded-xl border border-input bg-card px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
+                      />
+                      {error && (
+                        <p role="alert" className="mt-2 text-destructive text-sm">
+                          {error}
+                        </p>
+                      )}
+                      <div className="mt-2 flex gap-2">
+                        <Button disabled={!title.trim()}>Add subtask</Button>
+                        <Button type="button" variant="ghost" onClick={closeSubtaskForm}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </form>
+                  ) : (
+                    <button
+                      ref={addSubtask}
+                      type="button"
+                      onClick={() => setAdding(true)}
+                      className="flex min-h-11 w-full items-center gap-1 rounded-xl px-1 text-muted-foreground text-sm outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60"
+                    >
+                      <Plus className="size-3" />
+                      Add subtask
+                    </button>
+                  )}
+                </section>
+              )}
+              <TaskTimeline
+                key={`timeline:${task.id}`}
+                task={task}
+                project={project}
+                context={{
+                  priorityNames: project.priorityNames,
+                  parentName: (id) => {
+                    const parent = tasks.find((row) => row.id === id);
+                    return parent ? (taskIdentifier(project, parent) ?? undefined) : undefined;
+                  },
+                }}
+                onRecoverDescription={(entry) => setRecovery({ ...entry })}
+              />
+            </div>
+          </ScrollAreaViewport>
+          <ScrollBar />
+        </ScrollArea>
+      </div>
       {!phone && <TaskDrawer task={task} statuses={statuses} />}
     </div>
   );

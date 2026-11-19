@@ -465,8 +465,10 @@ view), comments and activity.
   opens its panel in the drawer beneath the dock, which stays as the panel's header, and
   the drawer holds still until a panel is open. The status panel is the board's grid of
   statuses by category; the tag picker stays open for several choices. The task's tags
-  are listed under its title. On desktop the pane shows the same controls along its foot
-  and opens their panels in place.
+  are listed under its title. On desktop the pane follows Catch's split view (2026-11-19):
+  the navigation and trash toolbars sit above the task's card, lined up with its edges, and
+  the same controls are a glass dock below it. A panel rises out of the dock over the
+  card's foot without moving the card.
 - The description is a directly editable, text-only BlockNote document. Changes commit
   when the task view closes or switches tasks; drafts survive reloads and conflicts.
 - Unfinished comments and comment edits can be resumed on the same device after closing the
