@@ -29,3 +29,25 @@ it('renders nothing when assigned rows have not synced or no tags were selected'
   const { container } = render(<TaskTags tags={[]} primaryTagId="missing" secondaryTagIds={[]} />);
   expect(container).toBeEmptyDOMElement();
 });
+
+it('on a card, shows a few badges with a count of the rest, without a landmark of its own', () => {
+  const tags = ['A', 'B', 'C', 'D', 'E'].map((name) => ({ ...tag, id: name, name }));
+  const { container } = render(
+    <TaskTags tags={tags} primaryTagId="A" secondaryTagIds={['B', 'C', 'D', 'E']} card />,
+  );
+  expect(screen.queryByRole('region')).toBeNull();
+  expect(screen.queryByRole('button')).toBeNull();
+  expect(container.textContent).toBe('ABC+2');
+  expect(screen.getByText('+2')).toHaveAttribute('title', 'D, E');
+});
+
+it('leaves tag colours out where they would mislead', () => {
+  const { container, rerender } = render(
+    <TaskTags tags={[tag]} primaryTagId={tag.id} secondaryTagIds={[]} card />,
+  );
+  expect(container.querySelector('[data-color="teal"]')).not.toBeNull();
+  rerender(
+    <TaskTags tags={[tag]} primaryTagId={tag.id} secondaryTagIds={[]} card colored={false} />,
+  );
+  expect(container.querySelector('[data-color]')).toBeNull();
+});
