@@ -624,7 +624,13 @@ onlineDetector.subscribe(updateConnection);
 
 // Restores the writes an earlier visit left in the outbox, so they show until they sync.
 await executor.waitForInit();
-for (const queued of await executor.peekOutbox()) addPendingWrite(queued.id);
+// Already durable: they came from the outbox. In a tab without it they never settle here,
+// since the tab with the outbox sends them, so leaving the page does not wait for them.
+const restoredWrites = new Set<string>();
+for (const queued of await executor.peekOutbox()) {
+  restoredWrites.add(queued.id);
+  addPendingWrite(queued.id);
+}
 
 /**
  * Applies the changes `mutate` makes to the collections optimistically and queues them for
@@ -757,9 +763,10 @@ export function useTaskTags(taskId: string) {
 /** A reload must wait for in-flight writes to reach durable storage or the server. */
 export async function waitForPendingWritesStored(): Promise<void> {
   const deadline = Date.now() + 10_000;
-  while (getPendingWriteIds().length) {
+  const unstored = () => getPendingWriteIds().filter((id) => !restoredWrites.has(id));
+  while (unstored().length) {
     const queued = new Set((await executor.peekOutbox()).map((write) => write.id));
-    if (getPendingWriteIds().every((id) => queued.has(id))) return;
+    if (unstored().every((id) => queued.has(id))) return;
     if (Date.now() >= deadline) {
       throw new Error('Changes are still being saved. Wait a moment and try reloading again.');
     }
