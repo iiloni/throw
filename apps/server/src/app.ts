@@ -3,13 +3,13 @@ import { API_PROTOCOL_HEADER, SUPPORTED_API_PROTOCOLS } from '@throw/shared';
 import { type Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
-import { logger } from 'hono/logger';
 import { auth } from './auth';
 import { isRestoring } from './backups/service';
 import type { AppEnv } from './context';
 import { env, NATIVE_APP_ORIGINS } from './env';
 import { CLIENT_IP_HEADER, clientIp, proxyList } from './lib/clientIp';
 import { requireCompatibleProtocol } from './lib/protocol';
+import { requestLogger } from './lib/requestLogger';
 import { backupDownloadRoutes, backupRoutes } from './routes/backups';
 import { commentRoutes } from './routes/comments';
 import { projectRoutes } from './routes/projects';
@@ -48,7 +48,7 @@ function withClientIp(c: Context) {
 export function createApp() {
   const app = new Hono<AppEnv>();
 
-  if (env.NODE_ENV !== 'test') app.use(logger());
+  if (env.NODE_ENV !== 'test') app.use(requestLogger);
 
   app.use(
     '/api/*',
