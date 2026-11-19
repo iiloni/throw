@@ -11,7 +11,7 @@ test('admins make, download, upload and delete backups and change the daily sche
   await page.getByLabel('Password').fill('adminadmin');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page).not.toHaveURL(/login/);
-  await page.goto('/settings');
+  await page.goto('/settings/admin/backups');
   const section = page.getByRole('region', { name: 'Server backups' });
   await expect(section.getByRole('button', { name: 'Back up now' })).toBeVisible();
   const backups = section.getByRole('button', { name: /^Manage the backup from/ });
@@ -59,8 +59,9 @@ test('admins make, download, upload and delete backups and change the daily sche
 
 test('regular accounts cannot see or call server backups', async ({ page }) => {
   const { headers } = await signUp(page);
-  await page.goto('/settings');
-  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+  await page.goto('/settings/admin/backups');
+  await expect(page).toHaveURL(/\/settings\/general$/);
+  await expect(page.getByRole('link', { name: 'Backups' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Server backups' })).toHaveCount(0);
   for (const path of ['', '/upload', '/missing/restore']) {
     const response = await page.request.fetch(`/api/admin/backups${path}`, {

@@ -11,7 +11,6 @@ export const Route = createFileRoute('/_app/w/$workspaceId/p/$projectId_/setting
 function Page() {
   const shell = useShell();
   const { section = 'general' } = Route.useSearch();
-  const navigate = Route.useNavigate();
   if (shell.awaitingWorkspaces || shell.awaitingProjects)
     return (
       <p role="status" className="p-6">
@@ -22,14 +21,5 @@ function Page() {
     return (
       <p className="p-6">Project unavailable. Choose another project from the navigation menu.</p>
     );
-  return (
-    <ProjectSettings
-      key={shell.project.id}
-      project={shell.project}
-      section={section}
-      onSectionChange={(section) => {
-        void navigate({ search: { section }, replace: true });
-      }}
-    />
-  );
+  return <ProjectSettings key={shell.project.id} project={shell.project} section={section} />;
 }

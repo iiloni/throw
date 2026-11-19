@@ -40,7 +40,7 @@ test('web update prompt only appears for a different deployed build and stays av
   await page.getByRole('button', { name: 'Later', exact: true }).click();
   await check();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.goto('/settings');
+  await page.goto('/settings/update');
   await expect(page.getByRole('button', { name: 'Reload to update' })).toBeVisible();
 });
 
@@ -58,7 +58,7 @@ test('protocol rejection prompts a client update even without build metadata and
   await expect(prompt).toBeVisible();
   await prompt.getByRole('button', { name: 'Keep working offline' }).click();
   await expect(prompt).toHaveCount(0);
-  await page.goto('/settings');
+  await page.goto('/settings/update');
   await expect(
     page.getByText('Local tasks and queued changes stay on this device until sync resumes.'),
   ).toBeVisible();

@@ -32,10 +32,12 @@ pane picks and lists tags; project settings mounts tag management. The task hist
 interleaves server entries and comments; refused changes have a quiet task-only notice and
 description recovery links. Cards move on both boards by drag, keyboard,
 phone long press, the move drawer and a rightward swipe to close (ADR 0008).
-Project settings lives at `/w/:workspaceId/p/:projectId/settings`, with project task
-trash beside it at `/trash`. Workspace trash is `/w/:workspaceId/trash`. Settings and trash
+Settings (`/settings/*`) and project settings (`/w/:workspaceId/p/:projectId/settings`,
+with project trash beside it at `/trash`) share Catch's `SettingsLayout`: pages listed
+beside the open one on wide screens, and a dock page picker on phones
+(`useManagementDock`). Workspace trash is `/w/:workspaceId/trash`. Settings and trash
 forms use the shell's `ManagementSurface` host for the shared Drawer on phones and centred
-dialogs on desktop; project appearance reuses `ManagementForm`.
+dialogs on desktop; project appearance is edited in place on project settings' General page.
 
 The board's interaction was worked out in a prototype on mock data: `/prototype/board`, in
 development builds only, with its components in `apps/web/src/components/Board`. It keeps

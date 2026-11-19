@@ -13,11 +13,13 @@ import { BottomSheet } from '@/components/BottomSheet/BottomSheet';
 import { Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
 import { useDesktop } from '@/lib/media';
 
-// Settings and trash have no dock at rest. Their shell-owned drawer exists only while a
-// form or confirmation is open; TagManager can use the same host as the surrounding screen.
+// Trash has no dock at rest: its shell-owned drawer exists only while a form or
+// confirmation is open. Settings gives it a dock that picks its pages, as Catch's dock does.
+// TagManager can use the same host as the surrounding screen.
 const SurfaceContext = createContext<{
   show: (id: string, page: DrawerPage, close: () => void) => void;
   hide: (id: string) => void;
+  setDock: (dock: ReactNode) => void;
 } | null>(null);
 
 export function ManagementSurfaceProvider({
@@ -34,13 +36,16 @@ export function ManagementSurfaceProvider({
     page: DrawerPage;
     close: () => void;
   } | null>(null);
+  const [dock, setDock] = useState<ReactNode>(null);
   const host = useMemo(
     () => ({
       show: (id: string, page: DrawerPage, close: () => void) => setSurface({ id, page, close }),
       hide: (id: string) => setSurface((current) => (current?.id === id ? null : current)),
+      setDock,
     }),
     [],
   );
+  const docked = dock !== null;
   const modal = surface !== null;
   useEffect(() => {
     if (!modal) return;
@@ -57,14 +62,17 @@ export function ManagementSurfaceProvider({
       </div>
       {phone && active && (
         // biome-ignore lint/a11y/noStaticElementInteractions: contains keyboard focus for the dialog descendant
-        <div className="contents" inert={!surface} onKeyDown={containFocus}>
+        <div className="contents" inert={!surface && !docked} onKeyDown={containFocus}>
           <Drawer
             label={surface?.page.title ?? 'Management'}
-            dock={null}
+            dock={dock}
             detent="closed"
+            detents={['closed']}
             onDetent={() => {}}
             page={surface?.page ?? null}
-            sunk={!surface}
+            sunk={!surface && !docked}
+            // A bare dock has nothing above it to pull up.
+            gesturesDisabled={!surface}
             onClosePage={() => surface?.close()}
           >
             {null}
@@ -81,11 +89,14 @@ export function ManagementSurface({
   children,
   onClose,
   initialFocusRef,
+  fit = false,
 }: {
   open: boolean;
   title: string;
   children: ReactNode;
   onClose: () => void;
+  /** On a phone, rise only as far as the content needs, as a short list does. */
+  fit?: boolean;
   /** The field the surface opens on, so typing can start at once. */
   initialFocusRef?: RefObject<HTMLElement | null>;
 }) {
@@ -99,6 +110,7 @@ export function ManagementSurface({
       {
         key: id,
         title,
+        fit,
         focus: initialFocusRef,
         content: (
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[calc(var(--safe-bottom)+1.5rem)]">
@@ -109,7 +121,7 @@ export function ManagementSurface({
       onClose,
     );
     return () => host.hide(id);
-  }, [open, desktop, host, id, title, children, onClose, initialFocusRef]);
+  }, [open, desktop, host, id, title, children, onClose, initialFocusRef, fit]);
   if (!desktop && host) return null;
   return (
     <BottomSheet
@@ -123,6 +135,22 @@ export function ManagementSurface({
       {children}
     </BottomSheet>
   );
+}
+
+/**
+ * Gives the phone's management drawer a dock while the caller is mounted. A no-op on desktop,
+ * which has no drawer, and outside the shell's host.
+ */
+export function useManagementDock(dock: ReactNode) {
+  const host = useContext(SurfaceContext);
+  useEffect(() => {
+    if (!host) return;
+    host.setDock(dock);
+  }, [host, dock]);
+  useEffect(() => {
+    if (!host) return;
+    return () => host.setDock(null);
+  }, [host]);
 }
 
 /** The management background is inert; keep Tab's endpoints inside its phone drawer too. */
