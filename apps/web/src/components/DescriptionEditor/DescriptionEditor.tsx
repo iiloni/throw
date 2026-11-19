@@ -1,11 +1,18 @@
 import '@blocknote/shadcn/style.css';
-import { BlockNoteSchema, defaultBlockSpecs } from '@blocknote/core';
+import { type BlockNoteEditor, BlockNoteSchema, defaultBlockSpecs } from '@blocknote/core';
+import { SuggestionMenu } from '@blocknote/core/extensions';
 import { en } from '@blocknote/core/locales';
 import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/shadcn';
 import type { Description } from '@throw/shared';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useResolvedTheme } from '@/lib/theme';
+import {
+  type EditorControls,
+  type FormattingState,
+  type TextStyle,
+  touchEditor,
+} from './editorControls';
 
 // Catch's editor, narrowed to text blocks. No file nodes, upload handlers or embeds.
 export const descriptionEditorSchema = BlockNoteSchema.create({
@@ -21,6 +28,17 @@ export const descriptionEditorSchema = BlockNoteSchema.create({
     table: defaultBlockSpecs.table,
   },
 });
+
+type Editor = BlockNoteEditor<
+  typeof descriptionEditorSchema.blockSchema,
+  typeof descriptionEditorSchema.inlineContentSchema,
+  typeof descriptionEditorSchema.styleSchema
+>;
+
+// A finger formats from the dock's formatting bar, as in Catch; BlockNote's floating toolbar
+// suits a mouse.
+const coarsePointer =
+  typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
 
 /** Content is read on mount; the owner changes the key to accept a remote revision. */
 export function DescriptionEditor({
@@ -54,6 +72,25 @@ export function DescriptionEditor({
   useEffect(() => {
     if (autoFocus && editable) editor.focus();
   }, [autoFocus, editable, editor]);
+  const controls = useMemo(() => createControls(editor), [editor]);
+  // While it has focus on a touch screen, this editor is the one the dock formats.
+  useEffect(() => {
+    if (!editable || !coarsePointer) return;
+    const dom = editor.prosemirrorView?.dom;
+    if (!dom) return;
+    const claim = () => touchEditor.set(controls);
+    const release = () => {
+      if (touchEditor.get() === controls) touchEditor.set(null);
+    };
+    if (dom.contains(document.activeElement)) claim();
+    dom.addEventListener('focus', claim);
+    dom.addEventListener('blur', release);
+    return () => {
+      dom.removeEventListener('focus', claim);
+      dom.removeEventListener('blur', release);
+      release();
+    };
+  }, [editor, editable, controls]);
   // Catch keeps the caret above its native keyboard and dock. Throw owns the same inset
   // as a CSS token, so observe it rather than installing a second keyboard tracker. A dock
   // resting over the scroll area declares itself as the area's bottom scroll padding.
@@ -97,9 +134,91 @@ export function DescriptionEditor({
         editable={editable}
         theme={theme}
         filePanel={false}
+        formattingToolbar={!coarsePointer}
         onChange={() => onChange?.(editor.document as Description)}
         className="task-editor"
       />
     </div>
   );
+}
+
+function createControls(editor: Editor): EditorControls {
+  const listeners = new Set<() => void>();
+  let state = readState(editor);
+
+  function refresh() {
+    const next = readState(editor);
+    if (JSON.stringify(next) === JSON.stringify(state)) return;
+    state = next;
+    for (const listener of listeners) listener();
+  }
+
+  function selectedBlocks() {
+    return editor.getSelection()?.blocks ?? [editor.getTextCursorPosition().block];
+  }
+
+  return {
+    getState: () => state,
+    subscribe(listener) {
+      if (listeners.size === 0) refresh();
+      listeners.add(listener);
+      const offChange = editor.onChange(refresh);
+      const offSelection = editor.onSelectionChange(refresh);
+      return () => {
+        listeners.delete(listener);
+        offChange?.();
+        offSelection?.();
+      };
+    },
+    toggleStyle(style) {
+      editor.toggleStyles({ [style]: true });
+      // Toggling with an empty selection only changes the stored marks, which fires no event.
+      refresh();
+    },
+    toggleBlock(kind) {
+      const blocks = selectedBlocks();
+      const off = blocks.every((block) => block.type === kind);
+      editor.transact(() => {
+        for (const block of blocks) {
+          editor.updateBlock(
+            block,
+            off
+              ? { type: 'paragraph' }
+              : kind === 'heading'
+                ? { type: 'heading', props: { level: 3 } }
+                : { type: kind },
+          );
+        }
+      });
+      refresh();
+    },
+    insertSlash() {
+      editor
+        .getExtension(SuggestionMenu)
+        ?.openSuggestionMenu('/', { deleteTriggerCharacter: true });
+    },
+    indent() {
+      if (editor.canNestBlock()) editor.nestBlock();
+      refresh();
+    },
+    outdent() {
+      if (editor.canUnnestBlock()) editor.unnestBlock();
+      refresh();
+    },
+  };
+}
+
+function readState(editor: Editor): FormattingState {
+  const active: Partial<Record<TextStyle, unknown>> = editor.getActiveStyles();
+  return {
+    styles: {
+      bold: Boolean(active.bold),
+      italic: Boolean(active.italic),
+      underline: Boolean(active.underline),
+      strike: Boolean(active.strike),
+    },
+    block: editor.getTextCursorPosition().block.type,
+    canIndent: editor.canNestBlock(),
+    canOutdent: editor.canUnnestBlock(),
+  };
 }

@@ -396,7 +396,12 @@ test('reduced motion keeps the drawer, keyboard controls and close-to-save edito
 }, testInfo) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const { pane } = await fixture(page);
-  await editDescription(pane, 'A focused plan for the launch, with room for the details.');
+  const draft = await editDescription(
+    pane,
+    'A focused plan for the launch, with room for the details.',
+  );
+  // While a finger types, the dock formats; leaving the editor brings the controls back.
+  await draft.blur();
   // Focus opens the control's tooltip and Enter closes it. Slow tooltip animations make sure a
   // tooltip lingering after it closes would hold, and swallow, the Escapes below.
   await page.addStyleTag({
@@ -495,6 +500,37 @@ test('the phone task drawer holds still until a panel opens, and keeps its tabs 
   await priority.click();
   await expect(page.getByRole('dialog', { name: 'Priority', exact: true })).toHaveCount(0);
   await expect(priority).toBeFocused();
+});
+
+test('a finger formats the description from the dock while typing, as in Catch', async ({
+  page,
+  isMobile,
+}, testInfo) => {
+  test.skip(!isMobile, "A mouse formats from BlockNote's floating toolbar");
+  const { pane } = await fixture(page);
+  const editor = pane.locator('.bn-editor[contenteditable="true"]');
+  await expect(editor).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
+  await expect(controls(page)).toBeVisible();
+  await editor.tap();
+  const formatting = page.getByRole('toolbar', { name: 'Formatting', exact: true });
+  await expect(formatting).toBeVisible();
+  await expect(controls(page)).toHaveCount(0);
+  const bold = formatting.getByRole('button', { name: 'Bold', exact: true });
+  await bold.tap();
+  await expect(bold).toHaveAttribute('aria-pressed', 'true');
+  // The tools never take focus, so the keyboard stays up.
+  await expect(editor).toBeFocused();
+  await page.keyboard.type('Ship it');
+  await expect(editor.locator('strong')).toHaveText('Ship it');
+  await formatting.getByRole('button', { name: 'Bulleted list', exact: true }).tap();
+  await expect(editor.locator('[data-content-type="bulletListItem"]')).toHaveCount(1);
+  const path = testInfo.outputPath('formatting-dock.png');
+  await page.screenshot({ path });
+  await testInfo.attach('formatting dock', { path, contentType: 'image/png' });
+  // Leaving the editor brings the task's controls back.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await expect(controls(page)).toBeVisible();
+  await expect(formatting).toHaveCount(0);
 });
 
 test('the desktop dock sits below the card, its panels open above it and follow it for Tab', async ({

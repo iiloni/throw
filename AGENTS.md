@@ -19,7 +19,9 @@ components on synced tasks and statuses, and the cross-project board
 whose columns are categories (`workspaceBoardData` in `Board/selection.ts`; a task's own
 project comes from `projectOf`, and category drop targets are `category:<name>`).
 Task actions live in `apps/web/src/lib/tasks.ts` and `statuses.ts`. The task pane edits
-fields and text-only BlockNote descriptions, keeps recoverable description drafts, and
+fields and text-only BlockNote descriptions (a touch screen formats from Catch's
+`FormattingBar` in the dock, through `DescriptionEditor/editorControls.ts`), keeps
+recoverable description drafts, and
 opens subtasks through the board's existing `openTaskId`. Its real content is supplied by
 `TaskContentContext` at the project-board boundary; the prototype keeps its mock content.
 On a phone the same boundary hands the board's drawer the open task's dock and pickers

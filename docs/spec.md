@@ -489,6 +489,10 @@ view), comments and activity.
   the phone keeps its drawer's drags.
 - The description is a directly editable, text-only BlockNote document. Changes commit
   when the task view closes or switches tasks; drafts survive reloads and conflicts.
+  Formatting follows Catch (2026-11-19): a mouse formats from BlockNote's floating toolbar,
+  and a finger from Catch's formatting bar, which takes the dock's place while the
+  description or a comment has focus on a touch screen. Its tools never take focus, so the
+  keyboard stays up; leaving the editor brings the task's controls back.
 - Unfinished comments and comment edits can be resumed on the same device after closing the
   task or reloading. Cancel discards the draft, and Ctrl/Cmd+Enter posts or saves it.
 - The top toolbars follow Catch: back and the parent/task identifier breadcrumb on the
