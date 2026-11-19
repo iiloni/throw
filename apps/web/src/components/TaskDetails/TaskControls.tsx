@@ -24,8 +24,10 @@ export const panelTitle: Record<TaskPanel, string> = {
   more: 'More',
 };
 
+// As Catch's note toolbar: inset in the dock so their corners follow its corners, and only
+// the one whose panel is open takes a surface.
 const control =
-  'h-[var(--dock-height)] flex-1 rounded-[var(--dock-radius)] bg-foreground/[0.06] transition-colors duration-200 aria-expanded:bg-foreground/[0.14] aria-expanded:shadow-[inset_0_1px_0_var(--glass-highlight)] [&_svg]:size-6';
+  'size-full rounded-[calc(var(--dock-radius)-0.25rem)] text-foreground/80 transition-[background-color,color,scale] duration-200 hover:bg-foreground/[0.05] hover:text-foreground active:scale-[0.92] aria-expanded:bg-foreground/[0.08] aria-expanded:text-foreground aria-expanded:shadow-[inset_0_1px_0_var(--glass-highlight)] [&_svg]:size-6';
 
 type ControlProps = Pick<
   ButtonHTMLAttributes<HTMLButtonElement>,
@@ -102,7 +104,7 @@ export function ControlButtons({
   more?: boolean;
 }) {
   return (
-    <div className="flex h-[var(--dock-height)] w-full items-center justify-around gap-2">
+    <div className="grid h-[var(--dock-height)] w-full auto-cols-fr grid-flow-col gap-1 p-1">
       <IconButton
         label={`Status: ${status?.name ?? 'Pending'}. Change`}
         className={control}

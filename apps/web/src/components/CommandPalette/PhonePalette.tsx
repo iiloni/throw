@@ -282,7 +282,12 @@ function CaptureControls({
   const { projectId, status, tags } = useCaptureOptions(draft);
 
   return (
-    <div role="toolbar" aria-label="New task controls">
+    // A tray in the place of the backlog's tile, beside the close button.
+    <div
+      role="toolbar"
+      aria-label="New task controls"
+      className="rounded-[var(--dock-radius)] bg-foreground/[0.06]"
+    >
       <ControlButtons
         status={status}
         priority={draft.priority}

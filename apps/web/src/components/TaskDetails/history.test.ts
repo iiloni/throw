@@ -1,6 +1,6 @@
 import type { ActivityChange, ActivityEntry } from '@throw/shared';
 import { describe, expect, it } from 'vitest';
-import { changeSentence, entrySentences, hasCommentText } from './history';
+import { changeSentence, entrySentences, hasCommentText, shortTime } from './history';
 
 const context = {
   priorityNames: ['Urgent', '', '', '', 'Someday'],
@@ -156,4 +156,19 @@ it('rejects empty editor scaffolding but accepts text in nested lists, links and
     [{ content: { rows: [{ cells: [{ content: [{ text: 'Cell' }] }] }] } }],
   ])
     expect(hasCommentText(content)).toBe(true);
+});
+
+describe('shortTime', () => {
+  const now = new Date(2026, 10, 19, 15, 0);
+  const at = (date: Date) => date.toISOString();
+  it('gives only the clock time for today', () => {
+    const today = new Date(2026, 10, 19, 9, 5);
+    expect(shortTime(at(today), now)).toBe(
+      today.toLocaleTimeString(undefined, { timeStyle: 'short' }),
+    );
+  });
+  it('leaves the year out within this year, and keeps it before', () => {
+    expect(shortTime(at(new Date(2026, 2, 3, 9, 5)), now)).not.toMatch(/2026/);
+    expect(shortTime(at(new Date(2025, 2, 3, 9, 5)), now)).toMatch(/2025/);
+  });
 });

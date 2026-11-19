@@ -4,6 +4,7 @@ import { LazyDescriptionEditor } from '@/components/DescriptionEditor/LazyDescri
 import { Button } from '@/components/ui/button';
 import { readCommentDraft, storeCommentDraft } from '@/lib/commentDrafts';
 import { holdUpdateReload } from '@/lib/useUpdateReloadBlocked';
+import { cn } from '@/lib/utils';
 import { hasCommentText } from './history';
 
 const same = (a: Description, b: Description) => JSON.stringify(a) === JSON.stringify(b);
@@ -17,7 +18,9 @@ export function CommentComposer({
   draftFor,
   onSave,
   onCancel,
+  className,
 }: {
+  className?: string;
   initialContent?: Description;
   draftFor?: string;
   onSave: (body: CommentBody) => void;
@@ -46,7 +49,10 @@ export function CommentComposer({
   return (
     <section
       aria-label="Comment editor"
-      className="mt-3 rounded-2xl border border-border p-4"
+      className={cn(
+        'mt-2 rounded-2xl bg-foreground/[0.045] px-3.5 pt-3 pb-2.5 ring-1 ring-foreground/[0.08]',
+        className,
+      )}
       // Before the editor, which would otherwise take Mod-Enter for itself.
       onKeyDownCapture={(event) => {
         if (
@@ -76,12 +82,12 @@ export function CommentComposer({
           {error}
         </p>
       )}
-      <div className="mt-3 flex gap-2">
-        <Button type="button" disabled={!writing} onClick={save}>
-          {initialContent ? 'Save comment' : 'Post comment'}
-        </Button>
-        <Button type="button" variant="ghost" onClick={cancel}>
+      <div className="mt-2 flex justify-end gap-1">
+        <Button type="button" variant="ghost" size="sm" onClick={cancel}>
           Cancel
+        </Button>
+        <Button type="button" size="sm" disabled={!writing} onClick={save}>
+          {initialContent ? 'Save comment' : 'Post comment'}
         </Button>
       </div>
     </section>

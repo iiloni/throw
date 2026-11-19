@@ -290,15 +290,11 @@ export function AppShell() {
                       href={`/w/${item.workspaceId}/p/${item.id}?view=board`}
                       expanded={expanded}
                       active={project?.id === item.id}
+                      tint={item.color}
                       className={expanded ? 'pr-11' : undefined}
                       onClick={() => selectProject(item.workspaceId, item.id)}
                     >
-                      <span
-                        data-color={item.color}
-                        className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-tint text-tint-accent"
-                      >
-                        <ProjectIcon name={item.icon} className="size-5" />
-                      </span>
+                      <ProjectIcon name={item.icon} className="size-5 text-tint-accent" />
                     </RailButton>
                     {expanded && (
                       <DropdownMenu.Root>
@@ -436,11 +432,14 @@ function RailButton({
   children,
   onClick,
   href,
+  tint,
   className,
 }: {
   label: string;
   expanded: boolean;
   active?: boolean;
+  /** A project's colour: its icon takes it, and so does the row while it is the open one. */
+  tint?: string | null;
   children: ReactNode;
   onClick: () => void;
   href?: string;
@@ -450,9 +449,12 @@ function RailButton({
     title: expanded ? undefined : label,
     'aria-label': label,
     'aria-current': active ? ('page' as const) : undefined,
+    'data-color': tint ?? undefined,
     className: cn(
       'relative flex h-12 w-full shrink-0 items-center gap-3 rounded-2xl px-2 text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
-      active ? 'bg-accent font-semibold' : 'text-muted-foreground hover:bg-accent/60',
+      active
+        ? cn('font-semibold', tint ? 'bg-tint' : 'bg-accent')
+        : 'text-muted-foreground hover:bg-accent/60',
       className,
     ),
   };

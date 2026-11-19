@@ -134,3 +134,16 @@ export function hasCommentText(document: Description): boolean {
   }
   return hasText(document);
 }
+
+/** As much of the time as tells it apart: today's are clock times, this year's leave out the year. */
+export function shortTime(at: string, now = new Date()) {
+  const date = new Date(at);
+  if (date.toDateString() === now.toDateString())
+    return date.toLocaleTimeString(undefined, { timeStyle: 'short' });
+  return date.toLocaleString(
+    undefined,
+    date.getFullYear() === now.getFullYear()
+      ? { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }
+      : { dateStyle: 'medium' },
+  );
+}

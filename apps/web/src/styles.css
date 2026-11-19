@@ -16,6 +16,10 @@
   font-size: 0.9375rem;
   line-height: 1.65;
 }
+/* A posted comment is as tall as its text; only an editor keeps room to write in. */
+.comment-body .bn-container.task-editor .bn-editor {
+  min-height: 0;
+}
 .bn-container.task-editor [data-content-type="heading"] {
   font-family: var(--font-display);
 }

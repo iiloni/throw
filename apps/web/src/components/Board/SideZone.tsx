@@ -224,7 +224,9 @@ export function StatusFilter({
   const targets = held?.phase === 'dragging' && (anyCard || held.origin === zone);
   if (statuses.length < 2) return null;
   const chip =
-    'flex shrink-0 items-center rounded-full px-3.5 text-sm outline-none transition-[height,background-color,color,border-color] duration-200 focus-visible:ring-[3px] focus-visible:ring-ring/60';
+    // A filter is a pill; as a drop target it grows to a tile with the status tiles' corners,
+    // which at a filter's height is the same radius.
+    'flex shrink-0 items-center rounded-2xl px-3.5 text-sm outline-none transition-[height,background-color,color,border-color,box-shadow] duration-200 focus-visible:ring-[3px] focus-visible:ring-ring/60';
   return (
     <div className={cn('flex shrink-0 flex-wrap items-center gap-2 px-4 pb-4', className)}>
       {!targets && (
@@ -257,7 +259,7 @@ export function StatusFilter({
               'border',
               targets ? 'h-11 flex-1 justify-center' : 'h-8',
               over
-                ? 'border-brand bg-accent text-foreground'
+                ? 'border-brand bg-accent text-foreground shadow-md'
                 : filter === status.id && !targets
                   ? 'border-transparent bg-foreground text-background'
                   : 'border-transparent bg-foreground/[0.06] text-foreground/75 hover:bg-foreground/[0.1]',

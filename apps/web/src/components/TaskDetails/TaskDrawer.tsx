@@ -74,7 +74,7 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
   // after the controls in the DOM so Tab reaches it from the control that opened it.
   return (
     <div ref={root} data-task-drawer="" className="relative mt-3 shrink-0">
-      <div className="glass rounded-[calc(var(--dock-radius)+0.25rem)] p-1">
+      <div className="glass rounded-[var(--dock-radius)]">
         <TaskDockRow>
           <TaskControls
             task={task}
@@ -99,7 +99,7 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
             animate={{ height: panelHeight[panel], opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={reduced ? { duration: 0 } : springs.smooth}
-            className="glass-thick absolute inset-x-0 bottom-full z-10 mb-2 flex max-h-[min(50dvh,24rem)] flex-col overflow-hidden rounded-[calc(var(--dock-radius)+0.25rem)]"
+            className="glass-thick absolute inset-x-0 bottom-full z-10 mb-2 flex max-h-[min(50dvh,24rem)] flex-col overflow-hidden rounded-[var(--dock-radius)]"
           >
             <div className="flex h-11 shrink-0 items-center justify-between pr-2 pl-5">
               <h2 className="font-semibold text-sm">{panelTitle[panel]}</h2>
