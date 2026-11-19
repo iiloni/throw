@@ -9,7 +9,7 @@ import {
   taskTagColor,
 } from '@throw/shared';
 import { ChevronLeft, ChevronRight, Plus, RotateCcw, Trash2 } from 'lucide-react';
-import { useContext, useRef, useState } from 'react';
+import { useContext, useMemo, useRef, useState } from 'react';
 import { StatusGlyph } from '@/components/Board/glyphs';
 import { type Task as BoardTask, projectOf } from '@/components/Board/model';
 import { StatusMenu } from '@/components/Board/StatusMenu';
@@ -82,7 +82,13 @@ export function TaskDetails({
   const [title, setTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
   const addSubtask = useRef<HTMLButtonElement>(null);
-  function cancelSubtask() {
+  // The board's copies carry each subtask's secondary tags, including under a trashed parent.
+  const data = current(state);
+  const boardTasks = useMemo(
+    () => new Map([...data.tasks, ...(data.hiddenTasks ?? [])].map((row) => [row.id, row])),
+    [data],
+  );
+  function closeSubtaskForm() {
     setAdding(false);
     setTitle('');
     setError(null);
@@ -190,9 +196,7 @@ export function TaskDetails({
                         key={child.id}
                         task={{
                           ...boardTask(child, tags),
-                          secondaryTagIds:
-                            current(state).tasks.find((row) => row.id === child.id)
-                              ?.secondaryTagIds ?? [],
+                          secondaryTagIds: boardTasks.get(child.id)?.secondaryTagIds ?? [],
                         }}
                         showStatus
                         onOpen={() => openSubtask(child.id)}
@@ -226,9 +230,7 @@ export function TaskDetails({
                       if (!title.trim()) return;
                       try {
                         createTask(project.id, { parentId: task.id, title: title.trim() });
-                        setTitle('');
-                        setAdding(false);
-                        setError(null);
+                        closeSubtaskForm();
                       } catch {
                         setError('The subtask could not be added. Try again.');
                       }
@@ -246,9 +248,10 @@ export function TaskDetails({
                       autoFocus
                       onKeyDown={(event) => {
                         // Escape leaves the new subtask first, and the task on the next press.
-                        if (event.key !== 'Escape') return;
+                        // An Escape during IME composition cancels the conversion, not the field.
+                        if (event.key !== 'Escape' || event.nativeEvent.isComposing) return;
                         event.preventDefault();
-                        cancelSubtask();
+                        closeSubtaskForm();
                       }}
                       placeholder="What needs doing?"
                       className="h-12 w-full rounded-xl border border-input bg-card px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
@@ -260,7 +263,7 @@ export function TaskDetails({
                     )}
                     <div className="mt-2 flex gap-2">
                       <Button disabled={!title.trim()}>Add subtask</Button>
-                      <Button type="button" variant="ghost" onClick={cancelSubtask}>
+                      <Button type="button" variant="ghost" onClick={closeSubtaskForm}>
                         Cancel
                       </Button>
                     </div>

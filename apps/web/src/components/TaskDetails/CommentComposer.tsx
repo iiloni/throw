@@ -6,35 +6,41 @@ import { readCommentDraft, storeCommentDraft } from '@/lib/commentDrafts';
 import { holdUpdateReload } from '@/lib/useUpdateReloadBlocked';
 import { hasCommentText } from './history';
 
-/** A draft stays on this device until the comment is saved or explicitly cancelled. */
+const same = (a: Description, b: Description) => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * Writes a new comment for `draftFor`'s task, or edits `initialContent`. A new comment's
+ * text is kept on this device until it is posted or cancelled; an edit lives in the editor.
+ */
 export function CommentComposer({
   initialContent = null,
-  draftKey,
+  draftFor,
   onSave,
   onCancel,
 }: {
   initialContent?: Description;
-  draftKey: string | null;
+  draftFor?: string;
   onSave: (body: CommentBody) => void;
   onCancel: () => void;
 }) {
-  const [draft] = useState(() => readCommentDraft(draftKey));
-  const [body, setBody] = useState(draft ?? initialContent);
-  const [changed, setChanged] = useState(draft !== null);
+  const [start] = useState(() => (draftFor ? readCommentDraft(draftFor) : null) ?? initialContent);
+  const [body, setBody] = useState(start);
   const [error, setError] = useState<string | null>(null);
   const writing = hasCommentText(body);
-  useEffect(() => (changed ? holdUpdateReload() : undefined), [changed]);
+  // Text that exists nowhere else holds an update's reload: an edit only once it differs.
+  const unsaved = initialContent === null ? writing : !same(body, initialContent);
+  useEffect(() => (unsaved ? holdUpdateReload() : undefined), [unsaved]);
   function save() {
     if (!body?.length || !hasCommentText(body)) return;
     try {
       onSave(body);
-      storeCommentDraft(draftKey, null);
+      if (draftFor) storeCommentDraft(draftFor, null);
     } catch {
       setError('Could not save this comment. Your text is kept here.');
     }
   }
   function cancel() {
-    storeCommentDraft(draftKey, null);
+    if (draftFor) storeCommentDraft(draftFor, null);
     onCancel();
   }
   return (
@@ -55,16 +61,14 @@ export function CommentComposer({
       }}
     >
       <LazyDescriptionEditor
-        initialContent={draft ?? initialContent}
+        initialContent={start}
         editable
         scrollClearance={96}
         autoFocus
         placeholder="Write a comment…"
         onChange={(document) => {
           setBody(document);
-          const keepDraft = initialContent !== null || hasCommentText(document);
-          setChanged(keepDraft);
-          storeCommentDraft(draftKey, keepDraft ? (document ?? []) : null);
+          if (draftFor) storeCommentDraft(draftFor, hasCommentText(document) ? document : null);
         }}
       />
       {error && (

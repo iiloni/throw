@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { LazyDescriptionEditor } from '@/components/DescriptionEditor/LazyDescriptionEditor';
 import { Button } from '@/components/ui/button';
 import { signedInUserId, useTaskTimeline } from '@/lib/collections';
-import { commentDraftKey, readCommentDraft, storeCommentDraft } from '@/lib/commentDrafts';
+import { useHasCommentDraft } from '@/lib/commentDrafts';
 import { addComment, deleteComment, editComment } from '@/lib/comments';
 import { getServerUrl } from '@/lib/serverUrl';
 import { CommentComposer } from './CommentComposer';
@@ -31,7 +31,6 @@ function CommentRow({ comment, pending }: { comment: Comment; pending: boolean }
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const own = comment.userId !== null && comment.userId === signedInUserId;
-  const draftKey = commentDraftKey(signedInUserId, `comment:${comment.id}`);
   return (
     <article aria-label={`${author(comment.userId)} commented`} className="py-4">
       <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs">
@@ -51,7 +50,6 @@ function CommentRow({ comment, pending }: { comment: Comment; pending: boolean }
       </div>
       {editing ? (
         <CommentComposer
-          draftKey={draftKey}
           initialContent={comment.body}
           onSave={(body) => {
             editComment(comment.id, body);
@@ -76,7 +74,6 @@ function CommentRow({ comment, pending }: { comment: Comment; pending: boolean }
                 onClick={() => {
                   try {
                     deleteComment(comment.id);
-                    storeCommentDraft(draftKey, null);
                   } catch {
                     setError('Could not delete this comment. Try again.');
                   }
@@ -91,7 +88,7 @@ function CommentRow({ comment, pending }: { comment: Comment; pending: boolean }
           ) : (
             <>
               <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
-                {readCommentDraft(draftKey) ? 'Resume editing comment' : 'Edit comment'}
+                Edit comment
               </Button>
               <Button variant="ghost" size="sm" onClick={() => setDeleting(true)}>
                 Delete comment
@@ -175,8 +172,10 @@ export function TaskTimeline({
   onRecoverDescription: (entry: ActivityEntry) => void;
 }) {
   const { timeline, isLoading } = useTaskTimeline(task.id);
-  const [composing, setComposing] = useState(false);
-  const draftKey = commentDraftKey(signedInUserId, `task:${task.id}`);
+  // Which task the composer is open for: the timeline stays mounted as the pane switches tasks.
+  const [composingFor, setComposingFor] = useState<string | null>(null);
+  const composing = composingFor === task.id;
+  const hasDraft = useHasCommentDraft(task.id);
   return (
     <section
       aria-label="Task history"
@@ -241,21 +240,22 @@ export function TaskTimeline({
       </ol>
       {composing ? (
         <CommentComposer
-          draftKey={draftKey}
+          key={task.id}
+          draftFor={task.id}
           onSave={(body) => {
             addComment(task.id, body);
-            setComposing(false);
+            setComposingFor(null);
           }}
-          onCancel={() => setComposing(false)}
+          onCancel={() => setComposingFor(null)}
         />
       ) : (
         <Button
           type="button"
           variant="secondary"
           className="mt-4 min-h-11"
-          onClick={() => setComposing(true)}
+          onClick={() => setComposingFor(task.id)}
         >
-          {readCommentDraft(draftKey) ? 'Resume comment draft' : 'Write a comment…'}
+          {hasDraft ? 'Resume comment draft' : 'Write a comment…'}
         </Button>
       )}
     </section>

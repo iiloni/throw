@@ -83,7 +83,7 @@ export function TaskCardFace({
         {task.secondaryTagIds.length > 0 && (
           <span
             className="shrink-0 tabular-nums"
-            title={`${task.secondaryTagIds.length} secondary tags`}
+            title={`${task.secondaryTagIds.length} more ${task.secondaryTagIds.length === 1 ? 'tag' : 'tags'}`}
           >
             +{task.secondaryTagIds.length}
           </span>

@@ -668,10 +668,8 @@ export async function clearLocalData() {
   await executor.clearOutbox();
   executor.dispose();
   await database?.destroy();
-  if (user) {
-    deleteOutbox(user.id);
-    clearCommentDrafts(user.id);
-  }
+  if (user) deleteOutbox(user.id);
+  clearCommentDrafts();
   clearDescriptionDrafts();
 }
 
@@ -752,6 +750,18 @@ export function useAllTaskTags() {
   return { taskTags: data ?? emptyTaskTags, isLoading };
 }
 const emptyTaskTags: TaskTag[] = [];
+
+/** One project's secondary tag assignments, for its board's cards. */
+export function useProjectTaskTags(projectId: string) {
+  const { data } = useLiveQuery(
+    (q) =>
+      q
+        .from({ assignment: taskTagsCollection })
+        .where(({ assignment }) => eq(assignment.projectId, projectId)),
+    [projectId],
+  );
+  return data ?? emptyTaskTags;
+}
 
 export function useTaskTags(taskId: string) {
   const { data, isLoading } = useLiveQuery(

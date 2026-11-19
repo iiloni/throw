@@ -135,11 +135,9 @@ test('comment drafts survive closing and reloading, and can be posted from the k
   await expect(comment.getByText('Pending sync')).toHaveCount(0);
   await expect(history.getByRole('button', { name: 'Write a comment…' })).toBeVisible();
 
+  // An edit lives in its editor: cancelling it leaves the comment as it was.
   await comment.getByRole('button', { name: 'Edit comment' }).click();
   await editor(page).fill('An unfinished edit');
-  await page.reload();
-  await comment.getByRole('button', { name: 'Resume editing comment' }).click();
-  await expect(editor(page)).toHaveText('An unfinished edit');
   await history.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(comment).toContainText('An unfinished comment');
   await expect(comment.getByRole('button', { name: 'Edit comment' })).toBeVisible();
