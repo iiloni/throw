@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect, type Page, test } from '@playwright/test';
+import { card, taskRow, workspaceFixture } from './board-helpers';
 import { APP_LOAD_TIMEOUT, shapeRows, signUp } from './helpers';
 
 // This exercises chained conflicts through the app's own actions; board.spec.ts covers UI
@@ -19,6 +20,31 @@ const localTask = (page: Page, id: string) =>
       priority: number;
     } | null;
   }, id);
+
+test('signing in again after a 401 replays the account’s saved write', async ({ page }) => {
+  const fixture = await workspaceFixture(page);
+  const taskId = fixture.ids['Bake bread']!;
+  const endpoint = `**/api/tasks/${taskId}`;
+  await page.route(endpoint, (route) => route.fulfill({ status: 401 }));
+  await page.evaluate(async (id) => {
+    const { updateTask } = await import(/* @vite-ignore */ '/src/lib/tasks.ts');
+    updateTask(id, { title: 'Bake bread after signing in' });
+  }, taskId);
+  await expect(page.getByRole('status').filter({ hasText: 'Signed out' })).toContainText(
+    '1 unsaved',
+  );
+  await page.getByRole('button', { name: 'Sign in again' }).click();
+  await page.waitForURL('**/login?**');
+  await page.unroute(endpoint);
+  await page.getByRole('textbox', { name: 'Email' }).fill(fixture.email);
+  await page.getByLabel('Password', { exact: true }).fill('password123');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.waitForURL((url) => url.pathname === `/w/${fixture.workspaceId}/board`);
+  await expect(card(page, 'Bake bread after signing in')).toBeVisible();
+  await expect
+    .poll(async () => (await taskRow(page, fixture.headers, taskId))?.title)
+    .toBe('Bake bread after signing in');
+});
 
 test('a task created and edited offline syncs correctly beside another device’s change', async ({
   page,

@@ -1,7 +1,7 @@
 import type { Project, Status, Tag, Task } from '@throw/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { compareClosed, compareTasks, identifier, subtasksOf, taskColor } from './model';
-import { projectBoardData, workspaceBoardData } from './selection';
+import { projectBoardData, secondaryTagsByTask, workspaceBoardData } from './selection';
 import {
   board,
   initialBoard,
@@ -87,6 +87,43 @@ describe('synced project board selection', () => {
     expect(taskColor(data.project, data.tasks[0]!)).toBe('teal');
     const partial = projectBoardData(project, statuses, [tagged], [child]);
     expect(taskColor(partial.project, partial.tasks[0]!)).toBeNull();
+  });
+  it('counts secondary tags the project has, apart from the primary one', () => {
+    const tag = (id: string): Tag => ({
+      id,
+      projectId: project.id,
+      workspaceId: project.workspaceId,
+      name: id,
+      parentId: null,
+      color: 'teal',
+      icon: null,
+    });
+    const assignment = (taskId: string, tagId: string) => ({
+      taskId,
+      tagId,
+      projectId: project.id,
+      workspaceId: project.workspaceId,
+    });
+    const secondary = secondaryTagsByTask([
+      assignment('tagged', 'one'),
+      assignment('tagged', 'two'),
+      // The primary tag, and a tag that has not synced, are not counted again.
+      assignment('tagged', 'primary'),
+      assignment('tagged', 'unsynced'),
+      assignment('plain', 'one'),
+    ]);
+    expect(secondary.get('tagged')).toEqual(['one', 'two', 'primary', 'unsynced']);
+    const data = projectBoardData(
+      project,
+      statuses,
+      [task('tagged', { primaryTagId: 'primary' }), task('plain'), task('none')],
+      [tag('one'), tag('two'), tag('primary')],
+      secondary,
+    );
+    const byId = new Map(data.tasks.map((row) => [row.id, row.secondaryTagIds]));
+    expect(byId.get('tagged')).toEqual(['one', 'two']);
+    expect(byId.get('plain')).toEqual(['one']);
+    expect(byId.get('none')).toEqual([]);
   });
   it('isolates projects and excludes a trashed task, its children and trashed projects', () => {
     const rows = [

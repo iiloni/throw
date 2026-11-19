@@ -160,8 +160,15 @@ test('task fields, actions, subtasks and task links work in the split pane and p
   }
 
   await page.goto(`${account.path}&task=${account.taskId}`);
+  const subtaskTitle = pane.getByRole('textbox', { name: 'Subtask title' });
   await pane.getByRole('button', { name: 'Add subtask', exact: true }).click();
-  await pane.getByRole('textbox', { name: 'Subtask title' }).fill('Draft the announcement');
+  await expect(subtaskTitle).toBeFocused();
+  await subtaskTitle.fill('Discard this draft');
+  await subtaskTitle.press('Escape');
+  await expect(pane.getByRole('button', { name: 'Add subtask', exact: true })).toBeFocused();
+  await pane.getByRole('button', { name: 'Add subtask', exact: true }).click();
+  await expect(subtaskTitle).toHaveValue('');
+  await subtaskTitle.fill('Draft the announcement');
   await pane.getByRole('button', { name: 'Add subtask', exact: true }).click();
   await pane
     .getByRole('button', { name: 'Status of Draft the announcement: backlog. Change' })
@@ -532,6 +539,9 @@ test('tags are picked from the task controls and listed on the task', async ({
       return [row?.primary_tag_id, assignments.map((assignment) => assignment.tag_id)];
     })
     .toEqual([launch, [press]]);
+  await closeTask(pane);
+  const card = page.getByRole('article', { name: 'TASK-1 Write the launch plan', exact: true });
+  await expect(card.getByText('+1', { exact: true })).toBeVisible();
 });
 
 test('the phone surface grows from its card without scaling text and lands back in it', async ({

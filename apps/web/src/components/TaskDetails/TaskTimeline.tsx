@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { LazyDescriptionEditor } from '@/components/DescriptionEditor/LazyDescriptionEditor';
 import { Button } from '@/components/ui/button';
 import { signedInUserId, useTaskTimeline } from '@/lib/collections';
+import { useHasCommentDraft } from '@/lib/commentDrafts';
 import { addComment, deleteComment, editComment } from '@/lib/comments';
 import { getServerUrl } from '@/lib/serverUrl';
 import { CommentComposer } from './CommentComposer';
@@ -171,7 +172,10 @@ export function TaskTimeline({
   onRecoverDescription: (entry: ActivityEntry) => void;
 }) {
   const { timeline, isLoading } = useTaskTimeline(task.id);
-  const [composing, setComposing] = useState(false);
+  // Which task the composer is open for: the timeline stays mounted as the pane switches tasks.
+  const [composingFor, setComposingFor] = useState<string | null>(null);
+  const composing = composingFor === task.id;
+  const hasDraft = useHasCommentDraft(task.id);
   return (
     <section
       aria-label="Task history"
@@ -236,20 +240,22 @@ export function TaskTimeline({
       </ol>
       {composing ? (
         <CommentComposer
+          key={task.id}
+          draftFor={task.id}
           onSave={(body) => {
             addComment(task.id, body);
-            setComposing(false);
+            setComposingFor(null);
           }}
-          onCancel={() => setComposing(false)}
+          onCancel={() => setComposingFor(null)}
         />
       ) : (
         <Button
           type="button"
           variant="secondary"
           className="mt-4 min-h-11"
-          onClick={() => setComposing(true)}
+          onClick={() => setComposingFor(task.id)}
         >
-          Write a comment…
+          {hasDraft ? 'Resume comment draft' : 'Write a comment…'}
         </Button>
       )}
     </section>

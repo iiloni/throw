@@ -5,9 +5,23 @@ import {
   type Status as StatusRow,
   type Tag,
   type Task as TaskRow,
+  type TaskTag,
   taskTagColor,
 } from '@throw/shared';
 import type { BoardData, Task as BoardTask } from './model';
+
+/** Each task's secondary tag ids, from the synced assignments. */
+export function secondaryTagsByTask(assignments: readonly TaskTag[]) {
+  const byTask = new Map<string, string[]>();
+  for (const { taskId, tagId } of assignments) {
+    const ids = byTask.get(taskId);
+    if (ids) ids.push(tagId);
+    else byTask.set(taskId, [tagId]);
+  }
+  return byTask;
+}
+
+const noSecondaryTags: ReadonlyMap<string, string[]> = new Map();
 
 /** Select before presenting: a trashed parent hides its children in every board view. */
 export function projectBoardData(
@@ -15,14 +29,19 @@ export function projectBoardData(
   statuses: StatusRow[],
   tasks: TaskRow[],
   tags: Tag[] = [],
+  secondaryTags: ReadonlyMap<string, string[]> = noSecondaryTags,
 ): BoardData {
   const parents = new Map(tasks.map((task) => [task.id, task]));
   const projectTags = tags.filter((tag) => tag.projectId === project.id);
+  const tagIds = new Set(projectTags.map((tag) => tag.id));
   const present = (task: TaskRow) => ({
     ...task,
     closedAt: task.closedAt === null ? null : Date.parse(task.closedAt),
     primaryTagColor: taskTagColor(task, projectTags),
-    secondaryTagIds: [],
+    // An assignment whose tag has not synced, or was deleted, is not counted on the card.
+    secondaryTagIds: (secondaryTags.get(task.id) ?? []).filter(
+      (id) => id !== task.primaryTagId && tagIds.has(id),
+    ),
     description: undefined,
   });
   return {
@@ -66,6 +85,7 @@ export function workspaceBoardData(
   statuses: StatusRow[],
   tasks: TaskRow[],
   tags: Tag[] = [],
+  secondaryTags: ReadonlyMap<string, string[]> = noSecondaryTags,
 ): BoardData {
   // Each project adapts only its own rows, so a sync change costs one pass over the tasks.
   const byProject = <T extends { projectId: string }>(rows: T[]) => {
@@ -84,6 +104,7 @@ export function workspaceBoardData(
       statusesOf.get(project.id) ?? [],
       tasksOf.get(project.id) ?? [],
       tagsOf.get(project.id) ?? [],
+      secondaryTags,
     );
     const own = (task: BoardTask) => ({
       ...task,
