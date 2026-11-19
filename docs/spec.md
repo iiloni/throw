@@ -649,8 +649,9 @@ capture, and becomes the move drawer while a card is held or selected; the board
 for now. Away from boards, the shell hosts that same Drawer component for settings, project settings
 and trash forms. Workspace trash has no dock at rest; settings pages give it their page
 picker. Tag management uses this host on phones and a
-centred dialog on desktop. The shell's project forms still use `BottomSheet` until the
-drawer moves to the shell. The cross-project board adapts every project's tasks at the same
+centred dialog on desktop. On a phone board the board owns the drawer, so the
+shell's forms (new project, new or renamed workspace) open as a page of the board's drawer
+rather than a sheet of their own (2026-11-19). The cross-project board adapts every project's tasks at the same
 kind of boundary (`Board/WorkspaceBoard.tsx`); search and quick capture there use the
 command palette. Cards move on both boards by dragging, from the keyboard, by long press
 and the move drawer on a phone, and by swiping to close.

@@ -12,6 +12,13 @@ import {
 import { BottomSheet } from '@/components/BottomSheet/BottomSheet';
 import { Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
 import { useDesktop } from '@/lib/media';
+import { createStore } from '@/lib/store';
+
+/**
+ * A page lent to the board's drawer: on a phone board the board owns the one drawer (ADR
+ * 0009), so the shell's forms open there rather than in a sheet of their own.
+ */
+export const boardDrawerPage = createStore<{ page: DrawerPage; close: () => void } | null>(null);
 
 // Trash has no dock at rest: its shell-owned drawer exists only while a form or
 // confirmation is open. Settings gives it a dock that picks its pages, as Catch's dock does.
@@ -45,6 +52,23 @@ export function ManagementSurfaceProvider({
     }),
     [],
   );
+  // A board shows the page in its own drawer, keyed by the surface that lent it.
+  const lent = useMemo(() => {
+    const owners = new Map<string, { page: DrawerPage; close: () => void }>();
+    return {
+      show: (id: string, page: DrawerPage, close: () => void) => {
+        const entry = { page, close };
+        owners.set(id, entry);
+        boardDrawerPage.set(entry);
+      },
+      hide: (id: string) => {
+        const entry = owners.get(id);
+        owners.delete(id);
+        if (entry && boardDrawerPage.get() === entry) boardDrawerPage.set(null);
+      },
+      setDock: () => {},
+    };
+  }, []);
   const docked = dock !== null;
   const modal = surface !== null;
   useEffect(() => {
@@ -56,7 +80,7 @@ export function ManagementSurfaceProvider({
     };
   }, [modal]);
   return (
-    <SurfaceContext.Provider value={active ? host : null}>
+    <SurfaceContext.Provider value={active ? host : phone ? lent : null}>
       <div className="contents" inert={surface !== null}>
         {children}
       </div>
