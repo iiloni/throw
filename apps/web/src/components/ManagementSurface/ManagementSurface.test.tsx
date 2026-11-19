@@ -2,12 +2,8 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, expect, it, vi } from 'vitest';
 
-const media = vi.hoisted(() => ({ wide: false, fractional: false }));
-// A fractional width between the breakpoints matches neither query.
-vi.mock('@/lib/media', () => ({
-  useMedia: (query: string) =>
-    !media.fractional && (query === '(min-width: 768px)' ? media.wide : !media.wide),
-}));
+const media = vi.hoisted(() => ({ wide: false }));
+vi.mock('@/lib/media', () => ({ useDesktop: () => media.wide }));
 vi.mock('@/components/Drawer/Drawer', () => ({
   Drawer: ({
     page,
@@ -49,7 +45,6 @@ function Screen({ onClose = () => {} }: { onClose?: () => void }) {
 
 beforeEach(() => {
   media.wide = false;
-  media.fractional = false;
 });
 
 it('shows a phone surface in the shell’s drawer, with the screen behind it inert', () => {
@@ -66,10 +61,4 @@ it('uses a centred dialog on a desktop', () => {
   render(<Screen />);
   expect(screen.getByRole('dialog', { name: 'Sheet: Rename' })).toHaveTextContent('Form');
   expect(screen.getByText('Behind').closest('[inert]')).toBeNull();
-});
-
-it('still shows the surface at a width between the two breakpoints', () => {
-  media.fractional = true;
-  render(<Screen />);
-  expect(screen.getByRole('dialog', { name: 'Rename' })).toHaveTextContent('Form');
 });

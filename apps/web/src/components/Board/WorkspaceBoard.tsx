@@ -6,7 +6,7 @@ import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { type TaskPanel, taskDrawerContent } from '@/components/TaskDetails/TaskControls';
 import { TaskDetails } from '@/components/TaskDetails/TaskDetails';
 import { useAllTags, useAllTaskTags, useStatuses, useTasks } from '@/lib/collections';
-import { useMedia } from '@/lib/media';
+import { useDesktop } from '@/lib/media';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { BoardAnnouncer } from './BoardAnnouncer';
 import { taskScreens, taskWrites, useBoardBoundary } from './boundary';
@@ -51,7 +51,7 @@ export function WorkspaceBoard({
   const { tags } = useAllTags();
   const { taskTags } = useAllTaskTags();
   const secondaryTags = useMemo(() => secondaryTagsByTask(taskTags), [taskTags]);
-  const phone = useMedia('(max-width: 767px)');
+  const phone = !useDesktop();
   const state = board.use();
   const data = useMemo(
     () => workspaceBoardData(workspaceId, projects, statuses, tasks, tags, secondaryTags),

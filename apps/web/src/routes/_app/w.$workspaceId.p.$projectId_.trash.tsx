@@ -21,7 +21,7 @@ function Page() {
     return (
       <p className="p-6">
         This project is in the trash.{' '}
-        <Link to="/w/$workspaceId/trash" params={{ workspaceId }} className="text-primary">
+        <Link to="/w/$workspaceId/trash" params={{ workspaceId }} className="text-brand-link">
           Restore it from the workspace trash
         </Link>{' '}
         to manage its tasks.

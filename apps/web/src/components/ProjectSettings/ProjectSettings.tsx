@@ -41,7 +41,7 @@ export function ProjectSettings({
           to="/w/$workspaceId/p/$projectId"
           params={{ workspaceId: project.workspaceId, projectId: project.id }}
           search={{ view: 'board' }}
-          className="text-sm text-primary underline-offset-4 hover:underline"
+          className="text-sm text-brand-link underline-offset-4 hover:underline"
         >
           Back to board
         </Link>

@@ -488,7 +488,7 @@
  * A phone has no room for a rail's detail: a held card's column there shows the priority's
  * name and nothing else, on a fainter rail.
  */
-@media (max-width: 767px) {
+@media (width < 768px) {
   .zone-header[data-mode="rail"] .zone-header-face {
     background: color-mix(in oklab, var(--foreground) 4%, transparent);
   }
