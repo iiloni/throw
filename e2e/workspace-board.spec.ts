@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
-import { card, carry, finger, taskRow, workspaceFixture } from './board-helpers';
+import { card, carry, finger, settled, taskRow, workspaceFixture } from './board-helpers';
 
 const column = (page: Page, name: string) => page.getByRole('region', { name, exact: true });
 const names = (cards: Locator) =>
@@ -126,6 +126,22 @@ test.describe('desktop', () => {
 test.describe('phone', () => {
   test.skip(({ isMobile, browserName }) => !isMobile || browserName !== 'chromium', 'Touch input');
 
+  test('swiping a workspace card reveals Done and closes it in its own project', async ({
+    page,
+  }) => {
+    const board = await workspaceFixture(page);
+    const touch = await finger(page);
+    const box = (await (await settled(card(page, 'Bake bread'))).boundingBox())!;
+    const start = { x: box.x + 48, y: box.y + box.height / 2 };
+    await touch.press(start, 30);
+    await touch.move({ x: start.x + 170, y: start.y }, 300);
+    await expect(page.locator('[data-swipe-reveal="armed"]')).toHaveText('Done');
+    await touch.lift();
+    await expect
+      .poll(async () => (await taskRow(page, board.headers, board.ids['Bake bread']!))?.status_id)
+      .toBe(board.statusIds.Served);
+  });
+
   test('the board pages through categories and the move drawer follows the cards’ projects', async ({
     page,
   }) => {
@@ -160,4 +176,38 @@ test.describe('phone', () => {
     );
     await expect(card(page, 'Water tomatoes')).toBeInViewport();
   });
+});
+
+test('the phone remembers folding and reopening both closed categories', async ({
+  page,
+  isMobile,
+  browserName,
+}) => {
+  test.skip(!isMobile && browserName !== 'firefox', 'Phone layout');
+  if (!isMobile) await page.setViewportSize({ width: 412, height: 915 });
+  await workspaceFixture(page);
+  const columns = page.getByRole('navigation', { name: 'Columns' });
+  const turn = async (name: string) => {
+    const tab = columns.getByRole('button', { name, exact: true });
+    await tab.click();
+    await expect(tab).toHaveAttribute('aria-current', 'page');
+  };
+  await turn('Done');
+  await expect(card(page, 'Wash up')).toBeInViewport();
+  await column(page, 'Done').getByRole('button', { name: 'Fold done' }).click();
+  await expect(card(page, 'Wash up')).toHaveCount(0);
+
+  await turn('Cancelled');
+  const cancelled = column(page, 'Cancelled');
+  await cancelled.getByRole('button', { name: 'Show 1 cancelled' }).click();
+  await expect(card(page, 'Flambé')).toBeInViewport();
+  await cancelled.getByRole('button', { name: 'Fold cancelled' }).click();
+  await expect(card(page, 'Flambé')).toHaveCount(0);
+
+  await page.reload();
+  await turn('Done');
+  await column(page, 'Done').getByRole('button', { name: 'Show 2 done' }).click();
+  await expect(card(page, 'Wash up')).toBeInViewport();
+  await turn('Cancelled');
+  await expect(cancelled.getByRole('button', { name: 'Show 1 cancelled' })).toBeInViewport();
 });

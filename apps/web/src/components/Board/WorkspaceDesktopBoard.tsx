@@ -38,6 +38,11 @@ const foldedSchema = z.object({
   cancelled: z.boolean().default(true),
 });
 
+/** The categories a column folds away: closed work. */
+export function foldableCategory(category: string): 'done' | 'cancelled' | null {
+  return category === 'done' || category === 'cancelled' ? category : null;
+}
+
 /** Done starts open and Cancelled folded; a choice to fold or open either stays on the device. */
 export function useFoldedColumns() {
   return usePersistentState('throw-workspace-board-folded', foldedSchema, foldedSchema.parse({}));
@@ -61,18 +66,19 @@ export function WorkspaceDesktopBoard() {
             data-autoscroll-x=""
             className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3 [&>div]:px-6"
           >
-            {CATEGORIES.map((category) => (
-              <CategoryColumn
-                key={category}
-                category={category}
-                folded={category === 'done' || category === 'cancelled' ? folded[category] : false}
-                onFold={
-                  category === 'done' || category === 'cancelled'
-                    ? (next) => setFolded({ ...folded, [category]: next })
-                    : undefined
-                }
-              />
-            ))}
+            {CATEGORIES.map((category) => {
+              const foldable = foldableCategory(category);
+              return (
+                <CategoryColumn
+                  key={category}
+                  category={category}
+                  folded={foldable ? folded[foldable] : false}
+                  onFold={
+                    foldable ? (next) => setFolded({ ...folded, [foldable]: next }) : undefined
+                  }
+                />
+              );
+            })}
           </ScrollAreaViewport>
           <ScrollBar orientation="horizontal" />
         </ScrollArea>

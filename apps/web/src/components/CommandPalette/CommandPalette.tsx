@@ -2,7 +2,7 @@ import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/
 import { Dialog } from 'radix-ui';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useBackHandler } from '@/lib/backButton';
-import { useMedia } from '@/lib/media';
+import { useDesktop } from '@/lib/media';
 import { springs } from '@/lib/motion';
 import { type Dismiss, focusPaletteInput, type PaletteActions, usePaletteActions } from './actions';
 import { CaptureContent } from './CaptureContent';
@@ -119,7 +119,7 @@ type SurfaceProps = {
 };
 
 function Surfaces(props: SurfaceProps) {
-  const desktop = useMedia('(min-width: 768px)');
+  const desktop = useDesktop();
   const actions = usePaletteActions(props);
   const shown = useRef(props.mode);
   // Switching from search to capture moves focus to the new input, unless the capture

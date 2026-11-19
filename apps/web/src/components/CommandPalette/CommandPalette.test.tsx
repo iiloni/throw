@@ -41,7 +41,7 @@ vi.mock('motion/react', async (importOriginal) => ({
   ...(await importOriginal<typeof import('motion/react')>()),
   useReducedMotion: () => true,
 }));
-vi.mock('@/lib/media', () => ({ useMedia: () => true }));
+vi.mock('@/lib/media', () => ({ useDesktop: () => true }));
 vi.mock('@/lib/backButton', () => ({ useBackHandler: () => {} }));
 beforeEach(() => {
   mocks.tasks = { tasks: [], isLoading: false };

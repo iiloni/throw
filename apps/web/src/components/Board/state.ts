@@ -1,5 +1,6 @@
 import { positionBetween } from '@throw/shared';
 import { z } from 'zod';
+import { isDesktop } from '@/lib/media';
 import { usePersistentState } from '@/lib/storage';
 import { createStore } from '@/lib/store';
 import type { BoardData } from './model';
@@ -126,7 +127,7 @@ export function update(change: Partial<BoardState> | ((state: BoardState) => Par
     return;
   const moving = 'openTaskId' in next && next.openTaskId !== state.openTaskId;
   // Returning down the trail finds its task where it was left, so only a new opening grows.
-  if (moving && next.openTaskId && innerWidth < 768 && !state.taskTrail.includes(next.openTaskId))
+  if (moving && next.openTaskId && !isDesktop() && !state.taskTrail.includes(next.openTaskId))
     rememberTaskOrigin(next.openTaskId);
   // Opening a task any other way starts a new trail.
   board.set({ ...state, ...(moving && !('taskTrail' in next) ? { taskTrail: [] } : {}), ...next });

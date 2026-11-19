@@ -4,7 +4,7 @@ import { Dialog } from 'radix-ui';
 import { type ReactNode, type RefObject, useRef } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { useBackHandler } from '@/lib/backButton';
-import { useMedia } from '@/lib/media';
+import { useDesktop } from '@/lib/media';
 import { springs } from '@/lib/motion';
 
 /** Catch's glass sheet, with a centred dialog on desktop and dragging confined to the grip. */
@@ -24,7 +24,7 @@ export function BottomSheet({
   useBackHandler(open, () => onOpenChange(false));
   const opener = useRef<HTMLElement | null>(null);
   const controls = useDragControls();
-  const desktop = useMedia('(min-width: 768px)');
+  const desktop = useDesktop();
   const reduced = useReducedMotion();
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>

@@ -5,13 +5,13 @@ import { ShellMenu } from '@/components/AppShell/ShellMenu';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { type TaskPanel, taskDrawerContent } from '@/components/TaskDetails/TaskControls';
 import { TaskDetails } from '@/components/TaskDetails/TaskDetails';
-import { useAllTags, useStatuses, useTasks } from '@/lib/collections';
-import { useMedia } from '@/lib/media';
+import { useAllTags, useAllTaskTags, useStatuses, useTasks } from '@/lib/collections';
+import { useDesktop } from '@/lib/media';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { BoardAnnouncer } from './BoardAnnouncer';
 import { taskScreens, taskWrites, useBoardBoundary } from './boundary';
 import { DragOverlay } from './DragOverlay';
-import { workspaceBoardData } from './selection';
+import { secondaryTagsByTask, workspaceBoardData } from './selection';
 import { board } from './state';
 import { TaskScreen } from './TaskView';
 import { TaskContentContext } from './taskContent';
@@ -53,11 +53,13 @@ export function WorkspaceBoard({
   const { statuses, isLoading: loadingStatuses } = useStatuses();
   const { tasks, isLoading: loadingTasks } = useTasks();
   const { tags } = useAllTags();
-  const phone = useMedia('(max-width: 767px)');
+  const { taskTags } = useAllTaskTags();
+  const secondaryTags = useMemo(() => secondaryTagsByTask(taskTags), [taskTags]);
+  const phone = !useDesktop();
   const state = board.use();
   const data = useMemo(
-    () => workspaceBoardData(workspaceId, projects, statuses, tasks, tags),
-    [workspaceId, projects, statuses, tasks, tags],
+    () => workspaceBoardData(workspaceId, projects, statuses, tasks, tags, secondaryTags),
+    [workspaceId, projects, statuses, tasks, tags, secondaryTags],
   );
   const awaiting = useAwaitingSync(loadingStatuses, data.project.statuses.length);
   const awaitingTasks = useAwaitingSync(loadingTasks, data.tasks.length);

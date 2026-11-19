@@ -3,7 +3,7 @@ import { type FormEvent, useState } from 'react';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { authClient } from '@/lib/auth';
+import { authClient, takeExpiredUser } from '@/lib/auth';
 import { authRedirectSearchSchema, authReturnTo } from '@/lib/authRedirect';
 import { needsServerUrl } from '@/lib/serverUrl';
 
@@ -47,8 +47,11 @@ function LoginPage() {
         setError(result.error.message ?? 'Something went wrong');
         return;
       }
+      // Another account than the one whose session expired cannot use its page.
+      const expired = takeExpiredUser();
+      const sameAccount = !expired || expired === result.data?.user.id;
       // A full load, so the collections open this user's copy of their data on the device.
-      window.location.assign(authReturnTo(returnTo, window.location.hash));
+      window.location.assign(sameAccount ? authReturnTo(returnTo, window.location.hash) : '/');
     } catch {
       setError('Could not reach the Throw server. Check your connection and try again.');
     } finally {

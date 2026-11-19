@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { Popover } from 'radix-ui';
 import type { ReactNode } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
-import { useMedia } from '@/lib/media';
+import { useDesktop } from '@/lib/media';
 import { springs } from '@/lib/motion';
 import { useThemePreference } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -183,7 +183,7 @@ export function BoardSettingsControls({
   const [settings, setSettings] = useBoardSettings();
   const [theme, setTheme] = useThemePreference();
   // Columns and side rails are desktop layout; a phone has neither to change.
-  const phone = useMedia('(max-width: 767px)');
+  const phone = !useDesktop();
   const set = <K extends keyof BoardSettings>(key: K, value: BoardSettings[K]) =>
     setSettings({ ...settings, [key]: value });
   return (

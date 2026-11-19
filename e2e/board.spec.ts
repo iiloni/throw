@@ -691,7 +691,9 @@ test('drawer pulls require the scroll boundary at gesture start, including after
   const closed = page.getByRole('dialog', { name: 'Closed', exact: true });
   await expect.poll(async () => (await closed.boundingBox())!.y).toBeLessThan(10);
   await expect(closed.getByRole('article')).toHaveCount(14);
-  const history = closed.getByRole('region', { name: 'Closed tasks', exact: true });
+  // The list scrolls in its scroll area's viewport, as the backlog does.
+  const history = closed.locator('[data-slot="scroll-area-viewport"]');
+  await expect(history.getByRole('region', { name: 'Closed tasks', exact: true })).toBeVisible();
   await history.evaluate((element) => element.scrollTo(0, 240));
   await pullFrom(page, isMobile, history, 100);
   await expect(closed).toBeVisible();

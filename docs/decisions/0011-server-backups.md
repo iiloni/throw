@@ -29,3 +29,6 @@ No synced tables, queued-write formats, collection schemas or protocol constants
 The server admin role already exists. New backup routes are protocol-gated; plain download
 links instead require an expiring signed ticket and a current server-admin check. That one
 read-only route is mounted before the gate because a browser download cannot send headers.
+A ticket names one file and expires a minute after it is issued, just before its link opens;
+it is not one-use, so a browser can retry the download. The app's request log replaces it
+with `redacted`. A reverse proxy's access log may still record it until it expires.

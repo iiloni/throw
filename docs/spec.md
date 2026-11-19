@@ -444,8 +444,8 @@ view, so it reads and moves the same way.
   with the task's own project's statuses, tags and subtasks.
 - New work is captured through the palette, which asks which project it belongs to.
 - On a phone the board pages through the four categories as the project board pages through
-  statuses, opening on Active. Cancelled stays folded behind a "Show cancelled" button until
-  opened. Backlog and Active swipe to close as the project board does, into each card's
+  statuses, opening on Active. Done and Cancelled can be folded and reopened on their pages,
+  with the same remembered preference as desktop. Backlog and Active swipe to close into each card's
   project's default done status. The move drawer offers the held cards' project statuses
   when they share one project, and the four categories when they do not.
 
@@ -469,6 +469,8 @@ view), comments and activity.
   and opens their panels in place.
 - The description is a directly editable, text-only BlockNote document. Changes commit
   when the task view closes or switches tasks; drafts survive reloads and conflicts.
+- Unfinished comments and comment edits can be resumed on the same device after closing the
+  task or reloading. Cancel discards the draft, and Ctrl/Cmd+Enter posts or saves it.
 - The top toolbars follow Catch: back and the parent/task identifier breadcrumb on the
   left, trash/restore on the right.
 - Subtasks sit on the task pane as a flush list of the same task cards, as Catch lists a

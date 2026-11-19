@@ -1,7 +1,6 @@
 import {
   type ActivityEntry,
   comparePositions,
-  isClosedCategory,
   type Project,
   type Status,
   type Tag,
@@ -10,7 +9,7 @@ import {
   taskTagColor,
 } from '@throw/shared';
 import { ChevronLeft, ChevronRight, Plus, RotateCcw, Trash2 } from 'lucide-react';
-import { useContext, useState } from 'react';
+import { useContext, useMemo, useRef, useState } from 'react';
 import { StatusGlyph } from '@/components/Board/glyphs';
 import { type Task as BoardTask, projectOf } from '@/components/Board/model';
 import { StatusMenu } from '@/components/Board/StatusMenu';
@@ -82,8 +81,23 @@ export function TaskDetails({
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const done = children.filter((child) =>
-    isClosedCategory(statuses.find((row) => row.id === child.statusId)?.category ?? 'backlog'),
+  const addSubtask = useRef<HTMLButtonElement>(null);
+  // The board's copies carry each subtask's secondary tags, including under a trashed parent.
+  const data = current(state);
+  const boardTasks = useMemo(
+    () => new Map([...data.tasks, ...(data.hiddenTasks ?? [])].map((row) => [row.id, row])),
+    [data],
+  );
+  function closeSubtaskForm() {
+    setAdding(false);
+    setTitle('');
+    setError(null);
+    // The field goes away; focus returns to the control that opened it.
+    requestAnimationFrame(() => addSubtask.current?.focus());
+  }
+  // Finished work only, as the card's progress counts it: a cancelled subtask was not done.
+  const done = children.filter(
+    (child) => statuses.find((row) => row.id === child.statusId)?.category === 'done',
   ).length;
   return (
     <div className="flex min-h-0 flex-1 flex-col pt-[var(--safe-top)] pb-[var(--keyboard)]">
@@ -180,7 +194,10 @@ export function TaskDetails({
                     return (
                       <TaskCard
                         key={child.id}
-                        task={boardTask(child, tags)}
+                        task={{
+                          ...boardTask(child, tags),
+                          secondaryTagIds: boardTasks.get(child.id)?.secondaryTagIds ?? [],
+                        }}
                         showStatus
                         onOpen={() => openSubtask(child.id)}
                         statusControl={
@@ -213,9 +230,7 @@ export function TaskDetails({
                       if (!title.trim()) return;
                       try {
                         createTask(project.id, { parentId: task.id, title: title.trim() });
-                        setTitle('');
-                        setAdding(false);
-                        setError(null);
+                        closeSubtaskForm();
                       } catch {
                         setError('The subtask could not be added. Try again.');
                       }
@@ -229,8 +244,14 @@ export function TaskDetails({
                       value={title}
                       onChange={(event) => setTitle(event.target.value)}
                       maxLength={500}
-                      ref={(element) => {
-                        element?.focus();
+                      // biome-ignore lint/a11y/noAutofocus: the field appears because Add subtask was chosen.
+                      autoFocus
+                      onKeyDown={(event) => {
+                        // Escape leaves the new subtask first, and the task on the next press.
+                        // An Escape during IME composition cancels the conversion, not the field.
+                        if (event.key !== 'Escape' || event.nativeEvent.isComposing) return;
+                        event.preventDefault();
+                        closeSubtaskForm();
                       }}
                       placeholder="What needs doing?"
                       className="h-12 w-full rounded-xl border border-input bg-card px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
@@ -242,13 +263,14 @@ export function TaskDetails({
                     )}
                     <div className="mt-2 flex gap-2">
                       <Button disabled={!title.trim()}>Add subtask</Button>
-                      <Button type="button" variant="ghost" onClick={() => setAdding(false)}>
+                      <Button type="button" variant="ghost" onClick={closeSubtaskForm}>
                         Cancel
                       </Button>
                     </div>
                   </form>
                 ) : (
                   <button
+                    ref={addSubtask}
                     type="button"
                     onClick={() => setAdding(true)}
                     className="flex min-h-11 w-full items-center gap-1 rounded-xl px-1 text-muted-foreground text-sm outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60"

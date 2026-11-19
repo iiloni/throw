@@ -39,14 +39,23 @@ export const workspaceRoutes = new Hono<AppEnv>()
     const { id } = c.req.valid('param');
     const body = c.req.valid('json');
     const txid = await db.transaction(async (tx) => {
-      const updated = await tx
-        .update(workspaces)
-        .set(body)
+      const [current] = await tx
+        .select({ name: workspaces.name, position: workspaces.position })
+        .from(workspaces)
         .where(and(eq(workspaces.id, id), inArray(workspaces.id, memberWorkspaces(tx, userId))))
-        .returning({ id: workspaces.id });
-      return updated.length === 0 ? null : currentTxid(tx);
+        .for('update');
+      if (!current) return 'missing';
+      // A write that changes nothing skips the UPDATE, or Electric would stream the row again.
+      const changes = Object.fromEntries(
+        Object.entries(body).filter(
+          ([key, value]) => current[key as keyof typeof current] !== value,
+        ),
+      );
+      if (Object.keys(changes).length === 0) return null;
+      await tx.update(workspaces).set(changes).where(eq(workspaces.id, id));
+      return currentTxid(tx);
     });
-    if (txid === null) return c.json({ error: 'Workspace not found' }, 404);
+    if (txid === 'missing') return c.json({ error: 'Workspace not found' }, 404);
     return c.json({ txid });
   })
   .delete('/:id', idParam, async (c) => {
