@@ -497,6 +497,50 @@ test('the phone task drawer holds still until a panel opens, and keeps its tabs 
   await expect(priority).toBeFocused();
 });
 
+test('the desktop dock sits below the card, its panels open above it and follow it for Tab', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'The phone shows its controls in the drawer (ADR 0009)');
+  await fixture(page);
+  const dock = controls(page);
+  // The card is the pane's scroller, between the toolbars and the dock.
+  const card = page
+    .locator('[data-task-drawer]')
+    .locator('xpath=preceding-sibling::*[@data-slot="scroll-area"][1]');
+  const dockTop = async () => (await dock.boundingBox())!.y;
+  const cardBottom = async () => {
+    const box = (await card.boundingBox())!;
+    return box.y + box.height;
+  };
+  expect(await dockTop()).toBeGreaterThanOrEqual(await cardBottom());
+  const status = dock.getByRole('button', { name: 'Status: Working. Change', exact: true });
+  await status.focus();
+  await page.keyboard.press('Enter');
+  const panel = page.getByRole('region', { name: 'Status', exact: true });
+  await expect(panel.getByRole('radio', { name: 'Working', exact: true })).toBeChecked();
+  const dockBox = (await dock.boundingBox())!;
+  const panelBox = (await panel.boundingBox())!;
+  expect(panelBox.y + panelBox.height).toBeLessThanOrEqual(dockBox.y);
+  // The card stays put under the panel.
+  expect(await cardBottom()).toBeLessThanOrEqual(dockBox.y);
+  // Tab from the controls reaches the panel they opened.
+  for (let step = 0; step < 8; step++) {
+    if (await panel.evaluate((node) => node.contains(document.activeElement))) break;
+    await page.keyboard.press('Tab');
+  }
+  await expect
+    .poll(() => panel.evaluate((node) => node.contains(document.activeElement)))
+    .toBe(true);
+  // The keyboard lifts the dock with the pane rather than covering it.
+  await page.keyboard.press('Escape');
+  await expect(panel).toHaveCount(0);
+  await expect(status).toBeFocused();
+  const resting = (await dock.boundingBox())!.y;
+  await page.evaluate(() => document.documentElement.style.setProperty('--keyboard', '200px'));
+  await expect.poll(async () => (await dock.boundingBox())!.y).toBeLessThanOrEqual(resting - 199);
+});
+
 test('tags are picked from the task controls and listed on the task', async ({
   page,
   isMobile,
