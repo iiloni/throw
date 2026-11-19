@@ -13,6 +13,10 @@ async function addProject(page: Page, name: string, isMobile: boolean) {
   if (isMobile) {
     await openMenu(page, isMobile);
     await page.getByRole('menuitem', { name: 'New project', exact: true }).click();
+    // A phone has one drawer, the board's when there is one (ADR 0009), and no other sheet.
+    await expect(
+      page.locator('section[data-page]').getByLabel('Project name', { exact: true }),
+    ).toBeVisible();
   } else await page.getByRole('button', { name: 'New project', exact: true }).click();
   await page.getByLabel('Project name', { exact: true }).fill(name);
   await page.getByRole('button', { name: 'Create', exact: true }).click();

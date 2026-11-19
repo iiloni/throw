@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { type ReactNode, useContext, useLayoutEffect, useRef, useState } from 'react';
 import { Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
 import { IconButton } from '@/components/IconButton/IconButton';
+import { boardDrawerPage } from '@/components/ManagementSurface/ManagementSurface';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
 import { haptics } from '@/lib/haptics';
@@ -63,6 +64,7 @@ export function WorkspacePhoneBoard({
   const [page, pager, quietPager] = usePagerPage(FIRST_PAGE);
   const [settings, setSettings] = useState(false);
   const task = useContext(TaskContentContext)?.drawer;
+  const lent = boardDrawerPage.use();
   const raised = useTaskSurfaceShown();
   const dragging = held?.phase === 'dragging';
   const pick = state.selection.length > 0 && !dragging && !fingerDown;
@@ -174,8 +176,8 @@ export function WorkspacePhoneBoard({
         onDetent={() => {}}
         move={!task && (dragging || pick) ? <MovePanel pick={pick} /> : null}
         gesturesDisabled={held !== null || fingerDown || (!!task && !task.page)}
-        page={task ? task.page : settings ? settingsPage : null}
-        onClosePage={task ? task.closePage : () => setSettings(false)}
+        page={lent ? lent.page : task ? task.page : settings ? settingsPage : null}
+        onClosePage={lent ? lent.close : task ? task.closePage : () => setSettings(false)}
         raised={!!task || raised}
       >
         {null}

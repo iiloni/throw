@@ -14,6 +14,7 @@ import { type ReactNode, useCallback, useContext, useRef, useState } from 'react
 import { type PhoneCapture, usePhonePalette } from '@/components/CommandPalette/PhonePalette';
 import { type Detent, Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
 import { IconButton } from '@/components/IconButton/IconButton';
+import { boardDrawerPage } from '@/components/ManagementSurface/ManagementSurface';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
@@ -438,6 +439,7 @@ function BoardDrawer({
 }) {
   const state = board.use();
   const held = drag.use();
+  const lent = boardDrawerPage.use();
   const fingerDown = holding.use();
   const { project } = current(state);
   const statuses = zoneStatuses('backlog', project.statuses);
@@ -581,8 +583,12 @@ function BoardDrawer({
       gesturesDisabled={
         held !== null || fingerDown || (!!task && !task.page) || (capturing && !capture.page)
       }
-      page={task ? task.page : capturing ? capture.page : page ? pages[page] : null}
-      onClosePage={task ? task.closePage : capturing ? capture.closePage : onClosePage}
+      page={
+        lent ? lent.page : task ? task.page : capturing ? capture.page : page ? pages[page] : null
+      }
+      onClosePage={
+        lent ? lent.close : task ? task.closePage : capturing ? capture.closePage : onClosePage
+      }
       card={task ? null : capture.card}
       raised={!!task || raised}
     >
