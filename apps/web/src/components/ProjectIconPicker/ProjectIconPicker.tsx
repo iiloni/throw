@@ -2,6 +2,7 @@ import type { Color } from '@throw/shared';
 import { useState } from 'react';
 import { PROJECT_ICON_LABELS, ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { Input } from '@/components/ui/input';
+import { haptics } from '@/lib/haptics';
 import { cn } from '@/lib/utils';
 
 /** The project icons to choose from, found by name and tinted in the project's colour. */
@@ -17,6 +18,10 @@ export function ProjectIconPicker({
   className?: string;
 }) {
   const [query, setQuery] = useState('');
+  function pick(icon: string | null) {
+    if (icon !== value) haptics.selection();
+    onChange(icon);
+  }
   return (
     <fieldset className={cn('min-w-0', className)}>
       <legend className="mb-2 font-medium text-sm">Project icon</legend>
@@ -33,7 +38,7 @@ export function ProjectIconPicker({
             type="button"
             aria-label="Default icon"
             aria-pressed={value === null}
-            onClick={() => onChange(null)}
+            onClick={() => pick(null)}
             className={cn(
               'flex size-10 items-center justify-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring',
               value === null && 'bg-tint text-tint-accent',
@@ -51,7 +56,7 @@ export function ProjectIconPicker({
               aria-label={`${label} icon`}
               title={label}
               aria-pressed={value === icon}
-              onClick={() => onChange(icon)}
+              onClick={() => pick(icon)}
               className={cn(
                 'flex size-10 items-center justify-center rounded-xl outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring',
                 value === icon && 'bg-tint text-tint-accent',

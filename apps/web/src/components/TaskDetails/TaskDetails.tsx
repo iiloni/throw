@@ -22,6 +22,7 @@ import { TaskTags } from '@/components/TaskTags/TaskTags';
 import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useTags, useTaskTags } from '@/lib/collections';
+import { haptics } from '@/lib/haptics';
 import { createTask, restoreTask, sendTask, trashTask } from '@/lib/tasks';
 import { cn } from '@/lib/utils';
 import { TaskDescription } from './TaskDescription';
@@ -162,7 +163,16 @@ export function TaskDetails({
           <IconButton
             label={task.deletedAt ? 'Restore task' : 'Move to trash'}
             className="size-10 text-destructive hover:text-destructive [&_svg]:size-5"
-            onClick={() => (task.deletedAt ? restoreTask(task.id) : trashTask(task.id))}
+            onClick={() => {
+              // Felt once it is done: either can throw if the task went meanwhile.
+              if (task.deletedAt) {
+                restoreTask(task.id);
+                haptics.success();
+              } else {
+                trashTask(task.id);
+                haptics.warning();
+              }
+            }}
           >
             {task.deletedAt ? <RotateCcw /> : <Trash2 />}
           </IconButton>
@@ -242,6 +252,7 @@ export function TaskDetails({
                       if (!title.trim()) return;
                       try {
                         createTask(project.id, { parentId: task.id, title: title.trim() });
+                        haptics.success();
                         closeSubtaskForm();
                       } catch {
                         setError('The subtask could not be added. Try again.');
