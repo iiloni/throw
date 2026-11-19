@@ -1,32 +1,87 @@
-import { Link } from '@tanstack/react-router';
 import { DEFAULT_PRIORITY_NAMES, EMPTY_PRIORITY_NAMES, type Project } from '@throw/shared';
-import { useState } from 'react';
+import {
+  ArrowUpDown,
+  Columns3,
+  type LucideIcon,
+  SlidersHorizontal,
+  Tags,
+  Trash2,
+} from 'lucide-react';
+import { type ReactNode, useState } from 'react';
+import { useShell } from '@/components/AppShell/shell';
+import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
-import { ManagementForm } from '@/components/ShellForms/ShellForms';
+import { ProjectIconPicker } from '@/components/ProjectIcon/ProjectIconPicker';
+import { SettingsLayout, type SettingsPage } from '@/components/SettingsLayout/SettingsLayout';
+import { SettingsSection } from '@/components/SettingsSection/SettingsSection';
 import { TagManager } from '@/components/TagManager/TagManager';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useProjects, useStatuses, useTasks } from '@/lib/collections';
+import { haptics } from '@/lib/haptics';
+import { useDesktop } from '@/lib/media';
 import {
+  type SettingsSection as ProjectSection,
   projectKeyIssue,
-  type SettingsSection,
   settingsSectionSchema,
 } from '@/lib/projectSettings';
-import { changeProjectKey, setPriorityNames } from '@/lib/projects';
+import { changeProjectKey, setPriorityNames, trashProject, updateProject } from '@/lib/projects';
 import { statusesOf } from '@/lib/statuses';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { StatusSettings } from './StatusSettings';
 
+const PAGES = {
+  general: { label: 'General', icon: SlidersHorizontal },
+  statuses: { label: 'Statuses', icon: Columns3 },
+  priorities: { label: 'Priorities', icon: ArrowUpDown },
+  tags: { label: 'Tags', icon: Tags },
+} as const satisfies Record<ProjectSection, { label: string; icon: LucideIcon }>;
+
+export type ProjectSettingsPage = ProjectSection | 'trash';
+
+/**
+ * Project settings' pages in the settings frame the app's own settings use: listed beside the
+ * open one on wide screens, picked from the dock on a phone.
+ */
+export function ProjectSettingsFrame({
+  project,
+  current,
+  children,
+}: {
+  project: Project;
+  current: ProjectSettingsPage;
+  children: ReactNode;
+}) {
+  const wide = useDesktop();
+  const base = `/w/${project.workspaceId}/p/${project.id}`;
+  const pages: SettingsPage[] = [
+    ...settingsSectionSchema.options.map((key) => ({
+      key,
+      ...PAGES[key],
+      href: key === 'general' ? `${base}/settings` : `${base}/settings?section=${key}`,
+    })),
+    { key: 'trash', label: 'Trash', icon: Trash2, href: `${base}/trash` },
+  ];
+  return (
+    <SettingsLayout
+      title="Project settings"
+      groups={[{ label: project.name, pages }]}
+      current={pages.find((page) => page.key === current) ?? null}
+      wide={wide}
+      back={{ label: 'Back to board', href: `${base}?view=board` }}
+    >
+      {children}
+    </SettingsLayout>
+  );
+}
+
 export function ProjectSettings({
   project,
   section,
-  onSectionChange,
 }: {
   project: Project;
-  section: SettingsSection;
-  onSectionChange: (section: SettingsSection) => void;
+  section: ProjectSection;
 }) {
-  const [editing, setEditing] = useState(false);
   const { statuses, isLoading } = useStatuses();
   const { tasks, isLoading: loadingTasks } = useTasks();
   const ownStatuses = statusesOf(statuses, project.id);
@@ -34,56 +89,12 @@ export function ProjectSettings({
   const awaitingTasks = useAwaitingSync(loadingTasks, tasks.length);
   const awaiting = awaitingStatuses || awaitingTasks;
   return (
-    <div className="mx-auto max-w-3xl px-5 pb-10 md:px-8">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-display text-2xl font-semibold">Project settings</h2>
-        <Link
-          to="/w/$workspaceId/p/$projectId"
-          params={{ workspaceId: project.workspaceId, projectId: project.id }}
-          search={{ view: 'board' }}
-          className="text-sm text-brand-link underline-offset-4 hover:underline"
-        >
-          Back to board
-        </Link>
-      </div>
-      <nav
-        aria-label="Project settings sections"
-        className="mb-8 flex flex-wrap gap-1 border-b pb-3"
-      >
-        {settingsSectionSchema.options.map((tab) => (
-          <Button
-            key={tab}
-            variant="ghost"
-            aria-current={section === tab ? 'page' : undefined}
-            className={section === tab ? 'h-11 bg-accent px-3' : 'h-11 px-3'}
-            onClick={() => onSectionChange(tab)}
-          >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-          </Button>
-        ))}
-        <Link
-          to="/w/$workspaceId/p/$projectId/trash"
-          params={{ workspaceId: project.workspaceId, projectId: project.id }}
-          className="inline-flex min-h-11 items-center rounded-xl px-3 text-sm text-muted-foreground hover:bg-accent"
-        >
-          Trash
-        </Link>
-      </nav>
+    <ProjectSettingsFrame project={project} current={section}>
       {section === 'general' && (
-        <div className="space-y-8">
-          <section className="flex items-start justify-between gap-4 border-b pb-6">
-            <div>
-              <h2 className="font-display text-xl font-semibold">Appearance</h2>
-              <p className="mt-2 break-words text-sm text-muted-foreground">{project.name}</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Name, colour and icon in your navigation.
-              </p>
-            </div>
-            <Button variant="secondary" onClick={() => setEditing(true)}>
-              Edit project
-            </Button>
-          </section>
+        <div className="flex flex-col gap-6">
+          <ProjectAppearance project={project} />
           <ProjectKey project={project} />
+          <DeleteProject project={project} />
         </div>
       )}
       {section === 'statuses' &&
@@ -94,17 +105,117 @@ export function ProjectSettings({
         ))}
       {section === 'priorities' && <PrioritySettings project={project} />}
       {section === 'tags' && <TagManager projectId={project.id} />}
-      <ManagementSurface open={editing} title="Edit project" onClose={() => setEditing(false)}>
-        {editing && (
-          <ManagementForm
-            form={{ kind: 'edit-project', project }}
-            onClose={() => setEditing(false)}
-          />
-        )}
-      </ManagementSurface>
-    </div>
+    </ProjectSettingsFrame>
   );
 }
+
+/**
+ * Name, colour and icon, saved as they change, as the app's settings are. A name is saved
+ * when it is left or entered, and Escape returns to the saved one.
+ */
+function ProjectAppearance({ project }: { project: Project }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    const name = draft.trim();
+    if (name && name !== project.name) updateProject(project.id, { name });
+    setDraft(null);
+  };
+  return (
+    <SettingsSection
+      title="Appearance"
+      description="How the project shows in your navigation and on the cross-project board."
+    >
+      <div className="flex flex-col gap-5 p-4" data-color={project.color}>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            commit();
+          }}
+          className="flex flex-col gap-2"
+        >
+          <label htmlFor="project-name" className="font-medium text-sm">
+            Project name
+          </label>
+          <Input
+            id="project-name"
+            value={draft ?? project.name}
+            maxLength={80}
+            required
+            autoComplete="off"
+            onChange={(event) => setDraft(event.target.value)}
+            onBlur={commit}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && draft !== null) {
+                event.preventDefault();
+                setDraft(null);
+              }
+            }}
+          />
+        </form>
+        <ColorPicker
+          value={project.color}
+          onChange={(color) => {
+            if (color !== project.color) updateProject(project.id, { color });
+          }}
+        />
+        <ProjectIconPicker
+          value={project.icon}
+          color={project.color}
+          onChange={(icon) => {
+            if (icon !== project.icon) updateProject(project.id, { icon });
+          }}
+        />
+      </div>
+    </SettingsSection>
+  );
+}
+
+function DeleteProject({ project }: { project: Project }) {
+  const shell = useShell();
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <>
+      <div className="rounded-2xl bg-foreground/[0.05]">
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl p-3.5 font-medium text-destructive outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
+        >
+          <Trash2 className="size-4" aria-hidden />
+          Delete project
+        </button>
+      </div>
+      <ManagementSurface
+        open={confirming}
+        title={`Delete ${project.name}?`}
+        fit
+        onClose={() => setConfirming(false)}
+      >
+        <p className="mb-5 text-muted-foreground text-sm">
+          This moves the project and its tasks to the workspace trash, where it can be restored.
+        </p>
+        <div className="flex justify-end gap-2 pb-1">
+          <Button autoFocus variant="ghost" onClick={() => setConfirming(false)}>
+            Keep project
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => {
+              haptics.warning();
+              trashProject(project.id);
+              setConfirming(false);
+              shell.selectWorkspace(project.workspaceId);
+            }}
+          >
+            Delete project
+          </Button>
+        </div>
+      </ManagementSurface>
+    </>
+  );
+}
+
 function ProjectKey({ project }: { project: Project }) {
   const { projects } = useProjects();
   const [draft, setDraft] = useState<string | null>(null);
@@ -112,15 +223,12 @@ function ProjectKey({ project }: { project: Project }) {
   const key = draft ?? project.key ?? '';
   const issue = projectKeyIssue(project, key, projects);
   return (
-    <section className="space-y-4">
-      <div>
-        <h2 className="font-display text-xl font-semibold">Project key</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          The prefix of every task identifier, such as {project.key ?? 'KEY'}-12.
-        </p>
-      </div>
+    <SettingsSection
+      title="Task identifiers"
+      description={`The prefix of every task identifier, such as ${project.key ?? 'KEY'}-12.`}
+    >
       <form
-        className="space-y-3"
+        className="space-y-3 p-4"
         onSubmit={(event) => {
           event.preventDefault();
           if (!issue && key !== project.key) setConfirming(true);
@@ -187,7 +295,7 @@ function ProjectKey({ project }: { project: Project }) {
           </Button>
         </div>
       </ManagementSurface>
-    </section>
+    </SettingsSection>
   );
 }
 function PrioritySettings({ project }: { project: Project }) {
@@ -195,12 +303,9 @@ function PrioritySettings({ project }: { project: Project }) {
   const names = draft ?? project.priorityNames;
   return (
     <section className="space-y-5">
-      <div>
-        <h2 className="font-display text-2xl font-semibold">Priority names</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Five fixed ranks, highest first. Empty names use the defaults. New tasks start at rank 3.
-        </p>
-      </div>
+      <p className="px-1 text-sm text-muted-foreground">
+        Five fixed ranks, highest first. Empty names use the defaults. New tasks start at rank 3.
+      </p>
       <form
         className="space-y-4"
         onSubmit={(event) => {

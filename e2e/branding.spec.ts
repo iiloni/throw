@@ -27,7 +27,10 @@ async function contrast(locator: Locator, ink: 'color' | 'borderColor', surface:
 }
 
 /** The selected surface on desktop, or the board tray's primary action on a phone. */
-async function paintedWithToken(locator: Locator, token: '--accent' | '--brand' = '--accent') {
+async function paintedWithToken(
+  locator: Locator,
+  token: '--accent' | '--brand' | '--card' = '--accent',
+) {
   return locator.evaluate((element, token) => {
     const probe = document.createElement('span');
     probe.style.backgroundColor = `var(${token})`;
@@ -187,8 +190,11 @@ test('brand surfaces preserve artwork, contrast and usable layout on light and d
     // Selection moves with the route: the project left behind returns to the neutral rail.
     await expect.poll(() => paintedWithToken(selected)).toBe(false);
   }
-  const theme = page.getByRole('button', { name: 'Dark', exact: true, pressed: true });
-  await expect.poll(() => paintedWithToken(theme)).toBe(true);
+  // The chosen theme sits on a raised card, as Catch's theme picker has it.
+  const theme = page
+    .getByRole('button', { name: 'Dark', exact: true, pressed: true })
+    .locator('[data-slot="theme-indicator"]');
+  await expect.poll(() => paintedWithToken(theme, '--card')).toBe(true);
   expect(await contrast(theme, 'color', 'self')).toBeGreaterThanOrEqual(4.5);
   await page.screenshot({ path: info.outputPath('settings-dark.png') });
 

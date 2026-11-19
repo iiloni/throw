@@ -28,7 +28,7 @@ export function AppUpdatePrompt() {
       open={
         (available || (required && Boolean(app))) &&
         dismissed !== target &&
-        pathname !== '/settings' &&
+        pathname !== '/settings/update' &&
         !blocked
       }
       onOpenChange={(open) => {
@@ -49,7 +49,7 @@ export function AppUpdatePrompt() {
           <Button
             onClick={() => {
               dismiss();
-              void navigate({ to: '/settings', hash: 'updates' });
+              void navigate({ to: '/settings/update' });
             }}
           >
             Go to Update

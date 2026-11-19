@@ -278,7 +278,7 @@ How a held card behaves, and why, is recorded in
 
 ### Board settings
 
-The settings page has a section for how the board looks and behaves. The board settings
+Settings' General page has a section for how the board looks and behaves. The board settings
 button opens the same options in the [drawer](#the-drawer) at full height on a phone, and in
 a panel from the rail on desktop, sized to the window. These are kept on the device. Column backgrounds and the
 rails' placement shape desktop columns, so a phone does not show them.
@@ -550,7 +550,9 @@ three-tab dock: every phone board has its own, and other pages use the title men
 
 The phone layout applies below 768 CSS pixels. The title menu also switches and manages
 workspaces, and opens settings. The project dock remains on project and cross-project
-boards; settings and an empty workspace use the title menu alone. On the cross-project
+boards. Settings and project settings have a dock that names the open page and lists the
+others in the drawer, as Catch's settings dock does; an empty workspace uses the title menu
+alone. On the cross-project
 board, the dock holds Search, which opens the workspace palette, and a create button that
 opens the palette's capture, where the project is chosen.
 
@@ -587,17 +589,23 @@ dock rather than opening as a page. Desktop has no drawer. The rules are in
   the board and replace the view with `board`. The palette has no route of its own.
 - `/w/:workspaceId/board` is the cross-project board for that workspace; `view=search`
   opens the palette over it and replaces the view with `board`.
-- `/w/:workspaceId/p/:projectId/settings` manages a project's appearance, statuses,
-  priority names, key and tags. The rail's project menu and the phone board's title menu
-  open it; the appearance form is shared with project creation. The optional `section`
-  search parameter keeps the chosen section across reloads and reconnects.
+- `/w/:workspaceId/p/:projectId/settings` manages a project in pages laid out as the app's
+  settings are: General (name, colour and icon, saved as they change; the key; deleting
+  the project), Statuses, Priorities and Tags, with Trash beside them. The rail's project
+  menu and the phone board's title menu open it. The optional `section` search parameter
+  keeps the chosen page across reloads and reconnects.
 - `/w/:workspaceId/p/:projectId/trash` lists that project's independently trashed tasks,
-  with inherited subtasks grouped under their parent. It is reached from project settings
-  and the rail's project menu.
+  with inherited subtasks grouped under their parent. It is project settings' Trash page,
+  and the rail's project menu opens it too.
 - `/w/:workspaceId/trash` lists trashed projects and independently trashed tasks across the
   workspace. The workspace menu and desktop rail open it. Each trash offers restore,
   confirmed permanent removal and confirmed emptying of that scope.
-- `/settings` holds account, board and appearance controls.
+- `/settings` redirects to `/settings/general`. Settings has Catch's pages: General
+  (theme and board), Account (name, password, the server on Android, signing out), Update,
+  and Backups for the server's admin at `/settings/admin/backups`. Wide, the pages are
+  listed beside the open one; on a phone the dock picks between them. Changing the
+  password signs the account's other devices out; they keep their unsaved changes until
+  the same account signs in again (ADR 0002).
 - `/` restores the device's last workspace and project for the signed-in account.
   `/w/:workspaceId` restores that workspace's last project, otherwise its first project
   by position, otherwise the create-project prompt.
@@ -615,8 +623,9 @@ drawer on a phone. Cards resolve their primary tag's root colour with `taskTagCo
 show the tag's name; a partially synced tag tree leaves the card neutral. The drawer
 (`components/Drawer`) carries the backlog, the closed tasks, board settings, and search and
 capture, and becomes the move drawer while a card is held or selected; the board owns it
-for now. Away from boards, the shell hosts that same Drawer component for project settings
-and trash forms, with no dock at rest. Tag management uses this host on phones and a
+for now. Away from boards, the shell hosts that same Drawer component for settings, project settings
+and trash forms. Workspace trash has no dock at rest; settings pages give it their page
+picker. Tag management uses this host on phones and a
 centred dialog on desktop. The shell's project forms still use `BottomSheet` until the
 drawer moves to the shell. The cross-project board adapts every project's tasks at the same
 kind of boundary (`Board/WorkspaceBoard.tsx`); search and quick capture there use the

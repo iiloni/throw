@@ -39,13 +39,10 @@ export function StatusSettings({
     removed && statusDeletionIssue(removed, statuses, counts.get(removed.id) ?? 0);
   return (
     <section aria-label="Statuses" className="space-y-7">
-      <div>
-        <h2 className="font-display text-2xl font-semibold">Statuses</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Categories are fixed when you create a status. Every category keeps a default and at least
-          one status. Task counts include the trash.
-        </p>
-      </div>
+      <p className="px-1 text-sm text-muted-foreground">
+        Categories are fixed when you create a status. Every category keeps a default and at least
+        one status. Task counts include the trash.
+      </p>
       {STATUS_CATEGORIES.map((category) => {
         const siblings = statuses.filter((status) => status.category === category);
         return (
