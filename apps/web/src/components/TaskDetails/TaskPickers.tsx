@@ -4,6 +4,7 @@ import { PriorityGlyph, StatusGlyph } from '@/components/Board/glyphs';
 import { byCategory, type Project, priorityName } from '@/components/Board/model';
 import { TagPicker } from '@/components/TagPicker/TagPicker';
 import { useTags, useTaskTags } from '@/lib/collections';
+import { feelStatusChange, haptics } from '@/lib/haptics';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { setPrimaryTag, setSecondaryTag } from '@/lib/tags';
 import { sendTask, updateTask } from '@/lib/tasks';
@@ -31,7 +32,11 @@ export function StatusPicker({
       value={task.statusId}
       statuses={statuses}
       onChange={(statusId) => {
-        if (statusId !== task.statusId) sendTask(task.id, statusId);
+        const next = statuses.find((status) => status.id === statusId);
+        if (next && statusId !== task.statusId) {
+          feelStatusChange(next.category);
+          sendTask(task.id, statusId);
+        }
         onPicked();
       }}
     />
@@ -99,7 +104,10 @@ export function PriorityPicker({
       value={task.priority}
       project={project}
       onChange={(priority) => {
-        if (priority !== task.priority) updateTask(task.id, { priority });
+        if (priority !== task.priority) {
+          haptics.selection();
+          updateTask(task.id, { priority });
+        }
         onPicked();
       }}
     />
@@ -155,8 +163,14 @@ export function TagsPicker({ task }: { task: Task }) {
         tags={tags}
         primaryTagId={task.primaryTagId}
         secondaryTagIds={taskTags.map((row) => row.tagId)}
-        onPrimaryChange={(id) => setPrimaryTag(task.id, id)}
-        onSecondaryChange={(id, present) => setSecondaryTag(task.id, id, present)}
+        onPrimaryChange={(id) => {
+          haptics.selection();
+          setPrimaryTag(task.id, id);
+        }}
+        onSecondaryChange={(id, present) => {
+          haptics.toggle();
+          setSecondaryTag(task.id, id, present);
+        }}
       />
     </div>
   );

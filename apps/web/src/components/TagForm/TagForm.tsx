@@ -3,6 +3,7 @@ import { type FormEvent, type RefObject, useId, useMemo, useState } from 'react'
 import { TAG_ICON_LABELS, TagIcon } from '@/components/TagIcon/TagIcon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { haptics } from '@/lib/haptics';
 import { createTag, updateTag } from '@/lib/tags';
 import { cn } from '@/lib/utils';
 
@@ -51,6 +52,7 @@ export function TagEditor({
       };
       if (initial.tag) updateTag(initial.tag.id, fields);
       else createTag(projectId, fields);
+      haptics.success();
       onDone();
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Check the tag details');

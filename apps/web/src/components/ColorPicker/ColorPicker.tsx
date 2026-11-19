@@ -1,6 +1,7 @@
 import { COLORS, type Color } from '@throw/shared';
 import { Check } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
+import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
@@ -26,7 +27,10 @@ export function ColorPicker({
           aria-pressed={value === color}
           whileTap={reduced ? undefined : { scale: 0.85 }}
           transition={springs.snappy}
-          onClick={() => onChange(color)}
+          onClick={() => {
+            if (color !== value) haptics.selection();
+            onChange(color);
+          }}
           className={cn(
             'flex size-10 items-center justify-center rounded-full border bg-tint text-tint-accent outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
             value === color

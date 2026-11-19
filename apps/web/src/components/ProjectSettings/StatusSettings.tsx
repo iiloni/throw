@@ -5,6 +5,7 @@ import { IconButton } from '@/components/IconButton/IconButton';
 import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { haptics } from '@/lib/haptics';
 import { statusDeletionIssue, statusUsage } from '@/lib/projectSettings';
 import {
   createStatus,
@@ -158,6 +159,7 @@ export function StatusSettings({
             onSave={(name) => {
               if (editor.status) renameStatus(editor.status.id, name);
               else createStatus(projectId, name, editor.category);
+              haptics.success();
               setEditor(null);
             }}
           />
@@ -176,7 +178,11 @@ export function StatusSettings({
             variant="destructive"
             disabled={!!removalIssue}
             onClick={() => {
-              if (removed) setError(deleteStatus(removed.id) ?? '');
+              if (removed) {
+                const failure = deleteStatus(removed.id);
+                if (!failure) haptics.warning();
+                setError(failure ?? '');
+              }
               setDeleting(null);
             }}
           >

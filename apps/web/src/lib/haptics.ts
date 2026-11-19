@@ -1,4 +1,5 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
+import type { StatusCategory } from '@throw/shared';
 
 type Effect = 'tick' | 'light' | 'medium' | 'success' | 'warning' | 'threshold';
 
@@ -20,14 +21,22 @@ function perform(effect: Effect) {
  * the device's tuned effects and respect its touch feedback setting.
  */
 export const haptics = {
-  /** A held card passes onto a new target. */
+  /** A choice among several: a page, a tab, a picker's option, or a held card's new target. */
   selection: () => perform('tick'),
+  /** A control changes state: a switch flips, a sheet or form opens. */
+  toggle: () => perform('light'),
   /** A long press picks up a card or starts selecting cards. */
   longPress: () => perform('medium'),
-  /** A card was dropped into place. */
+  /** Something was made or put in place: a card dropped, a task created, a comment posted. */
   success: () => perform('success'),
   /** A drag crossed the point where letting go commits, such as turning a page. */
   threshold: () => perform('threshold'),
-  /** Something destructive. */
+  /** Something destructive, such as moving to the trash or removing for good. */
   warning: () => perform('warning'),
 };
+
+/** A task changes status: finishing it lands as an accomplishment, anything else as a choice. */
+export function feelStatusChange(category: StatusCategory) {
+  if (category === 'done') haptics.success();
+  else haptics.selection();
+}

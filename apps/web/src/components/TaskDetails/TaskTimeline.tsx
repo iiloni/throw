@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { signedInUserId, useTaskTimeline } from '@/lib/collections';
 import { useHasCommentDraft } from '@/lib/commentDrafts';
 import { addComment, deleteComment, editComment } from '@/lib/comments';
+import { haptics } from '@/lib/haptics';
 import { getServerUrl } from '@/lib/serverUrl';
 import { CommentComposer } from './CommentComposer';
 import { entrySentences, type HistoryContext } from './history';
@@ -53,6 +54,7 @@ function CommentRow({ comment, pending }: { comment: Comment; pending: boolean }
           initialContent={comment.body}
           onSave={(body) => {
             editComment(comment.id, body);
+            haptics.success();
             setEditing(false);
           }}
           onCancel={() => setEditing(false)}
@@ -74,6 +76,7 @@ function CommentRow({ comment, pending }: { comment: Comment; pending: boolean }
                 onClick={() => {
                   try {
                     deleteComment(comment.id);
+                    haptics.warning();
                   } catch {
                     setError('Could not delete this comment. Try again.');
                   }
@@ -244,6 +247,7 @@ export function TaskTimeline({
           draftFor={task.id}
           onSave={(body) => {
             addComment(task.id, body);
+            haptics.success();
             setComposingFor(null);
           }}
           onCancel={() => setComposingFor(null)}

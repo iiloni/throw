@@ -8,6 +8,7 @@ import {
   useLayoutEffect,
   useRef,
 } from 'react';
+import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { CARD_HELP_ID } from './BoardAnnouncer';
@@ -174,6 +175,7 @@ export function TaskCard({
       return;
     }
     if (event.metaKey || event.ctrlKey || event.shiftKey || state.selection.length > 0) {
+      haptics.selection();
       toggleSelected(task.id);
     } else {
       update({ openTaskId: open ? null : task.id });

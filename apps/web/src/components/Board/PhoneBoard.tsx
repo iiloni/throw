@@ -10,13 +10,14 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
-import { type ReactNode, useCallback, useContext, useRef, useState } from 'react';
+import { type ReactNode, type UIEvent, useCallback, useContext, useRef, useState } from 'react';
 import { type PhoneCapture, usePhonePalette } from '@/components/CommandPalette/PhonePalette';
 import { type Detent, Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
+import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { BoardSettingsContent } from './BoardSettingsPanel';
@@ -86,7 +87,7 @@ export function PhoneBoard({
     project.statuses.find((status) => status.category === 'done');
   const reduced = useReducedMotion();
   const pager = useRef<HTMLDivElement>(null);
-  const [page, setPage] = useState(0);
+  const [page, pagerScrolled] = usePagerPage();
   const [drawerPage, setDrawerPage] = useState<BoardPage | null>(null);
   const closePage = useCallback(() => setDrawerPage(null), []);
   const phonePalette = usePhonePalette({
@@ -170,9 +171,7 @@ export function PhoneBoard({
           ref={pager}
           data-pager=""
           data-selecting={state.selection.length > 0 ? '' : undefined}
-          onScroll={(event) =>
-            setPage(Math.round(event.currentTarget.scrollLeft / pageStride(event.currentTarget)))
-          }
+          onScroll={pagerScrolled}
           className="phone-pager flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
         >
           {active.map((status) => (
@@ -472,7 +471,10 @@ function BoardDrawer({
           );
         }}
         data-status-home={statuses.map(({ id }) => id).join(' ')}
-        onClick={() => goTo(detent === 'closed' ? 'half' : 'closed')}
+        onClick={() => {
+          haptics.toggle();
+          goTo(detent === 'closed' ? 'half' : 'closed');
+        }}
         className={cn(
           'flex h-[var(--dock-height)] min-w-0 flex-1 items-center gap-3 rounded-[var(--dock-radius)] px-4 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/70',
           detent === 'closed' && 'bg-foreground/[0.06]',
@@ -486,7 +488,10 @@ function BoardDrawer({
         <motion.button
           type="button"
           aria-label="Search"
-          onClick={onSearch}
+          onClick={() => {
+            haptics.toggle();
+            onSearch();
+          }}
           whileTap={{ scale: 0.88 }}
           transition={springs.snappy}
           className={cn(dockButton, 'bg-foreground/[0.06] text-foreground')}
@@ -516,7 +521,11 @@ function BoardDrawer({
               ? 'New task'
               : 'New task in the backlog'
         }
-        onClick={() => (capturing ? capture.close() : onCreate(detent !== 'closed'))}
+        onClick={() => {
+          haptics.toggle();
+          if (capturing) capture.close();
+          else onCreate(detent !== 'closed');
+        }}
         whileTap={{ scale: 0.88 }}
         transition={springs.snappy}
         className={cn(
@@ -590,6 +599,23 @@ function BoardDrawer({
   );
 }
 
+/**
+ * The page a phone pager rests on, from its scroll. Each new page ticks, as Catch's pager
+ * does, unless a held card is turning it, which the drag feels on its own.
+ */
+export function usePagerPage(first = 0) {
+  const [page, setPage] = useState(first);
+  const seen = useRef(first);
+  const scrolled = useCallback((event: UIEvent<HTMLElement>) => {
+    const next = Math.round(event.currentTarget.scrollLeft / pageStride(event.currentTarget));
+    if (next === seen.current) return;
+    seen.current = next;
+    if (!drag.get()) haptics.selection();
+    setPage(next);
+  }, []);
+  return [page, scrolled] as const;
+}
+
 /** The board's dock and an open task's trade places, as Catch's dock does for a note. */
 export function DockFace({ children }: { children: ReactNode }) {
   const present = useIsPresent();
@@ -649,6 +675,7 @@ export function MovePanel({ pick }: { pick: boolean }) {
   );
   const open = pick || (held?.phase === 'dragging' && held.over);
   const send = (statusId: string) => {
+    haptics.success();
     sendTasks(state.selection, statusId);
     update({ selection: [] });
   };
