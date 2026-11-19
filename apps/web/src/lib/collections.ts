@@ -46,6 +46,7 @@ import { uuidv7 } from 'uuidv7';
 import { z } from 'zod';
 import { ApiError, api } from './api';
 import { getAuthToken, resolveSignedInUser } from './auth';
+import { clearCommentDrafts } from './commentDrafts';
 import { CompatibilityError } from './compatibility';
 import { clearDescriptionDrafts, settleDescriptionDraft } from './descriptionDrafts';
 import {
@@ -674,6 +675,7 @@ export async function clearLocalData() {
   executor.dispose();
   await database?.destroy();
   if (user) deleteOutbox(user.id);
+  clearCommentDrafts();
   clearDescriptionDrafts();
 }
 
@@ -748,16 +750,34 @@ export function useAllTags() {
   return { tags: data ?? emptyTags, isLoading };
 }
 
-/** Every secondary tag assignment, for search. */
+/** Every secondary tag assignment, for board cards and search. */
 export function useAllTaskTags() {
   const { data, isLoading } = useLiveQuery((q) => q.from({ assignment: taskTagsCollection }));
   return { taskTags: data ?? emptyTaskTags, isLoading };
 }
 const emptyTaskTags: TaskTag[] = [];
 
+/** One project's secondary tag assignments, for its board's cards. */
+export function useProjectTaskTags(projectId: string) {
+  const { data } = useLiveQuery(
+    (q) =>
+      q
+        .from({ assignment: taskTagsCollection })
+        .where(({ assignment }) => eq(assignment.projectId, projectId)),
+    [projectId],
+  );
+  return data ?? emptyTaskTags;
+}
+
 export function useTaskTags(taskId: string) {
-  const { data = [], isLoading } = useLiveQuery((q) => q.from({ assignment: taskTagsCollection }));
-  return { taskTags: data.filter((row) => row.taskId === taskId), isLoading };
+  const { data, isLoading } = useLiveQuery(
+    (q) =>
+      q
+        .from({ assignment: taskTagsCollection })
+        .where(({ assignment }) => eq(assignment.taskId, taskId)),
+    [taskId],
+  );
+  return { taskTags: data ?? emptyTaskTags, isLoading };
 }
 
 /** A reload must wait for in-flight writes to reach durable storage or the server. */
