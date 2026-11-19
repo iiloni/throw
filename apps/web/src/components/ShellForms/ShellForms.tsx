@@ -3,7 +3,7 @@ import { type FormEvent, useState } from 'react';
 import { useShell } from '@/components/AppShell/shell';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
-import { ProjectIconPicker } from '@/components/ProjectIcon/ProjectIconPicker';
+import { ProjectIconPicker } from '@/components/ProjectIconPicker/ProjectIconPicker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { createProject } from '@/lib/projects';

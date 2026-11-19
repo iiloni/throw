@@ -27,7 +27,7 @@ export const SETTINGS_TABS = [
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 export type SettingsPath = SettingsTab['path'];
 
-const pageOf = (tab: SettingsTab) => ({ ...tab, key: tab.path, href: tab.path });
+const pageOf = (tab: SettingsTab) => ({ ...tab, key: tab.path, link: { to: tab.path } });
 
 /** The pages this account can open, grouped as the settings list shows them. */
 export function settingsGroupsFor(isAdmin: boolean) {
@@ -54,8 +54,11 @@ export function hasAdminRole(user: unknown) {
   return adminUserSchema.safeParse(user).success;
 }
 
-/** Whether the server says this account is its admin; false offline or until it answers. */
+/**
+ * Whether the server says this account is its admin: false until it answers. A failed
+ * refetch keeps the session it last had, so the admin's pages stay listed through it.
+ */
 export function useAdminAccess() {
-  const { data, error } = authClient.useSession();
-  return !error && hasAdminRole(data?.user);
+  const { data } = authClient.useSession();
+  return hasAdminRole(data?.user);
 }

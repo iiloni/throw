@@ -6,6 +6,7 @@ import {
   protocolErrorSchema,
   protocolRangeSchema,
 } from '@throw/shared';
+import { getAuthToken } from './auth';
 import { getServerUrl } from './serverUrl';
 import { getSyncStatus, subscribeToSyncStatus, updateSyncStatus } from './syncStatus';
 
@@ -65,6 +66,16 @@ export async function observeProtocolResponse(response: Response) {
   throw new CompatibilityError(issue);
 }
 
+/**
+ * Whether a request went with a token this device has since replaced, as a password change
+ * does: its 401 is about that old session, not the current one.
+ */
+function sentStaleToken(headers: Headers) {
+  const sent = headers.get('authorization');
+  const token = getAuthToken();
+  return sent !== null && token !== null && sent !== `Bearer ${token}`;
+}
+
 export const compatibleFetch: typeof fetch = async (input, init) => {
   await ensureCompatible();
   const headers = new Headers(input instanceof Request ? input.headers : undefined);
@@ -73,7 +84,7 @@ export const compatibleFetch: typeof fetch = async (input, init) => {
   });
   headers.set(API_PROTOCOL_HEADER, String(API_PROTOCOL_VERSION));
   const response = await fetch(input, { ...init, headers });
-  if (response.status === 401) updateSyncStatus({ signedOut: true });
+  if (response.status === 401 && !sentStaleToken(headers)) updateSyncStatus({ signedOut: true });
   await observeProtocolResponse(response);
   return response;
 };

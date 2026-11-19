@@ -15,7 +15,7 @@ vi.mock('@/lib/auth', () => ({
   getSignedInUser: () => ({ id: 'user-1', name: 'Old Name', email: 'old@example.com' }),
 }));
 vi.mock('@/lib/signOut', () => ({ signOut: auth.signOut }));
-vi.mock('@/lib/syncStatus', () => ({ useSyncStatus: () => sync }));
+vi.mock('@/lib/syncStatus', () => ({ useSyncStatus: () => sync, updateSyncStatus: vi.fn() }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn() } }));
 vi.mock('@/components/ManagementSurface/ManagementSurface', () => ({
   ManagementSurface: ({

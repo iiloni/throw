@@ -1,7 +1,7 @@
-import { useRouter } from '@tanstack/react-router';
+import { Link, type LinkOptions } from '@tanstack/react-router';
 import { ChevronLeft, ChevronUp, type LucideIcon, Settings } from 'lucide-react';
 import { motion } from 'motion/react';
-import { type MouseEvent, type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import {
   ManagementSurface,
   useManagementDock,
@@ -10,7 +10,8 @@ import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
-export type SettingsPage = { key: string; label: string; icon: LucideIcon; href: string };
+/** A page and where it is: route options, so a renamed route fails the typecheck. */
+export type SettingsPage = { key: string; label: string; icon: LucideIcon; link: LinkOptions };
 export type SettingsPageGroup = { label: string; pages: readonly SettingsPage[] };
 
 type Props = {
@@ -22,7 +23,7 @@ type Props = {
   /** Lists the pages beside the open one; otherwise the dock picks between them. */
   wide: boolean;
   /** Where leaving these settings goes, listed above the pages. */
-  back?: { label: string; href: string };
+  back?: { label: string; link: LinkOptions };
   /** A page with wide content, such as a table, takes more of the window. */
   roomy?: boolean;
   children: ReactNode;
@@ -75,51 +76,47 @@ export function SettingsLayout({
 
 /** A link that moves within settings without adding to history, so Back leaves in one step. */
 function PageLink({
-  href,
+  link,
   replace = true,
   className,
   onNavigate,
   children,
   ...props
 }: {
-  href: string;
+  link: LinkOptions;
   replace?: boolean;
   className?: string;
   onNavigate?: () => void;
   children: ReactNode;
   'aria-current'?: 'page';
 }) {
-  const router = useRouter();
   return (
-    <a
+    <Link
+      {...link}
       {...props}
-      href={href}
+      replace={replace}
+      // Selection is drawn from the open page, not the router's idea of an active link.
+      activeOptions={{ exact: true, includeSearch: true }}
       className={className}
-      onClick={(event: MouseEvent<HTMLAnchorElement>) => {
-        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
-          return;
-        event.preventDefault();
-        onNavigate?.();
-        void router.navigate({ href, replace });
-      }}
+      onClick={() => onNavigate?.()}
     >
       {children}
-    </a>
+    </Link>
   );
 }
 
 function BackLink({
   label,
-  href,
+  link,
   onNavigate,
 }: {
   label: string;
-  href: string;
+  link: LinkOptions;
   onNavigate?: () => void;
 }) {
   return (
     <PageLink
-      href={href}
+      link={link}
       replace={false}
       onNavigate={onNavigate}
       className="-ml-1 flex h-10 items-center gap-1 self-start rounded-full pr-3 pl-1 font-medium text-muted-foreground outline-none hover:bg-foreground/[0.06] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60"
@@ -151,7 +148,7 @@ function PageList({
         return (
           <PageLink
             key={page.key}
-            href={page.href}
+            link={page.link}
             aria-current={selected ? 'page' : undefined}
             onNavigate={() => {
               if (!selected) haptics.selection();
@@ -194,7 +191,7 @@ function SettingsDock({
   title: string;
   groups: readonly SettingsPageGroup[];
   current: SettingsPage | null;
-  back?: { label: string; href: string };
+  back?: { label: string; link: LinkOptions };
 }) {
   const [picking, setPicking] = useState(false);
   const Icon = current?.icon ?? Settings;

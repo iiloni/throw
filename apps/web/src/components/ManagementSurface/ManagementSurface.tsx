@@ -71,6 +71,8 @@ export function ManagementSurfaceProvider({
             onDetent={() => {}}
             page={surface?.page ?? null}
             sunk={!surface && !docked}
+            // A bare dock has nothing above it to pull up.
+            gesturesDisabled={!surface}
             onClosePage={() => surface?.close()}
           >
             {null}

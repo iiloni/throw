@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { KeyRound, LogOut, Server, UserRound } from 'lucide-react';
-import { type CSSProperties, type FormEvent, useId, useRef, useState } from 'react';
+import { type CSSProperties, type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
 import { SettingsRow, SettingsSection } from '@/components/SettingsSection/SettingsSection';
@@ -10,7 +10,8 @@ import { authClient, changeAccountName, getSignedInUser, type SignedInUser } fro
 import { haptics } from '@/lib/haptics';
 import { getServerUrl } from '@/lib/serverUrl';
 import { signOut as endSession } from '@/lib/signOut';
-import { useSyncStatus } from '@/lib/syncStatus';
+import { updateSyncStatus, useSyncStatus } from '@/lib/syncStatus';
+import { holdUpdateReload } from '@/lib/useUpdateReloadBlocked';
 import { cn } from '@/lib/utils';
 
 /** Better Auth's default password limits, which the server enforces. */
@@ -56,7 +57,7 @@ function AccountSummary({ user }: { user: SignedInUser }) {
       <span
         aria-hidden
         style={{ '--avatar-hue': accountHue(user.id) } as CSSProperties}
-        className="flex size-12 shrink-0 items-center justify-center rounded-full bg-[oklch(0.86_0.11_var(--avatar-hue))] font-semibold text-[oklch(0.32_0.08_var(--avatar-hue))] text-lg"
+        className="flex size-12 shrink-0 items-center justify-center rounded-full bg-[light-dark(oklch(0.86_0.11_var(--avatar-hue)),oklch(0.4_0.09_var(--avatar-hue)))] font-semibold text-[light-dark(oklch(0.32_0.08_var(--avatar-hue)),oklch(0.92_0.05_var(--avatar-hue)))] text-lg"
       >
         {initials(user.name, user.email)}
       </span>
@@ -106,6 +107,9 @@ export function ChangeName({ name, onChanged }: { name: string; onChanged: () =>
   const [draft, setDraft] = useState(name);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // An update waits for a changed name to be saved or dropped.
+  const unsaved = open && draft !== name;
+  useEffect(() => (unsaved ? holdUpdateReload() : undefined), [unsaved]);
 
   function close() {
     if (pending) return;
@@ -185,6 +189,8 @@ export function ChangePassword() {
   const [confirmation, setConfirmation] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const unsaved = open && (current !== '' || next !== '' || confirmation !== '');
+  useEffect(() => (unsaved ? holdUpdateReload() : undefined), [unsaved]);
 
   function reset() {
     setOpen(false);
@@ -218,6 +224,9 @@ export function ChangePassword() {
         setError(result.error.message || 'Could not change your password.');
         return;
       }
+      // The old session's requests can be refused before the new token arrives; this device
+      // is signed in on the new one.
+      updateSyncStatus({ signedOut: false });
       reset();
       haptics.success();
       toast.success('Password changed');

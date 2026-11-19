@@ -1,3 +1,4 @@
+import { linkOptions } from '@tanstack/react-router';
 import { DEFAULT_PRIORITY_NAMES, EMPTY_PRIORITY_NAMES, type Project } from '@throw/shared';
 import {
   ArrowUpDown,
@@ -7,11 +8,11 @@ import {
   Tags,
   Trash2,
 } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { useShell } from '@/components/AppShell/shell';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
-import { ProjectIconPicker } from '@/components/ProjectIcon/ProjectIconPicker';
+import { ProjectIconPicker } from '@/components/ProjectIconPicker/ProjectIconPicker';
 import { SettingsLayout, type SettingsPage } from '@/components/SettingsLayout/SettingsLayout';
 import { SettingsSection } from '@/components/SettingsSection/SettingsSection';
 import { TagManager } from '@/components/TagManager/TagManager';
@@ -28,6 +29,7 @@ import {
 import { changeProjectKey, setPriorityNames, trashProject, updateProject } from '@/lib/projects';
 import { statusesOf } from '@/lib/statuses';
 import { useAwaitingSync } from '@/lib/syncStatus';
+import { holdUpdateReload } from '@/lib/useUpdateReloadBlocked';
 import { StatusSettings } from './StatusSettings';
 
 const PAGES = {
@@ -53,14 +55,23 @@ export function ProjectSettingsFrame({
   children: ReactNode;
 }) {
   const wide = useDesktop();
-  const base = `/w/${project.workspaceId}/p/${project.id}`;
+  const params = { workspaceId: project.workspaceId, projectId: project.id };
   const pages: SettingsPage[] = [
     ...settingsSectionSchema.options.map((key) => ({
       key,
       ...PAGES[key],
-      href: key === 'general' ? `${base}/settings` : `${base}/settings?section=${key}`,
+      link: linkOptions({
+        to: '/w/$workspaceId/p/$projectId/settings',
+        params,
+        search: key === 'general' ? {} : { section: key },
+      }),
     })),
-    { key: 'trash', label: 'Trash', icon: Trash2, href: `${base}/trash` },
+    {
+      key: 'trash',
+      label: 'Trash',
+      icon: Trash2,
+      link: linkOptions({ to: '/w/$workspaceId/p/$projectId/trash', params }),
+    },
   ];
   return (
     <SettingsLayout
@@ -68,7 +79,14 @@ export function ProjectSettingsFrame({
       groups={[{ label: project.name, pages }]}
       current={pages.find((page) => page.key === current) ?? null}
       wide={wide}
-      back={{ label: 'Back to board', href: `${base}?view=board` }}
+      back={{
+        label: 'Back to board',
+        link: linkOptions({
+          to: '/w/$workspaceId/p/$projectId',
+          params,
+          search: { view: 'board' },
+        }),
+      }}
     >
       {children}
     </SettingsLayout>
@@ -104,7 +122,7 @@ export function ProjectSettings({
           <StatusSettings projectId={project.id} statuses={ownStatuses} tasks={tasks} />
         ))}
       {section === 'priorities' && <PrioritySettings project={project} />}
-      {section === 'tags' && <TagManager projectId={project.id} />}
+      {section === 'tags' && <TagManager projectId={project.id} titled={false} />}
     </ProjectSettingsFrame>
   );
 }
@@ -115,6 +133,8 @@ export function ProjectSettings({
  */
 function ProjectAppearance({ project }: { project: Project }) {
   const [draft, setDraft] = useState<string | null>(null);
+  const unsaved = draft !== null && draft.trim() !== project.name;
+  useEffect(() => (unsaved ? holdUpdateReload() : undefined), [unsaved]);
   const commit = () => {
     if (draft === null) return;
     const name = draft.trim();

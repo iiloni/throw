@@ -10,11 +10,19 @@ import { Button } from '@/components/ui/button';
 import { useTags } from '@/lib/collections';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { deleteTag } from '@/lib/tags';
+import { cn } from '@/lib/utils';
 
 /**
  * Project tag management, using the settings drawer on phones and a dialog on desktop.
  */
-export function TagManager({ projectId }: { projectId: string }) {
+export function TagManager({
+  projectId,
+  titled = true,
+}: {
+  projectId: string;
+  /** Off inside project settings, whose page title already names it. */
+  titled?: boolean;
+}) {
   const { tags, isLoading } = useTags(projectId);
   const awaiting = useAwaitingSync(isLoading, tags.length);
   const [editing, setEditing] = useState<{ tag?: Tag; parentId: string | null } | null>(null);
@@ -22,8 +30,10 @@ export function TagManager({ projectId }: { projectId: string }) {
   const nameRef = useRef<HTMLInputElement>(null);
   return (
     <section aria-label="Manage project tags" className="min-w-0">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="font-display text-xl font-semibold">Project tags</h2>
+      <div
+        className={cn('mb-4 flex items-center gap-3', titled ? 'justify-between' : 'justify-end')}
+      >
+        {titled && <h2 className="font-display text-xl font-semibold">Project tags</h2>}
         <Button
           disabled={awaiting}
           variant="secondary"
