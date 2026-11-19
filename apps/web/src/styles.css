@@ -284,7 +284,7 @@
   }
 }
 
-/* Catch's filter chips and tag badges. A tag's colour sets `--badge-glass`/`--badge-solid`. */
+/* Catch's filter chips and tag badges. A tag's color sets `--badge-glass`/`--badge-solid`. */
 @utility glass-badge {
   background-color: var(--badge-glass, var(--glass));
   backdrop-filter: blur(24px) saturate(180%);

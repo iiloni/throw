@@ -76,7 +76,7 @@ export function projectBoardData(
 /**
  * Every project of a workspace as one board (spec, "The cross-project board"). Its statuses
  * and tags are its projects' together, each task names its project, and cards take their
- * project's colour, since tag colours mean different things in each project. A rank's name
+ * project's color, since tag colors mean different things in each project. A rank's name
  * is shown where every project agrees on it; otherwise the default.
  */
 export function workspaceBoardData(

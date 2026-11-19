@@ -5,16 +5,19 @@ import {
   type Project,
   type Task,
 } from '@throw/shared';
-import { Pencil, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { History, MessageCircle, Pencil, Trash2 } from 'lucide-react';
+import { useEffect, useId, useState } from 'react';
+import { z } from 'zod';
 import { LazyDescriptionEditor } from '@/components/DescriptionEditor/LazyDescriptionEditor';
 import { IconButton } from '@/components/IconButton/IconButton';
+import { SegmentedTabs } from '@/components/SegmentedTabs/SegmentedTabs';
 import { Button } from '@/components/ui/button';
 import { signedInUserId, useTaskTimeline } from '@/lib/collections';
 import { useHasCommentDraft } from '@/lib/commentDrafts';
 import { addComment, deleteComment, editComment } from '@/lib/comments';
 import { haptics } from '@/lib/haptics';
 import { getServerUrl } from '@/lib/serverUrl';
+import { usePersistentState } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 import { CommentComposer } from './CommentComposer';
 import { entrySentences, type HistoryContext, shortTime } from './history';
@@ -32,10 +35,12 @@ function Time({ at }: { at: string }) {
   );
 }
 
+const FOCUS_EVENT = 'throw:focus-history';
+const tabSchema = z.enum(['comments', 'history']);
+
+/** Shows a history entry: the timeline turns to its History tab, then focuses the entry. */
 export function focusHistory(id: string) {
-  const element = document.getElementById(`history-${id}`);
-  element?.scrollIntoView({ block: 'center', behavior: 'instant' });
-  element?.focus({ preventScroll: true });
+  window.dispatchEvent(new CustomEvent(FOCUS_EVENT, { detail: id }));
 }
 
 function CommentRow({ comment, pending }: { comment: Comment; pending: boolean }) {
@@ -193,28 +198,115 @@ export function TaskTimeline({
   const [composingFor, setComposingFor] = useState<string | null>(null);
   const composing = composingFor === task.id;
   const hasDraft = useHasCommentDraft(task.id);
+  const [tab, setTab] = usePersistentState('throw-task-timeline-tab', tabSchema, 'comments');
+  const [focusing, setFocusing] = useState<string | null>(null);
+  const ids = useId();
+  useEffect(() => {
+    const onFocus = (event: Event) => {
+      if (!(event instanceof CustomEvent) || typeof event.detail !== 'string') return;
+      setTab('history');
+      setFocusing(event.detail);
+    };
+    window.addEventListener(FOCUS_EVENT, onFocus);
+    return () => window.removeEventListener(FOCUS_EVENT, onFocus);
+  }, [setTab]);
+  useEffect(() => {
+    if (!focusing || tab !== 'history') return;
+    const element = document.getElementById(`history-${focusing}`);
+    element?.scrollIntoView({ block: 'center', behavior: 'instant' });
+    element?.focus({ preventScroll: true });
+    setFocusing(null);
+  }, [focusing, tab]);
+  const comments = timeline.filter((item) => item.type === 'comment');
+  const entries = timeline.filter((item) => item.type === 'entry');
+  const empty = (text: string) => (
+    <p className="px-1 py-4 text-muted-foreground text-sm">
+      {isLoading ? 'History has not synced yet.' : text}
+    </p>
+  );
   return (
     <section aria-label="Task history" data-task-timeline="" className="mt-8">
-      <h2 className="px-1 font-medium text-muted-foreground text-xs">History</h2>
-      {!timeline.length && (
-        <p className="px-1 py-4 text-muted-foreground text-sm">
-          {isLoading ? 'History has not synced yet.' : 'No history yet.'}
-        </p>
-      )}
-      <ol className="mt-2">
-        {timeline.map((item) => {
-          const refused =
-            item.type === 'entry' && item.entry.changes.some((change) => !change.applied);
-          return (
+      <SegmentedTabs
+        label="Comments and history"
+        value={tab}
+        onValueChange={setTab}
+        options={[
+          {
+            value: 'comments',
+            id: `${ids}-comments-tab`,
+            controls: `${ids}-comments`,
+            label: comments.length ? `Comments · ${comments.length}` : 'Comments',
+            icon: <MessageCircle className="relative size-4" aria-hidden />,
+          },
+          {
+            value: 'history',
+            id: `${ids}-history-tab`,
+            controls: `${ids}-history`,
+            label: 'History',
+            icon: <History className="relative size-4" aria-hidden />,
+          },
+        ]}
+      />
+      {/* Both stay mounted, so a comment being written survives a look at the history. */}
+      <div
+        role="tabpanel"
+        id={`${ids}-comments`}
+        aria-labelledby={`${ids}-comments-tab`}
+        hidden={tab !== 'comments'}
+        className="pt-2"
+      >
+        {!comments.length && !composing && empty('No comments yet.')}
+        <ol>
+          {comments.map((item) => (
             <li
               key={item.id}
               id={`history-${item.id}`}
               tabIndex={-1}
               className="scroll-m-6 rounded-2xl outline-none [overflow-wrap:anywhere] focus:ring-2 focus:ring-ring/60"
             >
-              {item.type === 'comment' ? (
-                <CommentRow comment={item.comment} pending={item.pending} />
-              ) : (
+              <CommentRow comment={item.comment} pending={item.pending} />
+            </li>
+          ))}
+        </ol>
+        {composing ? (
+          <CommentComposer
+            key={task.id}
+            draftFor={task.id}
+            onSave={(body) => {
+              addComment(task.id, body);
+              haptics.success();
+              setComposingFor(null);
+            }}
+            onCancel={() => setComposingFor(null)}
+          />
+        ) : (
+          <button
+            type="button"
+            className="mt-2 flex min-h-12 w-full items-center rounded-2xl bg-foreground/[0.045] px-3.5 text-left text-muted-foreground text-sm outline-none transition-colors hover:bg-foreground/[0.07] focus-visible:ring-[3px] focus-visible:ring-ring/60"
+            onClick={() => setComposingFor(task.id)}
+          >
+            {hasDraft ? 'Resume comment draft' : 'Write a comment…'}
+          </button>
+        )}
+      </div>
+      <div
+        role="tabpanel"
+        id={`${ids}-history`}
+        aria-labelledby={`${ids}-history-tab`}
+        hidden={tab !== 'history'}
+        className="pt-2"
+      >
+        {!entries.length && empty('No history yet.')}
+        <ol>
+          {entries.map((item) => {
+            const refused = item.entry.changes.some((change) => !change.applied);
+            return (
+              <li
+                key={item.id}
+                id={`history-${item.id}`}
+                tabIndex={-1}
+                className="scroll-m-6 rounded-2xl outline-none [overflow-wrap:anywhere] focus:ring-2 focus:ring-ring/60"
+              >
                 <div className="flex gap-3 px-3.5 py-1.5 text-muted-foreground text-sm leading-normal">
                   <span
                     aria-hidden
@@ -252,31 +344,11 @@ export function TaskTimeline({
                     <Time at={item.entry.createdAt} />
                   </span>
                 </div>
-              )}
-            </li>
-          );
-        })}
-      </ol>
-      {composing ? (
-        <CommentComposer
-          key={task.id}
-          draftFor={task.id}
-          onSave={(body) => {
-            addComment(task.id, body);
-            haptics.success();
-            setComposingFor(null);
-          }}
-          onCancel={() => setComposingFor(null)}
-        />
-      ) : (
-        <button
-          type="button"
-          className="mt-2 flex min-h-12 w-full items-center rounded-2xl bg-foreground/[0.045] px-3.5 text-left text-muted-foreground text-sm outline-none transition-colors hover:bg-foreground/[0.07] focus-visible:ring-[3px] focus-visible:ring-ring/60"
-          onClick={() => setComposingFor(task.id)}
-        >
-          {hasDraft ? 'Resume comment draft' : 'Write a comment…'}
-        </button>
-      )}
+              </li>
+            );
+          })}
+        </ol>
+      </div>
     </section>
   );
 }

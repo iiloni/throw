@@ -38,7 +38,7 @@ it('offers accessible parents outside the branch, and clears root appearance whe
   expect(screen.queryByRole('option', { name: 'Product' })).toBeNull();
   expect(screen.queryByRole('option', { name: 'Product / Mobile' })).toBeNull();
   fireEvent.change(parent, { target: { value: 'other' } });
-  expect(screen.queryByRole('group', { name: 'Colour' })).toBeNull();
+  expect(screen.queryByRole('group', { name: 'Color' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Save tag' }));
   expect(actions.updateTag).toHaveBeenCalledWith('root', {
     name: 'Product',

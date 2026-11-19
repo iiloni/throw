@@ -5,7 +5,7 @@ import { TagTree } from '@/components/TagTree/TagTree';
 import { haptics } from '@/lib/haptics';
 
 /**
- * Catch's searchable tree of secondary tags. The primary tag is picked by its colour beside
+ * Catch's searchable tree of secondary tags. The primary tag is picked by its color beside
  * it; a tag may hold both roles (data model, "Tags"), so the primary is only marked here.
  */
 export function TagPicker({
@@ -23,13 +23,14 @@ export function TagPicker({
   return (
     <section aria-label="Secondary tags" className="min-w-0">
       {!tags.length ? (
-        <p className="py-4 text-muted-foreground text-sm">
+        <p className="px-1 py-3 text-muted-foreground text-sm">
           No tags yet. Create a tag to organise this project.
         </p>
       ) : (
         <TagTree
           tags={tags}
-          className="max-h-80"
+          searchPosition="bottom"
+          className="max-h-[min(20rem,45dvh)]"
           renderTag={(tag, path) => {
             const label = path.map((item) => item.name).join(' / ');
             const root = path[0] ?? tag;

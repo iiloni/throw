@@ -27,7 +27,7 @@ export const TaskTags = memo(function TaskTags({
    * card, and at most `CARD_BADGES` badges with a count of the rest.
    */
   card?: boolean;
-  /** Off on the workspace board, where tag colours mean different things per project. */
+  /** Off on the workspace board, where tag colors mean different things per project. */
   colored?: boolean;
   className?: string;
 }) {

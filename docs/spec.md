@@ -193,8 +193,8 @@ Tags follow Catch's model (Catch ADR 0016), scoped to a project instead of a use
 
 ### Comments and activity
 
-Every task has an append-only activity log, shown as a timeline on the task. Comments
-appear in the same timeline.
+Every task has an append-only activity log, shown as the task's history. Comments sit
+beside it on the task, each under its own tab.
 
 - The server writes the log from the changes it applies; no device writes to it (ADR 0006).
 - It records creation and changes to the title, description, status, priority, parent,
@@ -303,11 +303,11 @@ Applying this further is ongoing.
 
 A card shows the title, its tags, a muted identifier and subtask progress. Tags are Catch's
 badges under the title, as on Catch's note cards (2026-11-19): the primary tag first and
-bolder, then the secondary tags, each in its root's colour and icon. Catch heads its card
+bolder, then the secondary tags, each in its root's color and icon. Catch heads its card
 tags with a "Tags" label; a task card leaves it out, and shows at most three badges and a
 count of the rest, to keep the board dense. Card badges are flat (no backdrop blur), since
 a card is opaque and a board may hold hundreds of them. On the cross-project board, badges
-are neutral: cards there take their project's colour, and tag colours mean different
+are neutral: cards there take their project's color, and tag colors mean different
 things in each project.
 Until its number and project key sync, the identifier reads “Pending”. The owner chose this
 quiet content when the real board was built (2026-10-14): status appears only in the mixed
@@ -472,13 +472,13 @@ view), comments and activity.
   drawer. It opens out of its card and closes back into it, on the card's color. Pulling it
   down from the top closes it too.
 - While a task is open on a phone, the dock (the collapsed [drawer](#the-drawer)) holds
-  that task's actions, as it does for a note in Catch: Status, Priority, Colour and Tags
+  that task's actions, as it does for a note in Catch: Status, Priority, Color and Tags
   (once the project has any) and More (close or reopen, copy link). The controls act as
   tabs: each opens its panel in the drawer beneath the dock, which stays as the panel's
   header, and the drawer holds still until a panel is open. The status panel is the
-  board's grid of statuses by category. As Catch keeps a note's colour and tags apart
-  (2026-11-19), Colour picks the primary tag: each coloured top-level tag is a swatch,
-  picking one opens its children to pick a more specific one, and uncoloured top-level
+  board's grid of statuses by category. As Catch keeps a note's color and tags apart
+  (2026-11-19), Color picks the primary tag: each colored top-level tag is a swatch,
+  picking one opens its children to pick a more specific one, and uncolored top-level
   tags sit one step away. Tags lists the secondary tags with the primary marked, since a
   tag may hold both roles. Both pickers stay open for further choices. The task's tags
   are listed under its title. On desktop the pane follows Catch's split view (2026-11-19):
@@ -614,7 +614,7 @@ dock rather than opening as a page. Desktop has no drawer. The rules are in
 - `/w/:workspaceId/board` is the cross-project board for that workspace; `view=search`
   opens the palette over it and replaces the view with `board`.
 - `/w/:workspaceId/p/:projectId/settings` manages a project in pages laid out as the app's
-  settings are: General (name, colour and icon, saved as they change; the key; deleting
+  settings are: General (name, color and icon, saved as they change; the key; deleting
   the project), Statuses, Priorities and Tags, with Trash beside them. The rail's project
   menu and the phone board's title menu open it. The optional `section` search parameter
   keeps the chosen page across reloads and reconnects.
@@ -646,7 +646,7 @@ workspace. Projects append by position. Deleting a project requires confirmation
 it to the trash (see [Project](#project)), where it can be restored or removed for good.
 
 The project board uses synced tasks, statuses and tags, with the backlog in the
-drawer on a phone. Cards resolve their primary tag's root colour with `taskTagColor` and
+drawer on a phone. Cards resolve their primary tag's root color with `taskTagColor` and
 show its tags as badges; a partially synced tag tree leaves the card neutral. The drawer
 (`components/Drawer`) carries the backlog, the closed tasks, board settings, and search and
 capture, and becomes the move drawer while a card is held or selected; the board owns it
@@ -719,5 +719,5 @@ little as possible; it is not the normal way to use the app (ADR 0005).
    an overview; see [The project board](#the-project-board).
 7. **The task view — settled for the first version (2026-11-18).** It holds what
    [The task view](#the-task-view) lists: the title and identifier, status, priority and
-   tags, the description, subtasks, and the timeline of comments and activity. More fields
+   tags, the description, subtasks, and its comments and history, each under its own tab. More fields
    arrive with the out-of-scope items that need them, such as dates.

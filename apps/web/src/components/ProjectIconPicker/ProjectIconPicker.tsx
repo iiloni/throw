@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { haptics } from '@/lib/haptics';
 import { cn } from '@/lib/utils';
 
-/** The project icons to choose from, found by name and tinted in the project's colour. */
+/** The project icons to choose from, found by name and tinted in the project's color. */
 export function ProjectIconPicker({
   value,
   color,

@@ -584,7 +584,7 @@ test('tags are picked from the task controls and listed on the task', async ({
   const account = await fixture(page);
   const { pane } = account;
   // Tags are made in the project's tag manager; without any there is nothing to pick.
-  await expect(controls(page).getByRole('button', { name: /^(Tags|Colour):/ })).toHaveCount(0);
+  await expect(controls(page).getByRole('button', { name: /^(Tags|Color):/ })).toHaveCount(0);
   const tag = async (name: string, parentId: string | null) => {
     const id = randomUUID();
     const data = { id, projectId: account.projectId, name, parentId, icon: null };
@@ -597,22 +597,22 @@ test('tags are picked from the task controls and listed on the task', async ({
   };
   const launch = await tag('Launch', null);
   const press = await tag('Press', launch);
-  // Enough children that the colour picker's list is taller than its swatches.
+  // Enough children that the color picker's list is taller than its swatches.
   for (const name of ['Blog', 'Events', 'Partners', 'Social', 'Video']) await tag(name, launch);
-  // The colour picks the primary tag, as Catch's palette does, and opens its children.
-  await controls(page).getByRole('button', { name: 'Colour: none. Change', exact: true }).click();
-  const colour = page.getByRole(isMobile ? 'dialog' : 'region', { name: 'Colour', exact: true });
-  await colour.getByRole('button', { name: 'Amber: Launch', exact: true }).click();
+  // The color picks the primary tag, as Catch's palette does, and opens its children.
+  await controls(page).getByRole('button', { name: 'Color: none. Change', exact: true }).click();
+  const color = page.getByRole(isMobile ? 'dialog' : 'region', { name: 'Color', exact: true });
+  await color.getByRole('button', { name: 'Amber: Launch', exact: true }).click();
   // On a phone the drawer grows with the picker's child list, so all of it is on screen; the
   // desktop panel keeps its height and scrolls.
-  const last = colour.getByRole('button', { name: 'Launch / Video', exact: true });
+  const last = color.getByRole('button', { name: 'Launch / Video', exact: true });
   if (isMobile) await expect(last).toBeInViewport({ ratio: 1 });
   else await expect(last).toBeVisible();
-  await page.screenshot({ path: test.info().outputPath('colour-picker.png') });
+  await page.screenshot({ path: test.info().outputPath('color-picker.png') });
   await page.keyboard.press('Escape');
-  await expect(colour).toHaveCount(0);
+  await expect(color).toHaveCount(0);
   await expect(
-    controls(page).getByRole('button', { name: 'Colour: Launch. Change', exact: true }),
+    controls(page).getByRole('button', { name: 'Color: Launch. Change', exact: true }),
   ).toBeFocused();
   await controls(page).getByRole('button', { name: 'Tags: none. Change', exact: true }).click();
   const picker = page.getByRole(isMobile ? 'dialog' : 'region', { name: 'Tags', exact: true });

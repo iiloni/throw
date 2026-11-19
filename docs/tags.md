@@ -1,7 +1,7 @@
 # Tags for later screens
 
 The tag model and write rules are in [data-model.md](data-model.md#tag-tree), adapted from
-Catch ADR 0016. The board shows primary tag colours and the task pane picks and lists a
+Catch ADR 0016. The board shows primary tag colors and the task pane picks and lists a
 task's tags (`TaskDetails/TaskPickers.tsx`). Project settings mounts `TagManager` in its Tags section.
 
 ## Data and actions
@@ -36,9 +36,9 @@ All actions use `write()` and the outbox. Do not mutate collections from compone
   for surfaces that already own interaction.
 - `TaskTags`: a wrapping primary-first list; takes `tags`, `primaryTagId` and
   `secondaryTagIds`. A tag assigned in both roles is shown once without changing data.
-- `ColorTagPicker`: picks the primary tag by colour, after Catch's colour picker. Each
-  coloured top-level tag is a swatch; picking a tag makes it primary and opens its children,
-  uncoloured top-level tags sit behind "Tags without a colour", and the slashed swatch
+- `ColorTagPicker`: picks the primary tag by color, after Catch's color picker. Each
+  colored top-level tag is a swatch; picking a tag makes it primary and opens its children,
+  uncolored top-level tags sit behind "Tags without a color", and the slashed swatch
   clears it. Picking the primary or one of its ancestors again only opens it. Pass `tags`,
   `primaryTagId` and `onChange(id | null)`.
 - `TagPicker`: a controlled, searchable tree of secondary-tag checkboxes, with the primary

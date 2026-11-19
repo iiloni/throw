@@ -205,7 +205,7 @@ export const cardSurface =
   'overflow-hidden rounded-3xl bg-[var(--tint,var(--card))] shadow-[0_1px_2px_oklch(0_0_0/0.06),0_12px_32px_-16px_oklch(0_0_0/0.18)]';
 
 /**
- * Wide screens: the task beside the board, as a card on its own colour between its toolbars
+ * Wide screens: the task beside the board, as a card on its own color between its toolbars
  * and its dock (Catch's split view).
  */
 export function TaskPane({ task }: { task: Task }) {

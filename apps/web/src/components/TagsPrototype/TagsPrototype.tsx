@@ -61,7 +61,7 @@ export function TagsPrototype() {
             A place for every kind of work.
           </h1>
           <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-            Nested tags, a primary colour, and room for extra context. Changes here save to your
+            Nested tags, a primary color, and room for extra context. Changes here save to your
             project.
           </p>
         </div>

@@ -54,7 +54,7 @@ it('keeps removal inside the badge as a separate action from revealing its hiera
   expect(onRemove).toHaveBeenCalledOnce();
 });
 
-it('draws a flat, uncoloured badge where asked', () => {
+it('draws a flat, uncolored badge where asked', () => {
   const root: Tag = {
     id: 'root',
     workspaceId: 'workspace',

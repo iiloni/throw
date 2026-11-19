@@ -438,7 +438,7 @@ function RailButton({
   label: string;
   expanded: boolean;
   active?: boolean;
-  /** A project's colour: its icon takes it, and so does the row while it is the open one. */
+  /** A project's color: its icon takes it, and so does the row while it is the open one. */
   tint?: string | null;
   children: ReactNode;
   onClick: () => void;

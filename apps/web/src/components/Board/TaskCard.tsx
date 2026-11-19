@@ -77,8 +77,8 @@ export function TaskCardFace({
         {task.title || 'Untitled task'}
       </p>
       {/*
-        As on Catch's cards: the primary tag first and bolder, each in its root's colour. The
-        workspace board colours cards by project, and so leaves tag colours out (spec).
+        As on Catch's cards: the primary tag first and bolder, each in its root's color. The
+        workspace board colors cards by project, and so leaves tag colors out (spec).
       */}
       <TaskTags
         tags={projectOf(project, task).tags}
