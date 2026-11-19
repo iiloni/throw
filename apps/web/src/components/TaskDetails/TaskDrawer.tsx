@@ -14,7 +14,7 @@ const panelHeight: Record<TaskPanel, number> = { status: 304, priority: 304, tag
 
 /**
  * The task's dock on desktop, below its card, as Catch's split view docks a note's controls
- * (ADR 0009: desktop has no drawer). A panel grows out of the dock above its controls. It owns
+ * (ADR 0009: desktop has no drawer). A panel opens above the dock, over the card's foot. It owns
  * the Escape, Back and outside-tap dismissal around the same controls and panels a phone
  * shows in the board's drawer.
  */
@@ -57,12 +57,27 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
     trigger.current = element;
     setPanel(panel === next ? null : next);
   }
+  // The dock stays in the pane's flow below the card, so it rises with the keyboard and the
+  // safe area; a panel opens above it over the card's foot without moving it. The panel comes
+  // after the controls in the DOM so Tab reaches it from the control that opened it.
   return (
-    <div
-      ref={root}
-      data-task-drawer=""
-      className="glass absolute inset-x-0 bottom-0 z-10 flex flex-col overflow-hidden rounded-[calc(var(--dock-radius)+0.25rem)]"
-    >
+    <div ref={root} data-task-drawer="" className="relative mt-3 shrink-0">
+      <div
+        role="toolbar"
+        aria-label="Task controls"
+        className="glass flex flex-col rounded-[calc(var(--dock-radius)+0.25rem)] p-1"
+      >
+        <TaskControls
+          task={task}
+          statuses={statuses}
+          project={project}
+          onOpen={toggle}
+          controlProps={(name) => ({
+            'aria-expanded': panel === name,
+            'aria-controls': `${id}-${name}`,
+          })}
+        />
+      </div>
       <AnimatePresence initial={false}>
         {panel && (
           <motion.div
@@ -74,7 +89,7 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
             animate={{ height: panelHeight[panel], opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={reduced ? { duration: 0 } : springs.smooth}
-            className="flex max-h-[min(50dvh,24rem)] flex-col overflow-hidden border-foreground/10 border-b"
+            className="glass-thick absolute inset-x-0 bottom-full z-10 mb-2 flex max-h-[min(50dvh,24rem)] flex-col overflow-hidden rounded-[calc(var(--dock-radius)+0.25rem)]"
           >
             <div className="flex h-11 shrink-0 items-center justify-between pr-2 pl-5">
               <h2 className="font-semibold text-sm">{panelTitle[panel]}</h2>
@@ -97,18 +112,6 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
           </motion.div>
         )}
       </AnimatePresence>
-      <div role="toolbar" aria-label="Task controls" className="flex flex-col p-1">
-        <TaskControls
-          task={task}
-          statuses={statuses}
-          project={project}
-          onOpen={toggle}
-          controlProps={(name) => ({
-            'aria-expanded': panel === name,
-            'aria-controls': `${id}-${name}`,
-          })}
-        />
-      </div>
     </div>
   );
 }

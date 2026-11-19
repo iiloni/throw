@@ -467,8 +467,10 @@ view), comments and activity.
   statuses by category; the tag picker stays open for several choices. The task's tags
   are listed under its title. On desktop the pane follows Catch's split view (2026-11-19):
   the navigation and trash toolbars sit above the task's card, lined up with its edges, and
-  the same controls are a glass dock below it. A panel rises out of the dock over the
-  card's foot without moving the card.
+  the same controls are a glass dock below it. A panel opens above the dock over the
+  card's foot without moving the card, and closes from its own button, Escape, Back or a
+  tap outside. The desktop dock has no drag gestures: a pointer does not need them, and
+  the phone keeps its drawer's drags.
 - The description is a directly editable, text-only BlockNote document. Changes commit
   when the task view closes or switches tasks; drafts survive reloads and conflicts.
 - Unfinished comments and comment edits can be resumed on the same device after closing the
