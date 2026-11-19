@@ -633,6 +633,19 @@ test('the open task lives in the URL: reload keeps it, Back closes it, a stale l
   await expect(page).not.toHaveURL(/task=/);
   await expect(page).toHaveURL(new RegExp(`/p/${account.projectId}`));
 
+  // A subtask opened from its parent replaces the entry: Back closes both in one step.
+  await page.getByRole('article', { name: 'TASK-1 Write the launch plan', exact: true }).click();
+  await pane.getByRole('button', { name: 'Add subtask', exact: true }).click();
+  await pane.getByRole('textbox', { name: 'Subtask title' }).fill('Draft the outline');
+  await pane.getByRole('textbox', { name: 'Subtask title' }).press('Enter');
+  await pane.getByRole('article', { name: /Draft the outline/ }).click();
+  await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue('Draft the outline');
+  await expect(page).not.toHaveURL(new RegExp(`task=${account.taskId}`));
+  await page.goBack();
+  await expect(page.locator('[data-task-screen]')).toHaveCount(0);
+  await expect(pane).toHaveCount(0);
+  await expect(page).not.toHaveURL(/task=/);
+
   await page.goto(`${account.path}&task=${randomUUID()}`);
   await expect(page.getByText('That task is not available')).toBeVisible({
     timeout: APP_LOAD_TIMEOUT,

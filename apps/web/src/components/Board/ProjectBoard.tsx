@@ -53,10 +53,9 @@ export function ProjectBoard({
     [project.id],
   );
   useBoardBoundary(data, actions, awaitingTasks);
+  // Whether the board holds this page's data, and whether its tasks have caught up.
   const ready = state.projectId === project.id && state.actions !== null && !awaitingTasks;
-  useTaskUrl(task, ready, (id) =>
-    [...data.tasks, ...(data.hiddenTasks ?? [])].some((row) => row.id === id),
-  );
+  useTaskUrl(task, ready, !loadingTasks);
   if (awaiting || state.projectId !== project.id || state.actions === null)
     return (
       <p role="status" className="p-6 text-muted-foreground">

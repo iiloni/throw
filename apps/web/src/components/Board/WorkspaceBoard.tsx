@@ -65,10 +65,9 @@ export function WorkspaceBoard({
   if (taskPage && taskPage.taskId !== state.openTaskId) setTaskPage(null);
   // New work is captured through the palette, which asks which project it belongs to.
   useBoardBoundary(data, taskWrites, awaitingTasks);
+  // Whether the board holds this page's data, and whether its tasks have caught up.
   const ready = state.projectId === data.project.id && state.actions !== null && !awaitingTasks;
-  useTaskUrl(task, ready, (id) =>
-    [...data.tasks, ...(data.hiddenTasks ?? [])].some((row) => row.id === id),
-  );
+  useTaskUrl(task, ready, !loadingTasks);
   if (awaiting || state.projectId !== data.project.id || state.actions === null)
     return (
       <p role="status" className="p-6 text-muted-foreground">
