@@ -250,21 +250,6 @@
   }
 }
 
-/* A tag badge: glass with a small shadow, light enough to repeat on every card. */
-@utility glass-badge {
-  background-color: var(--badge-glass, var(--glass));
-  backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid var(--glass-border);
-  box-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    0 1px 2px color-mix(in oklab, var(--glass-shadow) 50%, transparent);
-
-  @media (prefers-reduced-transparency: reduce) {
-    background-color: var(--badge-solid, var(--popover));
-    backdrop-filter: none;
-  }
-}
-
 @utility glass-thick {
   background-color: var(--glass-thick);
   backdrop-filter: blur(32px) saturate(180%);
@@ -295,9 +280,9 @@
   }
 }
 
-/* Catch's filter chips. */
+/* Catch's filter chips and tag badges. A tag's colour sets `--badge-glass`/`--badge-solid`. */
 @utility glass-badge {
-  background-color: var(--glass);
+  background-color: var(--badge-glass, var(--glass));
   backdrop-filter: blur(24px) saturate(180%);
   border: 1px solid var(--glass-border);
   box-shadow:
@@ -305,7 +290,7 @@
     0 1px 2px color-mix(in oklab, var(--glass-shadow) 50%, transparent);
 
   @media (prefers-reduced-transparency: reduce) {
-    background-color: var(--popover);
+    background-color: var(--badge-solid, var(--popover));
     backdrop-filter: none;
   }
 }
