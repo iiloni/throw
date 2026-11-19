@@ -3,6 +3,7 @@ import {
   comparePositions,
   compareTasks as compareTaskRows,
   positionBetween,
+  type TagIconName,
   taskIdentifier,
 } from '@throw/shared';
 
@@ -31,6 +32,8 @@ export type Tag = {
   parentId: string | null;
   /** Set on root tags; children show their root's color. */
   color?: Color;
+  /** Set on root tags; children show their root's icon. */
+  icon?: TagIconName | null;
 };
 
 export type Task = {

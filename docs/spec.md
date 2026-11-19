@@ -298,7 +298,10 @@ Applying this further is ongoing.
 
 ### Cards
 
-A card shows the title, a muted identifier, the primary tag name and subtask progress.
+A card shows the title, its tags, a muted identifier and subtask progress. Tags are Catch's
+badges under the title, as on Catch's note cards (2026-11-19): the primary tag first and
+bolder, then the secondary tags, each in its root's colour and icon. Catch heads its card
+tags with a "Tags" label; a task card leaves it out to keep the board dense.
 Until its number and project key sync, the identifier reads “Pending”. The owner chose this
 quiet content when the real board was built (2026-10-14): status appears only in the mixed
 backlog and closed zones; a subtask card has a small marker instead of a parent-title row,
@@ -615,7 +618,7 @@ it to the trash (see [Project](#project)), where it can be restored or removed f
 
 The project board uses synced tasks, statuses and primary tags, with the backlog in the
 drawer on a phone. Cards resolve their primary tag's root colour with `taskTagColor` and
-show the tag's name; a partially synced tag tree leaves the card neutral. The drawer
+show its tags as badges; a partially synced tag tree leaves the card neutral. The drawer
 (`components/Drawer`) carries the backlog, the closed tasks, board settings, and search and
 capture, and becomes the move drawer while a card is held or selected; the board owns it
 for now. Away from boards, the shell hosts that same Drawer component for project settings
