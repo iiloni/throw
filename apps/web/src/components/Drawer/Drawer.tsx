@@ -19,6 +19,7 @@ import {
 } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { useBackHandler } from '@/lib/backButton';
+import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { useDrawerGesture } from './useDrawerGesture';
@@ -169,7 +170,11 @@ export function Drawer({
   function settle(next: Detent) {
     // Let go at the height it was at: there is no new detent to move it.
     if (next === detent) slide(offsets()[next]);
-    else onDetent(next);
+    else {
+      // Coming to rest at another height is a choice among the drawer's heights.
+      haptics.selection();
+      onDetent(next);
+    }
   }
 
   useDrawerGesture(surface, {
@@ -182,8 +187,10 @@ export function Drawer({
     onEnd: (offset, velocity) => {
       const at = offsets();
       if (paged) {
-        if (offset > 100 || velocity > 500) onClosePage();
-        else slide(at.page);
+        if (offset > 100 || velocity > 500) {
+          haptics.selection();
+          onClosePage();
+        } else slide(at.page);
         return;
       }
       const aim = y.get() + velocity * 0.15;

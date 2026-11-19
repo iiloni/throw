@@ -55,7 +55,7 @@ export function TagPicker({
                   aria-describedby={tag.id === primaryTagId ? marker : undefined}
                   checked={secondaryTagIds.includes(tag.id)}
                   onChange={(event) => {
-                    haptics.selection();
+                    haptics.toggle();
                     onChange(tag.id, event.target.checked);
                   }}
                   className="size-4 shrink-0 accent-brand"

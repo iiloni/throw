@@ -17,6 +17,7 @@ import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
+import { feelStatusChange, haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { BoardSettingsContent } from './BoardSettingsPanel';
@@ -31,6 +32,7 @@ import {
   projectOf,
   type Status,
   type Task,
+  targetCategory,
 } from './model';
 import { StatusFilter, zoneStatuses } from './SideZone';
 import { CATEGORY_NAMES } from './StatusMenu';
@@ -48,6 +50,7 @@ import {
 import { TaskCard } from './TaskCard';
 import { TaskContentContext } from './taskContent';
 import { useTaskSurfaceShown } from './taskTransition';
+import { usePagerPage } from './usePagerPage';
 
 /** Clear space at the end of a column, for the collapsed drawer resting over it. */
 export const DOCK_SPACE = 'calc(var(--dock-height) + var(--safe-bottom) + 3rem)';
@@ -85,8 +88,8 @@ export function PhoneBoard({
     project.statuses.find((status) => status.category === 'done' && status.isDefault) ??
     project.statuses.find((status) => status.category === 'done');
   const reduced = useReducedMotion();
-  const pager = useRef<HTMLDivElement>(null);
-  const [page, setPage] = useState(0);
+  const pagerRef = useRef<HTMLDivElement>(null);
+  const [page, pager, quietPager] = usePagerPage();
   const [drawerPage, setDrawerPage] = useState<BoardPage | null>(null);
   const closePage = useCallback(() => setDrawerPage(null), []);
   const phonePalette = usePhonePalette({
@@ -101,7 +104,8 @@ export function PhoneBoard({
   useBackHandler(state.selection.length > 0, () => update({ selection: [] }));
 
   function turnTo(index: number, behavior: ScrollBehavior = 'smooth') {
-    const element = pager.current;
+    quietPager();
+    const element = pagerRef.current;
     element?.scrollTo({
       left: index * pageStride(element),
       behavior: reduced ? 'instant' : behavior,
@@ -167,12 +171,10 @@ export function PhoneBoard({
 
       <div className="relative flex min-h-0 flex-1" inert={covered}>
         <div
-          ref={pager}
+          ref={pagerRef}
           data-pager=""
           data-selecting={state.selection.length > 0 ? '' : undefined}
-          onScroll={(event) =>
-            setPage(Math.round(event.currentTarget.scrollLeft / pageStride(event.currentTarget)))
-          }
+          {...pager}
           className="phone-pager flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
         >
           {active.map((status) => (
@@ -472,7 +474,10 @@ function BoardDrawer({
           );
         }}
         data-status-home={statuses.map(({ id }) => id).join(' ')}
-        onClick={() => goTo(detent === 'closed' ? 'half' : 'closed')}
+        onClick={() => {
+          haptics.toggle();
+          goTo(detent === 'closed' ? 'half' : 'closed');
+        }}
         className={cn(
           'flex h-[var(--dock-height)] min-w-0 flex-1 items-center gap-3 rounded-[var(--dock-radius)] px-4 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/70',
           detent === 'closed' && 'bg-foreground/[0.06]',
@@ -486,7 +491,10 @@ function BoardDrawer({
         <motion.button
           type="button"
           aria-label="Search"
-          onClick={onSearch}
+          onClick={() => {
+            haptics.toggle();
+            onSearch();
+          }}
           whileTap={{ scale: 0.88 }}
           transition={springs.snappy}
           className={cn(dockButton, 'bg-foreground/[0.06] text-foreground')}
@@ -516,7 +524,11 @@ function BoardDrawer({
               ? 'New task'
               : 'New task in the backlog'
         }
-        onClick={() => (capturing ? capture.close() : onCreate(detent !== 'closed'))}
+        onClick={() => {
+          haptics.toggle();
+          if (capturing) capture.close();
+          else onCreate(detent !== 'closed');
+        }}
         whileTap={{ scale: 0.88 }}
         transition={springs.snappy}
         className={cn(
@@ -651,6 +663,11 @@ export function MovePanel({ pick }: { pick: boolean }) {
   const send = (statusId: string) => {
     sendTasks(state.selection, statusId);
     update({ selection: [] });
+    // As every status change is felt: finishing lands as success, anything else as a choice.
+    const category =
+      targetCategory(statusId) ??
+      project.statuses.find((status) => status.id === statusId)?.category;
+    if (category) feelStatusChange(category);
   };
   return (
     <motion.div

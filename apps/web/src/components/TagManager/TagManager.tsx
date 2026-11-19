@@ -8,6 +8,7 @@ import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { TagTree } from '@/components/TagTree/TagTree';
 import { Button } from '@/components/ui/button';
 import { useTags } from '@/lib/collections';
+import { haptics } from '@/lib/haptics';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { deleteTag } from '@/lib/tags';
 import { cn } from '@/lib/utils';
@@ -147,6 +148,7 @@ export function TagDeleteConfirm({
           className="h-11 rounded-full"
           onClick={() => {
             deleteTag(tag.id);
+            haptics.warning();
             onDone();
           }}
         >

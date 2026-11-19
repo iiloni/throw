@@ -5,6 +5,7 @@ import { byCategory, type Project, priorityName } from '@/components/Board/model
 import { ColorTagPicker } from '@/components/ColorTagPicker/ColorTagPicker';
 import { TagPicker } from '@/components/TagPicker/TagPicker';
 import { useTags, useTaskTags } from '@/lib/collections';
+import { feelStatusChange, haptics } from '@/lib/haptics';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { setPrimaryTag, setSecondaryTag } from '@/lib/tags';
 import { sendTask, updateTask } from '@/lib/tasks';
@@ -32,7 +33,11 @@ export function StatusPicker({
       value={task.statusId}
       statuses={statuses}
       onChange={(statusId) => {
-        if (statusId !== task.statusId) sendTask(task.id, statusId);
+        const next = statuses.find((status) => status.id === statusId);
+        if (next && statusId !== task.statusId) {
+          sendTask(task.id, statusId);
+          feelStatusChange(next.category);
+        }
         onPicked();
       }}
     />
@@ -100,7 +105,10 @@ export function PriorityPicker({
       value={task.priority}
       project={project}
       onChange={(priority) => {
-        if (priority !== task.priority) updateTask(task.id, { priority });
+        if (priority !== task.priority) {
+          haptics.selection();
+          updateTask(task.id, { priority });
+        }
         onPicked();
       }}
     />
