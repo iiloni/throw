@@ -291,7 +291,7 @@ rails' placement shape desktop columns, so a phone does not show them.
 | Backlog rail, Closed rail | Sticky | One setting for each. Sticky keeps the rail at the window's edge with the columns scrolling beneath it. With board puts it at its end of the columns, and it scrolls away with them. |
 | Scrollbars | Off | Draws scrollbars. Off, a faded edge shows where a list goes on. |
 | Holding a card | Compact | Compact or Full; see [Ordering and priority](#ordering-and-priority). |
-| Theme | System | System, Light or Dark. |
+| Theme | System | System, Light or Dark. The browser and installed app bars follow the chosen theme. |
 
 The board practises progressive disclosure: what is not needed at rest is not drawn at rest.
 Applying this further is ongoing.
