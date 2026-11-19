@@ -1,5 +1,6 @@
 import { taskTagColor } from '@throw/shared';
 import { useState } from 'react';
+import { ColorTagPicker } from '@/components/ColorTagPicker/ColorTagPicker';
 import { TagManager } from '@/components/TagManager/TagManager';
 import { TagPicker } from '@/components/TagPicker/TagPicker';
 import { TaskTags } from '@/components/TaskTags/TaskTags';
@@ -176,13 +177,19 @@ function TaskTagDemo({ task }: { task: import('@throw/shared').Task }) {
         {awaiting ? (
           <p role="status">Loading tags…</p>
         ) : (
-          <TagPicker
-            tags={tags}
-            primaryTagId={task.primaryTagId}
-            secondaryTagIds={secondaryTagIds}
-            onPrimaryChange={(id) => setPrimaryTag(task.id, id)}
-            onSecondaryChange={(id, present) => setSecondaryTag(task.id, id, present)}
-          />
+          <section aria-label="Choose task tags" className="flex flex-col gap-4">
+            <ColorTagPicker
+              tags={tags}
+              primaryTagId={task.primaryTagId}
+              onChange={(id) => setPrimaryTag(task.id, id)}
+            />
+            <TagPicker
+              tags={tags}
+              primaryTagId={task.primaryTagId}
+              secondaryTagIds={secondaryTagIds}
+              onChange={(id, present) => setSecondaryTag(task.id, id, present)}
+            />
+          </section>
         )}
       </div>
     </section>

@@ -2,6 +2,7 @@ import { compareStatuses, PRIORITIES, type Priority, type Status, type Task } fr
 import { useId } from 'react';
 import { PriorityGlyph, StatusGlyph } from '@/components/Board/glyphs';
 import { byCategory, type Project, priorityName } from '@/components/Board/model';
+import { ColorTagPicker } from '@/components/ColorTagPicker/ColorTagPicker';
 import { TagPicker } from '@/components/TagPicker/TagPicker';
 import { useTags, useTaskTags } from '@/lib/collections';
 import { feelStatusChange, haptics } from '@/lib/haptics';
@@ -145,32 +146,49 @@ export function PriorityOptions({
   );
 }
 
-/** Tags take several choices, so picking one leaves the picker open. */
-export function TagsPicker({ task }: { task: Task }) {
+function useTaskTagsReady(task: Task) {
   const { tags, isLoading } = useTags(task.projectId);
   const { taskTags, isLoading: loadingAssignments } = useTaskTags(task.id);
   const awaitingTags = useAwaitingSync(isLoading, tags.length);
   const awaitingAssignments = useAwaitingSync(loadingAssignments, taskTags.length);
-  if (awaitingTags || awaitingAssignments)
-    return (
-      <p role="status" className="px-6 py-3 text-muted-foreground text-sm">
-        Loading tags…
-      </p>
-    );
+  return { tags, taskTags, ready: !awaitingTags && !awaitingAssignments };
+}
+
+const loadingTags = (
+  <p role="status" className="px-6 py-3 text-muted-foreground text-sm">
+    Loading tags…
+  </p>
+);
+
+/**
+ * The primary tag, picked by colour as in Catch. Picking leaves the picker open, since a
+ * tag with children opens them to pick a more specific one.
+ */
+export function ColorTagsPicker({ task }: { task: Task }) {
+  const { tags, isLoading } = useTags(task.projectId);
+  // The colour reads the project's tags only, not the task's secondary assignments.
+  if (useAwaitingSync(isLoading, tags.length)) return loadingTags;
+  return (
+    <ColorTagPicker
+      tags={tags}
+      primaryTagId={task.primaryTagId}
+      onChange={(id) => setPrimaryTag(task.id, id)}
+      className="px-2 pb-2"
+    />
+  );
+}
+
+/** Secondary tags take several choices, so picking one leaves the picker open. */
+export function TagsPicker({ task }: { task: Task }) {
+  const { tags, taskTags, ready } = useTaskTagsReady(task);
+  if (!ready) return loadingTags;
   return (
     <div className="px-5 pt-1 pb-3">
       <TagPicker
         tags={tags}
         primaryTagId={task.primaryTagId}
         secondaryTagIds={taskTags.map((row) => row.tagId)}
-        onPrimaryChange={(id) => {
-          haptics.selection();
-          setPrimaryTag(task.id, id);
-        }}
-        onSecondaryChange={(id, present) => {
-          haptics.toggle();
-          setSecondaryTag(task.id, id, present);
-        }}
+        onChange={(id, present) => setSecondaryTag(task.id, id, present)}
       />
     </div>
   );
