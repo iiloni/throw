@@ -1,12 +1,16 @@
 import { type Priority, type Status, type Task, taskTagColor } from '@throw/shared';
 import { Flag, MoreHorizontal, Palette, Tag } from 'lucide-react';
-import type { ButtonHTMLAttributes } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import type { ButtonHTMLAttributes, KeyboardEventHandler, ReactNode } from 'react';
 import { PriorityGlyph, StatusGlyph } from '@/components/Board/glyphs';
 import { type Project, priorityName } from '@/components/Board/model';
 import { leaveTask } from '@/components/Board/state';
 import type { TaskDrawerContent } from '@/components/Board/taskContent';
+import { touchEditor } from '@/components/DescriptionEditor/editorControls';
+import { FormattingBar } from '@/components/FormattingBar/FormattingBar';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { useTags, useTaskTags } from '@/lib/collections';
+import { springs } from '@/lib/motion';
 import { TaskActions } from './TaskActions';
 import { ColorTagsPicker, PriorityPicker, StatusPicker, TagsPicker } from './TaskPickers';
 
@@ -202,10 +206,7 @@ export function taskDrawerContent({
   const closePage = () => onPage(null);
   return {
     dock: (
-      <div
-        role="toolbar"
-        aria-label="Task controls"
-        data-task-drawer=""
+      <TaskDockRow
         onKeyDown={(event) => {
           // The dock belongs to the open task, so Escape there leaves it as it does in it. With
           // a panel open, the drawer takes Escape to close the panel.
@@ -222,7 +223,7 @@ export function taskDrawerContent({
           controlProps={(panel) => ({ 'aria-expanded': panel === page })}
           tooltips={false}
         />
-      </div>
+      </TaskDockRow>
     ),
     page: page && {
       key: page,
@@ -243,4 +244,52 @@ export function taskDrawerContent({
     },
     closePage,
   };
+}
+
+/**
+ * The task's controls, or Catch's formatting bar in their place while a finger types in the
+ * task's description or a comment: the keyboard covers the page, and the dock rides above it.
+ */
+export function TaskDockRow({
+  children,
+  onKeyDown,
+}: {
+  children: ReactNode;
+  onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
+}) {
+  const editor = touchEditor.use();
+  const reduced = useReducedMotion();
+  const transition = reduced ? { duration: 0 } : springs.snappy;
+  return (
+    <div data-task-drawer="" className="relative h-[var(--dock-height)]">
+      <AnimatePresence initial={false} mode="popLayout">
+        {editor ? (
+          <motion.div
+            key="format"
+            className="absolute inset-0 flex items-center px-2"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            transition={transition}
+          >
+            <FormattingBar controls={editor} className="flex-1 [&_button]:size-11 [&_svg]:size-5" />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="controls"
+            role="toolbar"
+            aria-label="Task controls"
+            onKeyDown={onKeyDown}
+            className="absolute inset-0"
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={transition}
+          >
+            {children}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
