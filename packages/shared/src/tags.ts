@@ -148,10 +148,13 @@ export function tagWriteIssue(candidate: Tag, tags: readonly Tag[]): string | nu
 }
 
 /** Iterative and defensive: very deep trees and a partial sync never recurse forever. */
-export function tagPath(tags: readonly Tag[], id: string): Tag[] {
+export function tagPath<T extends Pick<Tag, 'id' | 'parentId'>>(
+  tags: readonly T[],
+  id: string,
+): T[] {
   const byId = new Map(tags.map((tag) => [tag.id, tag]));
   const seen = new Set<string>();
-  const path: Tag[] = [];
+  const path: T[] = [];
   let current = byId.get(id);
   while (current && !seen.has(current.id)) {
     seen.add(current.id);

@@ -8,6 +8,7 @@ import {
   useLayoutEffect,
   useRef,
 } from 'react';
+import { TaskTags } from '@/components/TaskTags/TaskTags';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { CARD_HELP_ID } from './BoardAnnouncer';
@@ -59,7 +60,6 @@ export function TaskCardFace({
 }) {
   const [settings] = useBoardSettings();
   const state = board.use();
-  const tag = project.tags.find((item) => item.id === task.primaryTagId);
   const status = statusById(project, task.statusId);
   const parent = task.parentId
     ? current(state).tasks.find((item) => item.id === task.parentId)
@@ -75,19 +75,22 @@ export function TaskCardFace({
       <p className="line-clamp-4 font-medium text-[0.9375rem] leading-snug [overflow-wrap:anywhere] max-md:text-base">
         {task.title || 'Untitled task'}
       </p>
+      {/*
+        As on Catch's cards: the primary tag first and bolder, each in its root's colour. The
+        workspace board colours cards by project, and so leaves tag colours out (spec).
+      */}
+      <TaskTags
+        tags={projectOf(project, task).tags}
+        primaryTagId={task.primaryTagId}
+        secondaryTagIds={task.secondaryTagIds}
+        card
+        colored={!project.members}
+        className="mt-2.5"
+      />
       <div className="mt-3 flex min-h-5 items-center gap-2.5 text-foreground/55 text-xs max-md:text-[0.8125rem]">
         <span className="shrink-0 font-medium tabular-nums">
           {identifier(project, task) ?? 'Pending'}
         </span>
-        {tag && <span className="min-w-0 truncate text-tint-accent">{tag.name}</span>}
-        {task.secondaryTagIds.length > 0 && (
-          <span
-            className="shrink-0 tabular-nums"
-            title={`${task.secondaryTagIds.length} more ${task.secondaryTagIds.length === 1 ? 'tag' : 'tags'}`}
-          >
-            +{task.secondaryTagIds.length}
-          </span>
-        )}
         {parent && state.actions && (
           <span
             role="img"
