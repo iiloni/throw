@@ -239,6 +239,7 @@ function DeleteProject({ project }: { project: Project }) {
                 action: {
                   label: 'Undo',
                   onClick: () => {
+                    haptics.success();
                     restoreProject(id);
                     shell.selectProject(workspaceId, id);
                   },
