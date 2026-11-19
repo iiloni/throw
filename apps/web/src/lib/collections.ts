@@ -573,7 +573,8 @@ function classifyWriteError(error: unknown): Error {
   if (error instanceof z.ZodError) return reject('Invalid change');
   if (error instanceof ApiError) {
     if (error.status === 401) {
-      updateSyncStatus({ signedOut: true });
+      // A replaced token says nothing about the current session; the retry sends the new one.
+      if (!error.staleToken) updateSyncStatus({ signedOut: true });
       return new Error('Waiting for sign-in');
     }
     if (error.status >= 500 || error.status === 408 || error.status === 429) {

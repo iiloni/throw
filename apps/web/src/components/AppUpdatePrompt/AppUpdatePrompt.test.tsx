@@ -62,7 +62,7 @@ describe('Android update prompt', () => {
   it('takes the user to the update in Settings', () => {
     render(<AppUpdatePrompt />);
     fireEvent.click(screen.getByRole('button', { name: 'Go to Update' }));
-    expect(navigate).toHaveBeenCalledWith({ to: '/settings', hash: 'updates' });
+    expect(navigate).toHaveBeenCalledWith({ to: '/settings/update' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 

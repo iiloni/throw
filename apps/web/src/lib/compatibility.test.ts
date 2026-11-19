@@ -2,6 +2,8 @@ import { API_PROTOCOL_HEADER, API_PROTOCOL_VERSION } from '@throw/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./serverUrl', () => ({ getServerUrl: () => 'https://throw.example' }));
+const auth = vi.hoisted(() => ({ token: null as string | null }));
+vi.mock('./auth', () => ({ getAuthToken: () => auth.token }));
 const fetcher = vi.fn();
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
 const compatible = { min: API_PROTOCOL_VERSION, max: API_PROTOCOL_VERSION };
@@ -9,6 +11,7 @@ const newer = { min: API_PROTOCOL_VERSION + 1, max: API_PROTOCOL_VERSION + 1 };
 beforeEach(() => {
   vi.resetModules();
   fetcher.mockReset();
+  auth.token = null;
   vi.stubGlobal('fetch', fetcher);
 });
 afterEach(() => {
@@ -30,6 +33,40 @@ describe('client compatibility transport', () => {
     updateSyncStatus({ signedOut: false });
     expect((await pending).status).toBe(200);
     expect(getSyncStatus().pending).toBe(1);
+  });
+
+  it('ignores a refusal of a token this device has since replaced', async () => {
+    auth.token = 'new';
+    fetcher.mockResolvedValueOnce(json(compatible)).mockResolvedValueOnce(json({}, 401));
+    const { compatibleFetch } = await import('./compatibility');
+    const { getSyncStatus } = await import('./syncStatus');
+    await compatibleFetch('https://throw.example/api/tasks', {
+      headers: { Authorization: 'Bearer old' },
+    });
+    expect(getSyncStatus().signedOut).toBe(false);
+    fetcher.mockResolvedValueOnce(json({}, 401));
+    await compatibleFetch('https://throw.example/api/tasks', {
+      headers: { Authorization: 'Bearer new' },
+    });
+    expect(getSyncStatus().signedOut).toBe(true);
+  });
+
+  it('retries a shape refused for a replaced token with the current one', async () => {
+    auth.token = 'old';
+    fetcher.mockResolvedValueOnce(json(compatible)).mockImplementationOnce(async () => {
+      auth.token = 'new';
+      return json({}, 401);
+    });
+    fetcher.mockResolvedValueOnce(json([]));
+    const { compatibleShapeFetch } = await import('./compatibility');
+    const { getSyncStatus } = await import('./syncStatus');
+    const response = await compatibleShapeFetch('https://throw.example/api/shapes/projects', {
+      headers: { Authorization: 'Bearer old' },
+    });
+    expect(response.status).toBe(200);
+    expect(getSyncStatus().signedOut).toBe(false);
+    const sent = fetcher.mock.calls.slice(1).map(([, init]) => init.headers.get('Authorization'));
+    expect(sent).toEqual(['Bearer old', 'Bearer new']);
   });
 
   it('aborts a refused shape while waiting for sign-in', async () => {

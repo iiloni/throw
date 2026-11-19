@@ -17,11 +17,11 @@ test('signing in again returns to the page that was asked for', async ({ page, i
   // Where signing in returns to is the router's doing. The test above signs up on both layouts.
   test.skip(isMobile, 'Sign-in redirects do not depend on the layout.');
   const { email } = await signUp(page);
-  await page.goto('/settings');
+  await page.goto('/settings/account');
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page).toHaveURL(/\/login$/);
 
-  await page.goto('/settings');
+  await page.goto('/settings/account');
   await expect(page).toHaveURL(/\/login\?/);
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill('wrongpassword');
@@ -30,7 +30,7 @@ test('signing in again returns to the page that was asked for', async ({ page, i
 
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page).toHaveURL(/\/settings\/account$/);
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({
     timeout: APP_LOAD_TIMEOUT,
   });

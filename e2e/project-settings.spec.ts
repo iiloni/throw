@@ -42,11 +42,26 @@ async function setup(page: Page, isMobile: boolean) {
     workspaceTrash: `/w/${ids.workspaceId}/trash`,
   };
 }
+const phone = (page: Page) => (page.viewportSize()?.width ?? 1024) < 768;
+/** Opens a project settings page: from the list beside it, or the dock's list on a phone. */
 async function section(page: Page, name: string) {
-  await page
-    .getByRole('navigation', { name: 'Project settings sections' })
-    .getByRole('button', { name, exact: true })
-    .click();
+  if (phone(page)) {
+    await page.getByRole('button', { name: /^Project settings page: / }).click();
+    await page
+      .getByRole('dialog', { name: 'Project settings', exact: true })
+      .getByRole('link', { name, exact: true })
+      .click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  } else
+    await page
+      .getByRole('navigation', { name: 'Project settings pages' })
+      .getByRole('link', { name, exact: true })
+      .click();
+  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+}
+async function backToBoard(page: Page) {
+  if (phone(page)) await page.getByRole('button', { name: /^Project settings page: / }).click();
+  await page.getByRole('link', { name: 'Back to board', exact: true }).click();
 }
 async function addStatus(page: Page, name: string, category = 'Active') {
   await page.getByRole('button', { name: `Add status to ${category}`, exact: true }).click();
@@ -61,13 +76,10 @@ test('project appearance and status rules, ordering, defaults, rename and deleti
   isMobile,
 }) => {
   const fixture = await setup(page, isMobile);
-  await page.getByRole('button', { name: 'Edit project', exact: true }).click();
   await page.getByLabel('Project name', { exact: true }).fill('Studio');
   await page.getByRole('button', { name: 'Blue', exact: true }).click();
   await page.getByRole('button', { name: 'Home icon', exact: true }).click();
-  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Studio');
-  await expect(page.getByRole('button', { name: 'Edit project', exact: true })).toBeFocused();
   await section(page, 'Statuses');
   await expect(page.getByText('Categories are fixed', { exact: false })).toBeVisible();
   for (const name of ['Backlog', 'In progress', 'Done', 'Cancelled']) {
@@ -172,7 +184,7 @@ test('priority names, key rules and board identifiers, and tags have a settings 
   await page.getByRole('button', { name: 'Change key', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('Old identifiers do not redirect');
   await page.getByRole('dialog').getByRole('button', { name: 'Change key', exact: true }).click();
-  await page.getByRole('link', { name: 'Back to board', exact: true }).click();
+  await backToBoard(page);
   if (isMobile) await page.getByRole('button', { name: /^Backlog \d+$/ }).click();
   await expect(page.getByText('NEW-1', { exact: true }).first()).toBeVisible();
   await page.goto(fixture.settings);
@@ -223,7 +235,7 @@ test('trash restores parents and projects, confirms purges and scopes emptying',
     trashProject(trashedProject);
     return { parent, other, trashedProject };
   }, fixture);
-  await page.getByRole('link', { name: 'Trash', exact: true }).click();
+  await section(page, 'Trash');
   const parent = page.getByRole('listitem', { name: 'Parent', exact: true });
   await expect(parent).toContainText('Inherited child — restores with parent');
   await expect(parent).toContainText('Separate child — stays trashed on restore');
@@ -317,11 +329,9 @@ test('offline settings edits persist and replay; refused renames, keys and delet
   });
   await page.reload();
   // Offline, the page appears once the device's copy has loaded, which can take a while here.
-  await expect(
-    page
-      .getByRole('navigation', { name: 'Project settings sections' })
-      .getByRole('button', { name: 'Statuses', exact: true }),
-  ).toHaveAttribute('aria-current', 'page', { timeout: APP_LOAD_TIMEOUT });
+  await expect(page.getByRole('heading', { name: 'Statuses', exact: true })).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
   await expect(statusRow(page, 'Offline review')).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
   await page.unroute('**/api/**');
   await synced
