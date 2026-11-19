@@ -250,6 +250,24 @@ export function Drawer({
     return () => observer.disconnect();
   }, [grooming]);
 
+  // A page that fits its content and then changes height, as a picker moving between its
+  // lists does, takes the drawer with it. It follows the content's own animation frame by
+  // frame rather than springing after it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: offsets reads refs
+  useLayoutEffect(() => {
+    const element = body.current;
+    if (!paged || !page?.fit || !element) return;
+    let measured = element.offsetHeight;
+    const observer = new ResizeObserver(() => {
+      if (element.offsetHeight === measured) return;
+      measured = element.offsetHeight;
+      y.stop();
+      y.jump(offsets().page);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [paged, page?.fit, page?.key, y]);
+
   // The move target opens into a grid and closes again under the card; the drawer rises and
   // falls with it so exactly the target shows.
   // biome-ignore lint/correctness/useExhaustiveDependencies: offsets reads refs

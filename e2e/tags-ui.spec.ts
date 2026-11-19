@@ -12,12 +12,13 @@ test('tag workshop manages a real tree and both task roles with touch and keyboa
   await page.goto('/prototype/tags');
   await page.getByRole('button', { name: 'Create example project' }).click();
   const picker = page.getByRole('region', { name: 'Choose task tags' });
-  await expect(
-    picker.getByRole('radio', { name: 'Primary: Product / Features / Mobile', exact: true }),
-  ).toBeChecked({ timeout: APP_LOAD_TIMEOUT });
-  await expect(
-    picker.getByRole('checkbox', { name: 'Secondary: Research', exact: true }),
-  ).toBeChecked();
+  const primaryBadge = picker.getByRole('group', { name: 'Primary tag' });
+  await expect(primaryBadge.getByTitle('Product / Features / Mobile', { exact: true })).toBeVisible(
+    {
+      timeout: APP_LOAD_TIMEOUT,
+    },
+  );
+  await expect(picker.getByRole('checkbox', { name: 'Research', exact: true })).toBeChecked();
   const badge = page
     .getByRole('button', { name: 'Product / Features / Mobile', exact: true })
     .first();
@@ -29,24 +30,33 @@ test('tag workshop manages a real tree and both task roles with touch and keyboa
     await expect(page.getByRole('tooltip')).toBeVisible();
     await badge.tap();
     await expect(page.getByRole('tooltip')).toHaveCount(0);
-    await picker.getByRole('checkbox', { name: 'Secondary: Product', exact: true }).tap();
+    await picker.getByRole('checkbox', { name: 'Product', exact: true }).tap();
   } else {
     await page.keyboard.press('Tab');
     await badge.focus();
     await expect(page.getByRole('tooltip')).toHaveText('Product / Features / Mobile');
     await page.keyboard.press('Escape');
     await expect(page.getByRole('tooltip')).toHaveCount(0);
-    await picker.getByRole('checkbox', { name: 'Secondary: Product', exact: true }).check();
+    await picker.getByRole('checkbox', { name: 'Product', exact: true }).check();
   }
-  await picker.getByRole('radio', { name: 'Primary: Research', exact: true }).check();
+  await picker.getByRole('button', { name: 'Amber: Research', exact: true }).click();
+  await expect(primaryBadge.getByTitle('Research', { exact: true })).toBeVisible();
   // A primary may be secondary too; both roles survive independently.
-  await expect(
-    picker.getByRole('checkbox', { name: 'Secondary: Research', exact: true }),
-  ).toBeChecked();
-  await picker.getByRole('button', { name: 'Clear primary' }).click();
-  await expect(
-    picker.getByRole('radio', { name: 'Primary: Research', exact: true }),
-  ).not.toBeChecked();
+  await expect(picker.getByRole('checkbox', { name: 'Research', exact: true })).toBeChecked();
+  // Research has children, so picking it opens them.
+  await picker.getByRole('button', { name: 'Back from Research' }).click();
+  await picker.getByRole('button', { name: 'Tags without a colour' }).click();
+  await picker.getByRole('button', { name: 'Accessibility', exact: true }).click();
+  await expect(picker.getByRole('button', { name: 'Accessibility', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await picker.getByRole('button', { name: 'Back to colours' }).click();
+  await picker.getByRole('button', { name: 'No colour tag' }).click();
+  await expect(picker.getByRole('button', { name: 'No colour tag' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   const manager = page.getByRole('region', { name: 'Manage project tags' });
   await manager.getByRole('button', { name: 'New tag', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'New tag', exact: true });
@@ -66,15 +76,21 @@ test('tag workshop manages a real tree and both task roles with touch and keyboa
     manager.getByRole('button', { name: 'Edit Product / Features / Quality checks', exact: true }),
   ).toBeVisible();
   await picker.getByRole('textbox', { name: 'Find tags' }).fill('Quality');
+  const quality = picker.getByRole('checkbox', {
+    name: 'Product / Features / Quality checks',
+    exact: true,
+  });
+  await quality.check();
+  await expect(quality).toBeChecked();
+  // The colour picker reaches it through its root's children.
+  await picker.getByRole('button', { name: 'Teal: Product', exact: true }).click();
+  await picker.getByRole('button', { name: 'Product / Features', exact: true }).click();
   await picker
-    .getByRole('radio', { name: 'Primary: Product / Features / Quality checks', exact: true })
-    .check();
+    .getByRole('button', { name: 'Product / Features / Quality checks', exact: true })
+    .click();
   await expect(
-    picker.getByRole('checkbox', {
-      name: 'Secondary: Product / Features / Quality checks',
-      exact: true,
-    }),
-  ).not.toBeChecked();
+    primaryBadge.getByTitle('Product / Features / Quality checks', { exact: true }),
+  ).toBeVisible();
   await picker.getByRole('textbox', { name: 'Find tags' }).fill('');
   await manager.getByRole('button', { name: 'Delete Quality checks', exact: true }).click();
   await page

@@ -10,7 +10,13 @@ import { useBackHandler } from '@/lib/backButton';
 import { springs } from '@/lib/motion';
 import { panelTitle, TaskControls, type TaskPanel, TaskPanelContent } from './TaskControls';
 
-const panelHeight: Record<TaskPanel, number> = { status: 304, priority: 304, tags: 384, more: 176 };
+const panelHeight: Record<TaskPanel, number> = {
+  status: 304,
+  priority: 304,
+  color: 304,
+  tags: 384,
+  more: 176,
+};
 
 /**
  * The task's dock on desktop, below its card, as Catch's split view docks a note's controls
