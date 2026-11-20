@@ -1,9 +1,10 @@
 import { compareStatuses, PRIORITIES, type Priority, type Status, type Task } from '@throw/shared';
 import { Check } from 'lucide-react';
-import { useId } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { PriorityGlyph, StatusGlyph } from '@/components/Board/glyphs';
 import { byCategory, type Project, priorityName } from '@/components/Board/model';
-import { ColorTagPicker } from '@/components/ColorTagPicker/ColorTagPicker';
+import { type Branch, ColorTagPicker } from '@/components/ColorTagPicker/ColorTagPicker';
+import { NewTagButton, openNewTag } from '@/components/NewTag/NewTag';
 import { TagPicker } from '@/components/TagPicker/TagPicker';
 import { useTags, useTaskTags } from '@/lib/collections';
 import { feelStatusChange, haptics } from '@/lib/haptics';
@@ -176,11 +177,28 @@ const loadingTags = (
 );
 
 /**
+ * The color panel's open branch while a new tag's form covers it. On a phone the form takes the
+ * drawer's page from the picker, so the picker this notes comes back to it once Back closes the
+ * form; on desktop the picker stays open beneath, and the note is dropped when the form closes.
+ */
+let covered: { taskId: string; branch: Branch } | null = null;
+
+/**
  * The primary tag, picked by color as in Catch. Picking leaves the picker open, since a
- * tag with children opens them to pick a more specific one.
+ * tag with children opens them to pick a more specific one. A new tag made from its corner
+ * becomes the primary.
  */
 export function ColorTagsPicker({ task }: { task: Task }) {
   const { tags, isLoading } = useTags(task.projectId);
+  const mounted = useRef(false);
+  const initialBranch = useRef(covered?.taskId === task.id ? covered.branch : null).current;
+  useEffect(() => {
+    mounted.current = true;
+    covered = null;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   // The color reads the project's tags only, not the task's secondary assignments.
   if (useAwaitingSync(isLoading, tags.length)) return <div className="px-3">{loadingTags}</div>;
   return (
@@ -188,17 +206,46 @@ export function ColorTagsPicker({ task }: { task: Task }) {
       tags={tags}
       primaryTagId={task.primaryTagId}
       onChange={(id) => setPrimaryTag(task.id, id)}
+      initialBranch={initialBranch}
+      onNewTag={({ parentId, color, branch }) => {
+        covered = { taskId: task.id, branch };
+        openNewTag({
+          projectId: task.projectId,
+          parentId,
+          color,
+          onCreated: (id) => setPrimaryTag(task.id, id),
+          onClose: () => {
+            if (mounted.current) covered = null;
+          },
+        });
+      }}
       className="w-full pt-1 pb-1"
     />
   );
 }
 
-/** Secondary tags take several choices, so picking one leaves the picker open. */
+/**
+ * Secondary tags take several choices, so picking one leaves the picker open. A new tag made
+ * from the heading's corner is added to them.
+ */
 export function TagsPicker({ task }: { task: Task }) {
   const { tags, taskTags, ready } = useTaskTagsReady(task);
   return (
-    <div className="px-3 pt-3 pb-1">
-      <p className="mb-1 px-1 font-medium text-sm">Secondary tags</p>
+    <div className="px-3 pt-2 pb-1">
+      <div className="mb-1 flex min-h-11 items-center justify-between gap-2">
+        <p className="px-1 font-medium text-sm">Secondary tags</p>
+        {ready && (
+          <NewTagButton
+            onClick={() =>
+              openNewTag({
+                projectId: task.projectId,
+                parentId: null,
+                onCreated: (id) => setSecondaryTag(task.id, id, true),
+              })
+            }
+          />
+        )}
+      </div>
       {ready ? (
         <TagPicker
           tags={tags}

@@ -669,6 +669,119 @@ test('tags are picked from the task controls and listed on the task', async ({
   await expect(card.getByText('Press', { exact: true })).toBeVisible();
 });
 
+test('the color and tags panels make a tag in their corner and assign it at once', async ({
+  page,
+  isMobile,
+}) => {
+  const account = await fixture(page);
+  const { pane } = account;
+  const tag = async (name: string, parentId: string | null, color: string | null) => {
+    const id = randomUUID();
+    const response = await page.request.post('/api/tags', {
+      headers: account.headers,
+      data: { id, projectId: account.projectId, name, parentId, icon: null, color },
+    });
+    expect(response.status()).toBe(201);
+    return id;
+  };
+  const launch = await tag('Launch', null, 'red');
+  await tag('Press', launch, null);
+  // On a phone the picker is a page of the drawer and the form takes its place there; on
+  // desktop the picker is a panel of the dock and the form is a centred dialog over it.
+  const panel = (name: string) =>
+    page.getByRole(isMobile ? 'dialog' : 'region', { name, exact: true });
+  const form = page.getByRole('dialog', { name: 'New tag', exact: true });
+  const newTag = (name: string) =>
+    panel(name).getByRole('button', { name: 'New tag', exact: true });
+
+  // A top-level tag starts with the first color no root holds, and becomes the primary.
+  await controls(page).getByRole('button', { name: 'Color: none. Change', exact: true }).click();
+  await newTag('Color').click();
+  await expect(form.getByRole('textbox', { name: 'Name' })).toBeFocused();
+  if (isMobile) {
+    // The open task raises the drawer, whose dock rides up on the keyboard; the form's page
+    // ends above the keyboard instead, so its title and the field being typed in stay in view.
+    const keyboard = 300;
+    await page.evaluate(
+      (height) => document.documentElement.style.setProperty('--keyboard', `${height}px`),
+      keyboard,
+    );
+    const viewport = page.viewportSize()!;
+    await expect
+      .poll(async () => (await form.boundingBox())!.y + (await form.boundingBox())!.height)
+      .toBeLessThanOrEqual(viewport.height - keyboard + 1);
+    await expect(form.getByRole('heading', { name: 'New tag' })).toBeInViewport({ ratio: 1 });
+    await expect(form.getByRole('textbox', { name: 'Name' })).toBeInViewport({ ratio: 1 });
+    await expect.poll(async () => (await form.boundingBox())!.y).toBeGreaterThanOrEqual(0);
+    await page.evaluate(() => document.documentElement.style.removeProperty('--keyboard'));
+  }
+  await expect(form.getByRole('button', { name: 'Orange', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await form.getByRole('textbox', { name: 'Name' }).fill('Roadmap');
+  await page.screenshot({ path: test.info().outputPath('new-tag-form.png') });
+  await form.getByRole('button', { name: 'Save tag', exact: true }).click();
+  await expect(form).toHaveCount(0);
+  const roadmap = panel('Color').getByRole('button', { name: 'Orange: Roadmap', exact: true });
+  await expect(roadmap).toHaveAttribute('aria-pressed', 'true');
+  await expect(roadmap).toBeInViewport({ ratio: 1 });
+  if (!isMobile) await expect(newTag('Color')).toBeFocused();
+  await page.screenshot({ path: test.info().outputPath('color-new-tag.png') });
+
+  // In a color's children, it makes another child there, and Back returns to that list.
+  await panel('Color').getByRole('button', { name: 'Red: Launch', exact: true }).click();
+  await expect(panel('Color').getByRole('button', { name: 'Back from Launch' })).toBeVisible();
+  await newTag('Color').click();
+  await expect(form.getByRole('combobox', { name: 'Parent tag' })).toHaveValue(launch);
+  await page.keyboard.press('Escape');
+  await expect(form).toHaveCount(0);
+  await expect(panel('Color').getByRole('button', { name: 'Back from Launch' })).toBeVisible();
+  await newTag('Color').click();
+  await form.getByRole('textbox', { name: 'Name' }).fill('Video');
+  await form.getByRole('button', { name: 'Save tag', exact: true }).click();
+  await expect(form).toHaveCount(0);
+  await expect(
+    panel('Color').getByRole('button', { name: 'Launch / Video', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('Escape');
+  await expect(panel('Color')).toHaveCount(0);
+  await expect(
+    controls(page).getByRole('button', { name: 'Color: Video. Change', exact: true }),
+  ).toBeVisible();
+
+  // The tags panel's corner adds the new tag to the task's other tags.
+  await controls(page).getByRole('button', { name: 'Tags: none. Change', exact: true }).click();
+  await newTag('Tags').click();
+  await expect(form.getByRole('combobox', { name: 'Parent tag' })).toHaveValue('');
+  await form.getByRole('textbox', { name: 'Name' }).fill('Docs');
+  await form.getByRole('button', { name: 'Save tag', exact: true }).click();
+  await expect(form).toHaveCount(0);
+  const docs = panel('Tags').getByRole('checkbox', { name: 'Docs', exact: true });
+  await expect(docs).toBeChecked();
+  await expect(docs).toBeInViewport({ ratio: 1 });
+  if (!isMobile) await expect(newTag('Tags')).toBeFocused();
+  await page.screenshot({ path: test.info().outputPath('tags-new-tag.png') });
+  await page.keyboard.press('Escape');
+  await expect(panel('Tags')).toHaveCount(0);
+  await expect(pane.getByRole('region', { name: 'Task tags' })).toContainText('Docs');
+
+  await expect
+    .poll(async () => {
+      const tags = await shapeRows(page.request, 'tags', account.headers);
+      const id = (name: string) => tags.find((row) => row.name === name)?.id;
+      const row = await taskRow(page, account);
+      const assignments = await shapeRows(page.request, 'task-tags', account.headers);
+      return [
+        tags.find((row) => row.name === 'Roadmap')?.color,
+        tags.find((row) => row.name === 'Video')?.parent_id,
+        row?.primary_tag_id === id('Video'),
+        assignments.map((assignment) => assignment.tag_id).includes(id('Docs')),
+      ];
+    })
+    .toEqual(['orange', launch, true, true]);
+});
+
 test('the phone surface grows from its card without scaling text and lands back in it', async ({
   page,
   isMobile,

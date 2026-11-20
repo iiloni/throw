@@ -72,7 +72,8 @@ export type DrawerCard = {
  * closing the page returns it to the height it was at. A docked page keeps the dock above it. A held card sinks it out of the way,
  * unless it is full and its own list is being reordered. Raised, it sits above a full-screen
  * view such as an open task, and its dock rides above the keyboard as a note's dock does in
- * Catch. Otherwise an open page ends above the keyboard, so its input stays in view. A card
+ * Catch, as does a short page; a full page ends above the keyboard instead, so its input stays
+ * in view. Otherwise an open page ends above the keyboard too. A card
  * floats above the dock, which rides above the keyboard with it. A page opened over the card
  * takes the keyboard's place rather than stacking on it, so the card glides between the two
  * instead of bouncing as one leaves and the other arrives.
@@ -132,6 +133,7 @@ export function Drawer({
   const grooming = moving && detent === 'full' && !paged;
   const moveInHead = moving && !grooming;
   const carded = card !== null;
+  const pageAboveKeyboard = paged && !carded && (!raised || !page.fit);
   const modal = paged || carded;
   // Read by effects that run once per opening, after the props that opened them.
   const latest = useRef({ page, card });
@@ -340,6 +342,18 @@ export function Drawer({
     };
   }, [carded]);
 
+  // A page that takes another's place, as a picker's form does and Back undoes, takes focus
+  // with it: what had focus went with the page it was on. Switching tabs keeps it on the tab.
+  const lastKey = useRef<string | undefined>(undefined);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: follows the page shown
+  useEffect(() => {
+    const previous = lastKey.current;
+    lastKey.current = page?.key;
+    if (!page || previous === undefined || previous === page.key) return;
+    if (head.current?.contains(document.activeElement)) return;
+    (page.focus?.current ?? surface.current)?.focus({ preventScroll: true });
+  }, [page?.key]);
+
   // Switching tabs makes the new tab the one focus returns to.
   // biome-ignore lint/correctness/useExhaustiveDependencies: follows the page shown
   useEffect(() => {
@@ -392,19 +406,30 @@ export function Drawer({
         data-origin={page ? page.origin : origin}
         style={{ y, '--drawer-reveal': reveal } as MotionStyle}
         className={cn(
-          'glass-thick fixed inset-x-0 top-[calc(var(--safe-top)+0.5rem)] mx-auto flex w-full max-w-md flex-col rounded-t-[1.75rem] outline-none',
+          'fixed inset-x-0 top-[calc(var(--safe-top)+0.5rem)] mx-auto flex w-full max-w-md flex-col rounded-t-[1.75rem] border border-transparent outline-none',
           raised ? 'z-[45]' : 'z-30',
           // Over a card, the drawer keeps its full height and the keyboard rides under the dock
           // until a page reaches past it, so a picker settles low, by the fingers.
           carded && !typingInPage
             ? 'bottom-0 [translate:0_calc(max(0px,var(--keyboard)-var(--drawer-reveal))*-1)]'
-            : raised || carded
-              ? 'bottom-0 [translate:0_calc(var(--keyboard)*-1)]'
-              : paged
-                ? 'bottom-[var(--keyboard)]'
+            : // A full page ends above the keyboard even when raised so its top stays in view.
+              pageAboveKeyboard
+              ? 'bottom-[var(--keyboard)]'
+              : raised || carded
+                ? 'bottom-0 [translate:0_calc(var(--keyboard)*-1)]'
                 : 'bottom-0',
         )}
       >
+        {/* The glass continues behind the keyboard's corners while the form stays above it. */}
+        <div
+          aria-hidden
+          className={cn(
+            'glass-thick pointer-events-none absolute -inset-x-px -top-px -z-10 rounded-[inherit]',
+            pageAboveKeyboard && !page.fit
+              ? 'bottom-[calc(-1px-min(var(--keyboard),1.25rem))]'
+              : '-bottom-px',
+          )}
+        />
         <AnimatePresence>
           {card && (
             <motion.div

@@ -12,8 +12,11 @@ import { cn } from '@/lib/utils';
 type TagEditorProps = {
   projectId: string;
   tags: readonly Tag[];
-  initial: { tag?: Tag; parentId: string | null };
+  /** A new tag may start with a color, such as one no root holds yet. */
+  initial: { tag?: Tag; parentId: string | null; color?: Tag['color'] };
   onDone: () => void;
+  /** Called with a new tag's id, so the picker that asked for it can assign it. */
+  onCreated?: (id: string) => void;
 };
 
 /**
@@ -25,12 +28,15 @@ export function TagEditor({
   tags,
   initial,
   onDone,
+  onCreated,
   nameRef,
 }: TagEditorProps & { nameRef?: RefObject<HTMLInputElement | null> }) {
   const nameId = useId();
   const [name, setName] = useState(initial.tag?.name ?? '');
   const [parentId, setParentId] = useState(initial.parentId);
-  const [color, setColor] = useState<Tag['color']>(initial.tag?.color ?? null);
+  const [color, setColor] = useState<Tag['color']>(
+    initial.tag ? initial.tag.color : (initial.color ?? null),
+  );
   const [icon, setIcon] = useState<Tag['icon']>(initial.tag?.icon ?? null);
   const [iconSearch, setIconSearch] = useState('');
   const [error, setError] = useState('');
@@ -53,7 +59,10 @@ export function TagEditor({
         icon: parentId ? null : icon,
       };
       if (initial.tag) updateTag(initial.tag.id, fields);
-      else createTag(projectId, fields);
+      else {
+        const id = createTag(projectId, fields);
+        onCreated?.(id);
+      }
       haptics.success();
       onDone();
     } catch (error) {

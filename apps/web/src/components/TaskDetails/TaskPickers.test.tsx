@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { Status, Tag, Task } from '@throw/shared';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { Project } from '@/components/Board/model';
+import { closeNewTag, newTagHosted, newTagRequest } from '@/components/NewTag/NewTag';
 import { ColorTagsPicker, PriorityPicker, StatusPicker, TagsPicker } from './TaskPickers';
 
 const fake = vi.hoisted(() => ({
@@ -108,6 +109,50 @@ it('assigns tags in both roles without closing', () => {
   expect(screen.getByRole('checkbox', { name: 'Work' })).toBeChecked();
   fireEvent.click(screen.getByRole('checkbox', { name: 'Work' }));
   expect(fake.secondary).toHaveBeenCalledWith('task', 'work', false);
+});
+
+it('assigns a tag made from either panel’s corner, and returns the color panel to its branch', async () => {
+  newTagHosted.set(true);
+  const tag = (id: string, name: string, parentId: string | null = null): Tag => ({
+    id,
+    workspaceId: 'workspace',
+    projectId: 'project',
+    parentId,
+    name,
+    color: parentId ? null : 'teal',
+    icon: null,
+  });
+  fake.tags = [tag('work', 'Work'), tag('mobile', 'Mobile', 'work')];
+  fake.taskTags = [];
+  const first = render(<ColorTagsPicker task={task} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Teal: Work' }));
+  await screen.findByRole('button', { name: 'Back from Work' });
+  fireEvent.click(screen.getByRole('button', { name: 'New tag' }));
+  const asked = newTagRequest.get();
+  expect(asked).toMatchObject({ projectId: 'project', parentId: 'work', color: null });
+  // On a phone the form takes the picker's page, and Back brings the picker back to its branch.
+  first.unmount();
+  asked?.onCreated('made');
+  expect(fake.primary).toHaveBeenLastCalledWith('task', 'made');
+  closeNewTag();
+  const second = render(<ColorTagsPicker task={task} />);
+  expect(screen.getByRole('button', { name: 'Back from Work' })).toBeInTheDocument();
+  second.unmount();
+  // Left in place, as on desktop, the picker opens at its colors next time.
+  render(<ColorTagsPicker task={task} />);
+  fireEvent.click(screen.getByRole('button', { name: 'New tag' }));
+  expect(newTagRequest.get()).toMatchObject({ parentId: null, color: 'red' });
+  closeNewTag();
+  cleanup();
+  render(<ColorTagsPicker task={task} />);
+  expect(screen.queryByRole('button', { name: 'Back from Work' })).toBeNull();
+  cleanup();
+  render(<TagsPicker task={task} />);
+  fireEvent.click(screen.getByRole('button', { name: 'New tag' }));
+  newTagRequest.get()?.onCreated('made');
+  expect(fake.secondary).toHaveBeenLastCalledWith('task', 'made', true);
+  closeNewTag();
+  newTagHosted.set(false);
 });
 
 it('closes on picking the current status or priority again, without writing', () => {

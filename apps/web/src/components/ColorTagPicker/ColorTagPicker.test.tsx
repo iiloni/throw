@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { Tag } from '@throw/shared';
 import { useState } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { newTagHosted } from '@/components/NewTag/NewTag';
 import { ColorTagPicker } from './ColorTagPicker';
 
 const tag = (id: string, name: string, parentId: string | null, color: Tag['color']): Tag => ({
@@ -84,4 +85,41 @@ it('reaches uncolored tags one step away and clears the primary', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Back to colors' }));
   fireEvent.click(await screen.findByRole('button', { name: 'No color tag' }));
   expect(onChange).toHaveBeenLastCalledWith(null);
+});
+
+it('offers a new tag at the open view’s level, with a free color at the top', async () => {
+  newTagHosted.set(true);
+  const onNewTag = vi.fn();
+  render(
+    <ColorTagPicker tags={tags} primaryTagId={null} onChange={() => {}} onNewTag={onNewTag} />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'New tag' }));
+  // Red is the first color in palette order that no root holds.
+  expect(onNewTag).toHaveBeenLastCalledWith({ parentId: null, color: 'red', branch: null });
+  fireEvent.click(screen.getByRole('button', { name: 'Teal: Product' }));
+  await screen.findByRole('button', { name: 'Back from Product' });
+  fireEvent.click(screen.getByRole('button', { name: 'New tag' }));
+  expect(onNewTag).toHaveBeenLastCalledWith({
+    parentId: 'product',
+    color: null,
+    branch: 'product',
+  });
+  newTagHosted.set(false);
+});
+
+it('opens on the branch it was left at, and offers no new tag without a form to show', () => {
+  render(
+    <ColorTagPicker
+      tags={tags}
+      primaryTagId="mobile"
+      onChange={() => {}}
+      onNewTag={() => {}}
+      initialBranch="product"
+    />,
+  );
+  expect(screen.getByRole('button', { name: 'Product / Mobile' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  expect(screen.queryByRole('button', { name: 'New tag' })).toBeNull();
 });

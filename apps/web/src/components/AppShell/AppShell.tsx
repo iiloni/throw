@@ -29,6 +29,7 @@ import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { CommandPalette, type PaletteMode } from '@/components/CommandPalette/CommandPalette';
 import { Hint } from '@/components/Hint/Hint';
 import { ManagementSurfaceProvider } from '@/components/ManagementSurface/ManagementSurface';
+import { NewTagHost } from '@/components/NewTag/NewTagHost';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { type ShellForm, ShellForms } from '@/components/ShellForms/ShellForms';
@@ -421,6 +422,7 @@ export function AppShell() {
         <AppUpdatePrompt />
         <WebUpdatePrompt />
         <ShellForms form={form} onClose={() => setForm(null)} />
+        <NewTagHost />
       </ManagementSurfaceProvider>
     </ShellContext.Provider>
   );
