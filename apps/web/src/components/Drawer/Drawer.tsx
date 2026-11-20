@@ -132,6 +132,7 @@ export function Drawer({
   const grooming = moving && detent === 'full' && !paged;
   const moveInHead = moving && !grooming;
   const carded = card !== null;
+  const pageAboveKeyboard = paged && !carded && (!raised || !page.fit);
   const modal = paged || carded;
   // Read by effects that run once per opening, after the props that opened them.
   const latest = useRef({ page, card });
@@ -394,21 +395,30 @@ export function Drawer({
         data-origin={page ? page.origin : origin}
         style={{ y, '--drawer-reveal': reveal } as MotionStyle}
         className={cn(
-          'glass-thick fixed inset-x-0 top-[calc(var(--safe-top)+0.5rem)] mx-auto flex w-full max-w-md flex-col rounded-t-[1.75rem] outline-none',
+          'fixed inset-x-0 top-[calc(var(--safe-top)+0.5rem)] mx-auto flex w-full max-w-md flex-col rounded-t-[1.75rem] border border-transparent outline-none',
           raised ? 'z-[45]' : 'z-30',
           // Over a card, the drawer keeps its full height and the keyboard rides under the dock
           // until a page reaches past it, so a picker settles low, by the fingers.
           carded && !typingInPage
             ? 'bottom-0 [translate:0_calc(max(0px,var(--keyboard)-var(--drawer-reveal))*-1)]'
-            : // A full page ends above the keyboard even when raised: lifted whole, as the dock
-              // is, its top and the field being typed in would go off screen.
-              (raised && !(paged && !page.fit)) || carded
-              ? 'bottom-0 [translate:0_calc(var(--keyboard)*-1)]'
-              : paged
-                ? 'bottom-[var(--keyboard)]'
+            : // A full page ends above the keyboard even when raised so its top stays in view.
+              pageAboveKeyboard
+              ? 'bottom-[var(--keyboard)]'
+              : raised || carded
+                ? 'bottom-0 [translate:0_calc(var(--keyboard)*-1)]'
                 : 'bottom-0',
         )}
       >
+        {/* The glass continues behind the keyboard's corners while the form stays above it. */}
+        <div
+          aria-hidden
+          className={cn(
+            'glass-thick pointer-events-none absolute -inset-x-px -top-px -z-10 rounded-[inherit]',
+            pageAboveKeyboard && !page.fit
+              ? 'bottom-[calc(-1px-min(var(--keyboard),1.25rem))]'
+              : '-bottom-px',
+          )}
+        />
         <AnimatePresence>
           {card && (
             <motion.div
