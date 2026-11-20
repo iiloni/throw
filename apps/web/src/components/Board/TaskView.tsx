@@ -1,11 +1,25 @@
 import { ArrowLeft, X } from 'lucide-react';
-import { motion, useDragControls, useIsPresent, useReducedMotion } from 'motion/react';
+import {
+  AnimatePresence,
+  motion,
+  useDragControls,
+  useIsPresent,
+  useReducedMotion,
+} from 'motion/react';
 import { Dialog } from 'radix-ui';
-import { type PointerEvent, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  type PointerEvent,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
-import { springs } from '@/lib/motion';
+import { curves, EASE_EMPHASIZED, springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { PriorityGlyph, StatusGlyph } from './glyphs';
 import { identifier, priorityName, statusById, subtasksOf, type Task, taskColor } from './model';
@@ -213,28 +227,45 @@ export function TaskPane({ task }: { task: Task }) {
   const content = useContext(TaskContentContext);
   useBackHandler(true, () => update({ openTaskId: null }));
   const { project } = current(board.use());
+  const reduced = useReducedMotion();
+  // Into a subtask the pane pushes it in over its parent; back out, it pops it off again.
+  const shown = useRef(task);
+  const [step, setStep] = useState<{ id: string; direction: PaneStep }>({
+    id: task.id,
+    direction: 0,
+  });
+  if (step.id !== task.id) {
+    const from = shown.current;
+    setStep({
+      id: task.id,
+      direction: task.parentId === from.id ? 1 : from.parentId === task.id ? -1 : 0,
+    });
+  }
+  useEffect(() => {
+    shown.current = task;
+  });
+  const direction = reduced ? 0 : step.direction;
   return (
     <motion.section
       aria-label="Task"
       inert={!present}
       data-color={taskColor(project, task) ?? undefined}
       className={cn(
-        'flex h-full min-w-0 flex-col',
-        // The real task draws its own card between its toolbars and dock.
-        !content && cardSurface,
+        'h-full min-w-0',
+        // The real task draws its own card between its toolbars and dock, and its pages stack
+        // in one cell while one replaces another.
+        content
+          ? 'grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)]'
+          : cn('flex flex-col', cardSurface),
       )}
       style={{ minWidth: PANE_MIN }}
     >
       {content ? (
-        <motion.div
-          key={task.id}
-          className="flex min-h-0 flex-1 flex-col"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, ease: 'easeOut' }}
-        >
-          {content.body(task.id)}
-        </motion.div>
+        <AnimatePresence initial={false} custom={direction}>
+          <PaneStepLayer key={task.id} direction={direction}>
+            {content.body(task.id)}
+          </PaneStepLayer>
+        </AnimatePresence>
       ) : (
         <>
           <TaskHeader task={task} />
@@ -242,6 +273,53 @@ export function TaskPane({ task }: { task: Task }) {
         </>
       )}
     </motion.section>
+  );
+}
+
+/** Into a subtask (1), back out to its parent (-1), or to another task (0). */
+type PaneStep = 1 | -1 | 0;
+
+/** How far a task travels as it is pushed or popped beside the board, and its parent. */
+const PUSH = 56;
+const RECEDE = 24;
+const paneStep = {
+  enter: (direction: PaneStep) =>
+    direction === 0
+      ? { opacity: 0, x: 0, y: 12, zIndex: 1 }
+      : { opacity: 0, x: direction > 0 ? PUSH : -RECEDE, y: 0, zIndex: direction > 0 ? 1 : 0 },
+  shown: {
+    opacity: 1,
+    x: 0,
+    y: 0,
+    transition: { duration: curves.enter.duration, ease: EASE_EMPHASIZED },
+  },
+  leave: (direction: PaneStep) =>
+    direction === 0
+      ? { opacity: 0, transition: { duration: 0 } }
+      : {
+          opacity: 0,
+          x: direction > 0 ? -RECEDE : PUSH,
+          zIndex: direction > 0 ? 0 : 1,
+          transition: { duration: curves.collapse.duration * 0.7, ease: EASE_EMPHASIZED },
+        },
+};
+
+/** One task's page in the pane; a leaving page is out of reach while it goes. */
+function PaneStepLayer({ direction, children }: { direction: PaneStep; children: ReactNode }) {
+  const present = useIsPresent();
+  return (
+    <motion.div
+      className="col-start-1 row-start-1 flex min-h-0 min-w-0 flex-col"
+      custom={direction}
+      variants={paneStep}
+      initial="enter"
+      animate="shown"
+      exit="leave"
+      inert={!present}
+      aria-hidden={!present || undefined}
+    >
+      {children}
+    </motion.div>
   );
 }
 

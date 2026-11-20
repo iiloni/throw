@@ -41,6 +41,10 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
   const opener = useRef(
     document.activeElement instanceof HTMLElement ? document.activeElement : null,
   );
+  // A task discarded as it closes (a new subtask left empty) keeps its last page while it goes.
+  const page = content.body(task.id);
+  const lastPage = useRef(page);
+  if (page) lastPage.current = page;
   const close = () => {
     if (board.get().openTaskId === task.id) leaveTask();
   };
@@ -194,7 +198,7 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
           >
             <TaskScrollContext.Provider value={attachScroll}>
               <TaskEditorReadyContext.Provider value={settled}>
-                {content.body(task.id)}
+                {lastPage.current}
               </TaskEditorReadyContext.Provider>
             </TaskScrollContext.Provider>
           </motion.div>

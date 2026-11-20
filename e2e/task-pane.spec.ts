@@ -161,31 +161,36 @@ test('task fields, actions, subtasks and task links work in the split pane and p
 
   await page.goto(`${account.path}&task=${account.taskId}`);
   // Adding a subtask makes it at once and opens it as a task of its own, over its parent,
-  // with its title selected to be written and its full controls.
-  await pane.getByRole('button', { name: 'Add subtask', exact: true }).click();
+  // with its title ready to be written and its full controls.
+  const addSubtask = pane.getByRole('button', { name: 'Add subtask', exact: true });
   const title = pane.getByRole('textbox', { name: 'Task title' });
-  await expect(title).toHaveValue('New subtask');
+  const subtaskRows = async () =>
+    (await shapeRows(page.request, 'tasks', account.headers)).filter(
+      (row) => row.parent_id === account.taskId,
+    );
+  await addSubtask.click();
+  await expect(title).toHaveValue('');
   await expect(title).toBeFocused();
-  expect(
-    await title.evaluate((input: HTMLTextAreaElement) => [
-      input.selectionStart,
-      input.selectionEnd,
-    ]),
-  ).toEqual([0, 'New subtask'.length]);
-  await expect(pane.getByRole('button', { name: 'Add subtask', exact: true })).toHaveCount(0);
+  await expect(addSubtask).toHaveCount(0);
   await expect(pane.getByRole('button', { name: /^Open parent / })).toBeVisible();
   await expect(
     controls(page).getByRole('button', { name: 'Status: backlog. Change', exact: true }),
   ).toBeVisible();
   if (isMobile) await expect(page.getByLabel('Task beneath', { exact: true })).toHaveCount(1);
+  // Left as it was made, it was never wanted: it goes, rather than stay as an untitled task.
+  await title.press('Escape');
+  await expect(title).toHaveValue('A plan ready to share');
+  await expect(pane.getByRole('article', { name: /Untitled task$/ })).toHaveCount(0);
+  await expect.poll(async () => (await subtaskRows()).length).toBe(0);
+  await addSubtask.click();
+  await expect(title).toBeFocused();
   await page.keyboard.type('Draft the announcement');
   // Escape names it and goes back to the parent, whose list now holds it.
   await title.press('Escape');
   await expect(title).toHaveValue('A plan ready to share');
   const added = pane.getByRole('article', { name: /^TASK-\d+ Draft the announcement$/ });
   await expect(added).toBeVisible();
-  if (isMobile)
-    await expect(pane.getByRole('button', { name: 'Add subtask', exact: true })).toBeFocused();
+  if (isMobile) await expect(addSubtask).toBeFocused();
   else await expect(added).toBeFocused();
   await pane
     .getByRole('button', { name: 'Status of Draft the announcement: backlog. Change' })
