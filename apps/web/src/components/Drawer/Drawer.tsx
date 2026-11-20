@@ -71,7 +71,8 @@ export type DrawerCard = {
  * closing the page returns it to the height it was at. A docked page keeps the dock above it. A held card sinks it out of the way,
  * unless it is full and its own list is being reordered. Raised, it sits above a full-screen
  * view such as an open task, and its dock rides above the keyboard as a note's dock does in
- * Catch. Otherwise an open page ends above the keyboard, so its input stays in view. A card
+ * Catch, as does a short page; a full page ends above the keyboard instead, so its input stays
+ * in view. Otherwise an open page ends above the keyboard too. A card
  * floats above the dock, which rides above the keyboard with it. A page opened over the card
  * takes the keyboard's place rather than stacking on it, so the card glides between the two
  * instead of bouncing as one leaves and the other arrives.
@@ -399,7 +400,9 @@ export function Drawer({
           // until a page reaches past it, so a picker settles low, by the fingers.
           carded && !typingInPage
             ? 'bottom-0 [translate:0_calc(max(0px,var(--keyboard)-var(--drawer-reveal))*-1)]'
-            : raised || carded
+            : // A full page ends above the keyboard even when raised: lifted whole, as the dock
+              // is, its top and the field being typed in would go off screen.
+              (raised && !(paged && !page.fit)) || carded
               ? 'bottom-0 [translate:0_calc(var(--keyboard)*-1)]'
               : paged
                 ? 'bottom-[var(--keyboard)]'

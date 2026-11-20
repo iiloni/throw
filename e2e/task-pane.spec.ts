@@ -679,6 +679,23 @@ test('the color and tags panels make a tag in their corner and assign it at once
   await controls(page).getByRole('button', { name: 'Color: none. Change', exact: true }).click();
   await newTag('Color').click();
   await expect(form.getByRole('textbox', { name: 'Name' })).toBeFocused();
+  if (isMobile) {
+    // The open task raises the drawer, whose dock rides up on the keyboard; the form's page
+    // ends above the keyboard instead, so its title and the field being typed in stay in view.
+    const keyboard = 300;
+    await page.evaluate(
+      (height) => document.documentElement.style.setProperty('--keyboard', `${height}px`),
+      keyboard,
+    );
+    const viewport = page.viewportSize()!;
+    await expect
+      .poll(async () => (await form.boundingBox())!.y + (await form.boundingBox())!.height)
+      .toBeLessThanOrEqual(viewport.height - keyboard + 1);
+    await expect(form.getByRole('heading', { name: 'New tag' })).toBeInViewport({ ratio: 1 });
+    await expect(form.getByRole('textbox', { name: 'Name' })).toBeInViewport({ ratio: 1 });
+    await expect.poll(async () => (await form.boundingBox())!.y).toBeGreaterThanOrEqual(0);
+    await page.evaluate(() => document.documentElement.style.removeProperty('--keyboard'));
+  }
   await expect(form.getByRole('button', { name: 'Orange', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
