@@ -299,12 +299,7 @@ export function TaskCard({
         className={cn('-z-10 relative flex flex-col', underlayHidden && 'invisible')}
         style={{ y: underlayY }}
       >
-        <SubtaskUnderlay
-          parent={task}
-          subtasks={subtasks}
-          inert={overlay}
-          folding={overlay && dragState?.unfolded}
-        />
+        <SubtaskUnderlay parent={task} subtasks={subtasks} inert={overlay} />
       </motion.div>
     </div>
   );

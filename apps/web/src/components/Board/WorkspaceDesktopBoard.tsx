@@ -7,7 +7,7 @@ import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scrol
 import { usePersistentState } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 import { OpenTaskPane, SelectionBar, useWidth } from './DesktopBoard';
-import { drag } from './drag';
+import { drag, makingWay } from './drag';
 import { StatusGlyph } from './glyphs';
 import {
   CATEGORIES,
@@ -126,7 +126,7 @@ function CategoryColumn({
   const { project, tasks } = current(state);
   const target = categoryTarget(category);
   const listId: ListId = target;
-  const dragging = held?.phase === 'dragging';
+  const dragging = makingWay(held);
   const aimed = dragging ? held.target : null;
   const over =
     aimed?.kind === 'status' &&

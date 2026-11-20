@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
-import { drag } from './drag';
+import { drag, makingWay } from './drag';
 import { groupByPriority, priorityName } from './model';
 import { board, current, listTasks } from './state';
 import { TaskCard } from './TaskCard';
@@ -21,7 +21,8 @@ export function BacklogGallery({ showStatus }: { showStatus: boolean }) {
   const tasks = listTasks(state, 'backlog');
   const dragging = held?.phase === 'dragging';
   const columns = useColumns(dragging);
-  const placing = dragging && held.origin === 'backlog' && held.ids.length === 1;
+  // A card just lifted keeps its place, faded, and the gallery waits for it to move.
+  const placing = makingWay(held) && held.origin === 'backlog' && held.ids.length === 1;
   const target =
     placing && held.target?.kind === 'place' && held.target.listId === 'backlog'
       ? held.target

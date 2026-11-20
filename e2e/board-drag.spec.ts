@@ -59,6 +59,55 @@ test.describe('desktop', () => {
       .toEqual([board.status('Review'), '3']);
   });
 
+  test('a card just picked up leaves its column as it was until it moves, and a drop then puts it back', async ({
+    page,
+  }) => {
+    const board = await fixture(page);
+    const build = page.getByRole('region', { name: 'Build', exact: true });
+    const order = await cardIds(page, 'Build');
+    const neighbours = ['Board parent', 'Later position', 'Low priority'].map((title) =>
+      card(page, title),
+    );
+    const tops = () => Promise.all(neighbours.map(async (item) => (await item.boundingBox())!.y));
+    const before = await tops();
+    const start = await centre(card(page, 'Earlier position'));
+    const lift = async () => {
+      await page.mouse.move(start.x, start.y);
+      await page.mouse.down();
+      // Past the slop, so it is held, but short of making way.
+      await page.mouse.move(start.x + 4, start.y + 8, { steps: 4 });
+      await expect(page.locator('[data-overlay]')).toBeVisible();
+    };
+
+    await lift();
+    await page.waitForTimeout(400);
+    // Nothing around it has moved: no rails, no labels, and its place is held open.
+    await expect(build.locator('[data-drop-rail]')).toHaveCount(0);
+    await expect(build.locator('[data-mode="open"], [data-mode="label"]')).toHaveCount(0);
+    const held = await tops();
+    for (const [index, top] of held.entries()) expect(top).toBeCloseTo(before[index]!, 0);
+    await page.mouse.up();
+    await expect(page.locator('[data-overlay]')).toHaveCount(0);
+    expect(await cardIds(page, 'Build')).toEqual(order);
+    expect((await taskRow(page, board.headers, board.ids['Earlier position']!))?.position).toBe(
+      'a0',
+    );
+
+    // Carried on, the column makes way: the other priorities fold into rails.
+    await lift();
+    await page.mouse.move(start.x, start.y + 40, { steps: 6 });
+    await expect(build.locator('[data-drop-rail="1"]')).toBeVisible();
+    await expect(build.locator('[data-drop-rail="5"]')).toBeVisible();
+    // The column folded under a card that then stayed put: dropped, it keeps its place.
+    await page.waitForTimeout(400);
+    await page.mouse.up();
+    await expect(page.locator('[data-overlay]')).toHaveCount(0);
+    expect(await cardIds(page, 'Build')).toEqual(order);
+    expect((await taskRow(page, board.headers, board.ids['Earlier position']!))?.position).toBe(
+      'a0',
+    );
+  });
+
   test('Escape puts a held card back and writes nothing', async ({ page }) => {
     const board = await fixture(page);
     const before = await cardIds(page, 'Build');
