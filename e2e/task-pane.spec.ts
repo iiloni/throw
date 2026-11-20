@@ -749,6 +749,58 @@ test('the phone surface grows from its card without scaling text and lands back 
   await expect(card).toBeVisible();
 });
 
+test("a subtask lands in its card in the parent with the card's face and edge", async ({
+  page,
+  isMobile,
+  browserName,
+}) => {
+  test.skip(
+    !isMobile && browserName !== 'firefox',
+    'Phone morph; Firefox exercises the same phone viewport.',
+  );
+  if (!isMobile) await page.setViewportSize({ width: 412, height: 915 });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const { pane } = await fixture(page);
+  await pane.getByRole('button', { name: 'Add subtask', exact: true }).click();
+  await page.keyboard.type('Sharpen the shears');
+  await page.getByRole('button', { name: 'Back to TASK-1' }).click();
+  const card = pane.getByRole('article', { name: 'TASK-2 Sharpen the shears' });
+  await expect(card).toBeVisible();
+  await card.click();
+  const subtask = page.getByLabel('Task', { exact: true });
+  await expect(subtask.getByRole('textbox', { name: 'Task title' })).toHaveValue(
+    'Sharpen the shears',
+  );
+  // The last frame of the surface, before the card is shown again in its place.
+  const last = page.evaluate(
+    () =>
+      new Promise<{ status: DOMRect; edge: number } | null>((resolve) => {
+        let seen: { status: DOMRect; edge: number } | null = null;
+        const start = performance.now();
+        const frame = () => {
+          const surface = document.querySelector('[aria-label="Closing task"] [data-task-surface]');
+          if (!surface && seen) return resolve(seen);
+          if (surface) {
+            const edge = surface.querySelector('[data-task-edge]');
+            seen = {
+              status: surface.querySelector('[data-task-face] .truncate')!.getBoundingClientRect(),
+              edge: edge ? Number(getComputedStyle(edge).opacity) : 0,
+            };
+          }
+          if (performance.now() - start > 5000) return resolve(null);
+          requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
+      }),
+  );
+  await page.getByRole('button', { name: 'Back to TASK-1' }).click();
+  const landed = (await last)!;
+  const status = (await card.getByText('backlog').boundingBox())!;
+  expect(Math.abs(landed.status.x - status.x)).toBeLessThan(1);
+  expect(Math.abs(landed.status.y - status.y)).toBeLessThan(1);
+  expect(landed.edge).toBeGreaterThan(0.95);
+});
+
 test('the open task lives in the URL: reload keeps it, Back closes it, a stale link says so', async ({
   page,
 }) => {

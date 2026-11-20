@@ -47,17 +47,23 @@ function closedAgo(closedAt: number) {
   return days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days}d ago`;
 }
 
+/** A card's status control: its tap target reaches beyond the line without growing it much. */
+export const CARD_STATUS_CONTROL = '-my-2 flex min-h-10 min-w-0 items-center gap-1 rounded-lg px-1';
+
 /** What a card says: the title, then one quiet line of everything else. */
 export function TaskCardFace({
   project,
   task,
   showStatus,
   statusControl,
+  statusAsControl = false,
 }: {
   project: Project;
   task: Task;
   showStatus?: boolean;
   statusControl?: ReactNode;
+  /** Lays the status out as `statusControl` would, for a copy of a card that has one. */
+  statusAsControl?: boolean;
 }) {
   const [settings] = useBoardSettings();
   const state = board.use();
@@ -104,7 +110,9 @@ export function TaskCardFace({
         <span className="flex-1" />
         {statusControl ??
           (showStatus && status && (
-            <span className="flex min-w-0 items-center gap-1">
+            <span
+              className={statusAsControl ? CARD_STATUS_CONTROL : 'flex min-w-0 items-center gap-1'}
+            >
               <StatusGlyph category={status.category} className="size-3" />
               <span className="truncate">{status.name}</span>
             </span>
@@ -221,6 +229,7 @@ export function TaskCard({
       data-card-id={task.id}
       data-card-root={subtasks.length === 0 ? '' : undefined}
       data-show-status={showStatus ? '' : undefined}
+      data-status-control={statusControl ? '' : undefined}
       data-overlay={overlay ? '' : undefined}
       data-color={color ?? undefined}
       tabIndex={overlay ? -1 : 0}

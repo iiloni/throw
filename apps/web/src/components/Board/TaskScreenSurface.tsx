@@ -19,6 +19,8 @@ import { MAX_DRAG, useSwipeToDismiss } from './useSwipeToDismiss';
 const lerp = (from: number, to: number, progress: number) => from + (to - from) * progress;
 /** Catch's lead: the card's underlay starts moving this long before the task lands. */
 const LAND_EARLY = 0.25;
+/** A card's border width: its face sits inside it. */
+const CARD_BORDER = 1;
 
 /**
  * Catch's card ⇄ note container transform: resize the clipping box, never its text. A subtask
@@ -31,8 +33,13 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
   const reduced = useReducedMotion();
   const [origin] = useState(() => (reduced ? null : takeTaskOrigin(task.id)));
   const card = useMotionValue(origin);
-  // The face matches the card it leaves or lands on: a board column's cards omit their status.
-  const [faceStatus, setFaceStatus] = useState(origin?.showStatus ?? true);
+  // The face matches the card it leaves or lands on: a board column's cards omit their status,
+  // and a subtask's card in its parent makes it a control.
+  const [face, setFace] = useState({
+    showStatus: origin?.showStatus ?? true,
+    statusControl: origin?.statusControl ?? false,
+  });
+  const color = taskColor(project, task);
   const viewport = useMotionValue({ width: innerWidth, height: innerHeight });
   const progress = useMotionValue(reduced ? 1 : 0);
   const fade = useMotionValue(origin || reduced ? 1 : 0);
@@ -76,7 +83,13 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
   const backdrop = useTransform(() => progress.get() * 0.35);
   const pageWidth = useTransform(() => viewport.get().width);
   const pageHeight = useTransform(() => viewport.get().height);
-  const faceWidth = useTransform(() => card.get()?.width ?? viewport.get().width);
+  const faceWidth = useTransform(
+    () => (card.get()?.width ?? viewport.get().width) - 2 * CARD_BORDER,
+  );
+  // The card's own edge, which it is hidden with while the task is out of it.
+  const boxShadow = useTransform(
+    () => `0 1px 2px oklch(0 0 0 / ${(0.06 * faceOpacity.get()).toFixed(3)})`,
+  );
 
   useEffect(() => {
     const resize = () => viewport.set({ width: innerWidth, height: innerHeight });
@@ -101,7 +114,7 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
         const rect = measureTaskCard(task.id);
         card.set(rect);
         if (rect) {
-          setFaceStatus(rect.showStatus);
+          setFace({ showStatus: rect.showStatus, statusControl: rect.statusControl });
           setTaskCardHidden(task.id, true);
           landing = window.setTimeout(
             () => landTaskCard(task.id),
@@ -185,12 +198,22 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
           }
         }}
       >
-        {/* No shadow of its own, as in Catch: the card it lands in has one, so none vanishes. */}
+        {/* Near the card it wears the card's edge, border and shadow, so landing changes nothing. */}
         <motion.div
           data-task-surface=""
-          data-color={taskColor(project, task) ?? undefined}
+          data-color={color ?? undefined}
           className="pointer-events-auto absolute top-0 left-0 overflow-hidden bg-[var(--tint,var(--card))]"
-          style={{ x, y, width, height, borderRadius, scale, opacity, transformOrigin: 'center' }}
+          style={{
+            x,
+            y,
+            width,
+            height,
+            borderRadius,
+            scale,
+            opacity,
+            boxShadow,
+            transformOrigin: 'center',
+          }}
         >
           <motion.div
             className="flex flex-col"
@@ -204,11 +227,26 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
           </motion.div>
           <motion.div
             aria-hidden
-            className="pointer-events-none absolute top-0 left-0"
+            data-task-face=""
+            className="pointer-events-none absolute top-px left-px"
             style={{ width: faceWidth, opacity: faceOpacity }}
           >
-            <TaskCardFace project={project} task={task} showStatus={faceStatus} />
+            <TaskCardFace
+              project={project}
+              task={task}
+              showStatus={face.showStatus}
+              statusAsControl={face.statusControl}
+            />
           </motion.div>
+          {/* A tinted card's border is transparent. */}
+          {!color && (
+            <motion.div
+              aria-hidden
+              data-task-edge=""
+              className="pointer-events-none absolute inset-0 rounded-[inherit] border border-border"
+              style={{ opacity: faceOpacity }}
+            />
+          )}
         </motion.div>
       </section>
     </>
