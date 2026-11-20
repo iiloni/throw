@@ -1,7 +1,6 @@
-import { Capacitor } from '@capacitor/core';
 import type * as React from 'react';
+import { Hint, type HintSide } from '@/components/Hint/Hint';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 type Props = React.ComponentProps<typeof Button> & {
@@ -9,10 +8,18 @@ type Props = React.ComponentProps<typeof Button> & {
   label: string;
   /** Docks go without: a tooltip left open as the dock hides would take the next Escape. */
   tooltip?: boolean;
+  tooltipSide?: HintSide;
 };
 
 /** Icon-only button. Stops clicks from reaching a clickable card. */
-export function IconButton({ label, className, onClick, tooltip = true, ...props }: Props) {
+export function IconButton({
+  label,
+  className,
+  onClick,
+  tooltip = true,
+  tooltipSide,
+  ...props
+}: Props) {
   const button = (
     <Button
       variant="ghost"
@@ -27,12 +34,9 @@ export function IconButton({ label, className, onClick, tooltip = true, ...props
     />
   );
 
-  if (!tooltip || Capacitor.getPlatform() === 'android') return button;
-
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>{button}</TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
+    <Hint label={label} side={tooltipSide} disabled={!tooltip}>
+      {button}
+    </Hint>
   );
 }

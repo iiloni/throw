@@ -13,11 +13,13 @@ test('tag workshop manages a real tree and both task roles with touch and keyboa
   await page.getByRole('button', { name: 'Create example project' }).click();
   const picker = page.getByRole('region', { name: 'Choose task tags' });
   const primaryBadge = picker.getByRole('group', { name: 'Primary tag' });
-  await expect(primaryBadge.getByTitle('Product / Features / Mobile', { exact: true })).toBeVisible(
-    {
-      timeout: APP_LOAD_TIMEOUT,
-    },
-  );
+  // The group also lists a root's children; the badge morphs between names, measuring each in
+  // a hidden copy first.
+  const primaryName = (name: string) =>
+    primaryBadge.locator('.glass-badge').getByText(name, { exact: true }).filter({ visible: true });
+  await expect(primaryName('Mobile')).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
   await expect(picker.getByRole('checkbox', { name: 'Research', exact: true })).toBeChecked();
   const badge = page
     .getByRole('button', { name: 'Product / Features / Mobile', exact: true })
@@ -40,7 +42,7 @@ test('tag workshop manages a real tree and both task roles with touch and keyboa
     await picker.getByRole('checkbox', { name: 'Product', exact: true }).check();
   }
   await picker.getByRole('button', { name: 'Amber: Research', exact: true }).click();
-  await expect(primaryBadge.getByTitle('Research', { exact: true })).toBeVisible();
+  await expect(primaryName('Research')).toBeVisible();
   // A primary may be secondary too; both roles survive independently.
   await expect(picker.getByRole('checkbox', { name: 'Research', exact: true })).toBeChecked();
   // Research has children, so picking it opens them.
@@ -88,9 +90,12 @@ test('tag workshop manages a real tree and both task roles with touch and keyboa
   await picker
     .getByRole('button', { name: 'Product / Features / Quality checks', exact: true })
     .click();
-  await expect(
-    primaryBadge.getByTitle('Product / Features / Quality checks', { exact: true }),
-  ).toBeVisible();
+  await expect(primaryName('Quality checks')).toBeVisible();
+  if (!isMobile) {
+    // A nested tag shows its own name; its hint gives the path.
+    await primaryName('Quality checks').hover();
+    await expect(page.getByRole('tooltip')).toHaveText('Product / Features / Quality checks');
+  }
   await picker.getByRole('textbox', { name: 'Find tags' }).fill('');
   await manager.getByRole('button', { name: 'Delete Quality checks', exact: true }).click();
   await page

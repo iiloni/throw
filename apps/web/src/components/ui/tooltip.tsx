@@ -3,11 +3,17 @@ import type * as React from 'react';
 import { createContext, useContext, useState } from 'react';
 import { cn } from '@/lib/utils';
 
+const Provided = createContext(false);
+
 function TooltipProvider({
   delayDuration = 300,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
-  return <TooltipPrimitive.Provider delayDuration={delayDuration} {...props} />;
+  return (
+    <Provided.Provider value>
+      <TooltipPrimitive.Provider delayDuration={delayDuration} {...props} />
+    </Provided.Provider>
+  );
 }
 
 const TooltipOpen = createContext(false);
@@ -20,7 +26,7 @@ function Tooltip({
 }: React.ComponentProps<typeof TooltipPrimitive.Root>) {
   const [uncontrolled, setUncontrolled] = useState(defaultOpen);
   const open = openProp ?? uncontrolled;
-  return (
+  const tooltip = (
     <TooltipOpen.Provider value={open}>
       <TooltipPrimitive.Root
         data-slot="tooltip"
@@ -33,6 +39,9 @@ function Tooltip({
       />
     </TooltipOpen.Provider>
   );
+  // The root mounts one provider, so hints share its delay. One rendered on its own (a test,
+  // a preview) brings its own rather than throwing.
+  return useContext(Provided) ? tooltip : <TooltipProvider>{tooltip}</TooltipProvider>;
 }
 
 function TooltipTrigger(props: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
@@ -55,7 +64,8 @@ function TooltipContent({
         data-slot="tooltip-content"
         sideOffset={sideOffset}
         className={cn(
-          'fade-in-0 zoom-in-95 z-50 animate-in rounded-md px-3 py-1.5 text-xs',
+          // Above every layer a hint can sit on: the drawer, dialogs and the palette (`z-[70]`).
+          'fade-in-0 zoom-in-95 z-[75] animate-in rounded-md px-3 py-1.5 text-xs',
           variant === 'glass' ? 'glass text-foreground' : 'bg-primary text-primary-foreground',
           className,
         )}

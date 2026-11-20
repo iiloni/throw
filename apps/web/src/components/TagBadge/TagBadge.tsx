@@ -2,6 +2,7 @@ import { type Tag, tagPath } from '@throw/shared';
 import { X } from 'lucide-react';
 import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion } from 'motion/react';
 import { useLayoutEffect, useRef, useState } from 'react';
+import { Hint } from '@/components/Hint/Hint';
 import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { springs } from '@/lib/motion';
@@ -109,14 +110,17 @@ export function TagBadge({
   );
   if (!interactive)
     return (
-      <motion.span
-        data-color={root.color ?? undefined}
-        className={className}
-        style={morph ? { width } : undefined}
-        title={label}
-      >
-        {badgeContents}
-      </motion.span>
+      // A nested tag shows only its own name, so its hint gives the path; a root's says
+      // nothing new unless its name is cut short.
+      <Hint label={label} whenTruncated={path.length < 2}>
+        <motion.span
+          data-color={root.color ?? undefined}
+          className={className}
+          style={morph ? { width } : undefined}
+        >
+          {badgeContents}
+        </motion.span>
+      </Hint>
     );
   const trigger = (
     <TooltipTrigger
@@ -181,7 +185,7 @@ export function TagBadge({
         data-color={root.color ?? undefined}
         sideOffset={8}
         className={cn(
-          'z-[70] max-w-[min(24rem,calc(100vw-2rem))] break-words',
+          'max-w-[min(24rem,calc(100vw-2rem))] break-words',
           root.color ? 'border-tint-accent!' : 'border-foreground/20!',
         )}
         onEscapeKeyDown={(event) => event.stopPropagation()}

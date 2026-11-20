@@ -38,7 +38,7 @@ it('on a card, shows a few badges with a count of the rest, without a landmark o
   expect(screen.queryByRole('region')).toBeNull();
   expect(screen.queryByRole('button')).toBeNull();
   expect(container.textContent).toBe('ABC+2');
-  expect(screen.getByText('+2')).toHaveAttribute('title', 'D, E');
+  expect(screen.getByText('+2')).toHaveAccessibleDescription('D, E');
 });
 
 it('leaves tag colors out where they would mislead', () => {

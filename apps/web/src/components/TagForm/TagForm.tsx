@@ -1,6 +1,7 @@
 import { COLORS, TAG_ICONS, type Tag, tagPath, tagSubtreeIds, tagTree } from '@throw/shared';
 import { type FormEvent, type RefObject, useId, useMemo, useState } from 'react';
 import { colorName } from '@/components/ColorPicker/ColorPicker';
+import { Hint } from '@/components/Hint/Hint';
 import { TAG_ICON_LABELS, TagIcon } from '@/components/TagIcon/TagIcon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -113,22 +114,35 @@ export function TagEditor({
               >
                 None
               </button>
-              {COLORS.map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  data-color={value}
-                  aria-label={colorName(value)}
-                  aria-pressed={color === value}
-                  disabled={usedColors.has(value)}
-                  title={usedColors.has(value) ? 'Already used by another root' : value}
-                  onClick={() => setColor(value)}
-                  className={cn(
-                    'size-10 rounded-full border border-foreground/10 bg-tint outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-25',
-                    color === value && 'ring-2 ring-foreground/50',
-                  )}
-                />
-              ))}
+              {COLORS.map((value) => {
+                const used = usedColors.has(value);
+                return (
+                  // A used color stays hoverable and focusable (`aria-disabled`, not
+                  // `disabled`), so its hint can say why it cannot be picked.
+                  <Hint
+                    key={value}
+                    label={
+                      used ? `${colorName(value)}: already used by another root` : colorName(value)
+                    }
+                    describe={used}
+                  >
+                    <button
+                      type="button"
+                      data-color={value}
+                      aria-label={colorName(value)}
+                      aria-pressed={color === value}
+                      aria-disabled={used || undefined}
+                      onClick={() => {
+                        if (!used) setColor(value);
+                      }}
+                      className={cn(
+                        'size-10 rounded-full border border-foreground/10 bg-tint outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-not-allowed aria-disabled:opacity-25',
+                        color === value && 'ring-2 ring-foreground/50',
+                      )}
+                    />
+                  </Hint>
+                );
+              })}
             </div>
           </fieldset>
           <fieldset className="min-w-0">
@@ -158,20 +172,20 @@ export function TagEditor({
                   TAG_ICON_LABELS[value].toLowerCase().includes(iconSearch.toLowerCase()) ||
                   value.replaceAll('-', ' ').includes(iconSearch.toLowerCase()),
               ).map((value) => (
-                <button
-                  type="button"
-                  key={value}
-                  aria-label={TAG_ICON_LABELS[value]}
-                  aria-pressed={icon === value}
-                  title={TAG_ICON_LABELS[value]}
-                  onClick={() => setIcon(value)}
-                  className={cn(
-                    'flex h-11 items-center justify-center rounded-xl outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring',
-                    icon === value && 'bg-accent',
-                  )}
-                >
-                  <TagIcon name={value} className="size-5" />
-                </button>
+                <Hint key={value} label={TAG_ICON_LABELS[value]}>
+                  <button
+                    type="button"
+                    aria-label={TAG_ICON_LABELS[value]}
+                    aria-pressed={icon === value}
+                    onClick={() => setIcon(value)}
+                    className={cn(
+                      'flex h-11 items-center justify-center rounded-xl outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring',
+                      icon === value && 'bg-accent',
+                    )}
+                  >
+                    <TagIcon name={value} className="size-5" />
+                  </button>
+                </Hint>
               ))}
             </div>
           </fieldset>

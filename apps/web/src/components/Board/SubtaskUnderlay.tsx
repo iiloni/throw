@@ -1,4 +1,5 @@
 import { ChevronDown } from 'lucide-react';
+import { Hint } from '@/components/Hint/Hint';
 import { cn } from '@/lib/utils';
 import { StatusGlyph } from './glyphs';
 import { isClosed, type Project, projectOf, statusById, type Task } from './model';
@@ -91,14 +92,15 @@ function SubtaskRow({ project, task }: { project: Project; task: Task }) {
         value={status.id}
         onSelect={(statusId) => setSubtaskStatus(task.id, statusId)}
       >
-        <button
-          type="button"
-          aria-label={`Status: ${status.name}. Change`}
-          title={status.name}
-          className="flex size-9 shrink-0 items-center justify-center rounded-xl outline-none hover:bg-foreground/[0.07] focus-visible:ring-[3px] focus-visible:ring-ring/60"
-        >
-          <StatusGlyph category={status.category} className="size-4" />
-        </button>
+        <Hint label={status.name}>
+          <button
+            type="button"
+            aria-label={`Status: ${status.name}. Change`}
+            className="flex size-9 shrink-0 items-center justify-center rounded-xl outline-none hover:bg-foreground/[0.07] focus-visible:ring-[3px] focus-visible:ring-ring/60"
+          >
+            <StatusGlyph category={status.category} className="size-4" />
+          </button>
+        </Hint>
       </StatusMenu>
       <button
         type="button"
