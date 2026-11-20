@@ -54,6 +54,8 @@ Anything else, such as when work started, is read from the log when a report nee
 
 ## Consequences
 
+- [ADR 0013](0013-mcp-server.md) adds token-name attribution to agent task writes and
+  comments, and makes agent reorders visible in task history.
 - The dates in the log are sync times for offline work. Reports built on the log later
   measure when the server learned of a change.
 - Description version history is not provided by the log. It is separate, later work.

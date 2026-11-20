@@ -36,5 +36,8 @@ and the server's maximum, with tests at the boundaries and a documented upgrade 
 - Shared TypeScript types check one build against itself. A contract change still needs
   thinking through old client with new server, and new client with old server.
 
-- Backup downloads are the one read-only data exception: plain browser links use an expiring
+- Backup downloads are a data exception: plain browser links use an expiring
   signed ticket and a current server-admin check instead of protocol/auth headers (ADR 0011).
+- `/api/mcp` is an external protocol endpoint. The MCP transport handles MCP protocol
+  versions, and requests use a separate credential. The app's token management routes
+  follow the Throw data gate as usual. See [ADR 0013](0013-mcp-server.md).
