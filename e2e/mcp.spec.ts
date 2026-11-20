@@ -136,7 +136,7 @@ test('MCP authenticates only its own tokens and revocation applies to an initial
       headers: account.headers,
     });
     expect(revoked.status()).toBe(204);
-    await expect(client.listTools()).rejects.toThrow(/401/);
+    await expect(client.listTools()).rejects.toMatchObject({ code: 401 });
   } finally {
     await client.close();
   }

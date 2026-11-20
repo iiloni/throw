@@ -244,7 +244,10 @@ export function blocksToMarkdown(document: Description) {
           if (!visit(depth + 1)) break;
           const children = asArray(asRecord(tableRow).cells).flatMap((cell, index) => [
             ...(index ? [{ type: 'text', value: ' | ' } as const] : []),
-            ...content(Array.isArray(cell) ? cell : asRecord(cell).content, depth + 2),
+            ...content(
+              typeof cell === 'string' || Array.isArray(cell) ? cell : asRecord(cell).content,
+              depth + 2,
+            ),
           ]);
           result.push({ type: 'paragraph', children });
         }
