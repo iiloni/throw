@@ -25,6 +25,7 @@ import {
   useBoardSettings,
 } from './state';
 import { PANE_MIN, SplitHandle, TaskPane } from './TaskView';
+import { TaskPaneWidthContext } from './taskMotionContext';
 
 const TILES_WIDTH = 176;
 const HANDLE_WIDTH = 24;
@@ -345,7 +346,9 @@ export function OpenTaskPane({ frameWidth }: { frameWidth: number }) {
             onActive={setResizing}
           />
           <div className="min-w-0 flex-1" style={{ width: paneWidth }}>
-            <TaskPane task={openTask} />
+            <TaskPaneWidthContext value={paneWidth}>
+              <TaskPane task={openTask} />
+            </TaskPaneWidthContext>
           </div>
         </motion.div>
       )}

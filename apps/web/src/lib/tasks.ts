@@ -16,6 +16,7 @@ import {
 } from '@throw/shared';
 import { uuidv7 } from 'uuidv7';
 import {
+  commentsCollection,
   projectsCollection,
   statusesCollection,
   tasksCollection,
@@ -26,6 +27,7 @@ import { trashRoots } from './projectSettings';
 import { deleteProjectRows, deleteTaskRows } from './projects';
 import { defaultStatus } from './statuses';
 import { requireTag } from './tags';
+import { descriptionText } from './taskSearch';
 
 // Server times (`closedAt`, `deletedAt`, `createdAt`) get a placeholder from the device's
 // clock here, so a change shows at once; the synced row brings the server's.
@@ -288,6 +290,31 @@ export function purgeTask(id: string) {
   const task = tasksCollection.get(id);
   if (!task || !taskInTrash(task)) return;
   write(() => deleteTaskRows(id));
+}
+
+/**
+ * Takes back a task just made and left as it was made: untitled, with no description, tags,
+ * comments or subtasks, in its default status and priority. It goes through the trash and is
+ * purged, so nothing is left to clear up. Returns whether it went.
+ */
+export function discardUntouchedTask(id: string) {
+  const task = tasksCollection.get(id);
+  if (
+    !task ||
+    task.deletedAt !== null ||
+    task.title.trim() !== '' ||
+    (task.description !== null && descriptionText(task.description).trim() !== '') ||
+    task.primaryTagId !== null ||
+    task.priority !== DEFAULT_PRIORITY ||
+    task.statusId !== defaultStatus([...statusesCollection.values()], task.projectId)?.id
+  )
+    return false;
+  for (const row of taskTagsCollection.values()) if (row.taskId === id) return false;
+  for (const comment of commentsCollection.values()) if (comment.taskId === id) return false;
+  for (const other of tasksCollection.values()) if (other.parentId === id) return false;
+  trashTask(id);
+  purgeTask(id);
+  return true;
 }
 
 /**

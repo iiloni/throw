@@ -1,4 +1,11 @@
-import { cancelFrame, cubicBezier, frame, type MotionValue, type Transition } from 'motion/react';
+import {
+  cancelFrame,
+  cubicBezier,
+  frame,
+  type MotionValue,
+  spring,
+  type Transition,
+} from 'motion/react';
 
 // Catch's interruptible springs: controls feel quick; changing surfaces settle softly.
 export const springs = {
@@ -51,6 +58,19 @@ export function animateSteady(
     done: elapsed >= length,
   });
   return steadily(value, to, progress, delayMs);
+}
+
+/**
+ * Runs one of the `springs` on a motion value by frames, as `animateSteady` runs a curve. A
+ * value already moving continues from where it is, so a reversal turns back without a jump.
+ */
+export function animateSteadySpring(
+  value: MotionValue<number>,
+  to: number,
+  { visualDuration, bounce }: (typeof springs)[keyof typeof springs],
+) {
+  const generator = spring({ keyframes: [0, 1], visualDuration, bounce });
+  return steadily(value, to, (elapsed) => generator.next(elapsed));
 }
 
 /** `progress` maps the time run so far (ms) to how far along the animation is. */
