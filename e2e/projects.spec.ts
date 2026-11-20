@@ -295,6 +295,50 @@ test('rail defaults to the available width and remembers a keyboard toggle', asy
   await expect(page.getByRole('button', { name: 'Switch workspace' })).toBeFocused();
 });
 
+test('the collapsed rail names its icons in Throw tooltips, and a tap shows none', async ({
+  page,
+  isMobile,
+}) => {
+  if (isMobile) {
+    await signUp(page);
+    await addProject(page, 'Garden', isMobile);
+    // A finger opens the menu it pressed, never a hint.
+    await openMenu(page, isMobile);
+    await expect(page.getByRole('menu')).toBeVisible();
+    await expect(page.getByRole('tooltip')).toHaveCount(0);
+    return;
+  }
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await signUp(page);
+  await addProject(page, 'Garden', isMobile);
+  const rail = page.getByRole('complementary', { name: 'Navigation rail' });
+  await expect(rail).toHaveAttribute('data-expanded', 'false');
+  const project = rail.getByRole('link', { name: 'Garden', exact: true });
+  await expect(project).not.toHaveAttribute('title');
+  await project.hover();
+  const tooltip = page.getByRole('tooltip');
+  await expect(tooltip).toHaveText('Garden');
+  // Beside the rail, not over the icons below.
+  const content = page.locator('[data-slot="tooltip-content"]');
+  const [tile, hint] = await Promise.all([project.boundingBox(), content.boundingBox()]);
+  expect(hint!.x).toBeGreaterThanOrEqual(tile!.x + tile!.width);
+  // The workspace menu names the workspace it switches, to a screen reader too.
+  const menu = page.getByRole('button', { name: 'Switch workspace', exact: true });
+  await expect(menu).toHaveAccessibleDescription(/\S/);
+  await page.mouse.move(600, 400, { steps: 5 });
+  await expect(tooltip).toHaveCount(0);
+  // From the keyboard too; an expanded rail names itself and shows none.
+  await rail.getByRole('button', { name: 'Search', exact: true }).focus();
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Tab');
+  await expect(tooltip).toHaveText('Search');
+  await rail.getByRole('button', { name: 'Expand navigation' }).click();
+  await expect(rail).toHaveAttribute('data-expanded', 'true');
+  await project.hover();
+  await page.waitForTimeout(600);
+  await expect(tooltip).toHaveCount(0);
+});
+
 test('offline workspace and project edits survive reload and replay in order', async ({
   page,
   isMobile,

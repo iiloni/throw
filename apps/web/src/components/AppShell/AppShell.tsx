@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { type ReactElement, type ReactNode, useCallback, useEffect, useState } from 'react';
 import { z } from 'zod';
 import { ShellMenu } from '@/components/AppShell/ShellMenu';
 import {
@@ -27,6 +27,7 @@ import { BoardSettingsPanel } from '@/components/Board/BoardSettingsPanel';
 import { board, update } from '@/components/Board/state';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { CommandPalette, type PaletteMode } from '@/components/CommandPalette/CommandPalette';
+import { Hint } from '@/components/Hint/Hint';
 import { ManagementSurfaceProvider } from '@/components/ManagementSurface/ManagementSurface';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
@@ -446,7 +447,6 @@ function RailButton({
   className?: string;
 }) {
   const props = {
-    title: expanded ? undefined : label,
     'aria-label': label,
     'aria-current': active ? ('page' as const) : undefined,
     'data-color': tint ?? undefined,
@@ -472,8 +472,14 @@ function RailButton({
       </span>
     </>
   );
+  // A collapsed rail shows only icons, so each names itself beside the rail.
+  const hint = (control: ReactElement) => (
+    <Hint label={label} side="right" disabled={expanded}>
+      {control}
+    </Hint>
+  );
   if (href)
-    return (
+    return hint(
       <a
         {...props}
         href={href}
@@ -491,11 +497,11 @@ function RailButton({
         }}
       >
         {content}
-      </a>
+      </a>,
     );
-  return (
+  return hint(
     <button {...props} type="button" onClick={onClick}>
       {content}
-    </button>
+    </button>,
   );
 }
