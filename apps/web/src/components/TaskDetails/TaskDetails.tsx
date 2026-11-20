@@ -21,7 +21,7 @@ import {
   openSubtask,
   update,
 } from '@/components/Board/state';
-import { TaskCard } from '@/components/Board/TaskCard';
+import { CARD_STATUS_CONTROL, TaskCard } from '@/components/Board/TaskCard';
 import { cardSurface, TaskTitle } from '@/components/Board/TaskView';
 import { TaskPaneWidthContext, TaskScrollContext } from '@/components/Board/taskMotionContext';
 import { IconButton } from '@/components/IconButton/IconButton';
@@ -158,7 +158,10 @@ export function TaskDetails({
                         type="button"
                         data-no-drag=""
                         aria-label={`Status of ${child.title || 'Untitled subtask'}: ${childStatus.name}. Change`}
-                        className="-my-2 flex min-h-10 min-w-0 items-center gap-1 rounded-lg px-1 outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/60"
+                        className={cn(
+                          CARD_STATUS_CONTROL,
+                          'outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/60',
+                        )}
                       >
                         <StatusGlyph category={childStatus.category} className="size-3" />
                         <span className="truncate">{childStatus.name}</span>
