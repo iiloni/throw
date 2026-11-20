@@ -140,6 +140,10 @@ export function BoardSettingsPanel({
       <Popover.Trigger asChild>
         <IconButton
           label="Board settings"
+          // On the rail it is a rail row: named beside the rail while collapsed, and by its
+          // own text while expanded.
+          tooltip={!expanded}
+          tooltipSide={expanded === undefined ? undefined : 'right'}
           className={cn(
             'size-10',
             expanded !== undefined &&

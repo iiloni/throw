@@ -1,5 +1,6 @@
 import type { Color } from '@throw/shared';
 import { useState } from 'react';
+import { Hint } from '@/components/Hint/Hint';
 import { PROJECT_ICON_LABELS, ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { Input } from '@/components/ui/input';
 import { haptics } from '@/lib/haptics';
@@ -50,20 +51,20 @@ export function ProjectIconPicker({
         {Object.entries(PROJECT_ICON_LABELS)
           .filter(([, label]) => label.toLowerCase().includes(query.toLowerCase()))
           .map(([icon, label]) => (
-            <button
-              key={icon}
-              type="button"
-              aria-label={`${label} icon`}
-              title={label}
-              aria-pressed={value === icon}
-              onClick={() => pick(icon)}
-              className={cn(
-                'flex size-10 items-center justify-center rounded-xl outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring',
-                value === icon && 'bg-tint text-tint-accent',
-              )}
-            >
-              <ProjectIcon name={icon} className="size-5" />
-            </button>
+            <Hint key={icon} label={label}>
+              <button
+                type="button"
+                aria-label={`${label} icon`}
+                aria-pressed={value === icon}
+                onClick={() => pick(icon)}
+                className={cn(
+                  'flex size-10 items-center justify-center rounded-xl outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring',
+                  value === icon && 'bg-tint text-tint-accent',
+                )}
+              >
+                <ProjectIcon name={icon} className="size-5" />
+              </button>
+            </Hint>
           ))}
       </div>
     </fieldset>

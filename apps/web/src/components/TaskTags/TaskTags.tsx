@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { Hint } from '@/components/Hint/Hint';
 import { type BadgeTag, TagBadge } from '@/components/TagBadge/TagBadge';
 import { cn } from '@/lib/utils';
 
@@ -55,15 +56,16 @@ export const TaskTags = memo(function TaskTags({
         />
       ))}
       {hidden > 0 && (
-        <span
-          className="text-foreground/55 text-xs tabular-nums"
-          title={all
+        // The count says how many, the hint which: on screen and to a screen reader.
+        <Hint
+          label={all
             .slice(shown.length)
             .map((tag) => tag.name)
             .join(', ')}
+          describe
         >
-          +{hidden}
-        </span>
+          <span className="text-foreground/55 text-xs tabular-nums">+{hidden}</span>
+        </Hint>
       )}
     </>
   );
