@@ -748,3 +748,102 @@ test('synced primary tags show their quiet name and root color on cards', async 
   await expect(card).not.toHaveAttribute('data-color');
   await expect(card.getByText('Sync', { exact: true })).toHaveCount(0);
 });
+
+test('a task opened from the phone backlog shrinks back into its card as the drawer rises', async ({
+  page,
+  isMobile,
+  browserName,
+}) => {
+  test.skip(
+    !isMobile && browserName !== 'firefox',
+    'Phone backlog; Firefox exercises the same phone viewport.',
+  );
+  if (!isMobile) await page.setViewportSize({ width: 412, height: 915 });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const { ids } = await fixture(page);
+  const id = ids['Idea for later']!;
+  const backlog = page.getByRole('region', { name: 'Backlog', exact: true });
+  await backlog.getByRole('button', { name: /^Backlog \d+$/ }).click();
+  await expect(backlog).toHaveAttribute('data-detent', 'half');
+  const card = backlog.locator(`[data-card-id="${id}"]`);
+  const pane = page.getByLabel('Task', { exact: true });
+  // Back, then Escape: every way of closing the task runs the same transform.
+  for (const close of [
+    () => pane.getByRole('button', { name: 'Back to the board', exact: true }).click(),
+    () => page.keyboard.press('Escape'),
+  ]) {
+    await expect(card).toBeVisible();
+    await card.click();
+    await expect(pane.getByRole('textbox', { name: 'Task title' })).toBeVisible();
+    await expect(pane.locator('.bn-editor[contenteditable="true"]')).toBeVisible({
+      timeout: APP_LOAD_TIMEOUT,
+    });
+    // Sampled every frame from Back until the card has been shown again for a few frames.
+    const sampling = page.evaluate(async (id) => {
+      type Box = { x: number; y: number; width: number; height: number };
+      const box = (element: Element): Box => {
+        const { x, y, width, height } = element.getBoundingClientRect();
+        return { x, y, width, height };
+      };
+      const frames: Array<{
+        surface: Box | null;
+        card: Box;
+        shown: boolean;
+        closing: boolean;
+        onTop: boolean;
+        edge: number;
+      }> = [];
+      const start = performance.now();
+      await new Promise<void>((resolve) => {
+        const step = () => {
+          const screen = document.querySelector('[data-task-screen]');
+          const surface = document.querySelector('[data-task-surface]');
+          const landing = document.querySelector(`[data-drawer] [data-card-id="${id}"]`)!;
+          const drawer = landing.closest('[data-drawer]')!;
+          // Hit testing skips the closing screen, which is inert, so its stacking is compared.
+          const z = (element: Element | null) =>
+            element ? Number(getComputedStyle(element).zIndex) : 0;
+          frames.push({
+            surface: surface && box(surface),
+            card: box(landing),
+            shown: getComputedStyle(landing).visibility === 'visible',
+            closing: screen?.getAttribute('aria-label') === 'Closing task',
+            onTop: z(screen) > z(drawer),
+            edge: Number(
+              getComputedStyle(document.querySelector('[data-task-edge]') ?? document.body).opacity,
+            ),
+          });
+          const closed = frames.findIndex((frame) => !frame.surface);
+          if (frames.length > 1 && closed >= 0 && frames.length > closed + 2) return resolve();
+          if (performance.now() - start > 5000) return resolve();
+          requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      });
+      return frames;
+    }, id);
+    await close();
+    const frames = await sampling;
+    const closing = frames.filter((frame) => frame.closing && frame.surface);
+    const shown = frames.findIndex((frame) => !frame.surface);
+    expect(closing.length).toBeGreaterThan(5);
+    expect(shown).toBeGreaterThan(0);
+    // It shrinks, staying over the drawer that carries its card, rather than dropping beneath it.
+    expect(closing.every((frame) => frame.onTop)).toBe(true);
+    expect(
+      closing.some(
+        ({ surface, card }) => surface!.height < 915 * 0.5 && surface!.height > card.height + 8,
+      ),
+    ).toBe(true);
+    // It ends on the card's place in the risen drawer...
+    const last = closing.at(-1)!;
+    for (const key of ['x', 'y', 'width', 'height'] as const)
+      expect(Math.abs(last.surface![key] - last.card[key])).toBeLessThan(4);
+    expect(last.card.y).toBeLessThan(915 * 0.8);
+    // ...wearing the card's edge, so it stands out from the drawer's glass before the card shows.
+    expect(last.edge).toBeGreaterThan(0.9);
+    // ...and the card is there as it goes, never an empty slot.
+    expect(frames.slice(shown).every((frame) => frame.shown)).toBe(true);
+    await expect(backlog).toHaveAttribute('data-detent', 'half');
+  }
+});

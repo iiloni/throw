@@ -22,6 +22,7 @@ import { useBackHandler } from '@/lib/backButton';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
+import { trackDrawerTravel } from './travel';
 import { useDrawerGesture } from './useDrawerGesture';
 
 export type Detent = 'closed' | 'half' | 'full';
@@ -157,9 +158,12 @@ export function Drawer({
     closedAt.current = at.closed;
     return at;
   };
+  // Where the drawer is sliding to, for `drawerTravel`.
+  const rest = useRef(0);
   // With reduced motion the drawer is placed at once, in the frame that changed it. A
   // zero-length animation would still land a frame later, showing the old height first.
   const slide = (to: number, spring = springs.smooth) => {
+    rest.current = to;
     if (!reduced) return animate(y, to, spring);
     y.stop();
     y.jump(to);
@@ -201,6 +205,12 @@ export function Drawer({
     },
     onCancel: () => slide(restingAt(offsets())),
   });
+
+  useEffect(() => {
+    const element = surface.current;
+    if (!element) return;
+    return trackDrawerTravel(element, () => (y.isAnimating() ? rest.current - y.get() : 0));
+  }, [y]);
 
   useBackHandler(detent !== 'closed' && !paged, () => onDetent('closed'));
   const dismissPage = useRef(page?.dismiss);
@@ -373,6 +383,7 @@ export function Drawer({
         aria-modal={modal || undefined}
         aria-label={page?.title ?? card?.title ?? label}
         tabIndex={-1}
+        data-drawer=""
         data-detent={detent}
         data-page={page?.key}
         data-drop-block=""
