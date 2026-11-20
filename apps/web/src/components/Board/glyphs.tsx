@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronsDown, ChevronsUp, ChevronUp } from 'lucide-react';
+import { Hint } from '@/components/Hint/Hint';
 import { cn } from '@/lib/utils';
 import type { Category, Priority } from './model';
 
@@ -73,13 +74,14 @@ export function PriorityGlyph({
 }) {
   if (!hasPriorityIcon(priority)) return null;
   return (
-    <span
-      role="img"
-      aria-label={`Priority: ${name}`}
-      title={name}
-      className={cn('shrink-0', priority === 1 && 'text-destructive', className)}
-    >
-      <PriorityIcon priority={priority} />
-    </span>
+    <Hint label={`Priority: ${name}`}>
+      <span
+        role="img"
+        aria-label={`Priority: ${name}`}
+        className={cn('shrink-0', priority === 1 && 'text-destructive', className)}
+      >
+        <PriorityIcon priority={priority} />
+      </span>
+    </Hint>
   );
 }
