@@ -1,6 +1,7 @@
 import {
   type MotionValue,
   motion,
+  useIsPresent,
   useMotionValue,
   useReducedMotion,
   useTransform,
@@ -14,9 +15,19 @@ import { columnFits, columnOpacity, columnProgress, columnSpace, foldHeight } fr
  * Springs `value` to `target` by painted frames, or sets it at once when `animate` is off. A
  * change of target mid-way continues from where the value is. The spring starts once the
  * frame that changed the layout has been drawn, so that work is not taken out of its time.
+ * Held, the value stays where it is.
  */
-function useSteadyTarget(value: MotionValue<number>, target: number, animate: boolean) {
+function useSteadyTarget(
+  value: MotionValue<number>,
+  target: number,
+  animate: boolean,
+  held: boolean,
+) {
   useEffect(() => {
+    if (held) {
+      stopSteady(value);
+      return;
+    }
     if (!animate) {
       stopSteady(value);
       value.jump(target);
@@ -30,7 +41,7 @@ function useSteadyTarget(value: MotionValue<number>, target: number, animate: bo
       cancel();
       stopSteady(value);
     };
-  }, [value, target, animate]);
+  }, [value, target, animate, held]);
 }
 
 /** Re-renders only when `check` of the value changes, not on every frame of its motion. */
@@ -80,10 +91,13 @@ export function useTaskColumn({
 }): TaskColumnLayout {
   const fits = columnFits(paneWidth);
   const reduced = useReducedMotion() ?? false;
+  // A task sliding away as another replaces it keeps its layout: adding a subtask lists it
+  // on the parent just before the new subtask's page pushes the parent off.
+  const leaving = !useIsPresent();
   const layout = useMotionValue(fits ? 1 : 0);
   const shown = useMotionValue(hasExtras ? 1 : 0);
-  useSteadyTarget(layout, fits ? 1 : 0, !reduced);
-  useSteadyTarget(shown, hasExtras ? 1 : 0, !reduced && ready);
+  useSteadyTarget(layout, fits ? 1 : 0, !reduced, leaving);
+  useSteadyTarget(shown, hasExtras ? 1 : 0, !reduced && ready, leaving);
   const progress = useTransform(() => columnProgress(layout.get(), shown.get()));
   const space = useTransform(() => columnSpace(progress.get()));
   const opacity = useTransform(() => columnOpacity(progress.get()));

@@ -790,22 +790,40 @@ test('the open task lives in the URL: reload keeps it, Back closes it, a stale l
 });
 
 /**
- * The room the card leaves for the side column on every frame for `ms`, starting with the one
- * before `act`. It does not depend on the pane's width, which a resize changes meanwhile.
+ * The room the card leaves for the side column on every frame from the one before `act` until
+ * `ms` after it. It does not depend on the pane's width, which a resize changes meanwhile.
  */
-async function columnRoom(page: Page, act: () => Promise<void>, ms = 900) {
-  await page.evaluate((ms) => {
-    const room: number[] = [];
-    (window as unknown as { room: number[] }).room = room;
-    const started = performance.now();
-    requestAnimationFrame(function sample(now) {
-      // Looked up each frame: switching tasks mounts a new card.
-      const frame = document.querySelector('[data-task-card]')?.parentElement;
-      if (frame) room.push(Math.round(Number.parseFloat(getComputedStyle(frame).paddingRight)));
-      if (now - started < ms) requestAnimationFrame(sample);
-    });
-  }, ms);
+async function columnRoom(
+  page: Page,
+  act: () => Promise<void>,
+  { ms = 900, leaving = false }: { ms?: number; leaving?: boolean } = {},
+) {
+  await page.evaluate(
+    ({ leaving }) => {
+      const room: number[] = [];
+      const state = window as unknown as { room: number[]; until: number };
+      state.room = room;
+      state.until = Number.POSITIVE_INFINITY;
+      requestAnimationFrame(function sample(now) {
+        // Looked up each frame: switching tasks mounts a new card. The one sliding away is
+        // hidden, and counts only when asked for: then the frame's widest room is recorded.
+        const cards = [...document.querySelectorAll('[data-task-card]')].filter(
+          (card) => leaving || !card.closest('[aria-hidden="true"]'),
+        );
+        const values = cards.map((card) =>
+          Math.round(Number.parseFloat(getComputedStyle(card.parentElement!).paddingRight)),
+        );
+        if (values.length) room.push(Math.max(...values));
+        if (now < state.until) requestAnimationFrame(sample);
+      });
+    },
+    { leaving },
+  );
   await act();
+  // Timed from the end of `act`, which can take a while on a busy machine.
+  await page.evaluate((ms) => {
+    (window as unknown as { until: number }).until = performance.now() + ms;
+  }, ms);
   await page.waitForTimeout(ms + 100);
   return page.evaluate(() => (window as unknown as { room: number[] }).room);
 }
@@ -822,7 +840,8 @@ test('a wide desktop pane keeps tags and subtasks in a column that opens and shu
   test.skip(isMobile, 'A phone keeps its stacked layout (ADR 0009)');
   const account = await fixture(page);
   const { pane } = account;
-  const card = page.locator('[data-task-card]');
+  // The task shown, not one sliding away as another replaces it.
+  const card = pane.locator(':scope > :not([aria-hidden="true"]) [data-task-card]');
   const column = pane.getByRole('complementary', { name: 'Task sidebar' });
   const handle = page.getByRole('separator', { name: 'Resize task' });
   const addSubtask = pane.getByRole('button', { name: 'Add subtask', exact: true });
@@ -878,11 +897,27 @@ test('a wide desktop pane keeps tags and subtasks in a column that opens and shu
   await expect(color).toHaveCount(0);
   await expect(card.getByRole('button', { name: 'Add subtask', exact: true })).toBeVisible();
 
+  // A subtask left untouched is discarded on the way back, and never opens the column.
+  const title = pane.getByRole('textbox', { name: 'Task title' });
+  room = await columnRoom(
+    page,
+    async () => {
+      await addSubtask.click();
+      await expect(title).toBeFocused();
+      await title.press('Escape');
+      await expect(title).toHaveValue('Write the launch plan');
+    },
+    { leaving: true },
+  );
+  // The new row reaches the parent a frame or two before the subtask's page pushes it off,
+  // and the parent then holds its layout while it leaves: the column never shows.
+  expect(Math.max(...room)).toBeLessThan(8);
+  await expect(card.getByRole('button', { name: 'Add subtask', exact: true })).toBeVisible();
+
   // The first subtask opens it: made inline, it is in the column when its parent comes back,
   // with focus on its card there.
   await addSubtask.click();
-  const title = pane.getByRole('textbox', { name: 'Task title' });
-  await expect(title).toHaveValue('New subtask');
+  await expect(title).toBeFocused();
   await expect(column).toHaveCount(0);
   await page.keyboard.type('Draft the announcement');
   await title.press('Escape');
