@@ -34,9 +34,10 @@ timeline query in `collections.ts` and a task history view in `TaskDetails/TaskT
 Tags have their data layer and reusable controls in `components/Tag*`, with a real-data `/prototype/tags` workshop in
 development only. The board color helper is `taskTagColor` in `@throw/shared`. The task
 pane picks and lists tags, and its Color and Tags panels make new tags through the shell's
-`NewTagHost` (`components/NewTag`); project settings mounts tag management. The task pane shows
-comments and server history under separate tabs (`SegmentedTabs`); refused changes have a quiet task-only notice and
-description recovery links. Cards move on both boards by drag, keyboard,
+`NewTagHost` (`components/NewTag`); project settings mounts tag management.
+The task pane shows comments and server history under separate tabs (`SegmentedTabs`).
+Touch screens swipe between them with `useTabSwipe`. Refused changes have a quiet task-only
+notice and description recovery links. Cards move on both boards by drag, keyboard,
 phone long press, the move drawer and a rightward swipe to close (ADR 0008).
 Settings (`/settings/*`) and project settings (`/w/:workspaceId/p/:projectId/settings`,
 with project trash beside it at `/trash`) share Catch's `SettingsLayout`: pages listed
