@@ -8,6 +8,7 @@ import {
   useLayoutEffect,
   useRef,
 } from 'react';
+import { Hint } from '@/components/Hint/Hint';
 import { TaskTags } from '@/components/TaskTags/TaskTags';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
@@ -99,13 +100,11 @@ export function TaskCardFace({
           {identifier(project, task) ?? 'Pending'}
         </span>
         {parent && state.actions && (
-          <span
-            role="img"
-            aria-label={`Subtask of ${parent.title}`}
-            title={`Subtask of ${parent.title}`}
-          >
-            <CornerDownRight aria-hidden className="size-3" />
-          </span>
+          <Hint label={`Subtask of ${parent.title}`}>
+            <span role="img" aria-label={`Subtask of ${parent.title}`}>
+              <CornerDownRight aria-hidden className="size-3" />
+            </span>
+          </Hint>
         )}
         <span className="flex-1" />
         {statusControl ??

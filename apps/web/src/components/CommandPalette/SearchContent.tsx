@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { useShell } from '@/components/AppShell/shell';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
+import { Hint } from '@/components/Hint/Hint';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { useAllTags, useAllTaskTags, useTasks } from '@/lib/collections';
 import { springs } from '@/lib/motion';
@@ -274,25 +275,30 @@ export function SearchField({
 /** Catch's filter button: opens the project scope, with a dot while one applies. */
 export function FilterButton({ search }: { search: SearchState }) {
   return (
-    <motion.button
-      type="button"
-      aria-label="Filter by project"
-      aria-expanded={search.filtersOpen}
-      title={search.scope ? `Filter by project (${search.scope.name})` : 'Filter by project'}
-      onPointerDown={(event) => event.preventDefault()}
-      onClick={search.toggleFilters}
-      whileTap={{ scale: 0.88 }}
-      transition={springs.snappy}
-      className={cn(
-        'glass relative flex size-[var(--dock-height)] shrink-0 items-center justify-center rounded-[var(--dock-radius)] outline-none transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ring/70',
-        search.filtersOpen || search.scope ? 'text-brand-link' : 'text-foreground',
-      )}
+    // The label stays the action; the hint adds the project it is scoped to.
+    <Hint
+      label={search.scope ? `Filter by project (${search.scope.name})` : 'Filter by project'}
+      describe={!!search.scope}
     >
-      <SlidersHorizontal className="size-7" strokeWidth={2.25} aria-hidden />
-      {search.scope && (
-        <span aria-hidden className="absolute top-3 right-3 size-1.5 rounded-full bg-brand" />
-      )}
-    </motion.button>
+      <motion.button
+        type="button"
+        aria-label="Filter by project"
+        aria-expanded={search.filtersOpen}
+        onPointerDown={(event) => event.preventDefault()}
+        onClick={search.toggleFilters}
+        whileTap={{ scale: 0.88 }}
+        transition={springs.snappy}
+        className={cn(
+          'glass relative flex size-[var(--dock-height)] shrink-0 items-center justify-center rounded-[var(--dock-radius)] outline-none transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ring/70',
+          search.filtersOpen || search.scope ? 'text-brand-link' : 'text-foreground',
+        )}
+      >
+        <SlidersHorizontal className="size-7" strokeWidth={2.25} aria-hidden />
+        {search.scope && (
+          <span aria-hidden className="absolute top-3 right-3 size-1.5 rounded-full bg-brand" />
+        )}
+      </motion.button>
+    </Hint>
   );
 }
 
