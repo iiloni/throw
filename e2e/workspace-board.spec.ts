@@ -124,6 +124,16 @@ test.describe('desktop', () => {
     await expect(pane).toBeVisible();
     await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue('Prune roses');
     await expect(pane).toContainText('GDN-3');
+    // A subtask added here belongs to the card's own project and opens as a new task.
+    await pane.getByRole('button', { name: 'Add subtask', exact: true }).click();
+    const title = pane.getByRole('textbox', { name: 'Task title' });
+    await expect(title).toBeFocused();
+    await page.keyboard.type('Sharpen the shears');
+    await title.press('Enter');
+    await expect(pane.getByRole('button', { name: 'Open parent GDN-3' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(title).toHaveValue('Prune roses');
+    await expect(pane.getByRole('article', { name: /^GDN-\d+ Sharpen the shears$/ })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(pane).toHaveCount(0);
   });

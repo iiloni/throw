@@ -1,3 +1,4 @@
+import { drawerTravel } from '@/components/Drawer/travel';
 import { createStore } from '@/lib/store';
 
 export type TaskRect = {
@@ -8,6 +9,8 @@ export type TaskRect = {
   radius: number;
   /** Whether the card shows its status, so the face that flies to it matches. */
   showStatus: boolean;
+  /** Whether that status is a control (a subtask's, in its parent), shaped as a button is. */
+  statusControl: boolean;
 };
 const origins = new Map<string, TaskRect>();
 const hidden = createStore<ReadonlySet<string>>(new Set());
@@ -16,31 +19,48 @@ const landing = createStore<ReadonlySet<string>>(new Set());
 // Task surfaces on screen, counting one still closing after its task has left the board.
 const surfaces = createStore(0);
 
-/** Prefer a subtask card in the open pane over a second copy on the board behind it. */
-export function measureTaskCard(taskId: string): TaskRect | null {
+/**
+ * The card a task leaves from or lands in. Prefer a subtask card in the open pane over a
+ * second copy on the board behind it. A card in a drawer that is still rising counts where
+ * the drawer will rest, so a task closing into the reopening backlog finds its card.
+ */
+export function findTaskCard(taskId: string): HTMLElement | null {
   const cards = document.querySelectorAll<HTMLElement>('[data-card-id]:not([data-overlay])');
   for (const card of Array.from(cards).reverse()) {
     if (card.dataset.cardId !== taskId) continue;
     const box = card.getBoundingClientRect();
+    const top = box.top + drawerTravel(card);
     if (
       !box.width ||
       !box.height ||
-      box.bottom <= 0 ||
-      box.top >= innerHeight ||
+      top + box.height <= 0 ||
+      top >= innerHeight ||
       box.right <= 0 ||
       box.left >= innerWidth
     )
       continue;
-    return {
-      x: box.left,
-      y: box.top,
-      width: box.width,
-      height: box.height,
-      radius: Number.parseFloat(getComputedStyle(card).borderTopLeftRadius) || 16,
-      showStatus: card.dataset.showStatus !== undefined,
-    };
+    return card;
   }
   return null;
+}
+
+/** Where a card is on screen now. */
+export function taskCardRect(card: HTMLElement): TaskRect {
+  const box = card.getBoundingClientRect();
+  return {
+    x: box.left,
+    y: box.top,
+    width: box.width,
+    height: box.height,
+    radius: Number.parseFloat(getComputedStyle(card).borderTopLeftRadius) || 16,
+    showStatus: card.dataset.showStatus !== undefined,
+    statusControl: card.dataset.statusControl !== undefined,
+  };
+}
+
+export function measureTaskCard(taskId: string): TaskRect | null {
+  const card = findTaskCard(taskId);
+  return card && taskCardRect(card);
 }
 
 export function rememberTaskOrigin(taskId: string) {
