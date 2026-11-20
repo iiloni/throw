@@ -9,17 +9,23 @@ import {
   taskTagColor,
 } from '@throw/shared';
 import { ChevronLeft, ChevronRight, Plus, RotateCcw, Trash2 } from 'lucide-react';
-import { useContext, useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import { StatusGlyph } from '@/components/Board/glyphs';
 import { type Task as BoardTask, projectOf } from '@/components/Board/model';
 import { StatusMenu } from '@/components/Board/StatusMenu';
-import { board, current, leaveTask, openSubtask, update } from '@/components/Board/state';
+import {
+  board,
+  current,
+  leaveTask,
+  openNewSubtask,
+  openSubtask,
+  update,
+} from '@/components/Board/state';
 import { TaskCard } from '@/components/Board/TaskCard';
 import { cardSurface, TaskTitle } from '@/components/Board/TaskView';
 import { TaskScrollContext } from '@/components/Board/taskMotionContext';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { TaskTags } from '@/components/TaskTags/TaskTags';
-import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useTags, useTaskTags } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
@@ -79,22 +85,37 @@ export function TaskDetails({
   // On the workspace board, the task's own project: its subtasks move among its statuses.
   const boardProject = projectOf(current().project, task);
   const [recovery, setRecovery] = useState<ActivityEntry | null>(null);
-  const [adding, setAdding] = useState(false);
-  const [title, setTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const addSubtask = useRef<HTMLButtonElement>(null);
   // The board's copies carry each subtask's secondary tags, including under a trashed parent.
   const data = current(state);
   const boardTasks = useMemo(
     () => new Map([...data.tasks, ...(data.hiddenTasks ?? [])].map((row) => [row.id, row])),
     [data],
   );
-  function closeSubtaskForm() {
-    setAdding(false);
-    setTitle('');
-    setError(null);
-    // The field goes away; focus returns to the control that opened it.
-    requestAnimationFrame(() => addSubtask.current?.focus());
+  // Beside the board, a subtask left for its parent's pane hands focus to its card there, as
+  // the phone screen returns it to its opener, so the keyboard carries on where it was.
+  useEffect(() => {
+    if (phone || task.parentId === null) return;
+    const id = task.id;
+    return () => {
+      requestAnimationFrame(() => {
+        const active = document.activeElement;
+        if (active && active !== document.body) return;
+        document
+          .querySelector<HTMLElement>(`[aria-label="Task"] [data-card-id="${CSS.escape(id)}"]`)
+          ?.focus();
+      });
+    };
+  }, [phone, task.id, task.parentId]);
+  function addSubtask() {
+    try {
+      const id = createTask(project.id, { parentId: task.id, title: 'New subtask' });
+      setError(null);
+      haptics.success();
+      openNewSubtask(id, task.id);
+    } catch {
+      setError('The subtask could not be added. Try again.');
+    }
   }
   // Finished work only, as the card's progress counts it: a cancelled subtask was not done.
   const done = children.filter(
@@ -245,62 +266,20 @@ export function TaskDetails({
                     );
                   })}
                 </div>
-                {adding ? (
-                  <form
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      if (!title.trim()) return;
-                      try {
-                        createTask(project.id, { parentId: task.id, title: title.trim() });
-                        haptics.success();
-                        closeSubtaskForm();
-                      } catch {
-                        setError('The subtask could not be added. Try again.');
-                      }
-                    }}
-                  >
-                    <label className="sr-only" htmlFor={`subtask-${task.id}`}>
-                      Subtask title
-                    </label>
-                    <input
-                      id={`subtask-${task.id}`}
-                      value={title}
-                      onChange={(event) => setTitle(event.target.value)}
-                      maxLength={500}
-                      // biome-ignore lint/a11y/noAutofocus: the field appears because Add subtask was chosen.
-                      autoFocus
-                      onKeyDown={(event) => {
-                        // Escape leaves the new subtask first, and the task on the next press.
-                        // An Escape during IME composition cancels the conversion, not the field.
-                        if (event.key !== 'Escape' || event.nativeEvent.isComposing) return;
-                        event.preventDefault();
-                        closeSubtaskForm();
-                      }}
-                      placeholder="What needs doing?"
-                      className="h-12 w-full rounded-xl border border-input bg-card px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
-                    />
-                    {error && (
-                      <p role="alert" className="mt-2 text-destructive text-sm">
-                        {error}
-                      </p>
-                    )}
-                    <div className="mt-2 flex gap-2">
-                      <Button disabled={!title.trim()}>Add subtask</Button>
-                      <Button type="button" variant="ghost" onClick={closeSubtaskForm}>
-                        Cancel
-                      </Button>
-                    </div>
-                  </form>
-                ) : (
-                  <button
-                    ref={addSubtask}
-                    type="button"
-                    onClick={() => setAdding(true)}
-                    className="flex min-h-11 w-full items-center gap-1 rounded-xl px-1 text-muted-foreground text-sm outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60"
-                  >
-                    <Plus className="size-3" />
-                    Add subtask
-                  </button>
+                {/* A slot in the list's own shape: the subtask is made at once and grows out
+                    of its card as a task of its own, to be written in the full view. */}
+                <button
+                  type="button"
+                  onClick={addSubtask}
+                  className="flex min-h-12 w-full items-center gap-2 rounded-2xl border border-foreground/15 border-dashed px-4 text-muted-foreground text-sm outline-none transition-colors hover:border-foreground/30 hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60"
+                >
+                  <Plus className="size-4" />
+                  Add subtask
+                </button>
+                {error && (
+                  <p role="alert" className="px-1 text-destructive text-sm">
+                    {error}
+                  </p>
                 )}
               </section>
             )}

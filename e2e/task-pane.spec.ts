@@ -160,16 +160,33 @@ test('task fields, actions, subtasks and task links work in the split pane and p
   }
 
   await page.goto(`${account.path}&task=${account.taskId}`);
-  const subtaskTitle = pane.getByRole('textbox', { name: 'Subtask title' });
+  // Adding a subtask makes it at once and opens it as a task of its own, over its parent,
+  // with its title selected to be written and its full controls.
   await pane.getByRole('button', { name: 'Add subtask', exact: true }).click();
-  await expect(subtaskTitle).toBeFocused();
-  await subtaskTitle.fill('Discard this draft');
-  await subtaskTitle.press('Escape');
-  await expect(pane.getByRole('button', { name: 'Add subtask', exact: true })).toBeFocused();
-  await pane.getByRole('button', { name: 'Add subtask', exact: true }).click();
-  await expect(subtaskTitle).toHaveValue('');
-  await subtaskTitle.fill('Draft the announcement');
-  await pane.getByRole('button', { name: 'Add subtask', exact: true }).click();
+  const title = pane.getByRole('textbox', { name: 'Task title' });
+  await expect(title).toHaveValue('New subtask');
+  await expect(title).toBeFocused();
+  expect(
+    await title.evaluate((input: HTMLTextAreaElement) => [
+      input.selectionStart,
+      input.selectionEnd,
+    ]),
+  ).toEqual([0, 'New subtask'.length]);
+  await expect(pane.getByRole('button', { name: 'Add subtask', exact: true })).toHaveCount(0);
+  await expect(pane.getByRole('button', { name: /^Open parent / })).toBeVisible();
+  await expect(
+    controls(page).getByRole('button', { name: 'Status: backlog. Change', exact: true }),
+  ).toBeVisible();
+  if (isMobile) await expect(page.getByLabel('Task beneath', { exact: true })).toHaveCount(1);
+  await page.keyboard.type('Draft the announcement');
+  // Escape names it and goes back to the parent, whose list now holds it.
+  await title.press('Escape');
+  await expect(title).toHaveValue('A plan ready to share');
+  const added = pane.getByRole('article', { name: /^TASK-\d+ Draft the announcement$/ });
+  await expect(added).toBeVisible();
+  if (isMobile)
+    await expect(pane.getByRole('button', { name: 'Add subtask', exact: true })).toBeFocused();
+  else await expect(added).toBeFocused();
   await pane
     .getByRole('button', { name: 'Status of Draft the announcement: backlog. Change' })
     .click();
@@ -240,7 +257,6 @@ test('task fields, actions, subtasks and task links work in the split pane and p
     'A plan ready to share',
     { timeout: APP_LOAD_TIMEOUT },
   );
-  const title = pane.getByRole('textbox', { name: 'Task title' });
   await title.fill('A title committed on Escape');
   await title.press('Escape');
   await expect(pane).toHaveCount(0);
@@ -752,9 +768,9 @@ test('the open task lives in the URL: reload keeps it, Back closes it, a stale l
   // A subtask opened from its parent replaces the entry: Back closes both in one step.
   await page.getByRole('article', { name: 'TASK-1 Write the launch plan', exact: true }).click();
   await pane.getByRole('button', { name: 'Add subtask', exact: true }).click();
-  await pane.getByRole('textbox', { name: 'Subtask title' }).fill('Draft the outline');
-  await pane.getByRole('textbox', { name: 'Subtask title' }).press('Enter');
-  await pane.getByRole('article', { name: /Draft the outline/ }).click();
+  await expect(pane.getByRole('textbox', { name: 'Task title' })).toBeFocused();
+  await page.keyboard.type('Draft the outline');
+  await pane.getByRole('textbox', { name: 'Task title' }).press('Enter');
   await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue('Draft the outline');
   await expect(page).not.toHaveURL(new RegExp(`task=${account.taskId}`));
   await page.goBack();

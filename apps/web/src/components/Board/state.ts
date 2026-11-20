@@ -154,6 +154,32 @@ export function openSubtask(taskId: string) {
   }));
 }
 
+/** A subtask just added from its parent's pane, until the board has its row to open. */
+let added: { taskId: string; parentId: string } | null = null;
+
+/**
+ * Opens a subtask just added from its parent's pane as a new task, as the board opens one: in
+ * the full task view with its title selected to be written, and on the parent's trail so
+ * leaving it goes back to the parent. The board may receive the row a render later.
+ */
+export function openNewSubtask(taskId: string, parentId: string) {
+  added = { taskId, parentId };
+  openAddedSubtask();
+}
+
+function openAddedSubtask() {
+  if (!added || !canOpenTask(added.taskId)) return;
+  const { taskId, parentId } = added;
+  added = null;
+  // Left meanwhile, the parent no longer asks for it.
+  if (board.get().openTaskId !== parentId) return;
+  update((state) => ({
+    openTaskId: taskId,
+    newTaskId: taskId,
+    taskTrail: [...state.taskTrail, parentId],
+  }));
+}
+
 /** Back, Escape and a dismissing pull: to the task this one was opened from, or the board. */
 export function leaveTask() {
   update((state) => ({
@@ -189,6 +215,7 @@ export function receiveBoard(data: BoardData, actions: BoardActions, awaitingTas
   }
   const before = board.get();
   if (before.projectId !== data.project.id || before.actions === null) {
+    added = null;
     board.set({ ...initialBoard([data]), actions, awaitingTasks });
   } else {
     const exists = (id: string) => data.tasks.some((task) => task.id === id);
@@ -207,6 +234,7 @@ export function receiveBoard(data: BoardData, actions: BoardActions, awaitingTas
         ? { carrying: null, announcement: 'The carried task was removed on another device.' }
         : {}),
     });
+    openAddedSubtask();
   }
 }
 
