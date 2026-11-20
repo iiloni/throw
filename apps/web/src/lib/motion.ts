@@ -21,6 +21,8 @@ export const curves = {
   expand: { duration: 0.55, ease: EASE_EMPHASIZED },
   /** The editor settling back into its card. */
   collapse: { duration: 0.5, ease: EASE_EMPHASIZED },
+  /** Reduced motion's stand-in for a surface's transform: a short fade in place. */
+  fade: { duration: 0.2, ease: [0.4, 0, 0.2, 1] as const },
 } satisfies Record<string, Transition>;
 
 const steady = new WeakMap<MotionValue<number>, () => void>();

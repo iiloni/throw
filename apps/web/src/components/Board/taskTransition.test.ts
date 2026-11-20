@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
+import { trackDrawerTravel } from '@/components/Drawer/travel';
 import { measureTaskCard, rememberTaskOrigin, takeTaskOrigin } from './taskTransition';
 
 afterEach(() => document.body.replaceChildren());
@@ -52,4 +53,17 @@ it('remeasures the landing card after a status change or scroll', () => {
   });
   expect(measureTaskCard('task')).toMatchObject({ x: 40, y: 300 });
   expect(takeTaskOrigin('task')).toMatchObject({ x: 20, y: 80 });
+});
+it('finds a card in a drawer still rising to it, where the drawer is carrying it now', () => {
+  const drawer = document.createElement('section');
+  drawer.dataset.drawer = '';
+  document.body.append(drawer);
+  const element = card(20, innerHeight + 40);
+  drawer.append(element);
+  // At rest, or outside a drawer, a card below the screen is not where a task can land.
+  expect(measureTaskCard('task')).toBeNull();
+  const untrack = trackDrawerTravel(drawer, () => -300);
+  expect(measureTaskCard('task')).toMatchObject({ x: 20, y: innerHeight + 40 });
+  untrack();
+  expect(measureTaskCard('task')).toBeNull();
 });
