@@ -562,9 +562,7 @@ test('the desktop dock sits below the card, its panels open above it and follow 
   await fixture(page);
   const dock = controls(page);
   // The card is the pane's scroller, between the toolbars and the dock.
-  const card = page
-    .locator('[data-task-drawer]')
-    .locator('xpath=preceding-sibling::*[@data-slot="scroll-area"][1]');
+  const card = page.locator('[data-task-card]');
   const dockTop = async () => (await dock.boundingBox())!.y;
   const cardBottom = async () => {
     const box = (await card.boundingBox())!;
@@ -841,4 +839,167 @@ test('the open task lives in the URL: reload keeps it, Back closes it, a stale l
   });
   await expect(page).not.toHaveURL(/task=/);
   await expect(pane).toHaveCount(0);
+});
+
+/**
+ * The room the card leaves for the side column on every frame from the one before `act` until
+ * `ms` after it. It does not depend on the pane's width, which a resize changes meanwhile.
+ */
+async function columnRoom(
+  page: Page,
+  act: () => Promise<void>,
+  { ms = 900, leaving = false }: { ms?: number; leaving?: boolean } = {},
+) {
+  await page.evaluate(
+    ({ leaving }) => {
+      const room: number[] = [];
+      const state = window as unknown as { room: number[]; until: number };
+      state.room = room;
+      state.until = Number.POSITIVE_INFINITY;
+      requestAnimationFrame(function sample(now) {
+        // Looked up each frame: switching tasks mounts a new card. The one sliding away is
+        // hidden, and counts only when asked for: then the frame's widest room is recorded.
+        const cards = [...document.querySelectorAll('[data-task-card]')].filter(
+          (card) => leaving || !card.closest('[aria-hidden="true"]'),
+        );
+        const values = cards.map((card) =>
+          Math.round(Number.parseFloat(getComputedStyle(card.parentElement!).paddingRight)),
+        );
+        if (values.length) room.push(Math.max(...values));
+        if (now < state.until) requestAnimationFrame(sample);
+      });
+    },
+    { leaving },
+  );
+  await act();
+  // Timed from the end of `act`, which can take a while on a busy machine.
+  await page.evaluate((ms) => {
+    (window as unknown as { until: number }).until = performance.now() + ms;
+  }, ms);
+  await page.waitForTimeout(ms + 100);
+  return page.evaluate(() => (window as unknown as { room: number[] }).room);
+}
+
+/** Frames of the column part-way open: it springs rather than jumping. */
+function sprung(room: number[]) {
+  return room.filter((value) => value > 8 && value < 260).length;
+}
+
+test('a wide desktop pane keeps tags and subtasks in a column that opens and shuts with them', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'A phone keeps its stacked layout (ADR 0009)');
+  const account = await fixture(page);
+  const { pane } = account;
+  // The task shown, not one sliding away as another replaces it.
+  const card = pane.locator(':scope > :not([aria-hidden="true"]) [data-task-card]');
+  const column = pane.getByRole('complementary', { name: 'Task sidebar' });
+  const handle = page.getByRole('separator', { name: 'Resize task' });
+  const addSubtask = pane.getByRole('button', { name: 'Add subtask', exact: true });
+  const width = async () => Math.round((await card.boundingBox())!.width);
+  const paneWidth = async () => Number(await handle.getAttribute('aria-valuenow'));
+
+  // The pane opens narrower than the column needs, and an empty task has nothing for it.
+  await expect(column).toHaveCount(0);
+  await handle.focus();
+  while ((await paneWidth()) < 620) await handle.press('Shift+ArrowLeft');
+  await expect(column).toHaveCount(0);
+  await expect(addSubtask).toBeVisible();
+  await expect.poll(width).toBe(await paneWidth());
+
+  // The first tag, picked from the dock, springs the column open; the card narrows for it.
+  const tag = { id: randomUUID(), projectId: account.projectId, name: 'Launch', parentId: null };
+  expect(
+    (
+      await page.request.post('/api/tags', {
+        headers: account.headers,
+        data: { ...tag, icon: null, color: 'amber' },
+      })
+    ).status(),
+  ).toBe(201);
+  const full = await width();
+  await controls(page).getByRole('button', { name: 'Color: none. Change', exact: true }).click();
+  const color = page.getByRole('region', { name: 'Color', exact: true });
+  let room = await columnRoom(page, () =>
+    color.getByRole('button', { name: 'Amber: Launch', exact: true }).click(),
+  );
+  await expect(column).toBeVisible();
+  await expect.poll(width).toBe(full - 268);
+  expect(sprung(room)).toBeGreaterThanOrEqual(3);
+  await page.screenshot({ path: test.info().outputPath('column-open.png') });
+  // It goes straight to the column, with the slot to add a subtask; the inline copies are
+  // hidden and cannot be reached.
+  await expect(pane.getByRole('region', { name: 'Task tags' })).toHaveCount(1);
+  await expect(column.getByRole('region', { name: 'Task tags' })).toContainText('Launch');
+  await expect(addSubtask).toHaveCount(1);
+  await expect(column.getByRole('button', { name: 'Add subtask', exact: true })).toBeVisible();
+  if (await color.count()) await page.keyboard.press('Escape');
+  await expect(color).toHaveCount(0);
+
+  // Removing the last tag springs it shut, and the slot comes back inline.
+  await controls(page).getByRole('button', { name: 'Color: Launch. Change', exact: true }).click();
+  room = await columnRoom(page, () =>
+    color.getByRole('button', { name: 'No color tag', exact: true }).click(),
+  );
+  await expect(column).toHaveCount(0);
+  await expect.poll(width).toBe(full);
+  expect(sprung(room)).toBeGreaterThanOrEqual(3);
+  if (await color.count()) await page.keyboard.press('Escape');
+  await expect(color).toHaveCount(0);
+  await expect(card.getByRole('button', { name: 'Add subtask', exact: true })).toBeVisible();
+
+  // A subtask left untouched is discarded on the way back, and never opens the column.
+  const title = pane.getByRole('textbox', { name: 'Task title' });
+  room = await columnRoom(
+    page,
+    async () => {
+      await addSubtask.click();
+      await expect(title).toBeFocused();
+      await title.press('Escape');
+      await expect(title).toHaveValue('Write the launch plan');
+    },
+    { leaving: true },
+  );
+  // The new row reaches the parent a frame or two before the subtask's page pushes it off,
+  // and the parent then holds its layout while it leaves: the column never shows.
+  expect(Math.max(...room)).toBeLessThan(8);
+  await expect(card.getByRole('button', { name: 'Add subtask', exact: true })).toBeVisible();
+
+  // The first subtask opens it: made inline, it is in the column when its parent comes back,
+  // with focus on its card there.
+  await addSubtask.click();
+  await expect(title).toBeFocused();
+  await expect(column).toHaveCount(0);
+  await page.keyboard.type('Draft the announcement');
+  await title.press('Escape');
+  await expect(title).toHaveValue('Write the launch plan');
+  const subtask = pane.getByRole('article', { name: /^TASK-\d+ Draft the announcement$/ });
+  await expect(column).toBeVisible();
+  await expect(subtask).toHaveCount(1);
+  await expect(column.getByRole('article')).toHaveCount(1);
+  await expect(subtask).toBeFocused();
+  expect(await width()).toBe(full - 268);
+  // Opening it and coming back keeps the column as it was, without springing it again.
+  room = await columnRoom(page, async () => {
+    await subtask.click();
+    await expect(title).toHaveValue('Draft the announcement');
+    await pane.getByRole('button', { name: 'Back to TASK-1', exact: true }).click();
+    await expect(title).toHaveValue('Write the launch plan');
+  });
+  await expect(subtask).toBeFocused();
+  expect(sprung(room)).toBe(0);
+
+  // Narrowed past the breakpoint, the layout springs back to stacked: the card widens on the
+  // spring while the subtasks unfold below the description, and only one copy is reachable.
+  await handle.focus();
+  room = await columnRoom(page, async () => {
+    while ((await paneWidth()) >= 620) await handle.press('ArrowRight');
+  });
+  await expect(column).toHaveCount(0);
+  await expect.poll(width).toBe(await paneWidth());
+  expect(sprung(room)).toBeGreaterThanOrEqual(3);
+  await expect(card.getByRole('article', { name: /Draft the announcement$/ })).toBeVisible();
+  await expect(pane.getByRole('article')).toHaveCount(1);
+  await expect(addSubtask).toHaveCount(1);
 });

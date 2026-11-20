@@ -506,6 +506,11 @@ view), comments and activity.
   tags, comments or changed fields) is discarded as it is left, rather than kept untitled. Opened from its parent's pane, it goes back there: Back, Escape, a pull and
   the breadcrumb return to the parent, and on a phone the subtask grows out of its card
   over the parent's pane and shrinks back into it.
+- A desktop pane at least 620 px wide has a side column beside the task's card, as a wide
+  Catch note pane does (2026-11-19, ADR 0012). It holds the task's tags and then its
+  subtasks, and later its link previews and media. It opens with the first of them and
+  closes with the last. Until then, “Add subtask” stays below the description. Narrower panes
+  and phones keep them inline.
 - Phone opening/closing uses Catch's card-to-note container transform and timing: the
   surface grows from its card and shrinks into its current position, with a fade when no
   card is visible. As in Catch, the surface has no shadow of its own,
