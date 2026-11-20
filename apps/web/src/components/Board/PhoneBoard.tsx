@@ -23,7 +23,7 @@ import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { BoardSettingsContent } from './BoardSettingsPanel';
 import { CardList } from './CardList';
-import { drag, holding, pageStride } from './drag';
+import { drag, holding, makingWay, pageStride } from './drag';
 import {
   byCategory,
   CATEGORIES,
@@ -355,7 +355,7 @@ function DoneCount({ onOpen }: { onOpen: () => void }) {
  */
 export function PeekEdge({ side, shown }: { side: -1 | 1; shown: boolean }) {
   const held = drag.use();
-  const visible = held?.phase === 'dragging' && shown;
+  const visible = makingWay(held) && shown;
   const waiting = visible && held.page === side;
   return (
     <motion.div
@@ -379,7 +379,7 @@ export function PeekEdge({ side, shown }: { side: -1 | 1; shown: boolean }) {
  */
 function DonePocket({ status, shown }: { status: Status; shown: boolean }) {
   const held = drag.use();
-  const visible = held?.phase === 'dragging' && shown;
+  const visible = makingWay(held) && shown;
   const over = visible && held.target?.kind === 'status' && held.target.statusId === status.id;
   return (
     <motion.div
@@ -412,8 +412,8 @@ export const dockButton =
 /**
  * The backlog in the drawer (ADR 0009). Collapsed, its header is the dock: the backlog's
  * handle beside search and the create button. Half open, it is a supply to take work from,
- * with the board still above: lifting a card sinks it out of the way so the whole screen is
- * board to place it on. Full, it is the backlog to groom, and its cards are reordered in
+ * with the board still above: a card carried off sinks it out of the way so the whole screen
+ * is board to place it on. Full, it is the backlog to groom, and its cards are reordered in
  * place. The closed tasks and board settings open in it as pages.
  */
 function BoardDrawer({
@@ -578,7 +578,7 @@ function BoardDrawer({
       detent={task || capturing ? 'closed' : detent}
       detents={task || capturing ? ['closed'] : undefined}
       onDetent={goTo}
-      move={!task && !capturing && (dragging || pick) ? <MovePanel pick={pick} /> : null}
+      move={!task && !capturing && (makingWay(held) || pick) ? <MovePanel pick={pick} /> : null}
       // An open task's drawer moves only while one of its panels is open.
       gesturesDisabled={
         held !== null || fingerDown || (!!task && !task.page) || (capturing && !capture.page)

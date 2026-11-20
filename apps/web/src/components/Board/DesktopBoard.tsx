@@ -10,7 +10,7 @@ import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { BoardSettingsPanel } from './BoardSettingsPanel';
 import { CardList } from './CardList';
-import { drag } from './drag';
+import { drag, makingWay } from './drag';
 import { railWidth, SideZone, STRIP_WIDTH, zoneWidth } from './SideZone';
 import { StatusMenu } from './StatusMenu';
 import { StatusTile } from './StatusTile';
@@ -103,7 +103,7 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
   const [frame, frameWidth] = useWidth();
   const [row, rowWidth] = useWidth();
   const active = project.statuses.filter((status) => status.category === 'active');
-  const dragging = held?.phase === 'dragging';
+  const dragging = makingWay(held);
   // A gallery covers the columns. A held card still needs somewhere to go, so they come
   // back as dropzones for as long as it is held.
   const covered = state.backlog === 'full' || state.closed === 'full';

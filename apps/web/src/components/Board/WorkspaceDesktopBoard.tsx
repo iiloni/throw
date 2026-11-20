@@ -7,8 +7,8 @@ import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scrol
 import { usePersistentState } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 import { OpenTaskPane, SelectionBar, useWidth } from './DesktopBoard';
-import { drag } from './drag';
-import { StatusGlyph } from './glyphs';
+import { drag, makingWay } from './drag';
+import { PriorityIcon, StatusGlyph } from './glyphs';
 import {
   CATEGORIES,
   type Category,
@@ -126,7 +126,7 @@ function CategoryColumn({
   const { project, tasks } = current(state);
   const target = categoryTarget(category);
   const listId: ListId = target;
-  const dragging = held?.phase === 'dragging';
+  const dragging = makingWay(held);
   const aimed = dragging ? held.target : null;
   const over =
     aimed?.kind === 'status' &&
@@ -199,6 +199,7 @@ function CategoryColumn({
                     >
                       <div className="zone-header-face">
                         <span className="truncate">{priorityName(project, band.priority)}</span>
+                        <PriorityIcon priority={band.priority} className="zone-chevron" />
                       </div>
                     </div>
                     {/* Masonry once the column is wide enough for two cards abreast. */}
