@@ -9,6 +9,8 @@ export type TaskRect = {
   radius: number;
   /** Whether the card shows its status, so the face that flies to it matches. */
   showStatus: boolean;
+  /** Whether that status is a control (a subtask's, in its parent), shaped as a button is. */
+  statusControl: boolean;
 };
 const origins = new Map<string, TaskRect>();
 const hidden = createStore<ReadonlySet<string>>(new Set());
@@ -52,6 +54,7 @@ export function taskCardRect(card: HTMLElement): TaskRect {
     height: box.height,
     radius: Number.parseFloat(getComputedStyle(card).borderTopLeftRadius) || 16,
     showStatus: card.dataset.showStatus !== undefined,
+    statusControl: card.dataset.statusControl !== undefined,
   };
 }
 

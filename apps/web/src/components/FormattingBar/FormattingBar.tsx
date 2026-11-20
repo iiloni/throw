@@ -244,7 +244,7 @@ function FormattingButton({
           )}
         </motion.button>
       </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={16} className="z-[70]">
+      <TooltipContent side="top" sideOffset={16}>
         {tool.label}
       </TooltipContent>
     </Tooltip>

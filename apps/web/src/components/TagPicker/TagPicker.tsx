@@ -1,5 +1,6 @@
 import type { Tag } from '@throw/shared';
 import { useId } from 'react';
+import { Hint } from '@/components/Hint/Hint';
 import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { TagTree } from '@/components/TagTree/TagTree';
 import { haptics } from '@/lib/haptics';
@@ -42,9 +43,10 @@ export function TagPicker({
                 >
                   <TagIcon name={root.icon} className="size-4" />
                 </span>
-                <span className="min-w-0 flex-1 truncate text-sm" title={label}>
-                  {tag.name}
-                </span>
+                {/* The tree shows the path; the checkbox is named by it. */}
+                <Hint label={label} whenTruncated>
+                  <span className="min-w-0 flex-1 truncate text-sm">{tag.name}</span>
+                </Hint>
                 {tag.id === primaryTagId && (
                   <span id={marker} className="text-muted-foreground text-xs">
                     Primary

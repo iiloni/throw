@@ -1,5 +1,6 @@
 import type { PendingMutation, Transaction } from '@tanstack/react-db';
 import {
+  type Comment,
   type Project,
   STARTER_STATUSES,
   type Status,
@@ -28,6 +29,7 @@ vi.mock('./collections', async () => {
   const collection = <T extends { id: string }>(id: string) =>
     createCollection(localOnlyCollectionOptions<T, string>({ id, getKey: (row) => row.id }));
   return {
+    commentsCollection: collection<Comment>('comments'),
     projectsCollection: collection<Project>('projects'),
     statusesCollection: collection<Status>('statuses'),
     tasksCollection: collection<Task>('tasks'),
@@ -44,7 +46,8 @@ vi.mock('./collections', async () => {
   };
 });
 
-const { projectsCollection, statusesCollection, tasksCollection } = await import('./collections');
+const { commentsCollection, projectsCollection, statusesCollection, tasksCollection } =
+  await import('./collections');
 const { createProject } = await import('./projects');
 const tasks = await import('./tasks');
 const tags = await import('./tags');
@@ -255,6 +258,32 @@ describe('the trash', () => {
     tasks.emptyTrash(workspaceId);
     const deleted = fake.written.at(-1)!.mutations.map((mutation) => String(mutation.key));
     expect(deleted.sort()).toEqual([parent, child, loose].sort());
+  });
+});
+
+describe('discarding a task left as it was made', () => {
+  it('trashes and purges it untouched, and keeps it once anything was given to it', () => {
+    const parent = tasks.createTask(projectId, { title: 'Parent' });
+    const empty = tasks.createTask(projectId, { parentId: parent });
+    fake.written.length = 0;
+    expect(tasks.discardUntouchedTask(empty)).toBe(true);
+    expect(fake.written.map((write) => write.mutations.map((m) => m.type))).toEqual([
+      ['update'],
+      ['delete'],
+    ]);
+    expect(tasksCollection.get(empty)).toBeUndefined();
+    const named = tasks.createTask(projectId, { parentId: parent, title: 'Named' });
+    const urgent = tasks.createTask(projectId, { parentId: parent, priority: 1 });
+    const moved = tasks.createTask(projectId, {
+      parentId: parent,
+      statusId: statusIn(projectId, 'active').id,
+    });
+    const commented = tasks.createTask(projectId, { parentId: parent });
+    commentsCollection.insert({ id: 'comment', taskId: commented } as Comment);
+    for (const id of [named, urgent, moved, commented, parent]) {
+      expect(tasks.discardUntouchedTask(id)).toBe(false);
+      expect(tasksCollection.get(id)).toBeDefined();
+    }
   });
 });
 

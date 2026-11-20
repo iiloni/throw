@@ -65,7 +65,8 @@ it('draws a flat, uncolored badge where asked', () => {
     icon: null,
   };
   render(<TagBadge tag={root} tags={[root]} interactive={false} colored={false} flat />);
-  const badge = screen.getByTitle('Work');
+  const badge = screen.getByText('Work').closest('.glass-badge')!;
+  expect(badge).not.toHaveAttribute('title');
   expect(badge).not.toHaveAttribute('data-color');
   expect(badge.className).not.toContain('[--badge-glass:');
   expect(badge.className).toContain('[backdrop-filter:none]!');

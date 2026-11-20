@@ -49,9 +49,10 @@ function Harness({ onChange }: { onChange: (id: string | null) => void }) {
 it('offers only colors a tag holds, and opens a picked tag’s children', async () => {
   const onChange = vi.fn();
   render(<Harness onChange={onChange} />);
-  const swatches = screen
-    .getAllByRole('button')
-    .flatMap((button) => (button.title.includes(':') ? [button.title] : []));
+  const swatches = screen.getAllByRole('button').flatMap((button) => {
+    const name = button.getAttribute('aria-label') ?? '';
+    return name.includes(':') ? [name] : [];
+  });
   // In palette order, as the project color picker lists them.
   expect(swatches).toEqual(['Amber: Research', 'Teal: Product']);
   expect(screen.getByRole('button', { name: 'No color tag' })).toHaveAttribute(

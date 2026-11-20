@@ -42,8 +42,12 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
   const reduced = useReducedMotion();
   const [origin] = useState(() => (reduced ? null : takeTaskOrigin(task.id)));
   const card = useMotionValue(origin);
-  // The face matches the card it leaves or lands on: a board column's cards omit their status.
-  const [faceStatus, setFaceStatus] = useState(origin?.showStatus ?? true);
+  // The face matches the card it leaves or lands on: a board column's cards omit their status,
+  // and a subtask's card in its parent makes it a control.
+  const [face, setFace] = useState({
+    showStatus: origin?.showStatus ?? true,
+    statusControl: origin?.statusControl ?? false,
+  });
   const color = taskColor(project, task);
   const viewport = useMotionValue({ width: innerWidth, height: innerHeight });
   const progress = useMotionValue(reduced ? 1 : 0);
@@ -55,6 +59,10 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
   const opener = useRef(
     document.activeElement instanceof HTMLElement ? document.activeElement : null,
   );
+  // A task discarded as it closes (a new subtask left empty) keeps its last page while it goes.
+  const page = content.body(task.id);
+  const lastPage = useRef(page);
+  if (page) lastPage.current = page;
   const close = () => {
     if (board.get().openTaskId === task.id) leaveTask();
   };
@@ -141,7 +149,7 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
         const rect = target && taskCardRect(target);
         card.set(rect);
         if (rect) {
-          setFaceStatus(rect.showStatus);
+          setFace({ showStatus: rect.showStatus, statusControl: rect.statusControl });
           setTaskCardHidden(task.id, true);
           frame.read(follow, true);
           landing = window.setTimeout(
@@ -247,7 +255,7 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
           >
             <TaskScrollContext.Provider value={attachScroll}>
               <TaskEditorReadyContext.Provider value={settled}>
-                {content.body(task.id)}
+                {lastPage.current}
               </TaskEditorReadyContext.Provider>
             </TaskScrollContext.Provider>
           </motion.div>
@@ -257,7 +265,12 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
             className="pointer-events-none absolute top-px left-px"
             style={{ width: faceWidth, opacity: faceOpacity }}
           >
-            <TaskCardFace project={project} task={task} showStatus={faceStatus} />
+            <TaskCardFace
+              project={project}
+              task={task}
+              showStatus={face.showStatus}
+              statusAsControl={face.statusControl}
+            />
           </motion.div>
           {/* A tinted card's border is transparent. */}
           {!color && (
