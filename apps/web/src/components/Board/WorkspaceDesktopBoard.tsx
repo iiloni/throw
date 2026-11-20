@@ -8,7 +8,7 @@ import { usePersistentState } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 import { OpenTaskPane, SelectionBar, useWidth } from './DesktopBoard';
 import { drag, makingWay } from './drag';
-import { StatusGlyph } from './glyphs';
+import { PriorityIcon, StatusGlyph } from './glyphs';
 import {
   CATEGORIES,
   type Category,
@@ -199,6 +199,7 @@ function CategoryColumn({
                     >
                       <div className="zone-header-face">
                         <span className="truncate">{priorityName(project, band.priority)}</span>
+                        <PriorityIcon priority={band.priority} className="zone-chevron" />
                       </div>
                     </div>
                     {/* Masonry once the column is wide enough for two cards abreast. */}

@@ -40,6 +40,27 @@ export function StatusGlyph({ category, className }: { category: Category; class
 
 const PRIORITY_ICONS = [ChevronsUp, ChevronUp, null, ChevronDown, ChevronsDown] as const;
 
+/** Whether a rank draws a chevron; the default rank does not. */
+export function hasPriorityIcon(priority: Priority) {
+  return PRIORITY_ICONS[priority - 1] !== null;
+}
+
+/**
+ * A rank's chevron alone, drawn as cards draw it, for places whose text already names the
+ * rank. The default rank draws nothing.
+ */
+export function PriorityIcon({ priority, className }: { priority: Priority; className?: string }) {
+  const Icon = PRIORITY_ICONS[priority - 1];
+  if (!Icon) return null;
+  return (
+    <Icon
+      aria-hidden
+      className={cn('size-4 shrink-0', priority === 1 && 'text-destructive', className)}
+      strokeWidth={priority === 1 ? 2.75 : 2.25}
+    />
+  );
+}
+
 /** A card's rank. The default rank draws nothing: most cards have it, and it is not news. */
 export function PriorityGlyph({
   priority,
@@ -50,8 +71,7 @@ export function PriorityGlyph({
   name: string;
   className?: string;
 }) {
-  const Icon = PRIORITY_ICONS[priority - 1];
-  if (!Icon) return null;
+  if (!hasPriorityIcon(priority)) return null;
   return (
     <span
       role="img"
@@ -59,7 +79,7 @@ export function PriorityGlyph({
       title={name}
       className={cn('shrink-0', priority === 1 && 'text-destructive', className)}
     >
-      <Icon className="size-4" strokeWidth={priority === 1 ? 2.75 : 2.25} aria-hidden />
+      <PriorityIcon priority={priority} />
     </span>
   );
 }

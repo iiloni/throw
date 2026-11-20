@@ -4,6 +4,7 @@ import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scrol
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { drag, makingWay } from './drag';
+import { PriorityIcon } from './glyphs';
 import { groupByPriority, priorityName } from './model';
 import { board, current, listTasks } from './state';
 import { TaskCard } from './TaskCard';
@@ -56,7 +57,10 @@ export function BacklogGallery({ showStatus }: { showStatus: boolean }) {
                   data-zone-header={priority}
                   data-current={at !== null ? '' : undefined}
                 >
-                  <span className="zone-header-face">{priorityName(project, priority)}</span>
+                  <span className="zone-header-face">
+                    <span className="truncate">{priorityName(project, priority)}</span>
+                    <PriorityIcon priority={priority} className="zone-chevron" />
+                  </span>
                 </h3>
                 <div
                   className="relative grid items-start gap-x-4 pb-3"
