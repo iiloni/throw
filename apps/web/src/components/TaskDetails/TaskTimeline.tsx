@@ -326,7 +326,7 @@ export function TaskTimeline({
       />
       {/* Both stay mounted, so a comment being written survives a look at the history or
           hiding them both. */}
-      <Collapse open={tab !== null} onRest={setLaidOut}>
+      <Collapse open={tab !== null} contentKey={shown} onRest={setLaidOut}>
         <div
           role="tabpanel"
           id={`${ids}-comments`}

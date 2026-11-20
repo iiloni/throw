@@ -19,21 +19,26 @@ const leave = { duration: 0.16, ease: curves.enter.ease };
  * takes over from wherever the last one had got to, and reduced motion switches at once.
  *
  * Closed content stays mounted under `hidden`, so whatever is being written there survives.
- * Once open the height is the content's own: a change inside does not animate it.
+ * Once open the height is the content's own: a change inside does not animate it, but a new
+ * `contentKey` (another panel swapped in) springs from the old height to the new one.
  */
 export function Collapse({
   open,
+  contentKey,
   onRest,
   className,
   children,
 }: {
   open: boolean;
+  /** Identifies what is showing; while open, a change animates to the new content's height. */
+  contentKey?: string | null;
   /** Called once opened content is laid out at its full height, or closed content hidden. */
   onRest?: (open: boolean) => void;
   className?: string;
   children: ReactNode;
 }) {
   const reducedMotion = useReducedMotion();
+  const box = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const height = useMotionValue(0);
   const opacity = useMotionValue(open ? 1 : 0);
@@ -44,6 +49,12 @@ export function Collapse({
   if (target !== open) {
     setTarget(open);
     setMoving(!reducedMotion);
+  }
+  // Swapped content starts out held at the old height, in the same render that swaps it in.
+  const [key, setKey] = useState(contentKey);
+  if (key !== contentKey) {
+    setKey(contentKey);
+    if (open && !reducedMotion) setMoving(true);
   }
   const growing = useRef<{ to: number; controls: AnimationPlaybackControls } | null>(null);
   const restRef = useRef(onRest);
@@ -126,11 +137,32 @@ export function Collapse({
     };
   }, [open, height, opacity, y, grow]);
 
+  const swapped = useRef(contentKey);
+  useLayoutEffect(() => {
+    const element = content.current;
+    if (swapped.current === contentKey || !element || !box.current) return;
+    swapped.current = contentKey;
+    // Closing content keeps its own course, and an open in progress follows the new content.
+    if (!open || growing.current) return;
+    // Motion writes the held height only after this commit. Laid out at its own height for a
+    // moment, shorter content would have the browser clamp the pane's scroll at once.
+    box.current.style.height = `${height.get()}px`;
+    box.current.style.overflow = 'clip';
+    const to = element.offsetHeight;
+    if (reduced.current || Math.abs(height.get() - to) < 1) {
+      height.set(to);
+      setMoving(false);
+      return;
+    }
+    grow(to);
+  }, [contentKey, open, height, grow]);
+
   useLayoutEffect(() => () => growing.current?.controls.stop(), []);
 
   const atRest = !moving;
   return (
     <motion.div
+      ref={box}
       hidden={!open && atRest}
       // Content on its way out can no longer be reached.
       inert={!open}

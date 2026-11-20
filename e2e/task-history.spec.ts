@@ -525,6 +525,44 @@ test('comments and history hide together, ease in and out, and stay hidden on th
   await expect(f.history.getByRole('tabpanel', { name: /^Comments/ })).toBeVisible();
 });
 
+test("switching panels springs to the new panel's height", async ({ page }) => {
+  const f = await fixture(page);
+  for (const line of ['First of several', 'Second of several', 'Third of several'])
+    await f.comment(line);
+  await expect(f.history).toContainText('Third of several');
+  const timeline = f.history.locator('[data-collapse]');
+  const commentsTab = f.history.getByRole('tab', { name: /^Comments/ });
+  const historyTab = f.history.getByRole('tab', { name: 'History' });
+  // From the bottom of the pane, where a sudden change of height would jump the page.
+  await f.history.getByRole('button', { name: 'Write a comment…' }).scrollIntoViewIfNeeded();
+
+  for (const [tab, panel] of [
+    [historyTab, 'History'],
+    [commentsTab, /^Comments/],
+  ] as const) {
+    const switching = await sampleFrames(page, async () => {
+      await tab.click();
+      await expect(f.history.getByRole('tabpanel', { name: panel })).toBeVisible();
+      await expect(timeline).toHaveAttribute('data-collapse', 'open');
+    });
+    const from = switching[0]!.height;
+    const to = switching.at(-1)!.height;
+    expect(Math.abs(to - from)).toBeGreaterThan(20);
+    // It passes through the heights between, one way, and the content stays shown.
+    expect(
+      switching.some((s) => Math.min(from, to) + 2 < s.height && s.height < Math.max(from, to) - 2),
+    ).toBe(true);
+    for (let i = 1; i < switching.length; i++) {
+      const step = switching[i]!.height - switching[i - 1]!.height;
+      expect(to > from ? step >= -0.5 : step <= 0.5).toBe(true);
+      expect(Math.abs(switching[i]!.scrollTop - switching[i - 1]!.scrollTop)).toBeLessThan(
+        Math.abs(to - from) * 0.6,
+      );
+    }
+    expect(switching.every((s) => s.opacity === 1)).toBe(true);
+  }
+});
+
 test('the keyboard opens and hides panels, and a history entry opens hidden panels', async ({
   page,
 }) => {
@@ -575,4 +613,10 @@ test('hiding panels is instant with reduced motion', async ({ page }) => {
   });
   expect(opening.every((s) => s.height === 0 || s.height === full)).toBe(true);
   expect(opening.every((s) => s.opacity === 0 || s.opacity === 1)).toBe(true);
+  const switching = await sampleFrames(page, async () => {
+    await f.history.getByRole('tab', { name: 'History' }).click();
+    await expect(f.history.getByRole('tabpanel', { name: 'History' })).toBeVisible();
+  });
+  const to = switching.at(-1)!.height;
+  expect(switching.every((s) => s.height === full || s.height === to)).toBe(true);
 });
