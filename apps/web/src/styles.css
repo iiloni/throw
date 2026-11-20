@@ -661,3 +661,175 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/*
+ * Page transitions (View Transitions API; see lib/pageTransition.ts and ADR 0013). Pages
+ * slide a short way in the direction of travel while cross-fading, boards cross-fade, and a
+ * page with no order rises softly into view. Snapshots move instead of the page itself, so
+ * fixed and sticky UI keeps working. Catch's timings.
+ */
+::view-transition {
+  background: var(--background);
+}
+/* Position eases out; opacity fades quickly so the two pages barely overlap. */
+html:active-view-transition-type(forward)::view-transition-old(root) {
+  animation:
+    500ms var(--ease-emphasized) both page-to-left,
+    180ms ease-out both page-fade-out;
+}
+html:active-view-transition-type(forward)::view-transition-new(root) {
+  animation:
+    500ms var(--ease-emphasized) both page-from-right,
+    260ms ease-out 60ms both page-fade-in;
+}
+html:active-view-transition-type(back)::view-transition-old(root) {
+  animation:
+    500ms var(--ease-emphasized) both page-to-right,
+    180ms ease-out both page-fade-out;
+}
+html:active-view-transition-type(back)::view-transition-new(root) {
+  animation:
+    500ms var(--ease-emphasized) both page-from-left,
+    260ms ease-out 60ms both page-fade-in;
+}
+html:active-view-transition-type(fade, enter)::view-transition-old(root) {
+  animation: 180ms ease-out both page-fade-out;
+}
+html:active-view-transition-type(fade)::view-transition-new(root) {
+  animation: 260ms ease-out 60ms both page-fade-in;
+}
+/* The content entry's settle (curves.enter in lib/motion.ts), for the whole page. */
+html:active-view-transition-type(enter)::view-transition-new(root) {
+  animation:
+    420ms cubic-bezier(0.25, 0.1, 0.25, 1) both page-rise,
+    260ms ease-out 60ms both page-fade-in;
+}
+/*
+ * The desktop rail stays put, so the moving page is clipped where the page column starts
+ * (measured as the transition begins) rather than passing under the rail's glass.
+ */
+html:active-view-transition-type(forward, back, fade, enter)::view-transition-image-pair(root) {
+  clip-path: inset(0 0 0 var(--page-inset, 0px));
+}
+
+/*
+ * Settings side by side: only the open page changes beside the page list, which stays live
+ * along with the rest of the window.
+ */
+html:active-view-transition-type(inner) [data-settings-page] {
+  view-transition-name: settings-page;
+}
+html:active-view-transition-type(inner)::view-transition-old(root) {
+  display: none;
+}
+html:active-view-transition-type(inner)::view-transition-new(root) {
+  animation: none;
+}
+/* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
+::view-transition-group(settings-page) {
+  animation: none;
+}
+/* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
+::view-transition-old(settings-page) {
+  animation: 120ms ease-out both page-fade-out;
+}
+/* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
+::view-transition-new(settings-page) {
+  animation:
+    420ms cubic-bezier(0.25, 0.1, 0.25, 1) both page-rise,
+    260ms ease-out 60ms both page-fade-in;
+}
+
+/*
+ * The rail and the phone's dock animate themselves; show them live rather than cross-fading
+ * two copies, so they stay put while the page moves. They are named only while a transition
+ * runs: a view-transition-name makes an element a backdrop root, which would stop their glass
+ * from blurring the page behind it. A sunk drawer is out of sight and goes with the page.
+ */
+html:active-view-transition [data-rail] {
+  view-transition-name: rail;
+}
+html:active-view-transition [data-drawer]:not([data-sunk]) {
+  view-transition-name: dock;
+}
+/* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
+::view-transition-group(rail),
+/* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
+::view-transition-group(dock),
+/* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
+::view-transition-new(rail),
+/* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
+::view-transition-new(dock) {
+  animation: none;
+}
+/* Hide the outgoing copy once the incoming live one is available. */
+/* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
+::view-transition-old(rail),
+/* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
+::view-transition-old(dock) {
+  display: none;
+  animation: none;
+}
+/* A page without a dock at rest (trash) lets the dock go, or arrive, with the page. */
+/* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
+::view-transition-old(dock):only-child {
+  display: block;
+  animation: 180ms ease-out both page-fade-out;
+}
+/* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
+::view-transition-new(dock):only-child {
+  animation: 260ms ease-out 60ms both page-fade-in;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:active-view-transition-type(forward, back, fade, enter)::view-transition-old(root) {
+    animation: 150ms ease-out both page-fade-out;
+  }
+  html:active-view-transition-type(forward, back, fade, enter)::view-transition-new(root) {
+    animation: 150ms ease-out both page-fade-in;
+  }
+  /* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
+  ::view-transition-old(settings-page) {
+    animation: 150ms ease-out both page-fade-out;
+  }
+  /* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
+  ::view-transition-new(settings-page) {
+    animation: 150ms ease-out both page-fade-in;
+  }
+}
+
+@keyframes page-to-left {
+  to {
+    transform: translateX(-20%);
+  }
+}
+@keyframes page-from-right {
+  from {
+    transform: translateX(20%);
+  }
+}
+@keyframes page-to-right {
+  to {
+    transform: translateX(20%);
+  }
+}
+@keyframes page-from-left {
+  from {
+    transform: translateX(-20%);
+  }
+}
+@keyframes page-rise {
+  from {
+    transform: translateY(10px);
+  }
+}
+@keyframes page-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes page-fade-in {
+  from {
+    opacity: 0;
+  }
+}

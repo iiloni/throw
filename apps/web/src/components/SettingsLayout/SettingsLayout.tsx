@@ -66,7 +66,8 @@ export function SettingsLayout({
         {back && <BackLink {...back} />}
         <PageList groups={groups} current={current} indicator="settings-nav" />
       </nav>
-      <div className="flex min-w-0 flex-col gap-4">
+      {/* The part that changes between pages (the `inner` page transition, styles.css). */}
+      <div data-settings-page="" className="flex min-w-0 flex-col gap-4">
         {heading}
         {children}
       </div>
