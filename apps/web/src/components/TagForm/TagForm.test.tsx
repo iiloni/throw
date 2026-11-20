@@ -47,3 +47,36 @@ it('offers accessible parents outside the branch, and clears root appearance whe
     icon: null,
   });
 });
+
+it('creates a new tag with its starting color, and hands its id to whoever asked for it', () => {
+  actions.createTag.mockReturnValue('made');
+  const onCreated = vi.fn();
+  const { unmount } = render(
+    <TagEditor
+      projectId="project"
+      tags={[root]}
+      initial={{ parentId: null, color: 'red' }}
+      onDone={() => {}}
+      onCreated={onCreated}
+    />,
+  );
+  expect(screen.getByRole('button', { name: 'Red' })).toHaveAttribute('aria-pressed', 'true');
+  fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'Ops' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save tag' }));
+  expect(actions.createTag).toHaveBeenLastCalledWith('project', {
+    name: 'Ops',
+    parentId: null,
+    color: 'red',
+    icon: null,
+  });
+  expect(onCreated).toHaveBeenCalledWith('made');
+  unmount();
+  // The tag manager asks for nothing back, and still creates the tag.
+  actions.createTag.mockClear();
+  render(
+    <TagEditor projectId="project" tags={[root]} initial={{ parentId: null }} onDone={() => {}} />,
+  );
+  fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'Ops' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save tag' }));
+  expect(actions.createTag).toHaveBeenCalledOnce();
+});

@@ -330,6 +330,18 @@ export function Drawer({
     };
   }, [carded]);
 
+  // A page that takes another's place, as a picker's form does and Back undoes, takes focus
+  // with it: what had focus went with the page it was on. Switching tabs keeps it on the tab.
+  const lastKey = useRef<string | undefined>(undefined);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: follows the page shown
+  useEffect(() => {
+    const previous = lastKey.current;
+    lastKey.current = page?.key;
+    if (!page || previous === undefined || previous === page.key) return;
+    if (head.current?.contains(document.activeElement)) return;
+    (page.focus?.current ?? surface.current)?.focus({ preventScroll: true });
+  }, [page?.key]);
+
   // Switching tabs makes the new tab the one focus returns to.
   // biome-ignore lint/correctness/useExhaustiveDependencies: follows the page shown
   useEffect(() => {

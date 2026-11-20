@@ -480,8 +480,12 @@ view), comments and activity.
   (2026-11-19), Color picks the primary tag: each colored top-level tag is a swatch,
   picking one opens its children to pick a more specific one, and uncolored top-level
   tags sit one step away. Tags lists the secondary tags with the primary marked, since a
-  tag may hold both roles. Both pickers stay open for further choices. The task's tags
-  are listed under its title. On desktop the pane follows Catch's split view (2026-11-19):
+  tag may hold both roles. Both pickers stay open for further choices. As in Catch, each
+  has a "+" in its top-right corner that makes a tag and assigns it at once (2026-11-20):
+  in Color, a top-level tag starting with a color no root holds yet, or a child of the
+  open tag, either becoming the primary; in Tags, a secondary tag. On a phone the form is
+  a drawer page in place of the picker, and Back returns to the picker; on desktop it is a
+  centred dialog over the open panel. The task's tags are listed under its title. On desktop the pane follows Catch's split view (2026-11-19):
   the navigation and trash toolbars sit above the task's card, lined up with its edges, and
   the same controls are a glass dock below it. A panel opens above the dock over the
   card's foot without moving the card, and closes from its own button, Escape, Back or a

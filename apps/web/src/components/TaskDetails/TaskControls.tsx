@@ -96,7 +96,7 @@ export function ControlButtons({
   status: Status | undefined;
   priority: Priority;
   project: Project;
-  /** Tags are made in the project's tag manager; with none, there is nothing to pick. */
+  /** With no tags in the project there is nothing to pick; the tag manager makes the first. */
   tags: { primary: string | null; secondary: string[]; color: string | null } | null;
   onOpen(panel: TaskPanel, element: HTMLButtonElement): void;
   controlProps(panel: TaskPanel): ControlProps;

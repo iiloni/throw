@@ -5,6 +5,7 @@ import { type ReactNode, useMemo, useRef, useState } from 'react';
 import { AnimatedHeight } from '@/components/AnimatedHeight/AnimatedHeight';
 import { colorName } from '@/components/ColorPicker/ColorPicker';
 import { Hint } from '@/components/Hint/Hint';
+import { NewTagButton } from '@/components/NewTag/NewTag';
 import { TagBadge } from '@/components/TagBadge/TagBadge';
 import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { haptics } from '@/lib/haptics';
@@ -12,7 +13,10 @@ import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
 /** The open branch: the swatches, the roots without a color, or a tag's children. */
-type Branch = null | 'uncolored' | string;
+export type Branch = null | 'uncolored' | string;
+
+/** Where a new tag made from the picker goes: the open view's level, as Catch's picker does. */
+export type NewTagPlace = { parentId: string | null; color: Tag['color']; branch: Branch };
 
 /**
  * Picks a task's primary tag by its color, as Catch's color picker does: each top-level tag
@@ -25,14 +29,22 @@ export function ColorTagPicker({
   tags,
   primaryTagId,
   onChange,
+  onNewTag,
+  initialBranch = null,
   className,
 }: {
   tags: readonly Tag[];
   primaryTagId: string | null;
   onChange: (id: string | null) => void;
+  /**
+   * Offers a new tag in the open view's corner: a top-level tag starting with a color no root
+   * holds yet, or a child of the open tag.
+   */
+  onNewTag?: (place: NewTagPlace) => void;
+  initialBranch?: Branch;
   className?: string;
 }) {
-  const [branch, setBranch] = useState<Branch>(null);
+  const [branch, setBranch] = useState<Branch>(initialBranch);
   const [direction, setDirection] = useState(1);
   const reducedMotion = useReducedMotion();
   const selected = tags.find((tag) => tag.id === primaryTagId);
@@ -104,6 +116,23 @@ export function ColorTagPicker({
       {children}
     </motion.div>
   );
+  const newTag = (className?: string) =>
+    onNewTag && (
+      <NewTagButton
+        className={className}
+        onClick={() =>
+          onNewTag(
+            branch === null
+              ? {
+                  parentId: null,
+                  color: COLORS.find((color) => !tags.some((tag) => tag.color === color)) ?? null,
+                  branch,
+                }
+              : { parentId: branch === 'uncolored' ? null : branch, color: null, branch },
+          )
+        }
+      />
+    );
   const badge = (
     <div className="flex min-h-7 min-w-0 justify-center">
       {selected && <TagBadge tag={selected} tags={tags} primary interactive={false} morph />}
@@ -119,7 +148,10 @@ export function ColorTagPicker({
             ? view(
                 'colors',
                 <>
-                  <div className="px-3 pt-2">{badge}</div>
+                  <div className="grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center px-3 pt-2">
+                    <div className="col-start-2">{badge}</div>
+                    {newTag()}
+                  </div>
                   <div className="grid grid-cols-6 justify-items-center gap-2 p-3">
                     <Swatch
                       label="No color tag"
@@ -179,6 +211,7 @@ export function ColorTagPicker({
                       <span>Back</span>
                     </button>
                     {badge}
+                    {newTag('justify-self-end')}
                   </div>
                   <AnimatePresence initial={false} mode="wait" custom={direction}>
                     {view(
