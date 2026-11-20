@@ -7,6 +7,7 @@ import {
   initialBoard,
   leaveTask,
   listTasks,
+  openNewSubtask,
   openSubtask,
   receiveBoard,
   update,
@@ -203,6 +204,40 @@ describe('synced project board selection', () => {
       place: () => true,
     });
     expect(board.get()).toMatchObject({ openTaskId: 'child', taskTrail: [] });
+  });
+  it('opens a subtask added from its parent as a new task once the board has its row', () => {
+    const discard = vi.fn();
+    const actions = { rename: () => {}, send: () => true, place: () => true, discard };
+    const rows = [task('parent'), task('other')];
+    board.set(view(rows));
+    receiveBoard(projectBoardData(project, statuses, rows), actions);
+    update({ openTaskId: 'parent' });
+    // Created on the device, the row reaches the board on its next render.
+    openNewSubtask('child', 'parent');
+    expect(board.get()).toMatchObject({ openTaskId: 'parent', newTaskId: null });
+    const added = [...rows, task('child', { parentId: 'parent' })];
+    receiveBoard(projectBoardData(project, statuses, added), actions);
+    expect(board.get()).toMatchObject({
+      openTaskId: 'child',
+      newTaskId: 'child',
+      taskTrail: ['parent'],
+    });
+    leaveTask();
+    expect(board.get()).toMatchObject({ openTaskId: 'parent', taskTrail: [] });
+    // Left, the new subtask is offered for discarding once; reopened, it is a task like any.
+    expect(discard).toHaveBeenCalledExactlyOnceWith('child');
+    openSubtask('child');
+    leaveTask();
+    expect(discard).toHaveBeenCalledOnce();
+    // A parent left before the row arrived no longer opens it.
+    update({ newTaskId: null });
+    openNewSubtask('late', 'parent');
+    update({ openTaskId: 'other' });
+    receiveBoard(
+      projectBoardData(project, statuses, [...added, task('late', { parentId: 'parent' })]),
+      actions,
+    );
+    expect(board.get()).toMatchObject({ openTaskId: 'other', newTaskId: null });
   });
   it('orders statuses by category, position and id, leaving active columns in project order', () => {
     const data = projectBoardData(

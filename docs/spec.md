@@ -499,7 +499,11 @@ view), comments and activity.
   left, trash/restore on the right.
 - Subtasks sit on the task pane as a flush list of the same task cards, as Catch lists a
   note's links below it, with status controls and an add action. A subtask opens in the same view, with its parent in the
-  breadcrumb. Opened from its parent's pane, it goes back there: Back, Escape, a pull and
+  breadcrumb. Adding one makes it at once and opens it as a new task, as the board's add
+  control does (2026-11-19): its title ready to be written and its full controls, over its
+  parent's pane. On a phone it grows out of its new card; beside the board it slides in over
+  its parent and back out when left. A new subtask left untouched (no title, description,
+  tags, comments or changed fields) is discarded as it is left, rather than kept untitled. Opened from its parent's pane, it goes back there: Back, Escape, a pull and
   the breadcrumb return to the parent, and on a phone the subtask grows out of its card
   over the parent's pane and shrinks back into it.
 - Phone opening/closing uses Catch's card-to-note container transform and timing: the

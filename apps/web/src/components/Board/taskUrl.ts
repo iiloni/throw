@@ -6,6 +6,8 @@ import { board, canOpenTask, update } from './state';
 /** The task whose opening pushed a history entry in this session, as Catch does for notes. */
 let pushedTaskId: string | null = null;
 
+const NOTHING = Symbol('nothing written');
+
 const taskInUrl = () => new URLSearchParams(window.location.search).get('task') ?? undefined;
 
 /**
@@ -25,6 +27,8 @@ export function useTaskUrl(task: string | undefined, ready: boolean, synced: boo
   const linked = task !== undefined && ready && canOpenTask(task);
   const seenTask = useRef(task);
   const seenOpen = useRef<string | null>(null);
+  /** What the board last wrote to the URL, until the router has taken it in. */
+  const written = useRef<string | undefined | typeof NOTHING>(NOTHING);
 
   const setTaskParam = useCallback(
     (value: string | undefined, replace: boolean) =>
@@ -46,6 +50,12 @@ export function useTaskUrl(task: string | undefined, ready: boolean, synced: boo
     // A value the router is still committing while a newer one is already in the address
     // bar: the board chose again meanwhile, so this one is not a request.
     if (task !== taskInUrl()) return;
+    // The board moved on and the router has yet to take it in: the URL still names the task it
+    // left, which may already be gone (a new subtask discarded as it was left).
+    if (written.current !== NOTHING) {
+      if (task !== written.current) return;
+      written.current = NOTHING;
+    }
     const { openTaskId } = board.get();
     if (task === undefined) {
       // Only the task leaving the URL (Back) closes it; a page without one leaves alone a
@@ -80,6 +90,7 @@ export function useTaskUrl(task: string | undefined, ready: boolean, synced: boo
     const current = taskInUrl();
     if ((open ?? undefined) === current) return;
     if (open === null) {
+      written.current = undefined;
       if (current && current === pushedTaskId) {
         pushedTaskId = null;
         window.history.back();
@@ -88,6 +99,7 @@ export function useTaskUrl(task: string | undefined, ready: boolean, synced: boo
     }
     if (!current) pushedTaskId = open;
     else if (current === pushedTaskId) pushedTaskId = open;
+    written.current = open;
     setTaskParam(open, Boolean(current));
   }, [open, ready, setTaskParam]);
 }

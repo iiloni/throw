@@ -160,16 +160,38 @@ test('task fields, actions, subtasks and task links work in the split pane and p
   }
 
   await page.goto(`${account.path}&task=${account.taskId}`);
-  const subtaskTitle = pane.getByRole('textbox', { name: 'Subtask title' });
-  await pane.getByRole('button', { name: 'Add subtask', exact: true }).click();
-  await expect(subtaskTitle).toBeFocused();
-  await subtaskTitle.fill('Discard this draft');
-  await subtaskTitle.press('Escape');
-  await expect(pane.getByRole('button', { name: 'Add subtask', exact: true })).toBeFocused();
-  await pane.getByRole('button', { name: 'Add subtask', exact: true }).click();
-  await expect(subtaskTitle).toHaveValue('');
-  await subtaskTitle.fill('Draft the announcement');
-  await pane.getByRole('button', { name: 'Add subtask', exact: true }).click();
+  // Adding a subtask makes it at once and opens it as a task of its own, over its parent,
+  // with its title ready to be written and its full controls.
+  const addSubtask = pane.getByRole('button', { name: 'Add subtask', exact: true });
+  const title = pane.getByRole('textbox', { name: 'Task title' });
+  const subtaskRows = async () =>
+    (await shapeRows(page.request, 'tasks', account.headers)).filter(
+      (row) => row.parent_id === account.taskId,
+    );
+  await addSubtask.click();
+  await expect(title).toHaveValue('');
+  await expect(title).toBeFocused();
+  await expect(addSubtask).toHaveCount(0);
+  await expect(pane.getByRole('button', { name: /^Open parent / })).toBeVisible();
+  await expect(
+    controls(page).getByRole('button', { name: 'Status: backlog. Change', exact: true }),
+  ).toBeVisible();
+  if (isMobile) await expect(page.getByLabel('Task beneath', { exact: true })).toHaveCount(1);
+  // Left as it was made, it was never wanted: it goes, rather than stay as an untitled task.
+  await title.press('Escape');
+  await expect(title).toHaveValue('A plan ready to share');
+  await expect(pane.getByRole('article', { name: /Untitled task$/ })).toHaveCount(0);
+  await expect.poll(async () => (await subtaskRows()).length).toBe(0);
+  await addSubtask.click();
+  await expect(title).toBeFocused();
+  await page.keyboard.type('Draft the announcement');
+  // Escape names it and goes back to the parent, whose list now holds it.
+  await title.press('Escape');
+  await expect(title).toHaveValue('A plan ready to share');
+  const added = pane.getByRole('article', { name: /^TASK-\d+ Draft the announcement$/ });
+  await expect(added).toBeVisible();
+  if (isMobile) await expect(addSubtask).toBeFocused();
+  else await expect(added).toBeFocused();
   await pane
     .getByRole('button', { name: 'Status of Draft the announcement: backlog. Change' })
     .click();
@@ -240,7 +262,6 @@ test('task fields, actions, subtasks and task links work in the split pane and p
     'A plan ready to share',
     { timeout: APP_LOAD_TIMEOUT },
   );
-  const title = pane.getByRole('textbox', { name: 'Task title' });
   await title.fill('A title committed on Escape');
   await title.press('Escape');
   await expect(pane).toHaveCount(0);
@@ -728,6 +749,58 @@ test('the phone surface grows from its card without scaling text and lands back 
   await expect(card).toBeVisible();
 });
 
+test("a subtask lands in its card in the parent with the card's face and edge", async ({
+  page,
+  isMobile,
+  browserName,
+}) => {
+  test.skip(
+    !isMobile && browserName !== 'firefox',
+    'Phone morph; Firefox exercises the same phone viewport.',
+  );
+  if (!isMobile) await page.setViewportSize({ width: 412, height: 915 });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const { pane } = await fixture(page);
+  await pane.getByRole('button', { name: 'Add subtask', exact: true }).click();
+  await page.keyboard.type('Sharpen the shears');
+  await page.getByRole('button', { name: 'Back to TASK-1' }).click();
+  const card = pane.getByRole('article', { name: 'TASK-2 Sharpen the shears' });
+  await expect(card).toBeVisible();
+  await card.click();
+  const subtask = page.getByLabel('Task', { exact: true });
+  await expect(subtask.getByRole('textbox', { name: 'Task title' })).toHaveValue(
+    'Sharpen the shears',
+  );
+  // The last frame of the surface, before the card is shown again in its place.
+  const last = page.evaluate(
+    () =>
+      new Promise<{ status: DOMRect; edge: number } | null>((resolve) => {
+        let seen: { status: DOMRect; edge: number } | null = null;
+        const start = performance.now();
+        const frame = () => {
+          const surface = document.querySelector('[aria-label="Closing task"] [data-task-surface]');
+          if (!surface && seen) return resolve(seen);
+          if (surface) {
+            const edge = surface.querySelector('[data-task-edge]');
+            seen = {
+              status: surface.querySelector('[data-task-face] .truncate')!.getBoundingClientRect(),
+              edge: edge ? Number(getComputedStyle(edge).opacity) : 0,
+            };
+          }
+          if (performance.now() - start > 5000) return resolve(null);
+          requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
+      }),
+  );
+  await page.getByRole('button', { name: 'Back to TASK-1' }).click();
+  const landed = (await last)!;
+  const status = (await card.getByText('backlog').boundingBox())!;
+  expect(Math.abs(landed.status.x - status.x)).toBeLessThan(1);
+  expect(Math.abs(landed.status.y - status.y)).toBeLessThan(1);
+  expect(landed.edge).toBeGreaterThan(0.95);
+});
+
 test('the open task lives in the URL: reload keeps it, Back closes it, a stale link says so', async ({
   page,
 }) => {
@@ -752,9 +825,9 @@ test('the open task lives in the URL: reload keeps it, Back closes it, a stale l
   // A subtask opened from its parent replaces the entry: Back closes both in one step.
   await page.getByRole('article', { name: 'TASK-1 Write the launch plan', exact: true }).click();
   await pane.getByRole('button', { name: 'Add subtask', exact: true }).click();
-  await pane.getByRole('textbox', { name: 'Subtask title' }).fill('Draft the outline');
-  await pane.getByRole('textbox', { name: 'Subtask title' }).press('Enter');
-  await pane.getByRole('article', { name: /Draft the outline/ }).click();
+  await expect(pane.getByRole('textbox', { name: 'Task title' })).toBeFocused();
+  await page.keyboard.type('Draft the outline');
+  await pane.getByRole('textbox', { name: 'Task title' }).press('Enter');
   await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue('Draft the outline');
   await expect(page).not.toHaveURL(new RegExp(`task=${account.taskId}`));
   await page.goBack();
