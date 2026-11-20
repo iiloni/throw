@@ -31,10 +31,10 @@ describe('MCP write tools', () => {
       projectId: uuidv7(),
       title: 'Stacked work',
       parent: 'THR-2',
-      operationId: uuidv7(),
+      operationId: '019abcd0-abcd-7abc-8abc-abcdefabcdef',
     });
     await createTaskTool(actor, input);
-    await createTaskTool(actor, input);
+    await createTaskTool(actor, { ...input, operationId: input.operationId!.toUpperCase() });
     await createTaskTool({ ...actor, tokenId: uuidv7() }, input);
     const [first, second, third] = vi.mocked(createTask).mock.calls.map(([, body]) => body);
     expect(first).toMatchObject({ parentId: task.id, title: 'Stacked work' });

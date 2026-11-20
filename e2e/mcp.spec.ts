@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -199,6 +200,29 @@ test('an MCP token is limited to one workspace, including against UUIDs from ano
     }
   } finally {
     await Promise.all([client.close(), other.close()]);
+  }
+});
+
+test('MCP checks membership again when a credential still exists @api', async ({ request }) => {
+  const account = await createAccount(request);
+  const { token, metadata } = await makeToken(request, account);
+  const client = await connect(token);
+  try {
+    expect((await call(client, 'list_workspaces')).items[0]?.id).toBe(metadata.workspaceId);
+    // Membership management has no API yet. Remove it in this isolated worktree's database.
+    const literal = (value: string) => `'${value.replaceAll("'", "''")}'`;
+    execFileSync('./scripts/dev.sh', [
+      'psql',
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-c',
+      `DELETE FROM workspace_members WHERE workspace_id = ${literal(metadata.workspaceId)} AND user_id = ${literal(account.user.id)}`,
+    ]);
+    await expect(client.listTools()).rejects.toMatchObject({ code: 401 });
+    const inventory = await request.get('/api/mcp-tokens', { headers: account.headers });
+    expect(mcpTokensResponseSchema.parse(await inventory.json()).tokens).toContainEqual(metadata);
+  } finally {
+    await client.close();
   }
 });
 

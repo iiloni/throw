@@ -158,12 +158,37 @@ export function blocksToMarkdown(document: Description) {
     return false;
   }
 
-  function inline(value: unknown, depth: number): PhrasingContent[] {
+  function inlineText(
+    value: string,
+    styles: Record<string, unknown>,
+    allowBreaks: boolean,
+  ): PhrasingContent[] {
+    let valueText = text(value);
+    if (valueText.includes('\n') && (!allowBreaks || styles.code === true)) {
+      lossy = true;
+      valueText = valueText.replaceAll('\n', ' ');
+    }
+    return valueText.split(/(\n)/).flatMap((part): PhrasingContent[] => {
+      if (part === '\n') return [{ type: 'break' }];
+      if (!part) return [];
+      let node: PhrasingContent = {
+        type: styles.code === true ? 'inlineCode' : 'text',
+        value: part,
+      };
+      if (styles.italic === true) node = { type: 'emphasis', children: [node] };
+      if (styles.bold === true) node = { type: 'strong', children: [node] };
+      return [node];
+    });
+  }
+
+  function inline(value: unknown, depth: number, allowBreaks: boolean): PhrasingContent[] {
     if (!visit(depth)) return [];
-    if (typeof value === 'string') return [{ type: 'text', value: text(value) }];
+    if (typeof value === 'string') return inlineText(value, {}, allowBreaks);
     const row = asRecord(value);
     if (row.type === 'link') {
-      const children = asArray(row.content).flatMap((child) => inline(child, depth + 1));
+      const children = asArray(row.content).flatMap((child) =>
+        inline(child, depth + 1, allowBreaks),
+      );
       if (typeof row.href !== 'string' || row.href.length > 2048 || !supportedUrl(row.href)) {
         lossy = true;
         return children;
@@ -178,20 +203,19 @@ export function blocksToMarkdown(document: Description) {
     const styles = asRecord(row.styles);
     if (Object.keys(styles).some((style) => !['bold', 'italic', 'code'].includes(style)))
       lossy = true;
-    const valueText = text(row.text);
-    let node: PhrasingContent = {
-      type: styles.code === true ? 'inlineCode' : 'text',
-      value: valueText,
-    };
-    if (styles.italic === true) node = { type: 'emphasis', children: [node] };
-    if (styles.bold === true) node = { type: 'strong', children: [node] };
-    return [node];
+    return inlineText(row.text, styles, allowBreaks);
   }
 
-  function content(value: unknown, depth: number): PhrasingContent[] {
-    return (typeof value === 'string' ? [value] : asArray(value)).flatMap((item) =>
-      inline(item, depth),
+  function content(value: unknown, depth: number, allowBreaks = true): PhrasingContent[] {
+    const children = (typeof value === 'string' ? [value] : asArray(value)).flatMap((item) =>
+      inline(item, depth, allowBreaks),
     );
+    // A hard break needs a following line in the same Markdown block.
+    while (children.at(-1)?.type === 'break') {
+      children.pop();
+      lossy = true;
+    }
+    return children;
   }
 
   function code(value: unknown, depth: number): string {
@@ -256,7 +280,9 @@ export function blocksToMarkdown(document: Description) {
         continue;
       }
 
-      const children = content(row.content, depth + 1);
+      const level = headingDepth.safeParse(props.level).data ?? 1;
+      // Setext headings allow line breaks, while level 3–6 headings must fit on one line.
+      const children = content(row.content, depth + 1, row.type !== 'heading' || level <= 2);
       if (
         row.type === 'bulletListItem' ||
         row.type === 'numberedListItem' ||
@@ -290,10 +316,7 @@ export function blocksToMarkdown(document: Description) {
           result.push(...nested);
           break;
         case 'heading':
-          result.push(
-            { type: 'heading', depth: headingDepth.safeParse(props.level).data ?? 1, children },
-            ...nested,
-          );
+          result.push({ type: 'heading', depth: level, children }, ...nested);
           if (nested.length) lossy = true;
           break;
         case 'quote':

@@ -6,6 +6,8 @@ const SECRET_PARAMS = ['access'];
 /** The request's path and query, with credentials replaced, so a log line never holds one. */
 export function loggedPath(url: string) {
   const { pathname, searchParams } = new URL(url);
+  // MCP has no query parameters. A misplaced bearer credential must stay out of logs.
+  if (/^\/api\/mcp\/*$/.test(pathname)) return pathname;
   for (const name of SECRET_PARAMS) if (searchParams.has(name)) searchParams.set(name, 'redacted');
   const query = searchParams.toString();
   return query ? `${pathname}?${query}` : pathname;

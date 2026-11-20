@@ -41,3 +41,20 @@ test('create a workspace MCP token, reveal it once and revoke it in Settings', a
   await page.reload();
   await expect(page.getByText('No MCP tokens')).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
 });
+
+test('MCP tokens stay reachable when their inventory request fails', async ({ page, isMobile }) => {
+  await signUp(page);
+  await page.route(
+    '**/api/mcp-tokens',
+    async (route) => {
+      await route.fulfill({ status: 503, json: { error: 'Temporarily unavailable' } });
+    },
+    { times: 1 },
+  );
+  await page.goto('/settings/general');
+  if (isMobile) await page.getByRole('button', { name: 'Settings page: General' }).click();
+  await page.getByRole('link', { name: 'MCP tokens' }).click({ timeout: APP_LOAD_TIMEOUT });
+  await expect(page.getByText('Could not load MCP tokens')).toBeVisible();
+  await page.getByRole('button', { name: 'Retry' }).click();
+  await expect(page.getByText('No MCP tokens')).toBeVisible();
+});

@@ -34,6 +34,36 @@ describe('MCP Markdown', () => {
     expect(markdownToBlocks(restored.markdown!)).toEqual(blocks);
   });
 
+  test('keeps consecutive hard breaks in the same paragraph', () => {
+    const document = [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'First\n\nThird', styles: {} }],
+      },
+    ];
+    const { markdown, lossy } = blocksToMarkdown(document);
+    expect(lossy).toBe(false);
+    expect(markdown).toBe(['First\\', '\\', 'Third'].join('\n'));
+    const roundTrip = markdownToBlocks(markdown!);
+    expect(roundTrip).toHaveLength(1);
+    expect(roundTrip[0]?.content).toMatchObject([
+      { text: 'First' },
+      { text: '\n' },
+      { text: '\n' },
+      { text: 'Third' },
+    ]);
+  });
+
+  test('flags breaks that CommonMark cannot preserve', () => {
+    expect(blocksToMarkdown([{ type: 'paragraph', content: 'Last line\n' }])).toEqual({
+      markdown: 'Last line',
+      lossy: true,
+    });
+    expect(
+      blocksToMarkdown([{ type: 'heading', props: { level: 3 }, content: 'One\nTwo' }]),
+    ).toEqual({ markdown: '### One Two', lossy: true });
+  });
+
   test.each([
     '<iframe src="https://example.com"></iframe>',
     '![image](https://example.com/image.png)',

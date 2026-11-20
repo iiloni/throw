@@ -11,18 +11,17 @@ function SettingsPage() {
   const admin = useAdminAccess();
   const page = settingsPageFor(pathname);
   const mcp = useMcpSettings();
-  const mcpAvailable = mcp.state.status === 'ready';
+  const onMcpPage = page?.path === '/settings/mcp';
+  const showMcp =
+    mcp.state.status !== 'unavailable' && (mcp.state.status !== 'loading' || onMcpPage);
   // An admin page opened before the server confirms the role is not listed, so it is not shown
   // as the open one either.
-  const current =
-    (page?.section === 'Admin' && !admin) || (page?.path === '/settings/mcp' && !mcpAvailable)
-      ? null
-      : page;
+  const current = (page?.section === 'Admin' && !admin) || (onMcpPage && !showMcp) ? null : page;
   return (
     <McpSettingsContext value={mcp}>
       <SettingsLayout
         title="Settings"
-        groups={settingsGroupsFor(admin, mcpAvailable)}
+        groups={settingsGroupsFor(admin, showMcp)}
         current={current}
         wide={useDesktop()}
         roomy={current?.section === 'Admin'}
