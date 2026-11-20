@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 import {
   APP_LOAD_TIMEOUT,
   createAccount,
@@ -426,4 +426,290 @@ test('comment composition stays clear of the phone keyboard and dock in both the
   }
   await post.click();
   await expect(f.history).toContainText('Comment line 24');
+});
+
+type Sample = { height: number; opacity: number; tabs: number; scrollTop: number };
+/** Records the timeline's layout every frame until `stop` resolves. */
+async function sampleFrames(page: Page, act: () => Promise<void>) {
+  await page.evaluate(() => {
+    const samples: Sample[] = [];
+    (window as unknown as { samples: Sample[] }).samples = samples;
+    const tick = () => {
+      const box = document.querySelector<HTMLElement>('[data-task-timeline] [data-collapse]');
+      const tabs = document.querySelector('[data-task-timeline] [role="tablist"]');
+      const scroller = tabs?.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
+      if (box && tabs)
+        samples.push({
+          height: box.hidden ? 0 : box.getBoundingClientRect().height,
+          opacity: Number(getComputedStyle(box.firstElementChild!).opacity),
+          tabs: tabs.getBoundingClientRect().top,
+          scrollTop: scroller?.scrollTop ?? 0,
+        });
+      (window as unknown as { sampling: number }).sampling = requestAnimationFrame(tick);
+    };
+    tick();
+  });
+  await act();
+  return page.evaluate(() => {
+    cancelAnimationFrame((window as unknown as { sampling: number }).sampling);
+    return (window as unknown as { samples: Sample[] }).samples;
+  });
+}
+
+test('comments and history hide together, ease in and out, and stay hidden on this device', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  await f.comment('A comment to keep in view');
+  await expect(f.history).toContainText('A comment to keep in view');
+  const timeline = f.history.locator('[data-collapse]');
+  const commentsTab = f.history.getByRole('tab', { name: /^Comments/ });
+  const historyTab = f.history.getByRole('tab', { name: 'History' });
+  await expect(commentsTab).toHaveAttribute('aria-expanded', 'true');
+  // A comment being written survives hiding both panels.
+  await f.history.getByRole('button', { name: 'Write a comment…' }).click();
+  await editor(page).fill('Still writing');
+
+  const closing = await sampleFrames(page, async () => {
+    await commentsTab.click();
+    await expect(timeline).toHaveAttribute('data-collapse', 'closed');
+  });
+  await expect(f.history.getByRole('tabpanel')).toHaveCount(0);
+  await expect(commentsTab).toHaveAttribute('aria-selected', 'false');
+  await expect(historyTab).toHaveAttribute('aria-selected', 'false');
+  const full = closing[0]!.height;
+  expect(full).toBeGreaterThan(40);
+  // The content fades before the height closes, which never grows back on the way.
+  const shrinking = closing.find((sample) => sample.height < full * 0.9)!;
+  expect(shrinking.opacity).toBeLessThan(0.5);
+  expect(closing.some((s) => s.height > 1 && s.height < full - 1)).toBe(true);
+  for (let i = 1; i < closing.length; i++)
+    expect(closing[i]!.height).toBeLessThanOrEqual(closing[i - 1]!.height + 0.5);
+  // The tabs and the pane's scroll position stay where they were.
+  for (const sample of closing) {
+    expect(Math.abs(sample.tabs - closing[0]!.tabs)).toBeLessThan(1);
+    expect(sample.scrollTop).toBe(closing[0]!.scrollTop);
+  }
+
+  const opening = await sampleFrames(page, async () => {
+    await commentsTab.click();
+    await expect(timeline).toHaveAttribute('data-collapse', 'open');
+  });
+  const opened = opening.at(-1)!;
+  expect(opened.height).toBeGreaterThan(40);
+  expect(opened.opacity).toBe(1);
+  expect(opening.some((s) => s.height > 1 && s.height < opened.height - 1)).toBe(true);
+  // Content arriving settles in, behind the room opening for it.
+  const firstOpen = opening.find((sample) => sample.height > 1)!;
+  expect(firstOpen.opacity).toBeLessThan(0.5);
+  for (let i = 1; i < opening.length; i++)
+    expect(opening[i]!.height).toBeGreaterThanOrEqual(opening[i - 1]!.height - 0.5);
+  await expect(editor(page)).toHaveText('Still writing');
+
+  // The choice is kept on this device.
+  await commentsTab.click();
+  await expect(timeline).toHaveAttribute('data-collapse', 'closed');
+  await page.reload();
+  await expect(historyTab).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
+  await expect(timeline).toHaveAttribute('data-collapse', 'closed');
+  await expect(commentsTab).toHaveAttribute('tabindex', '0');
+  await commentsTab.click();
+  await expect(f.history.getByRole('button', { name: 'Resume comment draft' })).toBeVisible();
+
+  // Rapid changes take over mid-way and end where the last one asked.
+  await commentsTab.click();
+  await historyTab.click();
+  await historyTab.click();
+  await commentsTab.click();
+  await expect(timeline).toHaveAttribute('data-collapse', 'open');
+  await expect(f.history.getByRole('tabpanel', { name: /^Comments/ })).toBeVisible();
+});
+
+test("switching panels springs to the new panel's height", async ({ page }) => {
+  const f = await fixture(page);
+  for (const line of ['First of several', 'Second of several', 'Third of several'])
+    await f.comment(line);
+  await expect(f.history).toContainText('Third of several');
+  const timeline = f.history.locator('[data-collapse]');
+  const commentsTab = f.history.getByRole('tab', { name: /^Comments/ });
+  const historyTab = f.history.getByRole('tab', { name: 'History' });
+  // From the bottom of the pane, where a sudden change of height would jump the page.
+  await f.history.getByRole('button', { name: 'Write a comment…' }).scrollIntoViewIfNeeded();
+
+  for (const [tab, panel] of [
+    [historyTab, 'History'],
+    [commentsTab, /^Comments/],
+  ] as const) {
+    const switching = await sampleFrames(page, async () => {
+      await tab.click();
+      await expect(f.history.getByRole('tabpanel', { name: panel })).toBeVisible();
+      await expect(timeline).toHaveAttribute('data-collapse', 'open');
+    });
+    const from = switching[0]!.height;
+    const to = switching.at(-1)!.height;
+    expect(Math.abs(to - from)).toBeGreaterThan(20);
+    // It passes through the heights between, one way, and the content stays shown.
+    expect(
+      switching.some((s) => Math.min(from, to) + 2 < s.height && s.height < Math.max(from, to) - 2),
+    ).toBe(true);
+    for (let i = 1; i < switching.length; i++) {
+      const step = switching[i]!.height - switching[i - 1]!.height;
+      expect(to > from ? step >= -0.5 : step <= 0.5).toBe(true);
+      expect(Math.abs(switching[i]!.scrollTop - switching[i - 1]!.scrollTop)).toBeLessThan(
+        Math.abs(to - from) * 0.6,
+      );
+    }
+    expect(switching.every((s) => s.opacity === 1)).toBe(true);
+  }
+});
+
+test('a sideways swipe turns between comments and history on a phone', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'Swiping between panels is a touch gesture.');
+  const f = await fixture(page);
+  await f.comment('Swipe past me');
+  await expect(f.history).toContainText('Swipe past me');
+  const commentsTab = f.history.getByRole('tab', { name: /^Comments/ });
+  const historyTab = f.history.getByRole('tab', { name: 'History' });
+  const comments = f.history.getByRole('tabpanel', { name: /^Comments/ });
+  const historyPanel = f.history.getByRole('tabpanel', { name: 'History' });
+  const pill = f.history.locator('[data-tab-indicator]');
+  await comments.scrollIntoViewIfNeeded();
+  const session = await page.context().newCDPSession(page);
+  const touch = (type: string, x = 0, y = 0) =>
+    session.send('Input.dispatchTouchEvent', {
+      type,
+      touchPoints: type === 'touchEnd' || type === 'touchCancel' ? [] : [{ x, y }],
+    });
+  // Drags from one share of the timeline's width to another, a frame at a time.
+  const swipe = async (
+    from: number,
+    to: number,
+    { lift = true, frames = 12, gap = 16, dy = 0, on = comments } = {},
+  ) => {
+    const area = (await f.history.boundingBox())!;
+    const box = (await on.boundingBox())!;
+    const y = box.y + Math.min(box.height / 2, 40);
+    await touch('touchStart', area.x + area.width * from, y);
+    for (let frame = 1; frame <= frames; frame++) {
+      await touch(
+        'touchMove',
+        area.x + area.width * (from + ((to - from) * frame) / frames),
+        y + (dy * frame) / frames,
+      );
+      await page.waitForTimeout(gap);
+    }
+    if (lift) await touch('touchEnd');
+  };
+  const shift = (locator: Locator) =>
+    locator.evaluate((element) => new DOMMatrix(getComputedStyle(element).transform).m41);
+  const pillAt = await shift(pill);
+
+  // Mid-swipe the panel follows the finger and the indicator heads for History.
+  await swipe(0.8, 0.45, {
+    lift: false,
+    on: f.history.getByRole('button', { name: 'Write a comment…' }),
+  });
+  const panel = comments.locator('..');
+  expect(await shift(panel)).toBeLessThan(-60);
+  expect(await shift(pill)).toBeGreaterThan(pillAt + 20);
+  // Drifting up at the bottom of the pane does not start pulling the task away.
+  const button = (await f.history.getByRole('button', { name: 'Write a comment…' }).boundingBox())!;
+  for (let step = 1; step <= 6; step++)
+    await touch('touchMove', button.x + button.width * 0.45 - step * 20, button.y - step * 10);
+  await touch('touchEnd');
+  await expect(f.pane).toBeVisible();
+  await expect(historyTab).toHaveAttribute('aria-selected', 'true');
+  await expect(historyPanel).toBeVisible();
+  await expect.poll(() => shift(historyPanel.locator('..'))).toBe(0);
+  // The swipe began on the comment button, which it did not press.
+  await expect(f.history.getByRole('button', { name: 'Resume comment draft' })).toHaveCount(0);
+  await expect(f.history.locator('button', { hasText: 'Write a comment…' })).toHaveCount(1);
+
+  // A short, slow drag springs back; there is nothing further to the left.
+  await swipe(0.3, 0.45, { frames: 30, on: historyPanel });
+  await expect(historyTab).toHaveAttribute('aria-selected', 'true');
+  await swipe(0.8, 0.1, { on: historyPanel });
+  await expect(historyTab).toHaveAttribute('aria-selected', 'true');
+  await expect.poll(() => shift(historyPanel.locator('..'))).toBe(0);
+  await expect
+    .poll(async () => (await pill.boundingBox())!.x - (await historyTab.boundingBox())!.x)
+    .toBeCloseTo(0, 0);
+
+  // A quick flick goes back to Comments.
+  await swipe(0.3, 0.55, { frames: 4, gap: 8, on: historyPanel });
+  await expect(commentsTab).toHaveAttribute('aria-selected', 'true');
+  await expect(comments).toBeVisible();
+
+  // Moving mostly down the pane is a scroll, not a swipe. (From the middle of its scroll: at
+  // either end, the pull closes the task.)
+  await f.history.evaluate((element) => {
+    const scroller = element.closest<HTMLElement>('[data-slot="scroll-area-viewport"]')!;
+    scroller.scrollTop = (scroller.scrollHeight - scroller.clientHeight) / 2;
+  });
+  await swipe(0.6, 0.5, { dy: 40, on: f.history.getByRole('tablist') });
+  await expect(f.pane).toBeVisible();
+  await expect(commentsTab).toHaveAttribute('aria-selected', 'true');
+  await expect.poll(() => shift(comments.locator('..'))).toBe(0);
+  await session.detach();
+});
+
+test('the keyboard opens and hides panels, and a history entry opens hidden panels', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  const timeline = f.history.locator('[data-collapse]');
+  const commentsTab = f.history.getByRole('tab', { name: /^Comments/ });
+  const historyTab = f.history.getByRole('tab', { name: 'History' });
+  await commentsTab.focus();
+  await page.keyboard.press('Enter');
+  await expect(timeline).toHaveAttribute('data-collapse', 'closed');
+  await expect(commentsTab).toBeFocused();
+  // Arrows move between hidden tabs without opening one; Space opens it.
+  await page.keyboard.press('ArrowRight');
+  await expect(historyTab).toBeFocused();
+  await expect(timeline).toHaveAttribute('data-collapse', 'closed');
+  await page.keyboard.press('Space');
+  await expect(f.history.getByRole('tabpanel', { name: 'History' })).toBeVisible();
+  await page.keyboard.press('ArrowLeft');
+  await expect(f.history.getByRole('tabpanel', { name: /^Comments/ })).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(timeline).toHaveAttribute('data-collapse', 'closed');
+
+  // A refused change's notice jumps to its entry even with both panels hidden.
+  const entry = await f.history.locator('li[id^="history-"]').first().getAttribute('id');
+  await page.evaluate(async (id) => {
+    const { focusHistory } = await import('/src/components/TaskDetails/TaskTimeline.tsx');
+    focusHistory(id.replace('history-', ''));
+  }, entry!);
+  await expect(historyTab).toHaveAttribute('aria-selected', 'true');
+  await expect(f.history.locator(`[id="${entry}"]`)).toBeFocused();
+  await expect(timeline).toHaveAttribute('data-collapse', 'open');
+});
+
+test('hiding panels is instant with reduced motion', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const f = await fixture(page);
+  const commentsTab = f.history.getByRole('tab', { name: /^Comments/ });
+  const timeline = f.history.locator('[data-collapse]');
+  const closing = await sampleFrames(page, async () => {
+    await commentsTab.click();
+    await expect(timeline).toHaveAttribute('data-collapse', 'closed');
+  });
+  const full = closing[0]!.height;
+  expect(closing.every((s) => s.height === 0 || s.height === full)).toBe(true);
+  const opening = await sampleFrames(page, async () => {
+    await commentsTab.click();
+    await expect(timeline).toHaveAttribute('data-collapse', 'open');
+  });
+  expect(opening.every((s) => s.height === 0 || s.height === full)).toBe(true);
+  expect(opening.every((s) => s.opacity === 0 || s.opacity === 1)).toBe(true);
+  const switching = await sampleFrames(page, async () => {
+    await f.history.getByRole('tab', { name: 'History' }).click();
+    await expect(f.history.getByRole('tabpanel', { name: 'History' })).toBeVisible();
+  });
+  const to = switching.at(-1)!.height;
+  expect(switching.every((s) => s.height === full || s.height === to)).toBe(true);
 });

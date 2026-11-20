@@ -6,12 +6,15 @@ import {
   type Task,
 } from '@throw/shared';
 import { History, MessageCircle, Pencil, Trash2 } from 'lucide-react';
-import { useEffect, useId, useState } from 'react';
+import { motion } from 'motion/react';
+import { memo, useDeferredValue, useEffect, useId, useMemo, useState } from 'react';
 import { z } from 'zod';
+import { Collapse } from '@/components/Collapse/Collapse';
 import { LazyDescriptionEditor } from '@/components/DescriptionEditor/LazyDescriptionEditor';
 import { Hint } from '@/components/Hint/Hint';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { SegmentedTabs } from '@/components/SegmentedTabs/SegmentedTabs';
+import { useTabSwipe } from '@/components/SegmentedTabs/useTabSwipe';
 import { Button } from '@/components/ui/button';
 import { signedInUserId, useTaskTimeline } from '@/lib/collections';
 import { useHasCommentDraft } from '@/lib/commentDrafts';
@@ -39,14 +42,27 @@ function Time({ at }: { at: string }) {
 }
 
 const FOCUS_EVENT = 'throw:focus-history';
-const tabSchema = z.enum(['comments', 'history']);
+const panels = ['comments', 'history'] as const;
+// `none` hides both panels; any other stored value falls back to Comments.
+const tabSchema = z.enum([...panels, 'none']);
 
-/** Shows a history entry: the timeline turns to its History tab, then focuses the entry. */
+/**
+ * Shows a history entry: the timeline turns to its History tab, opening it if both were
+ * hidden, then focuses the entry.
+ */
 export function focusHistory(id: string) {
   window.dispatchEvent(new CustomEvent(FOCUS_EVENT, { detail: id }));
 }
 
-function CommentRow({ comment, pending }: { comment: Comment; pending: boolean }) {
+// Rows render only when their own data changes: switching tabs must stay cheap, or the
+// render holds up the tab indicator's spring on a phone.
+const CommentRow = memo(function CommentRow({
+  comment,
+  pending,
+}: {
+  comment: Comment;
+  pending: boolean;
+}) {
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -129,7 +145,55 @@ function CommentRow({ comment, pending }: { comment: Comment; pending: boolean }
       )}
     </article>
   );
-}
+});
+
+const HistoryRow = memo(function HistoryRow({
+  entry,
+  context,
+  onRecoverDescription,
+}: {
+  entry: ActivityEntry;
+  context: HistoryContext;
+  onRecoverDescription: (entry: ActivityEntry) => void;
+}) {
+  const refused = entry.changes.some((change) => !change.applied);
+  return (
+    <div className="flex gap-3 px-3.5 py-1.5 text-muted-foreground text-sm leading-normal">
+      <span
+        aria-hidden
+        className={cn(
+          'mt-2 size-1.5 shrink-0 rounded-full',
+          refused ? 'bg-destructive' : 'bg-foreground/25',
+        )}
+      />
+      <div className="min-w-0 flex-1">
+        <p className={refused ? 'text-foreground' : undefined}>
+          {entry.userId !== signedInUserId && (
+            <span className="font-medium">{author(entry.userId)}: </span>
+          )}
+          {entrySentences(entry, context).join(' ')}
+        </p>
+        {entry.changes.some(
+          (change) =>
+            change.field === 'description' &&
+            !change.applied &&
+            descriptionSchema.safeParse(change.rejectedDocument).success,
+        ) && (
+          <Button
+            variant="link"
+            className="h-auto px-0 py-1.5"
+            onClick={() => onRecoverDescription(entry)}
+          >
+            Recover description
+          </Button>
+        )}
+      </div>
+      <span className="mt-px shrink-0 text-muted-foreground/75 text-xs leading-5">
+        <Time at={entry.createdAt} />
+      </span>
+    </div>
+  );
+});
 
 export function TaskRefusalNotice({ taskId }: { taskId: string }) {
   const { timeline } = useTaskTimeline(taskId);
@@ -201,7 +265,24 @@ export function TaskTimeline({
   const [composingFor, setComposingFor] = useState<string | null>(null);
   const composing = composingFor === task.id;
   const hasDraft = useHasCommentDraft(task.id);
-  const [tab, setTab] = usePersistentState('throw-task-timeline-tab', tabSchema, 'comments');
+  const [stored, setTab] = usePersistentState('throw-task-timeline-tab', tabSchema, 'comments');
+  const tab = stored === 'none' ? null : stored;
+  // The panel showing, or the one on its way out (and back in) while both are hidden.
+  const [panel, setPanel] = useState(tab ?? 'comments');
+  if (tab !== null && tab !== panel) setPanel(tab);
+  // Whether the open panel has finished opening, so an entry in it has its place.
+  const [laidOut, setLaidOut] = useState(tab !== null);
+  if (tab === null && laidOut) setLaidOut(false);
+  // Switching panels in place follows the tabs at a lower priority, so the indicator starts
+  // moving before the panels change. While opening, the panel measured must be the new one.
+  const deferredPanel = useDeferredValue(panel);
+  const shown = laidOut ? deferredPanel : panel;
+  const swipe = useTabSwipe({
+    value: tab,
+    shown: tab === null ? null : shown,
+    values: panels,
+    onValueChange: setTab,
+  });
   const [focusing, setFocusing] = useState<string | null>(null);
   const ids = useId();
   useEffect(() => {
@@ -214,12 +295,16 @@ export function TaskTimeline({
     return () => window.removeEventListener(FOCUS_EVENT, onFocus);
   }, [setTab]);
   useEffect(() => {
-    if (!focusing || tab !== 'history') return;
+    if (!focusing || shown !== 'history' || !laidOut) return;
     const element = document.getElementById(`history-${focusing}`);
     element?.scrollIntoView({ block: 'center', behavior: 'instant' });
     element?.focus({ preventScroll: true });
     setFocusing(null);
-  }, [focusing, tab]);
+  }, [focusing, shown, laidOut]);
+  const historyContext = useMemo(
+    () => ({ ...context, priorityNames: project.priorityNames }),
+    [context, project.priorityNames],
+  );
   const comments = timeline.filter((item) => item.type === 'comment');
   const entries = timeline.filter((item) => item.type === 'entry');
   const empty = (text: string) => (
@@ -228,11 +313,20 @@ export function TaskTimeline({
     </p>
   );
   return (
-    <section aria-label="Task history" data-task-timeline="" className="mt-8">
+    // Swiping sideways over the tabs or a panel turns between them; scrolling stays the pane's.
+    <section
+      aria-label="Task history"
+      data-task-timeline=""
+      className="mt-8 touch-pan-y"
+      ref={swipe.ref}
+      {...swipe.handlers}
+    >
       <SegmentedTabs
         label="Comments and history"
         value={tab}
-        onValueChange={setTab}
+        onValueChange={(next) => setTab(next ?? 'none')}
+        collapsible
+        drag={swipe.drag}
         options={[
           {
             value: 'comments',
@@ -250,108 +344,78 @@ export function TaskTimeline({
           },
         ]}
       />
-      {/* Both stay mounted, so a comment being written survives a look at the history. */}
-      <div
-        role="tabpanel"
-        id={`${ids}-comments`}
-        aria-labelledby={`${ids}-comments-tab`}
-        hidden={tab !== 'comments'}
-        className="pt-2"
-      >
-        {!comments.length && !composing && empty('No comments yet.')}
-        <ol>
-          {comments.map((item) => (
-            <li
-              key={item.id}
-              id={`history-${item.id}`}
-              tabIndex={-1}
-              className="scroll-m-6 rounded-2xl outline-none [overflow-wrap:anywhere] focus:ring-2 focus:ring-ring/60"
-            >
-              <CommentRow comment={item.comment} pending={item.pending} />
-            </li>
-          ))}
-        </ol>
-        {composing ? (
-          <CommentComposer
-            key={task.id}
-            draftFor={task.id}
-            onSave={(body) => {
-              addComment(task.id, body);
-              haptics.success();
-              setComposingFor(null);
-            }}
-            onCancel={() => setComposingFor(null)}
-          />
-        ) : (
-          <button
-            type="button"
-            className="mt-2 flex min-h-12 w-full items-center rounded-2xl bg-foreground/[0.045] px-3.5 text-left text-muted-foreground text-sm outline-none transition-colors hover:bg-foreground/[0.07] focus-visible:ring-[3px] focus-visible:ring-ring/60"
-            onClick={() => setComposingFor(task.id)}
+      {/* Both stay mounted, so a comment being written survives a look at the history or
+          hiding them both. */}
+      <Collapse open={tab !== null} contentKey={shown} onRest={setLaidOut}>
+        <motion.div style={{ x: swipe.x, opacity: swipe.opacity }}>
+          <div
+            role="tabpanel"
+            id={`${ids}-comments`}
+            aria-labelledby={`${ids}-comments-tab`}
+            hidden={shown !== 'comments'}
+            className="pt-2"
           >
-            {hasDraft ? 'Resume comment draft' : 'Write a comment…'}
-          </button>
-        )}
-      </div>
-      <div
-        role="tabpanel"
-        id={`${ids}-history`}
-        aria-labelledby={`${ids}-history-tab`}
-        hidden={tab !== 'history'}
-        className="pt-2"
-      >
-        {!entries.length && empty('No history yet.')}
-        <ol>
-          {entries.map((item) => {
-            const refused = item.entry.changes.some((change) => !change.applied);
-            return (
-              <li
-                key={item.id}
-                id={`history-${item.id}`}
-                tabIndex={-1}
-                className="scroll-m-6 rounded-2xl outline-none [overflow-wrap:anywhere] focus:ring-2 focus:ring-ring/60"
+            {!comments.length && !composing && empty('No comments yet.')}
+            <ol>
+              {comments.map((item) => (
+                <li
+                  key={item.id}
+                  id={`history-${item.id}`}
+                  tabIndex={-1}
+                  className="scroll-m-6 rounded-2xl outline-none [overflow-wrap:anywhere] focus:ring-2 focus:ring-ring/60"
+                >
+                  <CommentRow comment={item.comment} pending={item.pending} />
+                </li>
+              ))}
+            </ol>
+            {composing ? (
+              <CommentComposer
+                key={task.id}
+                draftFor={task.id}
+                onSave={(body) => {
+                  addComment(task.id, body);
+                  haptics.success();
+                  setComposingFor(null);
+                }}
+                onCancel={() => setComposingFor(null)}
+              />
+            ) : (
+              <button
+                type="button"
+                className="mt-2 flex min-h-12 w-full items-center rounded-2xl bg-foreground/[0.045] px-3.5 text-left text-muted-foreground text-sm outline-none transition-colors hover:bg-foreground/[0.07] focus-visible:ring-[3px] focus-visible:ring-ring/60"
+                onClick={() => setComposingFor(task.id)}
               >
-                <div className="flex gap-3 px-3.5 py-1.5 text-muted-foreground text-sm leading-normal">
-                  <span
-                    aria-hidden
-                    className={cn(
-                      'mt-2 size-1.5 shrink-0 rounded-full',
-                      refused ? 'bg-destructive' : 'bg-foreground/25',
-                    )}
+                {hasDraft ? 'Resume comment draft' : 'Write a comment…'}
+              </button>
+            )}
+          </div>
+          <div
+            role="tabpanel"
+            id={`${ids}-history`}
+            aria-labelledby={`${ids}-history-tab`}
+            hidden={shown !== 'history'}
+            className="pt-2"
+          >
+            {!entries.length && empty('No history yet.')}
+            <ol>
+              {entries.map((item) => (
+                <li
+                  key={item.id}
+                  id={`history-${item.id}`}
+                  tabIndex={-1}
+                  className="scroll-m-6 rounded-2xl outline-none [overflow-wrap:anywhere] focus:ring-2 focus:ring-ring/60"
+                >
+                  <HistoryRow
+                    entry={item.entry}
+                    context={historyContext}
+                    onRecoverDescription={onRecoverDescription}
                   />
-                  <div className="min-w-0 flex-1">
-                    <p className={refused ? 'text-foreground' : undefined}>
-                      {item.entry.userId !== signedInUserId && (
-                        <span className="font-medium">{author(item.entry.userId)}: </span>
-                      )}
-                      {entrySentences(item.entry, {
-                        ...context,
-                        priorityNames: project.priorityNames,
-                      }).join(' ')}
-                    </p>
-                    {item.entry.changes.some(
-                      (change) =>
-                        change.field === 'description' &&
-                        !change.applied &&
-                        descriptionSchema.safeParse(change.rejectedDocument).success,
-                    ) && (
-                      <Button
-                        variant="link"
-                        className="h-auto px-0 py-1.5"
-                        onClick={() => onRecoverDescription(item.entry)}
-                      >
-                        Recover description
-                      </Button>
-                    )}
-                  </div>
-                  <span className="mt-px shrink-0 text-muted-foreground/75 text-xs leading-5">
-                    <Time at={item.entry.createdAt} />
-                  </span>
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-      </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </motion.div>
+      </Collapse>
     </section>
   );
 }
