@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { timestampSchema } from './sync';
+import type { Description } from './tasks';
 
 /** A comment's text: a BlockNote document, text only, as a task's description. */
 export const commentBodySchema = z.array(z.record(z.string(), z.unknown())).min(1);
@@ -17,6 +18,7 @@ export const commentSchema = z.object({
   taskId: z.uuid(),
   /** The author, set by the server. Null once their account is deleted. */
   userId: z.string().nullable(),
+  viaTokenName: z.string().nullish(),
   body: commentBodySchema,
   /**
    * When the server received the comment. Null on the device until a comment written there
@@ -37,3 +39,15 @@ export type CreateComment = z.infer<typeof createCommentSchema>;
 /** Editing a comment, applied in the order edits reach the server. */
 export const updateCommentSchema = commentSchema.pick({ body: true }).strict();
 export type UpdateComment = z.infer<typeof updateCommentSchema>;
+
+/** Empty editor scaffolding must not produce a blank comment; includes tables and lists. */
+export function hasCommentText(document: Description): boolean {
+  function hasText(value: unknown): boolean {
+    if (typeof value === 'string') return value.trim().length > 0;
+    if (Array.isArray(value)) return value.some(hasText);
+    if (!value || typeof value !== 'object') return false;
+    const row = value as Record<string, unknown>;
+    return ['text', 'content', 'children', 'rows', 'cells'].some((key) => hasText(row[key]));
+  }
+  return hasText(document);
+}

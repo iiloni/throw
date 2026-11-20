@@ -17,7 +17,9 @@ and `manifest.json` (format/version, creating release, newest migration, display
 secret fingerprint and SHA-256/size of every file). ZIP64 and streaming avoid memory/4 GiB
 limits. Verification rejects unexpected members, damaged checksums, and Catch archives.
 Any unzip tool can read it; `pg_restore` can read the dump independently of Throw.
-Sessions are excluded, including when restoring an older dump that contains them.
+Session and MCP token data are excluded, including when restoring a dump that contains
+them. After a restore, issue fresh MCP tokens for the clients you want to reconnect.
+Existing task history and comments retain their token-name attribution.
 
 Backups are **not encrypted** and include password hashes and everyone's data. Files are
 owner-only. Keep credentials and backup copies securely off the server and test restores.

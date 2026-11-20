@@ -2,6 +2,7 @@ import {
   CircleUser,
   DatabaseBackup,
   Download,
+  KeyRound,
   type LucideIcon,
   SlidersHorizontal,
 } from 'lucide-react';
@@ -15,6 +16,7 @@ import { authClient } from './auth';
 export const SETTINGS_TABS = [
   { path: '/settings/general', label: 'General', icon: SlidersHorizontal, section: 'User' },
   { path: '/settings/account', label: 'Account', icon: CircleUser, section: 'User' },
+  { path: '/settings/mcp', label: 'MCP tokens', icon: KeyRound, section: 'User' },
   { path: '/settings/update', label: 'Update', icon: Download, section: 'User' },
   { path: '/settings/admin/backups', label: 'Backups', icon: DatabaseBackup, section: 'Admin' },
 ] as const satisfies ReadonlyArray<{
@@ -30,12 +32,14 @@ export type SettingsPath = SettingsTab['path'];
 const pageOf = (tab: SettingsTab) => ({ ...tab, key: tab.path, link: { to: tab.path } });
 
 /** The pages this account can open, grouped as the settings list shows them. */
-export function settingsGroupsFor(isAdmin: boolean) {
+export function settingsGroupsFor(isAdmin: boolean, mcpAvailable = false) {
   return (['User', 'Admin'] as const)
     .filter((section) => section === 'User' || isAdmin)
     .map((label) => ({
       label,
-      pages: SETTINGS_TABS.filter((tab) => tab.section === label).map(pageOf),
+      pages: SETTINGS_TABS.filter(
+        (tab) => tab.section === label && (tab.path !== '/settings/mcp' || mcpAvailable),
+      ).map(pageOf),
     }));
 }
 

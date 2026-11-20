@@ -1,5 +1,5 @@
 import { DEFAULT_WORKSPACE_NAME, positionBetween } from '@throw/shared';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, type SQLWrapper } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { type Db, db, type Transaction } from '../db/client';
 import { workspaceMembers, workspaces } from '../db/schema';
@@ -7,11 +7,20 @@ import { workspaceMembers, workspaces } from '../db/schema';
 type Queryable = Db | Transaction;
 
 /** The workspaces a user belongs to, for `inArray` on a table's `workspaceId`. */
-export const memberWorkspaces = (queryable: Queryable, userId: string) =>
+export const memberWorkspaces = (
+  queryable: Queryable,
+  userId: string | SQLWrapper,
+  workspaceId?: string,
+) =>
   queryable
     .select({ id: workspaceMembers.workspaceId })
     .from(workspaceMembers)
-    .where(eq(workspaceMembers.userId, userId));
+    .where(
+      and(
+        eq(workspaceMembers.userId, userId),
+        workspaceId ? eq(workspaceMembers.workspaceId, workspaceId) : undefined,
+      ),
+    );
 
 export async function isMember(queryable: Queryable, userId: string, workspaceId: string) {
   const [row] = await queryable

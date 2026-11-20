@@ -84,6 +84,7 @@ const CommentRow = memo(function CommentRow({
         <div className="rounded-2xl bg-foreground/[0.045] px-3.5 pt-1.5 pb-3">
           <div className="flex min-h-8 items-center gap-2 text-muted-foreground text-xs">
             <span className="font-medium text-foreground">{author(comment.userId)}</span>
+            {comment.viaTokenName && <span className="truncate">via {comment.viaTokenName}</span>}
             {pending ? <span>Pending sync</span> : <Time at={comment.createdAt!} />}
             {comment.editedAt && <span>· Edited</span>}
             {own && !deleting && (
@@ -172,6 +173,9 @@ const HistoryRow = memo(function HistoryRow({
             <span className="font-medium">{author(entry.userId)}: </span>
           )}
           {entrySentences(entry, context).join(' ')}
+          {entry.viaTokenName && (
+            <span className="break-all text-muted-foreground"> via {entry.viaTokenName}</span>
+          )}
         </p>
         {entry.changes.some(
           (change) =>

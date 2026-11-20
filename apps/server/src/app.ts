@@ -10,8 +10,10 @@ import { env, NATIVE_APP_ORIGINS } from './env';
 import { CLIENT_IP_HEADER, clientIp, proxyList } from './lib/clientIp';
 import { requireCompatibleProtocol } from './lib/protocol';
 import { requestLogger } from './lib/requestLogger';
+import { mcpEndpoint } from './mcp/http';
 import { backupDownloadRoutes, backupRoutes } from './routes/backups';
 import { commentRoutes } from './routes/comments';
+import { mcpTokenRoutes } from './routes/mcpTokens';
 import { projectRoutes } from './routes/projects';
 import { shapeRoutes } from './routes/shapes';
 import { statusRoutes } from './routes/statuses';
@@ -30,16 +32,20 @@ const jsonBodyLimit = bodyLimit({
 
 const trustedProxies = proxyList(env.TRUSTED_PROXIES);
 
-/** The request as Better Auth should see it: with the address it really came from. */
-function withClientIp(c: Context) {
+function clientAddress(c: Context) {
   let peer: string | undefined;
   try {
     peer = getConnInfo(c).remote.address;
   } catch {
     // No socket: a request made in a test.
   }
+  return clientIp(peer, c.req.header('x-forwarded-for'), trustedProxies);
+}
+
+/** Better Auth trusts only the client address read from the connection and trusted proxies. */
+function withClientIp(c: Context) {
   const headers = new Headers(c.req.raw.headers);
-  const ip = clientIp(peer, headers.get('x-forwarded-for') ?? undefined, trustedProxies);
+  const ip = clientAddress(c);
   headers.delete(CLIENT_IP_HEADER);
   if (ip) headers.set(CLIENT_IP_HEADER, ip);
   return new Request(c.req.raw, { headers });
@@ -50,22 +56,20 @@ export function createApp() {
 
   if (env.NODE_ENV !== 'test') app.use(requestLogger);
 
-  app.use(
-    '/api/*',
-    cors({
-      origin: [...NATIVE_APP_ORIGINS, ...env.TRUSTED_ORIGINS],
-      credentials: true,
-      allowHeaders: ['Content-Type', 'Authorization', API_PROTOCOL_HEADER],
-      exposeHeaders: [
-        'set-auth-token',
-        'electric-offset',
-        'electric-handle',
-        'electric-schema',
-        'electric-cursor',
-        'electric-up-to-date',
-      ],
-    }),
-  );
+  const appCors = cors({
+    origin: [...NATIVE_APP_ORIGINS, ...env.TRUSTED_ORIGINS],
+    credentials: true,
+    allowHeaders: ['Content-Type', 'Authorization', API_PROTOCOL_HEADER],
+    exposeHeaders: [
+      'set-auth-token',
+      'electric-offset',
+      'electric-handle',
+      'electric-schema',
+      'electric-cursor',
+      'electric-up-to-date',
+    ],
+  });
+  app.use('/api/*', (c, next) => (c.req.path === '/api/mcp' ? next() : appCors(c, next)));
 
   app.use('/api/*', async (c, next) => {
     if (isRestoring() && c.req.path !== '/api/health') {
@@ -74,6 +78,7 @@ export function createApp() {
     }
     await next();
   });
+  app.all('/api/mcp', mcpEndpoint(clientAddress, jsonBodyLimit));
   app.route('/api/admin/backups', backupDownloadRoutes);
   app.use('/api/*', requireCompatibleProtocol);
   app.use('/api/*', (c, next) =>
@@ -99,6 +104,7 @@ export function createApp() {
     .get('/health', (c) => c.json({ ok: true }))
     .route('/updates', updateRoutes)
     .route('/admin/backups', backupRoutes)
+    .route('/mcp-tokens', mcpTokenRoutes)
     .route('/workspaces', workspaceRoutes)
     .route('/projects', projectRoutes)
     .route('/statuses', statusRoutes)

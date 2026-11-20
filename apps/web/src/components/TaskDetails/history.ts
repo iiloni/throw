@@ -1,7 +1,6 @@
 import {
   type ActivityChange,
   type ActivityEntry,
-  type Description,
   priorityName,
   prioritySchema,
 } from '@throw/shared';
@@ -58,6 +57,8 @@ const labels: Record<string, string> = {
 };
 
 export function changeSentence(change: ActivityChange, context: HistoryContext): string {
+  if (change.field === 'position')
+    return change.applied ? 'Reordered.' : 'Could not move the task to that position.';
   const wanted = value(change, true, context);
   const stood = value(change, false, context);
   if (change.reason === 'replaced') return `The requested status was unavailable. Used ${wanted}.`;
@@ -111,8 +112,15 @@ export function changeSentence(change: ActivityChange, context: HistoryContext):
 
 /** One row per server write: compact its fields, never cross a comment or hide a refusal. */
 export function entrySentences(entry: ActivityEntry, context: HistoryContext): string[] {
-  if (entry.kind !== 'created')
-    return entry.changes.map((change) => changeSentence(change, context));
+  if (entry.kind !== 'created') {
+    const statusChanged = entry.changes.some(
+      (change) =>
+        change.field === 'statusId' && change.applied && change.previous !== change.requested,
+    );
+    return entry.changes
+      .filter((change) => !(change.field === 'position' && change.applied && statusChanged))
+      .map((change) => changeSentence(change, context));
+  }
   const title = entry.changes.find((change) => change.field === 'title');
   const status = entry.changes.find((change) => change.field === 'statusId' && change.applied);
   return [
@@ -123,17 +131,7 @@ export function entrySentences(entry: ActivityEntry, context: HistoryContext): s
   ];
 }
 
-/** Empty editor scaffolding must not produce a blank comment; includes tables and lists. */
-export function hasCommentText(document: Description): boolean {
-  function hasText(value: unknown): boolean {
-    if (typeof value === 'string') return value.trim().length > 0;
-    if (Array.isArray(value)) return value.some(hasText);
-    if (!value || typeof value !== 'object') return false;
-    const row = value as Record<string, unknown>;
-    return ['text', 'content', 'children', 'rows', 'cells'].some((key) => hasText(row[key]));
-  }
-  return hasText(document);
-}
+export { hasCommentText } from '@throw/shared';
 
 /** As much of the time as tells it apart: today's are clock times, this year's leave out the year. */
 export function shortTime(at: string, now = new Date()) {

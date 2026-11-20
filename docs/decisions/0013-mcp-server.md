@@ -1,6 +1,6 @@
 # 0013 — MCP access to Throw
 
-Status: proposed (2026-11-20)
+Status: accepted (2026-11-20)
 
 ## Context
 
@@ -117,8 +117,8 @@ report any status or tag fallback the shared logic applied.
 
 Use UUIDv7 for creates, comment IDs, change IDs and description versions. The adapter
 can generate IDs, and a caller can supply a stable operation UUIDv7 to make retries of
-the same write reuse the existing replay identity. A JSON-RPC request ID is independent of
-write replay. The committed rows go to Electric through the usual shapes. MCP clients get
+the same write reuse the existing replay identity. Operation IDs are scoped to the
+credential. A JSON-RPC request ID is independent of write replay. The committed rows go to Electric through the usual shapes. MCP clients get
 the resulting task or comment reference and the write outcome. REST clients keep the
 transaction responses their outbox uses for handover.
 
@@ -127,7 +127,7 @@ transaction responses their outbox uses for handover.
 Accept and return Markdown for descriptions and comments. A lightweight server-side
 Markdown parser and serializer map to Throw's text-only BlockNote JSON. Use an AST to
 preserve paragraphs, headings, nested ordered and unordered lists, links, fenced and
-inline code, and emphasis. Raw HTML, images and embeds are rejected on input. Permit
+inline code, quotes, dividers, and emphasis. Raw HTML, images and embeds are rejected on input. Permit
 HTTP(S) and mailto link destinations. Reads never fetch a link. For existing content
 outside the supported subset, return readable Markdown and identify any formatting or
 blocks the conversion cannot represent faithfully. Include that indication with the
@@ -156,8 +156,8 @@ offline timeline continue to use the same activity and comment shapes.
   revoked credential. Cap request bodies at Throw's existing 1 MiB JSON limit, including
   chunked bodies, before parsing. Accept one MCP message per POST and bound page sizes
   and Markdown parsing work.
-- Limit requests per connection-derived client IP before token lookup and per token ID
-  after authentication. Reuse Throw's trusted-proxy IP handling. Use bounded, expiring
+- Allow 240 requests per minute per connection-derived client IP before token lookup and
+  120 per minute per token ID after authentication. Reuse Throw's trusted-proxy IP handling. Use bounded, expiring
   counters in the supported single-server deployment and return 429 with `Retry-After`.
   Client IP limits also cover failed authentication. Multiple instances would need shared
   limits or equivalent enforcement at the proxy.

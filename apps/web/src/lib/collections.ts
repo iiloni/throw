@@ -228,7 +228,7 @@ export const activityCollection = createCollection(
       getKey: (entry) => entry.id,
       shapeOptions: shapeOptions('task_activity'),
     }),
-    1,
+    2,
   ),
 );
 
@@ -242,7 +242,7 @@ export const commentsCollection = createCollection(
       getKey: (comment) => comment.id,
       shapeOptions: shapeOptions('comments'),
     }),
-    1,
+    2,
   ),
 );
 
