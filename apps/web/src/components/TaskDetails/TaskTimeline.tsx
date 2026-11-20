@@ -6,6 +6,7 @@ import {
   type Task,
 } from '@throw/shared';
 import { History, MessageCircle, Pencil, Trash2 } from 'lucide-react';
+import { motion } from 'motion/react';
 import { memo, useDeferredValue, useEffect, useId, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { Collapse } from '@/components/Collapse/Collapse';
@@ -13,6 +14,7 @@ import { LazyDescriptionEditor } from '@/components/DescriptionEditor/LazyDescri
 import { Hint } from '@/components/Hint/Hint';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { SegmentedTabs } from '@/components/SegmentedTabs/SegmentedTabs';
+import { useTabSwipe } from '@/components/SegmentedTabs/useTabSwipe';
 import { Button } from '@/components/ui/button';
 import { signedInUserId, useTaskTimeline } from '@/lib/collections';
 import { useHasCommentDraft } from '@/lib/commentDrafts';
@@ -40,8 +42,9 @@ function Time({ at }: { at: string }) {
 }
 
 const FOCUS_EVENT = 'throw:focus-history';
+const panels = ['comments', 'history'] as const;
 // `none` hides both panels; any other stored value falls back to Comments.
-const tabSchema = z.enum(['comments', 'history', 'none']);
+const tabSchema = z.enum([...panels, 'none']);
 
 /**
  * Shows a history entry: the timeline turns to its History tab, opening it if both were
@@ -274,6 +277,12 @@ export function TaskTimeline({
   // moving before the panels change. While opening, the panel measured must be the new one.
   const deferredPanel = useDeferredValue(panel);
   const shown = laidOut ? deferredPanel : panel;
+  const swipe = useTabSwipe({
+    value: tab,
+    shown: tab === null ? null : shown,
+    values: panels,
+    onValueChange: setTab,
+  });
   const [focusing, setFocusing] = useState<string | null>(null);
   const ids = useId();
   useEffect(() => {
@@ -304,12 +313,20 @@ export function TaskTimeline({
     </p>
   );
   return (
-    <section aria-label="Task history" data-task-timeline="" className="mt-8">
+    // Swiping sideways over the tabs or a panel turns between them; scrolling stays the pane's.
+    <section
+      aria-label="Task history"
+      data-task-timeline=""
+      className="mt-8 touch-pan-y"
+      ref={swipe.ref}
+      {...swipe.handlers}
+    >
       <SegmentedTabs
         label="Comments and history"
         value={tab}
         onValueChange={(next) => setTab(next ?? 'none')}
         collapsible
+        drag={swipe.drag}
         options={[
           {
             value: 'comments',
@@ -330,72 +347,74 @@ export function TaskTimeline({
       {/* Both stay mounted, so a comment being written survives a look at the history or
           hiding them both. */}
       <Collapse open={tab !== null} contentKey={shown} onRest={setLaidOut}>
-        <div
-          role="tabpanel"
-          id={`${ids}-comments`}
-          aria-labelledby={`${ids}-comments-tab`}
-          hidden={shown !== 'comments'}
-          className="pt-2"
-        >
-          {!comments.length && !composing && empty('No comments yet.')}
-          <ol>
-            {comments.map((item) => (
-              <li
-                key={item.id}
-                id={`history-${item.id}`}
-                tabIndex={-1}
-                className="scroll-m-6 rounded-2xl outline-none [overflow-wrap:anywhere] focus:ring-2 focus:ring-ring/60"
+        <motion.div style={{ x: swipe.x, opacity: swipe.opacity }}>
+          <div
+            role="tabpanel"
+            id={`${ids}-comments`}
+            aria-labelledby={`${ids}-comments-tab`}
+            hidden={shown !== 'comments'}
+            className="pt-2"
+          >
+            {!comments.length && !composing && empty('No comments yet.')}
+            <ol>
+              {comments.map((item) => (
+                <li
+                  key={item.id}
+                  id={`history-${item.id}`}
+                  tabIndex={-1}
+                  className="scroll-m-6 rounded-2xl outline-none [overflow-wrap:anywhere] focus:ring-2 focus:ring-ring/60"
+                >
+                  <CommentRow comment={item.comment} pending={item.pending} />
+                </li>
+              ))}
+            </ol>
+            {composing ? (
+              <CommentComposer
+                key={task.id}
+                draftFor={task.id}
+                onSave={(body) => {
+                  addComment(task.id, body);
+                  haptics.success();
+                  setComposingFor(null);
+                }}
+                onCancel={() => setComposingFor(null)}
+              />
+            ) : (
+              <button
+                type="button"
+                className="mt-2 flex min-h-12 w-full items-center rounded-2xl bg-foreground/[0.045] px-3.5 text-left text-muted-foreground text-sm outline-none transition-colors hover:bg-foreground/[0.07] focus-visible:ring-[3px] focus-visible:ring-ring/60"
+                onClick={() => setComposingFor(task.id)}
               >
-                <CommentRow comment={item.comment} pending={item.pending} />
-              </li>
-            ))}
-          </ol>
-          {composing ? (
-            <CommentComposer
-              key={task.id}
-              draftFor={task.id}
-              onSave={(body) => {
-                addComment(task.id, body);
-                haptics.success();
-                setComposingFor(null);
-              }}
-              onCancel={() => setComposingFor(null)}
-            />
-          ) : (
-            <button
-              type="button"
-              className="mt-2 flex min-h-12 w-full items-center rounded-2xl bg-foreground/[0.045] px-3.5 text-left text-muted-foreground text-sm outline-none transition-colors hover:bg-foreground/[0.07] focus-visible:ring-[3px] focus-visible:ring-ring/60"
-              onClick={() => setComposingFor(task.id)}
-            >
-              {hasDraft ? 'Resume comment draft' : 'Write a comment…'}
-            </button>
-          )}
-        </div>
-        <div
-          role="tabpanel"
-          id={`${ids}-history`}
-          aria-labelledby={`${ids}-history-tab`}
-          hidden={shown !== 'history'}
-          className="pt-2"
-        >
-          {!entries.length && empty('No history yet.')}
-          <ol>
-            {entries.map((item) => (
-              <li
-                key={item.id}
-                id={`history-${item.id}`}
-                tabIndex={-1}
-                className="scroll-m-6 rounded-2xl outline-none [overflow-wrap:anywhere] focus:ring-2 focus:ring-ring/60"
-              >
-                <HistoryRow
-                  entry={item.entry}
-                  context={historyContext}
-                  onRecoverDescription={onRecoverDescription}
-                />
-              </li>
-            ))}
-          </ol>
-        </div>
+                {hasDraft ? 'Resume comment draft' : 'Write a comment…'}
+              </button>
+            )}
+          </div>
+          <div
+            role="tabpanel"
+            id={`${ids}-history`}
+            aria-labelledby={`${ids}-history-tab`}
+            hidden={shown !== 'history'}
+            className="pt-2"
+          >
+            {!entries.length && empty('No history yet.')}
+            <ol>
+              {entries.map((item) => (
+                <li
+                  key={item.id}
+                  id={`history-${item.id}`}
+                  tabIndex={-1}
+                  className="scroll-m-6 rounded-2xl outline-none [overflow-wrap:anywhere] focus:ring-2 focus:ring-ring/60"
+                >
+                  <HistoryRow
+                    entry={item.entry}
+                    context={historyContext}
+                    onRecoverDescription={onRecoverDescription}
+                  />
+                </li>
+              ))}
+            </ol>
+          </div>
+        </motion.div>
       </Collapse>
     </section>
   );

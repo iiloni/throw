@@ -1,4 +1,11 @@
-import { animate, motion, useMotionValue, useReducedMotion } from 'motion/react';
+import {
+  animate,
+  type MotionValue,
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useTransform,
+} from 'motion/react';
 import { type ReactNode, useLayoutEffect, useRef, useState } from 'react';
 import { springs } from '@/lib/motion';
 
@@ -10,13 +17,13 @@ type Tab<TValue extends string> = {
   icon: ReactNode;
 };
 
-const offset = (index: number) => (index === 0 ? 'calc(0% + 0rem)' : 'calc(100% + 0.25rem)');
 /** The indicator draws in slightly as it goes, and grows back as it returns. */
 const AWAY_SCALE = 0.9;
 
 /**
  * Two tabs over their panels. With `collapsible`, choosing the selected tab again hides both
- * panels (`value` is then null) and choosing either tab brings its panel back.
+ * panels (`value` is then null) and choosing either tab brings its panel back. `drag` moves
+ * the indicator by a share of a tab while a swipe is turning panels (`useTabSwipe`).
  */
 export function SegmentedTabs<TValue extends string>({
   label,
@@ -25,6 +32,7 @@ export function SegmentedTabs<TValue extends string>({
   options,
   collapsible = false,
   disabled = false,
+  drag,
 }: {
   label: string;
   value: TValue | null;
@@ -32,6 +40,7 @@ export function SegmentedTabs<TValue extends string>({
   options: readonly [Tab<TValue>, Tab<TValue>];
   collapsible?: boolean;
   disabled?: boolean;
+  drag?: MotionValue<number>;
 }) {
   const reducedMotion = useReducedMotion();
   // With nothing selected, the tab that keyboard focus enters on: the last one chosen, or
@@ -45,7 +54,15 @@ export function SegmentedTabs<TValue extends string>({
   const tabStop = value ?? anchor;
   const index = options.findIndex((option) => option.value === value);
 
-  const x = useMotionValue(offset(Math.max(0, index)));
+  // Which tab the indicator is over, 0 or 1, and in between as it moves.
+  const position = useMotionValue(Math.max(0, index));
+  const still = useMotionValue(0);
+  const dragged = drag ?? still;
+  const x = useTransform(() => {
+    const at = position.get() + dragged.get();
+    // Each step is one tab's width plus the gap between them.
+    return `calc(${at * 100}% + ${at * 0.25}rem)`;
+  });
   const opacity = useMotionValue(value === null ? 0 : 1);
   const scale = useMotionValue(value === null ? AWAY_SCALE : 1);
   const first = useRef(true);
@@ -62,14 +79,17 @@ export function SegmentedTabs<TValue extends string>({
         for (const control of controls) control.stop();
       };
     }
+    // A swipe hands over the indicator from where the finger left it.
+    position.jump(position.get() + dragged.get());
+    dragged.jump(0);
     // One that had already gone comes back at its tab; one still on its way out slides there.
     const controls = [animate(opacity, 1, spring), animate(scale, 1, spring)];
-    if (opacity.get() < 0.05) x.set(offset(index));
-    else controls.push(animate(x, offset(index), spring));
+    if (opacity.get() < 0.05) position.jump(index);
+    else controls.push(animate(position, index, spring));
     return () => {
       for (const control of controls) control.stop();
     };
-  }, [index, reducedMotion, opacity, scale, x]);
+  }, [index, reducedMotion, opacity, scale, position, dragged]);
 
   return (
     <div

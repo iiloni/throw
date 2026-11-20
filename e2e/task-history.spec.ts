@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 import {
   APP_LOAD_TIMEOUT,
   createAccount,
@@ -561,6 +561,99 @@ test("switching panels springs to the new panel's height", async ({ page }) => {
     }
     expect(switching.every((s) => s.opacity === 1)).toBe(true);
   }
+});
+
+test('a sideways swipe turns between comments and history on a phone', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'Swiping between panels is a touch gesture.');
+  const f = await fixture(page);
+  await f.comment('Swipe past me');
+  await expect(f.history).toContainText('Swipe past me');
+  const commentsTab = f.history.getByRole('tab', { name: /^Comments/ });
+  const historyTab = f.history.getByRole('tab', { name: 'History' });
+  const comments = f.history.getByRole('tabpanel', { name: /^Comments/ });
+  const historyPanel = f.history.getByRole('tabpanel', { name: 'History' });
+  const pill = f.history.locator('[data-tab-indicator]');
+  await comments.scrollIntoViewIfNeeded();
+  const session = await page.context().newCDPSession(page);
+  const touch = (type: string, x = 0, y = 0) =>
+    session.send('Input.dispatchTouchEvent', {
+      type,
+      touchPoints: type === 'touchEnd' || type === 'touchCancel' ? [] : [{ x, y }],
+    });
+  // Drags from one share of the timeline's width to another, a frame at a time.
+  const swipe = async (
+    from: number,
+    to: number,
+    { lift = true, frames = 12, gap = 16, dy = 0, on = comments } = {},
+  ) => {
+    const area = (await f.history.boundingBox())!;
+    const box = (await on.boundingBox())!;
+    const y = box.y + Math.min(box.height / 2, 40);
+    await touch('touchStart', area.x + area.width * from, y);
+    for (let frame = 1; frame <= frames; frame++) {
+      await touch(
+        'touchMove',
+        area.x + area.width * (from + ((to - from) * frame) / frames),
+        y + (dy * frame) / frames,
+      );
+      await page.waitForTimeout(gap);
+    }
+    if (lift) await touch('touchEnd');
+  };
+  const shift = (locator: Locator) =>
+    locator.evaluate((element) => new DOMMatrix(getComputedStyle(element).transform).m41);
+  const pillAt = await shift(pill);
+
+  // Mid-swipe the panel follows the finger and the indicator heads for History.
+  await swipe(0.8, 0.45, {
+    lift: false,
+    on: f.history.getByRole('button', { name: 'Write a comment…' }),
+  });
+  const panel = comments.locator('..');
+  expect(await shift(panel)).toBeLessThan(-60);
+  expect(await shift(pill)).toBeGreaterThan(pillAt + 20);
+  // Drifting up at the bottom of the pane does not start pulling the task away.
+  const button = (await f.history.getByRole('button', { name: 'Write a comment…' }).boundingBox())!;
+  for (let step = 1; step <= 6; step++)
+    await touch('touchMove', button.x + button.width * 0.45 - step * 20, button.y - step * 10);
+  await touch('touchEnd');
+  await expect(f.pane).toBeVisible();
+  await expect(historyTab).toHaveAttribute('aria-selected', 'true');
+  await expect(historyPanel).toBeVisible();
+  await expect.poll(() => shift(historyPanel.locator('..'))).toBe(0);
+  // The swipe began on the comment button, which it did not press.
+  await expect(f.history.getByRole('button', { name: 'Resume comment draft' })).toHaveCount(0);
+  await expect(f.history.locator('button', { hasText: 'Write a comment…' })).toHaveCount(1);
+
+  // A short, slow drag springs back; there is nothing further to the left.
+  await swipe(0.3, 0.45, { frames: 30, on: historyPanel });
+  await expect(historyTab).toHaveAttribute('aria-selected', 'true');
+  await swipe(0.8, 0.1, { on: historyPanel });
+  await expect(historyTab).toHaveAttribute('aria-selected', 'true');
+  await expect.poll(() => shift(historyPanel.locator('..'))).toBe(0);
+  await expect
+    .poll(async () => (await pill.boundingBox())!.x - (await historyTab.boundingBox())!.x)
+    .toBeCloseTo(0, 0);
+
+  // A quick flick goes back to Comments.
+  await swipe(0.3, 0.55, { frames: 4, gap: 8, on: historyPanel });
+  await expect(commentsTab).toHaveAttribute('aria-selected', 'true');
+  await expect(comments).toBeVisible();
+
+  // Moving mostly down the pane is a scroll, not a swipe. (From the middle of its scroll: at
+  // either end, the pull closes the task.)
+  await f.history.evaluate((element) => {
+    const scroller = element.closest<HTMLElement>('[data-slot="scroll-area-viewport"]')!;
+    scroller.scrollTop = (scroller.scrollHeight - scroller.clientHeight) / 2;
+  });
+  await swipe(0.6, 0.5, { dy: 40, on: f.history.getByRole('tablist') });
+  await expect(f.pane).toBeVisible();
+  await expect(commentsTab).toHaveAttribute('aria-selected', 'true');
+  await expect.poll(() => shift(comments.locator('..'))).toBe(0);
+  await session.detach();
 });
 
 test('the keyboard opens and hides panels, and a history entry opens hidden panels', async ({
