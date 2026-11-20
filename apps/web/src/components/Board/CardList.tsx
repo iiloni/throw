@@ -2,6 +2,7 @@ import { Fragment, type ReactNode } from 'react';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { CARD_SPACING, drag, makingWay } from './drag';
+import { hasPriorityIcon, PriorityIcon } from './glyphs';
 import { groupByPriority, type Priority, priorityName, taskColor } from './model';
 import { SwipeReveal } from './SwipeReveal';
 import { board, createTask, current, type ListId, listTasks, useBoardSettings } from './state';
@@ -139,6 +140,12 @@ export function CardList({
                             {placed.length || ''}
                           </span>
                         </>
+                      )}
+                      {headerMode === 'rail' && !hasPriorityIcon(priority) ? (
+                        // Holds the chevron's place, so every rail's count lines up.
+                        <span aria-hidden className="zone-chevron size-4 shrink-0" />
+                      ) : (
+                        <PriorityIcon priority={priority} className="zone-chevron" />
                       )}
                     </div>
                   </div>

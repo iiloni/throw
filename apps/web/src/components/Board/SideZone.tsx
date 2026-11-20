@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { CardList } from './CardList';
 import { drag, makingWay } from './drag';
 import { BacklogGallery } from './Gallery';
+import { PriorityIcon } from './glyphs';
 import { type Category, groupByPriority, priorityName, type Status } from './model';
 import { StatusTile } from './StatusTile';
 import { board, countIn, createTask, current, listTasks, update, type ZoneState } from './state';
@@ -295,7 +296,10 @@ function Gallery({ zone }: { zone: Zone }) {
             <section key={band.priority ?? 'all'}>
               {band.priority !== null && (
                 <h3 className="zone-header" data-mode="label">
-                  <span className="zone-header-face">{priorityName(project, band.priority)}</span>
+                  <span className="zone-header-face">
+                    <span className="truncate">{priorityName(project, band.priority)}</span>
+                    <PriorityIcon priority={band.priority} className="zone-chevron" />
+                  </span>
                 </h3>
               )}
               <div className="columns-[17rem] gap-4 pb-3">

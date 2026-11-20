@@ -107,3 +107,23 @@ describe('a column under a card just picked up', () => {
     for (const id of ids) expect(slot(id)).toHaveAttribute('data-folded');
   });
 });
+
+describe('a zone label', () => {
+  it("ends with its rank's chevron, hidden from assistive tech, except at the default rank", () => {
+    localStorage.setItem('throw-board-settings', JSON.stringify({ zoneLabels: true }));
+    const { listId } = mixedColumn();
+    const { container } = render(<CardList listId={listId} />);
+    const headers = [...container.querySelectorAll<HTMLElement>('[data-zone-header]')];
+    const shown = headers.filter((header) => header.dataset.mode === 'label');
+    expect(shown.length).toBeGreaterThan(1);
+    for (const header of shown) {
+      const chevron = header.querySelector('.zone-chevron');
+      if (header.dataset.zoneHeader === '3') expect(chevron).toBeNull();
+      else {
+        expect(chevron?.tagName.toLowerCase()).toBe('svg');
+        expect(chevron?.getAttribute('aria-hidden')).toBe('true');
+        expect(header.querySelector('[title], [role="img"]')).toBeNull();
+      }
+    }
+  });
+});

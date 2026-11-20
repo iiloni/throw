@@ -478,6 +478,11 @@
   background: var(--border);
   content: "";
 }
+/* The rank's chevron, as cards draw it, closes the row: after the line, or a rail's detail. */
+.zone-header-face > .zone-chevron {
+  order: 1;
+  margin-inline-start: auto;
+}
 .zone-header[data-current] .zone-header-face {
   color: var(--brand-link);
 }
