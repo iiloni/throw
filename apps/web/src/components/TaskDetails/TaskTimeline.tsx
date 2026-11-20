@@ -6,7 +6,7 @@ import {
   type Task,
 } from '@throw/shared';
 import { History, MessageCircle, Pencil, Trash2 } from 'lucide-react';
-import { useEffect, useId, useState } from 'react';
+import { memo, useDeferredValue, useEffect, useId, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { Collapse } from '@/components/Collapse/Collapse';
 import { LazyDescriptionEditor } from '@/components/DescriptionEditor/LazyDescriptionEditor';
@@ -48,7 +48,15 @@ export function focusHistory(id: string) {
   window.dispatchEvent(new CustomEvent(FOCUS_EVENT, { detail: id }));
 }
 
-function CommentRow({ comment, pending }: { comment: Comment; pending: boolean }) {
+// Rows render only when their own data changes: switching tabs must stay cheap, or the
+// render holds up the tab indicator's spring on a phone.
+const CommentRow = memo(function CommentRow({
+  comment,
+  pending,
+}: {
+  comment: Comment;
+  pending: boolean;
+}) {
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -131,7 +139,55 @@ function CommentRow({ comment, pending }: { comment: Comment; pending: boolean }
       )}
     </article>
   );
-}
+});
+
+const HistoryRow = memo(function HistoryRow({
+  entry,
+  context,
+  onRecoverDescription,
+}: {
+  entry: ActivityEntry;
+  context: HistoryContext;
+  onRecoverDescription: (entry: ActivityEntry) => void;
+}) {
+  const refused = entry.changes.some((change) => !change.applied);
+  return (
+    <div className="flex gap-3 px-3.5 py-1.5 text-muted-foreground text-sm leading-normal">
+      <span
+        aria-hidden
+        className={cn(
+          'mt-2 size-1.5 shrink-0 rounded-full',
+          refused ? 'bg-destructive' : 'bg-foreground/25',
+        )}
+      />
+      <div className="min-w-0 flex-1">
+        <p className={refused ? 'text-foreground' : undefined}>
+          {entry.userId !== signedInUserId && (
+            <span className="font-medium">{author(entry.userId)}: </span>
+          )}
+          {entrySentences(entry, context).join(' ')}
+        </p>
+        {entry.changes.some(
+          (change) =>
+            change.field === 'description' &&
+            !change.applied &&
+            descriptionSchema.safeParse(change.rejectedDocument).success,
+        ) && (
+          <Button
+            variant="link"
+            className="h-auto px-0 py-1.5"
+            onClick={() => onRecoverDescription(entry)}
+          >
+            Recover description
+          </Button>
+        )}
+      </div>
+      <span className="mt-px shrink-0 text-muted-foreground/75 text-xs leading-5">
+        <Time at={entry.createdAt} />
+      </span>
+    </div>
+  );
+});
 
 export function TaskRefusalNotice({ taskId }: { taskId: string }) {
   const { timeline } = useTaskTimeline(taskId);
@@ -211,6 +267,10 @@ export function TaskTimeline({
   // Whether the open panel has finished opening, so an entry in it has its place.
   const [laidOut, setLaidOut] = useState(tab !== null);
   if (tab === null && laidOut) setLaidOut(false);
+  // Switching panels in place follows the tabs at a lower priority, so the indicator starts
+  // moving before the panels change. While opening, the panel measured must be the new one.
+  const deferredPanel = useDeferredValue(panel);
+  const shown = laidOut ? deferredPanel : panel;
   const [focusing, setFocusing] = useState<string | null>(null);
   const ids = useId();
   useEffect(() => {
@@ -223,12 +283,16 @@ export function TaskTimeline({
     return () => window.removeEventListener(FOCUS_EVENT, onFocus);
   }, [setTab]);
   useEffect(() => {
-    if (!focusing || tab !== 'history' || !laidOut) return;
+    if (!focusing || shown !== 'history' || !laidOut) return;
     const element = document.getElementById(`history-${focusing}`);
     element?.scrollIntoView({ block: 'center', behavior: 'instant' });
     element?.focus({ preventScroll: true });
     setFocusing(null);
-  }, [focusing, tab, laidOut]);
+  }, [focusing, shown, laidOut]);
+  const historyContext = useMemo(
+    () => ({ ...context, priorityNames: project.priorityNames }),
+    [context, project.priorityNames],
+  );
   const comments = timeline.filter((item) => item.type === 'comment');
   const entries = timeline.filter((item) => item.type === 'entry');
   const empty = (text: string) => (
@@ -267,7 +331,7 @@ export function TaskTimeline({
           role="tabpanel"
           id={`${ids}-comments`}
           aria-labelledby={`${ids}-comments-tab`}
-          hidden={panel !== 'comments'}
+          hidden={shown !== 'comments'}
           className="pt-2"
         >
           {!comments.length && !composing && empty('No comments yet.')}
@@ -308,60 +372,25 @@ export function TaskTimeline({
           role="tabpanel"
           id={`${ids}-history`}
           aria-labelledby={`${ids}-history-tab`}
-          hidden={panel !== 'history'}
+          hidden={shown !== 'history'}
           className="pt-2"
         >
           {!entries.length && empty('No history yet.')}
           <ol>
-            {entries.map((item) => {
-              const refused = item.entry.changes.some((change) => !change.applied);
-              return (
-                <li
-                  key={item.id}
-                  id={`history-${item.id}`}
-                  tabIndex={-1}
-                  className="scroll-m-6 rounded-2xl outline-none [overflow-wrap:anywhere] focus:ring-2 focus:ring-ring/60"
-                >
-                  <div className="flex gap-3 px-3.5 py-1.5 text-muted-foreground text-sm leading-normal">
-                    <span
-                      aria-hidden
-                      className={cn(
-                        'mt-2 size-1.5 shrink-0 rounded-full',
-                        refused ? 'bg-destructive' : 'bg-foreground/25',
-                      )}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className={refused ? 'text-foreground' : undefined}>
-                        {item.entry.userId !== signedInUserId && (
-                          <span className="font-medium">{author(item.entry.userId)}: </span>
-                        )}
-                        {entrySentences(item.entry, {
-                          ...context,
-                          priorityNames: project.priorityNames,
-                        }).join(' ')}
-                      </p>
-                      {item.entry.changes.some(
-                        (change) =>
-                          change.field === 'description' &&
-                          !change.applied &&
-                          descriptionSchema.safeParse(change.rejectedDocument).success,
-                      ) && (
-                        <Button
-                          variant="link"
-                          className="h-auto px-0 py-1.5"
-                          onClick={() => onRecoverDescription(item.entry)}
-                        >
-                          Recover description
-                        </Button>
-                      )}
-                    </div>
-                    <span className="mt-px shrink-0 text-muted-foreground/75 text-xs leading-5">
-                      <Time at={item.entry.createdAt} />
-                    </span>
-                  </div>
-                </li>
-              );
-            })}
+            {entries.map((item) => (
+              <li
+                key={item.id}
+                id={`history-${item.id}`}
+                tabIndex={-1}
+                className="scroll-m-6 rounded-2xl outline-none [overflow-wrap:anywhere] focus:ring-2 focus:ring-ring/60"
+              >
+                <HistoryRow
+                  entry={item.entry}
+                  context={historyContext}
+                  onRecoverDescription={onRecoverDescription}
+                />
+              </li>
+            ))}
           </ol>
         </div>
       </Collapse>
