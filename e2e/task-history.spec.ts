@@ -491,11 +491,6 @@ test('comments and history hide together, ease in and out, and stay hidden on th
     expect(sample.scrollTop).toBe(closing[0]!.scrollTop);
   }
 
-  await page.reload();
-  await expect(historyTab).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
-  await expect(timeline).toHaveAttribute('data-collapse', 'closed');
-  await expect(commentsTab).toHaveAttribute('tabindex', '0');
-
   const opening = await sampleFrames(page, async () => {
     await commentsTab.click();
     await expect(timeline).toHaveAttribute('data-collapse', 'open');
@@ -509,7 +504,17 @@ test('comments and history hide together, ease in and out, and stay hidden on th
   expect(firstOpen.opacity).toBeLessThan(0.5);
   for (let i = 1; i < opening.length; i++)
     expect(opening[i]!.height).toBeGreaterThanOrEqual(opening[i - 1]!.height - 0.5);
-  await expect(editor(page)).toHaveText('Still writing', { timeout: APP_LOAD_TIMEOUT });
+  await expect(editor(page)).toHaveText('Still writing');
+
+  // The choice is kept on this device.
+  await commentsTab.click();
+  await expect(timeline).toHaveAttribute('data-collapse', 'closed');
+  await page.reload();
+  await expect(historyTab).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
+  await expect(timeline).toHaveAttribute('data-collapse', 'closed');
+  await expect(commentsTab).toHaveAttribute('tabindex', '0');
+  await commentsTab.click();
+  await expect(f.history.getByRole('button', { name: 'Resume comment draft' })).toBeVisible();
 
   // Rapid changes take over mid-way and end where the last one asked.
   await commentsTab.click();
