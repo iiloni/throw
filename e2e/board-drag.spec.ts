@@ -98,9 +98,14 @@ test.describe('desktop', () => {
     await page.mouse.move(start.x, start.y + 40, { steps: 6 });
     await expect(build.locator('[data-drop-rail="1"]')).toBeVisible();
     await expect(build.locator('[data-drop-rail="5"]')).toBeVisible();
-    await page.keyboard.press('Escape');
+    // The column folded under a card that then stayed put: dropped, it keeps its place.
+    await page.waitForTimeout(400);
     await page.mouse.up();
     await expect(page.locator('[data-overlay]')).toHaveCount(0);
+    expect(await cardIds(page, 'Build')).toEqual(order);
+    expect((await taskRow(page, board.headers, board.ids['Earlier position']!))?.position).toBe(
+      'a0',
+    );
   });
 
   test('Escape puts a held card back and writes nothing', async ({ page }) => {

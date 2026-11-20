@@ -122,11 +122,13 @@ const LONG_PRESS_MS = 260;
 const TOUCH_SLOP = 10;
 const MOUSE_SLOP = 6;
 /**
- * How far a held card goes from where it was pressed before the board makes way for it,
- * unless it leaves its column first. Past the slops, so a lift that wobbles leaves the board
- * still; about half the shortest card, the least that could change its place in a column.
+ * How far a held card goes from where it lifted before the board makes way for it, unless it
+ * leaves its column first: about half the shortest card, the least that could change its place
+ * in a column. Counted from the lift, not the press, so the slop it took to lift is not part of
+ * it. A finger rests less still than a mouse and gets more.
  */
 export const MAKE_WAY_DISTANCE = 24;
+export const MAKE_WAY_TOUCH_DISTANCE = 32;
 const RAIL_DWELL_MS = 220;
 /** How long a column takes to fold its zones into rails. */
 const FOLD_MS = 300;
@@ -161,6 +163,15 @@ let folded: { listId: string; since: number } | null = null;
 let pageHold: { side: -1 | 1; since: number } | null = null;
 /** The column or status the card was picked up in; leaving it is a move, however short. */
 let home: Element | null = null;
+/** Where the card lifted, and the place it lifted from. */
+let lift = { x: 0, y: 0 };
+let liftedFrom: DropTarget | null = null;
+/**
+ * The column folds or relabels around a card that is not moving, which would carry its place
+ * off under it, so once the board makes way the card keeps the place it lifted from until it
+ * goes on twice as far from the lift.
+ */
+let keeping = false;
 let overSince = 0;
 let suppressClick = false;
 
@@ -238,6 +249,8 @@ function release() {
   folded = null;
   pageHold = null;
   home = null;
+  liftedFrom = null;
+  keeping = false;
 }
 
 function onPointerMove(event: PointerEvent) {
@@ -345,6 +358,7 @@ function begin() {
   });
   document.documentElement.dataset.dragging = '';
   home = element.closest('[data-drop-list], [data-drop-status]');
+  lift = { ...pointer };
   holdBoard();
   feel('selection');
   // Before the first render, so the gap opens where the card already is. Its own place is
@@ -355,6 +369,7 @@ function begin() {
   if (start && (start.target?.kind !== 'place' || start.target.listId !== homeList())) {
     drag.set({ ...start, target: null, rail: null, priority: task.priority });
   }
+  liftedFrom = drag.get()?.target ?? null;
   frame = requestAnimationFrame(loop);
 }
 
@@ -362,11 +377,30 @@ function homeList() {
   return home instanceof HTMLElement ? home.dataset.dropList : undefined;
 }
 
+function makeWayDistance() {
+  return press?.touch ? MAKE_WAY_TOUCH_DISTANCE : MAKE_WAY_DISTANCE;
+}
+
 /** Whether the card has gone far enough, or left its column, for the board to make way. */
 function farEnough(hit: Element | null) {
   if (!press) return true;
-  if (Math.hypot(pointer.x - press.x, pointer.y - press.y) >= MAKE_WAY_DISTANCE) return true;
+  if (Math.hypot(pointer.x - lift.x, pointer.y - lift.y) >= makeWayDistance()) return true;
   return (hit?.closest('[data-drop-list], [data-drop-status]') ?? null) !== home;
+}
+
+/**
+ * Whether the card still keeps the place it lifted from while the board makes way around it:
+ * until it goes twice the make-way distance from the lift, takes another priority, or leaves
+ * its column. Counted from the lift, so a quick move that is far away by the next frame is
+ * placed where it is.
+ */
+function keepsPlace(listId: ListId, priority: Priority) {
+  if (!keeping || liftedFrom?.kind !== 'place') return false;
+  keeping =
+    listId === liftedFrom.listId &&
+    priority === liftedFrom.priority &&
+    Math.hypot(pointer.x - lift.x, pointer.y - lift.y) < 2 * makeWayDistance();
+  return keeping;
 }
 
 /**
@@ -387,6 +421,7 @@ function makeWay(state: DragState): DragState {
   folded = null;
   armed = null;
   dwell = null;
+  keeping = true;
   return next;
 }
 
@@ -534,6 +569,7 @@ function resolve(pickup = false) {
   if (arming || pageSide(hit) !== 0) return set({ target: null, rail: null });
   if (tile?.dataset.dropStatus) {
     dwell = null;
+    keeping = false;
     return set({ target: { kind: 'status', statusId: tile.dataset.dropStatus }, rail: null });
   }
   const list = listAt(hit);
@@ -543,6 +579,7 @@ function resolve(pickup = false) {
   if (!list || !listId || (listId === 'backlog' && state.origin !== 'backlog')) {
     dwell = null;
     folded = null;
+    keeping = false;
     return set({ target: null, rail: null });
   }
   // The copy takes the width cards have in this list.
@@ -575,6 +612,9 @@ function resolve(pickup = false) {
     dwell = null;
   }
 
+  if (liftedFrom?.kind === 'place' && keepsPlace(listId, priority)) {
+    return set({ target: liftedFrom, priority, rail });
+  }
   const centre = pointer.y - grab.y + state.height / 2;
   // A gallery keeps its layout under a held card, as a column does in Full.
   const grid = list.dataset.layout === 'grid';

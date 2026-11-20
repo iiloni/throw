@@ -1,6 +1,6 @@
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { drag, MAKE_WAY_DISTANCE, pressCard } from './drag';
+import { drag, MAKE_WAY_DISTANCE, MAKE_WAY_TOUCH_DISTANCE, pressCard } from './drag';
 import { mockBoards } from './mockData';
 import type { Priority, Task } from './model';
 import { board, current, initialBoard } from './state';
@@ -45,13 +45,18 @@ function column(task: Task, rail: Priority) {
   return { list, header, slot, card, outside };
 }
 
-function press(card: HTMLElement, taskId: string, x = 100, y = 100) {
+/** Gives an element a place on the screen, which jsdom does not lay out. */
+function box(element: HTMLElement, top: number, height = 60) {
+  element.getBoundingClientRect = () => new DOMRect(0, top, 280, height);
+}
+
+function press(card: HTMLElement, taskId: string, x = 100, y = 100, pointerType = 'mouse') {
   pressCard(
     {
       button: 0,
       clientX: x,
       clientY: y,
-      pointerType: 'mouse',
+      pointerType,
       currentTarget: card,
       target: card,
     } as unknown as ReactPointerEvent<HTMLElement>,
@@ -107,12 +112,80 @@ describe('picking up a card', () => {
     expect(lifted?.target).toMatchObject({ kind: 'place', listId: `status:${task.statusId}` });
     expect(document.documentElement.dataset.dragMoved).toBeUndefined();
 
-    move(100, 100 + MAKE_WAY_DISTANCE - 2);
+    // Counted from where it lifted, not where it was pressed.
+    move(100, 108 + MAKE_WAY_DISTANCE - 2);
     expect(drag.get()?.moved).toBe(false);
 
-    move(100, 100 + MAKE_WAY_DISTANCE);
+    move(100, 108 + MAKE_WAY_DISTANCE);
     expect(drag.get()?.moved).toBe(true);
     expect(document.documentElement.dataset.dragMoved).toBe('');
+  });
+
+  it('gives a finger more room than a mouse before the board makes way', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const task = activeTask();
+      const { slot, card } = column(task, 1);
+      hit = slot;
+      press(card, task.id, 100, 100, 'touch');
+      vi.advanceTimersByTime(300);
+      move(100, 112);
+      expect(drag.get()?.moved).toBe(false);
+
+      move(100, 112 + MAKE_WAY_TOUCH_DISTANCE - 2);
+      expect(drag.get()?.moved).toBe(false);
+
+      move(100, 112 + MAKE_WAY_TOUCH_DISTANCE);
+      expect(drag.get()?.moved).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps its place as the column changes around it, until it moves on', () => {
+    const task = activeTask();
+    const { list, slot, card } = column(task, 1);
+    const neighbour = document.createElement('div');
+    neighbour.dataset.slot = 'neighbour';
+    neighbour.dataset.zone = String(task.priority);
+    list.append(neighbour);
+    box(card, 100);
+    box(neighbour, 172);
+    hit = slot;
+    press(card, task.id);
+    move(100, 108);
+    const place = { kind: 'place', listId: `status:${task.statusId}`, index: 0 };
+    expect(drag.get()?.target).toMatchObject(place);
+
+    move(100, 108 + MAKE_WAY_DISTANCE);
+    expect(drag.get()?.moved).toBe(true);
+    // The column folds above it and the neighbour slides up under the card, which has not moved.
+    box(neighbour, 80);
+    for (let i = 0; i < 30; i++) step(16);
+    // Dropped now, it would go back where it was.
+    expect(drag.get()?.target).toMatchObject(place);
+
+    move(100, 108 + 2 * MAKE_WAY_DISTANCE);
+    expect(drag.get()?.target).toMatchObject({ ...place, index: 1 });
+  });
+
+  it('places a card that is far off by the next frame where it is', () => {
+    const task = activeTask();
+    const { list, slot, card } = column(task, 1);
+    const neighbour = document.createElement('div');
+    neighbour.dataset.slot = 'neighbour';
+    neighbour.dataset.zone = String(task.priority);
+    list.append(neighbour);
+    box(card, 100);
+    box(neighbour, 172);
+    hit = slot;
+    press(card, task.id);
+    move(100, 108);
+    // A quick move, all of it between two frames.
+    window.dispatchEvent(new MouseEvent('pointermove', { clientX: 100, clientY: 240 }));
+    step();
+    expect(drag.get()?.moved).toBe(true);
+    expect(drag.get()?.target).toMatchObject({ kind: 'place', index: 1 });
   });
 
   it('makes way at once when the card leaves its column, however short the move', () => {

@@ -39,17 +39,27 @@ both stay.
 **The board makes way for a card only once it moves.** Lifting a card changes nothing around
 it: the copy rises where the card was, with the usual lift and haptic, and the card's own
 place stays open as a gap of its full height, subtasks and all. The board makes way only when
-the card has gone 24 px from where it was pressed, or has left the column or status it was
-in, whichever comes first. Then the column folds or labels its zones, the dropzones and the
+the card has gone 24 px (32 px under a finger) from where it lifted, or has left the column or
+status it was in, whichever comes first. Then the column folds or labels its zones, the dropzones and the
 phone's peeks and move drawer appear, the phone's page draws in, edge scrolling starts and an
 open card folds its subtasks, all on the transitions they already had. Every one of those
 used to happen on the frame the card lifted, so the cards around it jumped before the person
-had said where it was going. 24 px is past both slops, so a lift that wobbles leaves the
-board still, and about half the shortest card, the least that could change its place in a
-column. A card dropped before it moves goes back as it was and writes nothing; its subtasks
+had said where it was going. 24 px is about half the shortest card, the least that could
+change its place in a column. It counts from the lift rather than the press, so the slop a
+card took to lift is not spent from it, and a finger, which rests less still than a mouse,
+gets more. A card dropped before it moves goes back as it was and writes nothing; its subtasks
 stay open. Several held cards stay in their places, faded, until they move; then their
 column closes up around them as it folds a zone. A keyboard carry never restructures the
 column, so it has nothing to wait for.
+
+**A card keeps its place while the board makes way around it.** As a column folds its zones
+or labels them, and as the card folds its subtasks, the cards slide under a card that has not
+moved, which would carry its place to a neighbour's other side. Testing on a tablet found most
+short lifts landed one place off for this reason. So the card keeps the place it lifted from
+until it has gone twice the make-way distance from the lift, takes another priority, or leaves
+the column; then its place follows it as usual. Counting from the lift rather than from where
+the board made way places a quick move that is already far off by the next frame where it is. This is the rule below
+for rails, applied to places.
 
 **A rail does not take a card it appeared under.** Rails arrive when the column folds,
 sometimes directly beneath a card that is not moving. A rail starts to count only once the
