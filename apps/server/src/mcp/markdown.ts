@@ -17,7 +17,7 @@ const supportedUrl = (href: string) => {
 export class MarkdownError extends Error {}
 
 export function markdownToBlocks(markdown: string): CommentBody {
-  if (!markdown.isWellFormed() || markdown.includes('\0'))
+  if (/[\uD800-\uDFFF]/u.test(markdown) || markdown.includes('\0'))
     throw new MarkdownError('Use valid Unicode text in Markdown.');
   const root = fromMarkdown(markdown);
   const definitions = new Map<string, Definition>();
@@ -149,7 +149,7 @@ export function blocksToMarkdown(document: Description) {
     const limited = value.slice(0, Math.max(0, remaining));
     remaining -= limited.length;
     if (limited.length !== value.length) lossy = true;
-    return limited.toWellFormed();
+    return limited.replace(/[\uD800-\uDFFF]/gu, '\uFFFD');
   }
 
   function visit(depth: number) {
