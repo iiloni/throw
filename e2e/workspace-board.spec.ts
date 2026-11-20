@@ -78,6 +78,27 @@ test.describe('desktop', () => {
     ).toBeVisible();
   });
 
+  test('a card just picked up keeps its column until it moves', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await workspaceFixture(page);
+    const active = column(page, 'Active');
+    const start = (await card(page, 'Simmer stock').boundingBox())!;
+    const x = start.x + start.width / 2;
+    const y = start.y + start.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 4, y + 8, { steps: 4 });
+    await expect(page.locator('[data-overlay]')).toBeVisible();
+    await page.waitForTimeout(300);
+    // Its own column does not turn into its statuses under a card that has not moved.
+    await expect(active).not.toContainText('Kitchen · Active');
+    await page.mouse.move(x, y + 40, { steps: 6 });
+    await expect(active).toContainText('Kitchen · Active');
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+    await expect(page.locator('[data-overlay]')).toHaveCount(0);
+  });
+
   test('a selection across projects moves to a category, each to its own default status', async ({
     page,
   }) => {
@@ -103,6 +124,16 @@ test.describe('desktop', () => {
     await expect(pane).toBeVisible();
     await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue('Prune roses');
     await expect(pane).toContainText('GDN-3');
+    // A subtask added here belongs to the card's own project and opens as a new task.
+    await pane.getByRole('button', { name: 'Add subtask', exact: true }).click();
+    const title = pane.getByRole('textbox', { name: 'Task title' });
+    await expect(title).toBeFocused();
+    await page.keyboard.type('Sharpen the shears');
+    await title.press('Enter');
+    await expect(pane.getByRole('button', { name: 'Open parent GDN-3' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(title).toHaveValue('Prune roses');
+    await expect(pane.getByRole('article', { name: /^GDN-\d+ Sharpen the shears$/ })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(pane).toHaveCount(0);
   });

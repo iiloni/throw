@@ -1,7 +1,8 @@
 import { Fragment, type ReactNode } from 'react';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { CARD_SPACING, drag } from './drag';
+import { CARD_SPACING, drag, makingWay } from './drag';
+import { hasPriorityIcon, PriorityIcon } from './glyphs';
 import { groupByPriority, type Priority, priorityName, taskColor } from './model';
 import { SwipeReveal } from './SwipeReveal';
 import { board, createTask, current, type ListId, listTasks, useBoardSettings } from './state';
@@ -30,7 +31,8 @@ type HeaderMode = 'hidden' | 'label' | 'open' | 'rail';
  *
  * At rest the zones are unmarked, or labelled if the user asks. Under a held card the column
  * either folds every zone but one into rails (`compact`) or keeps its layout and dims the
- * other zones (`full`); the drag engine reads the result from the DOM.
+ * other zones (`full`); the drag engine reads the result from the DOM. A card just lifted
+ * changes nothing but its own place, which stays open as a gap, until it moves.
  */
 export function CardList({
   listId,
@@ -47,11 +49,12 @@ export function CardList({
   const { project } = current(state);
 
   const dragging = held?.phase === 'dragging';
+  const moving = makingWay(held);
   const target = dragging ? held.target : null;
-  const over = target !== null && target.kind !== 'status' && target.listId === listId;
-  const place = over && target.kind === 'place' ? target : null;
-  const stretch = place !== null && settings.heldColumn === 'compact';
-  const inPlace = place !== null && settings.heldColumn === 'full';
+  const over = moving && target?.kind !== 'status' && target?.listId === listId;
+  const place = target?.kind === 'place' && target.listId === listId ? target : null;
+  const stretch = moving && place !== null && settings.heldColumn === 'compact';
+  const inPlace = moving && place !== null && settings.heldColumn === 'full';
 
   // A held card stays mounted but out of the layout: a touch keeps reporting to the element
   // it began on, and stops if that element is removed.
@@ -92,7 +95,7 @@ export function CardList({
             {groups.map(({ priority, tasks: zone }) => {
               const headerMode = mode(priority, zone.length);
               const folded = stretch && priority !== open;
-              const accepts = stretch ? priority === open : inPlace;
+              const accepts = stretch ? priority === open : inPlace || place?.priority === priority;
               const name = priorityName(project, priority);
               const placed = zone.filter((task) => !lifted(task.id));
               return (
@@ -101,7 +104,7 @@ export function CardList({
                     data-zone-header={priority}
                     data-drop-rail={headerMode === 'rail' ? priority : undefined}
                     data-mode={headerMode}
-                    data-current={place?.priority === priority ? '' : undefined}
+                    data-current={moving && place?.priority === priority ? '' : undefined}
                     data-charging={
                       held?.rail?.listId === listId && held.rail.priority === priority
                         ? ''
@@ -138,6 +141,12 @@ export function CardList({
                           </span>
                         </>
                       )}
+                      {headerMode === 'rail' && !hasPriorityIcon(priority) ? (
+                        // Holds the chevron's place, so every rail's count lines up.
+                        <span aria-hidden className="zone-chevron size-4 shrink-0" />
+                      ) : (
+                        <PriorityIcon priority={priority} className="zone-chevron" />
+                      )}
                     </div>
                   </div>
                   {accepts && (
@@ -149,14 +158,17 @@ export function CardList({
                   {zone.map((task) => {
                     // Same element either way, or React would remount the card mid-touch.
                     const away = lifted(task.id);
+                    // Several held cards stay in place, faded, until they move; then the
+                    // column closes up around them as it folds a zone.
+                    const gathered = away && (held?.ids.length ?? 0) > 1;
                     const index = placed.indexOf(task);
                     return (
                       <Fragment key={task.id}>
                         <div
                           data-slot={task.id}
                           data-zone={priority}
-                          hidden={away}
-                          data-folded={folded ? '' : undefined}
+                          hidden={away && !gathered}
+                          data-folded={folded || (gathered && moving) ? '' : undefined}
                           data-dim={inPlace && place?.priority !== priority ? '' : undefined}
                           className="board-slot"
                         >
@@ -190,7 +202,7 @@ export function CardList({
                 + Add task
               </button>
             )}
-            {tasks.length === 0 && !dragging && (
+            {tasks.length === 0 && !moving && (
               <p className="px-1 py-10 text-center text-muted-foreground text-sm">
                 {state.awaitingTasks ? 'Loading tasks…' : 'Nothing here.'}
               </p>
@@ -199,7 +211,7 @@ export function CardList({
         </ScrollAreaViewport>
         <ScrollBar />
       </ScrollArea>
-      {over && target.kind === 'list' && held && (
+      {over && target?.kind === 'list' && held && (
         <p className="pointer-events-none absolute inset-x-3 bottom-4 rounded-2xl bg-foreground py-2 text-center font-medium text-background text-sm">
           Move {held.ids.length} here
         </p>

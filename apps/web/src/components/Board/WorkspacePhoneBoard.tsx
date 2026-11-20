@@ -10,7 +10,7 @@ import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { BoardSettingsContent } from './BoardSettingsPanel';
-import { drag, holding, pageStride } from './drag';
+import { drag, holding, makingWay, pageStride } from './drag';
 import { CATEGORIES, type Category, categoryTarget, groupByPriority, priorityName } from './model';
 import {
   DOCK_SPACE,
@@ -174,7 +174,7 @@ export function WorkspacePhoneBoard({
         detent="closed"
         detents={['closed']}
         onDetent={() => {}}
-        move={!task && (dragging || pick) ? <MovePanel pick={pick} /> : null}
+        move={!task && (makingWay(held) || pick) ? <MovePanel pick={pick} /> : null}
         gesturesDisabled={held !== null || fingerDown || (!!task && !task.page)}
         page={lent ? lent.page : task ? task.page : settings ? settingsPage : null}
         onClosePage={lent ? lent.close : task ? task.closePage : () => setSettings(false)}
@@ -199,10 +199,10 @@ function CategoryPage({ category }: { category: Category }) {
   const target = categoryTarget(category);
   const name = CATEGORY_NAMES[category];
   const bands = groupByPriority(listTasks(state, target)).filter((band) => band.tasks.length > 0);
-  const over = held?.phase === 'dragging' && held.target?.kind === 'status';
+  const over = makingWay(held) && held.target?.kind === 'status';
   const aimed = over && held.target?.kind === 'status' && held.target.statusId === target;
   const foldable = foldableCategory(category);
-  const dragging = held?.phase === 'dragging';
+  const dragging = makingWay(held);
   // A folded page opens under a held card, as a folded desktop column does.
   const hidden = foldable !== null && folded[foldable] && !dragging;
   const open = category === 'backlog' || category === 'active';

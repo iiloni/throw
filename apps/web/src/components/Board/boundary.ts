@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect } from 'react';
 import { flushTaskDescription } from '@/lib/descriptionEditing';
-import { moveTask, sendTask, updateTask } from '@/lib/tasks';
+import { discardUntouchedTask, moveTask, sendTask, updateTask } from '@/lib/tasks';
 import { putBack } from './carry';
 import { configureDrag, drag } from './drag';
 import type { BoardData, Place } from './model';
@@ -26,6 +26,7 @@ function attempt(write: () => void) {
 /** The writes a board makes the same way whichever tasks it shows. */
 export const taskWrites = {
   beforeLeave: flushTaskDescription,
+  discard: (id: string) => void attempt(() => discardUntouchedTask(id)),
   rename: (id: string, title: string) => updateTask(id, { title }),
   // A task purged or a status deleted on another device cannot be moved to; the board
   // falls back to what sync has.

@@ -10,7 +10,7 @@ import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { BoardSettingsPanel } from './BoardSettingsPanel';
 import { CardList } from './CardList';
-import { drag } from './drag';
+import { drag, makingWay } from './drag';
 import { railWidth, SideZone, STRIP_WIDTH, zoneWidth } from './SideZone';
 import { StatusMenu } from './StatusMenu';
 import { StatusTile } from './StatusTile';
@@ -25,6 +25,7 @@ import {
   useBoardSettings,
 } from './state';
 import { PANE_MIN, SplitHandle, TaskPane } from './TaskView';
+import { TaskPaneWidthContext } from './taskMotionContext';
 
 const TILES_WIDTH = 176;
 const HANDLE_WIDTH = 24;
@@ -102,7 +103,7 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
   const [frame, frameWidth] = useWidth();
   const [row, rowWidth] = useWidth();
   const active = project.statuses.filter((status) => status.category === 'active');
-  const dragging = held?.phase === 'dragging';
+  const dragging = makingWay(held);
   // A gallery covers the columns. A held card still needs somewhere to go, so they come
   // back as dropzones for as long as it is held.
   const covered = state.backlog === 'full' || state.closed === 'full';
@@ -345,7 +346,9 @@ export function OpenTaskPane({ frameWidth }: { frameWidth: number }) {
             onActive={setResizing}
           />
           <div className="min-w-0 flex-1" style={{ width: paneWidth }}>
-            <TaskPane task={openTask} />
+            <TaskPaneWidthContext value={paneWidth}>
+              <TaskPane task={openTask} />
+            </TaskPaneWidthContext>
           </div>
         </motion.div>
       )}

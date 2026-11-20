@@ -321,7 +321,8 @@ Folded, it shows one pip per subtask and a count. Unfolded, it lists the subtask
 
 - A subtask's status can be changed there, without opening it.
 - Tapping a subtask opens it in the task view. There is no pop-out card.
-- A card that is picked up folds its subtasks away as it lifts.
+- A card that is picked up folds its subtasks away once it moves; one put straight back
+  keeps them open.
 
 ### Subtasks on the board
 
@@ -382,8 +383,8 @@ own way in and out, so the board is not a row of identical pages.
 - The backlog lives in the [drawer](#the-drawer), at its three heights:
   - **Collapsed**, the drawer's header is the dock: the backlog's handle (a small stack of
     cards, its name and count) beside Search and the create button.
-  - **Half open**, it is a supply of work with the board still above it. Lifting a card
-    sinks the drawer out of sight, so the whole screen is board to place the card on. Its
+  - **Half open**, it is a supply of work with the board still above it. Carrying a card
+    off sinks the drawer out of sight, so the whole screen is board to place the card on. Its
     cards are not reordered at this height. The drawer comes back to half open after the drop.
   - **Full**, the backlog is groomed: its cards are reordered in place, and the status
     filters are dropzones for its own cards.
@@ -503,9 +504,18 @@ view), comments and activity.
   left, trash/restore on the right.
 - Subtasks sit on the task pane as a flush list of the same task cards, as Catch lists a
   note's links below it, with status controls and an add action. A subtask opens in the same view, with its parent in the
-  breadcrumb. Opened from its parent's pane, it goes back there: Back, Escape, a pull and
+  breadcrumb. Adding one makes it at once and opens it as a new task, as the board's add
+  control does (2026-11-19): its title ready to be written and its full controls, over its
+  parent's pane. On a phone it grows out of its new card; beside the board it slides in over
+  its parent and back out when left. A new subtask left untouched (no title, description,
+  tags, comments or changed fields) is discarded as it is left, rather than kept untitled. Opened from its parent's pane, it goes back there: Back, Escape, a pull and
   the breadcrumb return to the parent, and on a phone the subtask grows out of its card
   over the parent's pane and shrinks back into it.
+- A desktop pane at least 620 px wide has a side column beside the task's card, as a wide
+  Catch note pane does (2026-11-19, ADR 0012). It holds the task's tags and then its
+  subtasks, and later its link previews and media. It opens with the first of them and
+  closes with the last. Until then, “Add subtask” stays below the description. Narrower panes
+  and phones keep them inline.
 - Phone opening/closing uses Catch's card-to-note container transform and timing: the
   surface grows from its card and shrinks into its current position, with a fade when no
   card is visible. As in Catch, the surface has no shadow of its own,
