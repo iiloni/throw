@@ -10,6 +10,7 @@ import { memo, useDeferredValue, useEffect, useId, useMemo, useState } from 'rea
 import { z } from 'zod';
 import { Collapse } from '@/components/Collapse/Collapse';
 import { LazyDescriptionEditor } from '@/components/DescriptionEditor/LazyDescriptionEditor';
+import { Hint } from '@/components/Hint/Hint';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { SegmentedTabs } from '@/components/SegmentedTabs/SegmentedTabs';
 import { Button } from '@/components/ui/button';
@@ -30,9 +31,11 @@ const fullTime = (at: string) =>
 /** When the server received it, which is the order the history is in. */
 function Time({ at }: { at: string }) {
   return (
-    <time dateTime={at} title={`${fullTime(at)}, when it synced`} className="whitespace-nowrap">
-      {shortTime(at)}
-    </time>
+    <Hint label={`${fullTime(at)}, when it synced`} describe>
+      <time dateTime={at} className="whitespace-nowrap">
+        {shortTime(at)}
+      </time>
+    </Hint>
   );
 }
 
