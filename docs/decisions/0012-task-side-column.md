@@ -20,11 +20,14 @@ the place for later extras such as link previews and media: each is one more blo
 `TaskColumnFrame`'s children, in order, with its inline copy folding in the main column
 (`Fold`). Comments and history stay in the main column, below the description.
 
-**The pane must be at least 700 px wide** (`COLUMN_MIN` in
-`components/TaskDetails/taskColumn.ts`, Catch's `SIDE_LINKS_MIN`). The card keeps 432 px
-beside the column: room for the title, a description's lines and the timeline's rows. The
-pane opens at 440 px, so the column waits until someone widens the pane for it. Narrower panes and
-phones (ADR 0009) keep the stacked layout.
+**The pane must be at least 620 px wide** (`COLUMN_MIN` in
+`components/TaskDetails/taskColumn.ts`). Catch waits for 700 px (`SIDE_LINKS_MIN`), but
+Throw's pane stops at 62% of the board beside the navigation. That is about 640 px on a
+1280 px window, and under 700 px on most laptops, so Catch's value left the column out of
+reach where a stacked pane was already plainly too wide. At 620 px the card keeps 352 px
+beside the column, more than the narrowest pane (340 px). The pane opens at 440 px, so the
+column waits until someone widens the pane for it. Narrower panes and phones (ADR 0009) keep
+the stacked layout.
 
 **It shows only when there is something in it.** A task's first tag or subtask springs it open
 and removing the last springs it shut. The card narrows or widens on the spring rather than

@@ -26,7 +26,7 @@ opens subtasks through the board's existing `openTaskId`. Its real content is su
 `TaskContentContext` at the project-board boundary; the prototype keeps its mock content.
 On a phone the same boundary hands the board's drawer the open task's dock and pickers
 (`TaskDetails/TaskControls.tsx`); the desktop pane docks them below the task's card, as
-Catch's split view does (`TaskDrawer`). A desktop pane at least 700 px wide moves the task's
+Catch's split view does (`TaskDrawer`). A desktop pane at least 620 px wide moves the task's
 tags and subtasks to a side column beside the card while it has any (ADR 0012,
 `TaskDetails/TaskColumn.tsx`); later extras such as link previews join it there.
 The activity log syncs to devices and comments are built (`lib/comments.ts`), with a

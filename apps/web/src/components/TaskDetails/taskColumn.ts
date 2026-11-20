@@ -10,11 +10,13 @@ export const COLUMN_WIDTH = 256;
 export const COLUMN_GAP = 12;
 
 /**
- * From this pane width the extras get a column. The card keeps 432 px beside it, enough for
- * the title, a description's lines and the timeline's rows, as Catch keeps a note's. The
- * pane opens at 440 px, so the column waits until it is widened for.
+ * From this pane width the extras get a column. Catch waits for 700 px, but Throw's pane
+ * stops at 62% of the board beside the navigation: about 640 px on a 1280 px window, and
+ * under 700 px on most laptops. At 620 px the card keeps 352 px beside the column, more than
+ * the narrowest pane (340 px). The pane opens at 440 px, so the column waits until it is
+ * widened for.
  */
-export const COLUMN_MIN = 700;
+export const COLUMN_MIN = 620;
 
 export function columnFits(paneWidth: number | null) {
   return paneWidth !== null && paneWidth >= COLUMN_MIN;

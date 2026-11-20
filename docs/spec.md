@@ -505,7 +505,7 @@ view), comments and activity.
   unnamed stays, as “New subtask”, until it is moved to the trash. Opened from its parent's pane, it goes back there: Back, Escape, a pull and
   the breadcrumb return to the parent, and on a phone the subtask grows out of its card
   over the parent's pane and shrinks back into it.
-- A desktop pane at least 700 px wide has a side column beside the task's card, as a wide
+- A desktop pane at least 620 px wide has a side column beside the task's card, as a wide
   Catch note pane does (2026-11-19, ADR 0012). It holds the task's tags and then its
   subtasks, and later its link previews and media. It opens with the first of them and
   closes with the last. Until then, “Add subtask” stays below the description. Narrower panes

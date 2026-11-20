@@ -815,7 +815,6 @@ test('a wide desktop pane keeps tags and subtasks in a column that opens and shu
   isMobile,
 }) => {
   test.skip(isMobile, 'A phone keeps its stacked layout (ADR 0009)');
-  await page.setViewportSize({ width: 1440, height: 900 });
   const account = await fixture(page);
   const { pane } = account;
   const card = page.locator('[data-task-card]');
@@ -828,7 +827,7 @@ test('a wide desktop pane keeps tags and subtasks in a column that opens and shu
   // The pane opens narrower than the column needs, and an empty task has nothing for it.
   await expect(column).toHaveCount(0);
   await handle.focus();
-  while ((await paneWidth()) < 700) await handle.press('Shift+ArrowLeft');
+  while ((await paneWidth()) < 620) await handle.press('Shift+ArrowLeft');
   await expect(column).toHaveCount(0);
   await expect(addSubtask).toBeVisible();
   await expect.poll(width).toBe(await paneWidth());
@@ -903,7 +902,7 @@ test('a wide desktop pane keeps tags and subtasks in a column that opens and shu
   // spring while the subtasks unfold below the description, and only one copy is reachable.
   await handle.focus();
   room = await columnRoom(page, async () => {
-    while ((await paneWidth()) >= 700) await handle.press('ArrowRight');
+    while ((await paneWidth()) >= 620) await handle.press('ArrowRight');
   });
   await expect(column).toHaveCount(0);
   await expect.poll(width).toBe(await paneWidth());
