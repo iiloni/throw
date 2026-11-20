@@ -76,6 +76,11 @@ describe('MCP Markdown', () => {
     });
   });
 
+  test('keeps valid Unicode and rejects an isolated surrogate', () => {
+    expect(blocksToMarkdown(markdownToBlocks('Ready 🚀')).markdown).toBe('Ready 🚀');
+    expect(() => markdownToBlocks(`Draft ${String.fromCharCode(0xd800)}`)).toThrow('valid Unicode');
+  });
+
   test('caps Markdown conversion and keeps absent descriptions nullable', () => {
     expect(blocksToMarkdown(null)).toEqual({ markdown: null, lossy: false });
     expect(blocksToMarkdown([{ type: 'paragraph', content: 'x'.repeat(60_000) }])).toEqual({

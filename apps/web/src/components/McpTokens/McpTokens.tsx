@@ -1,6 +1,6 @@
 import { createMcpTokenSchema, type McpToken, type McpTokensResponse } from '@throw/shared';
 import { Copy, KeyRound, Plus } from 'lucide-react';
-import { type FormEvent, useContext, useId, useRef, useState } from 'react';
+import { type FormEvent, useCallback, useContext, useId, useRef, useState } from 'react';
 import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
 import { SettingsRow, SettingsSection } from '@/components/SettingsSection/SettingsSection';
 import { Button } from '@/components/ui/button';
@@ -129,6 +129,10 @@ function CreateToken({
   const nameId = useId();
   const nameField = useRef<HTMLInputElement>(null);
   const secretField = useRef<HTMLInputElement>(null);
+  const focusSecret = useCallback((field: HTMLInputElement | null) => {
+    secretField.current = field;
+    field?.focus({ preventScroll: true });
+  }, []);
   const close = () => {
     if (!busy) onClose();
   };
@@ -179,7 +183,7 @@ function CreateToken({
             Copy this token now. Throw only shows it once.
           </p>
           <Input
-            ref={secretField}
+            ref={focusSecret}
             readOnly
             value={token}
             className="font-mono"

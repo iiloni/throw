@@ -24,9 +24,9 @@ test('create a workspace MCP token, reveal it once and revoke it in Settings', a
   await form.getByRole('button', { name: 'Create token' }).click();
 
   const reveal = page.getByRole('dialog', { name: 'Copy your token' });
-  await expect(reveal.getByRole('textbox', { name: 'MCP token' })).toHaveValue(
-    /^throw_mcp_[\w-]{43}$/,
-  );
+  const secret = reveal.getByRole('textbox', { name: 'MCP token' });
+  await expect(secret).toHaveValue(/^throw_mcp_[\w-]{43}$/);
+  await expect(secret).toBeFocused();
   await reveal.getByRole('button', { name: 'Done' }).click();
   await expect(reveal).toBeHidden();
   await expect(page.getByText('Review agent', { exact: true })).toBeVisible();
