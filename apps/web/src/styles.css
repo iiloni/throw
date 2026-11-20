@@ -600,8 +600,8 @@
     );
   }
 }
-/* A held card's column shows rails at its top and bottom; they are its edges. */
-:root[data-dragging] [data-slot="scroll-area"][data-edges] {
+/* A held card's column shows rails at its top and bottom once it moves; they are its edges. */
+:root[data-drag-moved] [data-slot="scroll-area"][data-edges] {
   --edge-top: 0px;
   --edge-bottom: 0px;
 }
@@ -620,8 +620,8 @@
   initial-value: 0px;
 }
 /*
- * While a card is held, the current page draws in from the screen's sides, leaving a margin
- * for the pages beside it to peek in over the edges.
+ * While a card is held and on the move, the current page draws in from the screen's sides,
+ * leaving a margin for the pages beside it to peek in over the edges.
  */
 .phone-pager {
   --gutter: 0.875rem;
@@ -630,7 +630,7 @@
     --gutter 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
     --page-inset 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-:root[data-dragging] .phone-pager {
+:root[data-drag-moved] .phone-pager {
   --gutter: 0.375rem;
   --page-inset: 1.75rem;
 }

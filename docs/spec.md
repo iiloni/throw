@@ -321,7 +321,8 @@ Folded, it shows one pip per subtask and a count. Unfolded, it lists the subtask
 
 - A subtask's status can be changed there, without opening it.
 - Tapping a subtask opens it in the task view. There is no pop-out card.
-- A card that is picked up folds its subtasks away as it lifts.
+- A card that is picked up folds its subtasks away once it moves; one put straight back
+  keeps them open.
 
 ### Subtasks on the board
 
@@ -382,8 +383,8 @@ own way in and out, so the board is not a row of identical pages.
 - The backlog lives in the [drawer](#the-drawer), at its three heights:
   - **Collapsed**, the drawer's header is the dock: the backlog's handle (a small stack of
     cards, its name and count) beside Search and the create button.
-  - **Half open**, it is a supply of work with the board still above it. Lifting a card
-    sinks the drawer out of sight, so the whole screen is board to place the card on. Its
+  - **Half open**, it is a supply of work with the board still above it. Carrying a card
+    off sinks the drawer out of sight, so the whole screen is board to place the card on. Its
     cards are not reordered at this height. The drawer comes back to half open after the drop.
   - **Full**, the backlog is groomed: its cards are reordered in place, and the status
     filters are dropzones for its own cards.

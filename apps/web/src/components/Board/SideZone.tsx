@@ -13,7 +13,7 @@ import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scrol
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { CardList } from './CardList';
-import { drag } from './drag';
+import { drag, makingWay } from './drag';
 import { BacklogGallery } from './Gallery';
 import { type Category, groupByPriority, priorityName, type Status } from './model';
 import { StatusTile } from './StatusTile';
@@ -66,9 +66,8 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
   const statuses = zoneStatuses(zone, project.statuses);
   const view = state[zone];
   const count = statuses.reduce((sum, status) => sum + countIn(state, status.id), 0);
-  const dragging = held?.phase === 'dragging';
   // A card held from this zone keeps the zone as it is, so it can still be placed here.
-  const tiles = dragging && held.origin !== zone;
+  const tiles = makingWay(held) && held.origin !== zone;
   const width = railWidth(view, fullWidth, tiles);
   const other = zone === 'backlog' ? 'closed' : 'backlog';
   // A gallery takes the board, so the opposite zone steps back to its strip.
@@ -221,7 +220,7 @@ export function StatusFilter({
   const filter = zone === 'backlog' ? state.backlogFilter : state.closedFilter;
   const setFilter = (value: string | null) =>
     update(zone === 'backlog' ? { backlogFilter: value } : { closedFilter: value });
-  const targets = held?.phase === 'dragging' && (anyCard || held.origin === zone);
+  const targets = makingWay(held) && (anyCard || held.origin === zone);
   if (statuses.length < 2) return null;
   const chip =
     // A filter is a pill; as a drop target it grows to a tile with the status tiles' corners,
