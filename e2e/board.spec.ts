@@ -791,6 +791,7 @@ test('a task opened from the phone backlog shrinks back into its card as the dra
         shown: boolean;
         closing: boolean;
         onTop: boolean;
+        edge: number;
       }> = [];
       const start = performance.now();
       await new Promise<void>((resolve) => {
@@ -808,6 +809,9 @@ test('a task opened from the phone backlog shrinks back into its card as the dra
             shown: getComputedStyle(landing).visibility === 'visible',
             closing: screen?.getAttribute('aria-label') === 'Closing task',
             onTop: z(screen) > z(drawer),
+            edge: Number(
+              getComputedStyle(document.querySelector('[data-task-edge]') ?? document.body).opacity,
+            ),
           });
           const closed = frames.findIndex((frame) => !frame.surface);
           if (frames.length > 1 && closed >= 0 && frames.length > closed + 2) return resolve();
@@ -836,6 +840,8 @@ test('a task opened from the phone backlog shrinks back into its card as the dra
     for (const key of ['x', 'y', 'width', 'height'] as const)
       expect(Math.abs(last.surface![key] - last.card[key])).toBeLessThan(4);
     expect(last.card.y).toBeLessThan(915 * 0.8);
+    // ...wearing the card's edge, so it stands out from the drawer's glass before the card shows.
+    expect(last.edge).toBeGreaterThan(0.9);
     // ...and the card is there as it goes, never an empty slot.
     expect(frames.slice(shown).every((frame) => frame.shown)).toBe(true);
     await expect(backlog).toHaveAttribute('data-detent', 'half');
