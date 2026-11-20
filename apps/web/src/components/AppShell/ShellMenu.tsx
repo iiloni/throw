@@ -11,6 +11,7 @@ import {
 import { DropdownMenu } from 'radix-ui';
 import type { ReactNode } from 'react';
 import { useShell } from '@/components/AppShell/shell';
+import { Hint } from '@/components/Hint/Hint';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { cn } from '@/lib/utils';
 
@@ -36,42 +37,52 @@ export function ShellMenu({
     : (shell.workspace?.name ?? 'Throw');
   return (
     <DropdownMenu.Root>
+      {/*
+        The label names the action, so the hint gives the name it acts on: always to a screen
+        reader, and on screen where the rail hides it or the title is cut short.
+      */}
       <DropdownMenu.Trigger asChild>
-        <button
-          type="button"
-          data-shell-menu
-          data-shell-title={phone ? '' : undefined}
-          aria-label={phone ? 'Switch project or workspace' : 'Switch workspace'}
-          title={title}
-          className={
-            phone
-              ? 'flex min-h-11 max-w-full items-center gap-2 rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring'
-              : 'flex h-12 w-full items-center gap-3 rounded-2xl px-2 outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring'
-          }
+        <Hint
+          label={title}
+          side={phone ? 'bottom' : 'right'}
+          whenTruncated={phone || expanded}
+          describe
         >
-          {!phone && (
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-foreground/[0.08]">
-              <Layers className="size-5" aria-hidden />
-            </span>
-          )}
-          {(phone || expanded) && (
-            <>
-              <span
-                className={
-                  phone
-                    ? cn(
-                        'truncate font-display font-extrabold text-[clamp(1.5rem,6vw,2.625rem)] leading-tight tracking-[-0.03em]',
-                        titleClassName,
-                      )
-                    : 'min-w-0 flex-1 truncate text-left font-semibold text-sm'
-                }
-              >
-                {title}
+          <button
+            type="button"
+            data-shell-menu
+            data-shell-title={phone ? '' : undefined}
+            aria-label={phone ? 'Switch project or workspace' : 'Switch workspace'}
+            className={
+              phone
+                ? 'flex min-h-11 max-w-full items-center gap-2 rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                : 'flex h-12 w-full items-center gap-3 rounded-2xl px-2 outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring'
+            }
+          >
+            {!phone && (
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-foreground/[0.08]">
+                <Layers className="size-5" aria-hidden />
               </span>
-              <ChevronDown aria-hidden className="size-4 shrink-0 text-muted-foreground" />
-            </>
-          )}
-        </button>
+            )}
+            {(phone || expanded) && (
+              <>
+                <span
+                  className={
+                    phone
+                      ? cn(
+                          'truncate font-display font-extrabold text-[clamp(1.5rem,6vw,2.625rem)] leading-tight tracking-[-0.03em]',
+                          titleClassName,
+                        )
+                      : 'min-w-0 flex-1 truncate text-left font-semibold text-sm'
+                  }
+                >
+                  {title}
+                </span>
+                <ChevronDown aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+              </>
+            )}
+          </button>
+        </Hint>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content
