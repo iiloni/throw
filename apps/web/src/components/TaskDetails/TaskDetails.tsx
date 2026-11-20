@@ -109,7 +109,7 @@ export function TaskDetails({
   }, [phone, task.id, task.parentId]);
   function addSubtask() {
     try {
-      const id = createTask(project.id, { parentId: task.id, title: 'New subtask' });
+      const id = createTask(project.id, { parentId: task.id });
       setError(null);
       haptics.success();
       openNewSubtask(id, task.id);

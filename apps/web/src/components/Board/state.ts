@@ -144,6 +144,11 @@ export function update(change: Partial<BoardState> | ((state: BoardState) => Par
     rememberTaskOrigin(next.openTaskId);
   // Opening a task any other way starts a new trail.
   board.set({ ...state, ...(moving && !('taskTrail' in next) ? { taskTrail: [] } : {}), ...next });
+  // A new subtask left as it was made was never wanted: it goes rather than stay untitled.
+  if (moving && fresh !== null && fresh === state.openTaskId) {
+    fresh = null;
+    state.actions?.discard?.(state.openTaskId);
+  }
 }
 
 /** A subtask opened from its parent's pane goes back to that pane when it is left. */
@@ -156,6 +161,8 @@ export function openSubtask(taskId: string) {
 
 /** A subtask just added from its parent's pane, until the board has its row to open. */
 let added: { taskId: string; parentId: string } | null = null;
+/** That subtask while it is open: left untouched, it is discarded. */
+let fresh: string | null = null;
 
 /**
  * Opens a subtask just added from its parent's pane as a new task, as the board opens one: in
@@ -178,6 +185,7 @@ function openAddedSubtask() {
     newTaskId: taskId,
     taskTrail: [...state.taskTrail, parentId],
   }));
+  if (board.get().openTaskId === taskId) fresh = taskId;
 }
 
 /** Back, Escape and a dismissing pull: to the task this one was opened from, or the board. */
@@ -191,6 +199,8 @@ export function leaveTask() {
 export type BoardActions = {
   /** Flush device-local editor text before closing or opening another task. */
   beforeLeave?(taskId: string): boolean;
+  /** Removes a task just made if it was left as it was made. */
+  discard?(taskId: string): void;
   /** The new task's id. The workspace board has none: it captures through the palette. */
   create?(statusId?: string): string;
   rename(taskId: string, title: string): void;
@@ -216,6 +226,7 @@ export function receiveBoard(data: BoardData, actions: BoardActions, awaitingTas
   const before = board.get();
   if (before.projectId !== data.project.id || before.actions === null) {
     added = null;
+    fresh = null;
     board.set({ ...initialBoard([data]), actions, awaitingTasks });
   } else {
     const exists = (id: string) => data.tasks.some((task) => task.id === id);

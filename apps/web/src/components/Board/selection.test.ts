@@ -206,7 +206,8 @@ describe('synced project board selection', () => {
     expect(board.get()).toMatchObject({ openTaskId: 'child', taskTrail: [] });
   });
   it('opens a subtask added from its parent as a new task once the board has its row', () => {
-    const actions = { rename: () => {}, send: () => true, place: () => true };
+    const discard = vi.fn();
+    const actions = { rename: () => {}, send: () => true, place: () => true, discard };
     const rows = [task('parent'), task('other')];
     board.set(view(rows));
     receiveBoard(projectBoardData(project, statuses, rows), actions);
@@ -223,6 +224,11 @@ describe('synced project board selection', () => {
     });
     leaveTask();
     expect(board.get()).toMatchObject({ openTaskId: 'parent', taskTrail: [] });
+    // Left, the new subtask is offered for discarding once; reopened, it is a task like any.
+    expect(discard).toHaveBeenCalledExactlyOnceWith('child');
+    openSubtask('child');
+    leaveTask();
+    expect(discard).toHaveBeenCalledOnce();
     // A parent left before the row arrived no longer opens it.
     update({ newTaskId: null });
     openNewSubtask('late', 'parent');
