@@ -784,28 +784,30 @@ test('the open task lives in the URL: reload keeps it, Back closes it, a stale l
   await expect(pane).toHaveCount(0);
 });
 
-/** The card's width on every painted frame for `ms`, starting with the one before `act`. */
-async function cardWidths(page: Page, act: () => Promise<void>, ms = 900) {
+/**
+ * The room the card leaves for the side column on every frame for `ms`, starting with the one
+ * before `act`. It does not depend on the pane's width, which a resize changes meanwhile.
+ */
+async function columnRoom(page: Page, act: () => Promise<void>, ms = 900) {
   await page.evaluate((ms) => {
-    const card = document.querySelector('[data-task-card]')!;
-    const widths: number[] = [];
-    (window as unknown as { widths: number[] }).widths = widths;
+    const room: number[] = [];
+    (window as unknown as { room: number[] }).room = room;
     const started = performance.now();
     requestAnimationFrame(function sample(now) {
-      widths.push(Math.round(card.getBoundingClientRect().width));
+      // Looked up each frame: switching tasks mounts a new card.
+      const frame = document.querySelector('[data-task-card]')?.parentElement;
+      if (frame) room.push(Math.round(Number.parseFloat(getComputedStyle(frame).paddingRight)));
       if (now - started < ms) requestAnimationFrame(sample);
     });
   }, ms);
   await act();
   await page.waitForTimeout(ms + 100);
-  return page.evaluate(() => (window as unknown as { widths: number[] }).widths);
+  return page.evaluate(() => (window as unknown as { room: number[] }).room);
 }
 
-/** Springs through, rather than jumping: frames between the two ends. */
-function sprung(widths: number[], from: number, to: number) {
-  const low = Math.min(from, to) + 8;
-  const high = Math.max(from, to) - 8;
-  return widths.filter((width) => width > low && width < high).length;
+/** Frames of the column part-way open: it springs rather than jumping. */
+function sprung(room: number[]) {
+  return room.filter((value) => value > 8 && value < 260).length;
 }
 
 test('a wide desktop pane keeps tags and subtasks in a column that opens and shuts with them', async ({
@@ -844,12 +846,12 @@ test('a wide desktop pane keeps tags and subtasks in a column that opens and shu
   const full = await width();
   await controls(page).getByRole('button', { name: 'Color: none. Change', exact: true }).click();
   const color = page.getByRole('region', { name: 'Color', exact: true });
-  let widths = await cardWidths(page, () =>
+  let room = await columnRoom(page, () =>
     color.getByRole('button', { name: 'Amber: Launch', exact: true }).click(),
   );
   await expect(column).toBeVisible();
   await expect.poll(width).toBe(full - 268);
-  expect(sprung(widths, full, full - 268)).toBeGreaterThanOrEqual(3);
+  expect(sprung(room)).toBeGreaterThanOrEqual(3);
   await page.screenshot({ path: test.info().outputPath('column-open.png') });
   // It goes straight to the column, with the slot to add a subtask; the inline copies are
   // hidden and cannot be reached.
@@ -862,12 +864,12 @@ test('a wide desktop pane keeps tags and subtasks in a column that opens and shu
 
   // Removing the last tag springs it shut, and the slot comes back inline.
   await controls(page).getByRole('button', { name: 'Color: Launch. Change', exact: true }).click();
-  widths = await cardWidths(page, () =>
+  room = await columnRoom(page, () =>
     color.getByRole('button', { name: 'No color tag', exact: true }).click(),
   );
   await expect(column).toHaveCount(0);
   await expect.poll(width).toBe(full);
-  expect(sprung(widths, full - 268, full)).toBeGreaterThanOrEqual(3);
+  expect(sprung(room)).toBeGreaterThanOrEqual(3);
   if (await color.count()) await page.keyboard.press('Escape');
   await expect(color).toHaveCount(0);
   await expect(card.getByRole('button', { name: 'Add subtask', exact: true })).toBeVisible();
@@ -888,25 +890,24 @@ test('a wide desktop pane keeps tags and subtasks in a column that opens and shu
   await expect(subtask).toBeFocused();
   expect(await width()).toBe(full - 268);
   // Opening it and coming back keeps the column as it was, without springing it again.
-  widths = await cardWidths(page, async () => {
+  room = await columnRoom(page, async () => {
     await subtask.click();
     await expect(title).toHaveValue('Draft the announcement');
     await pane.getByRole('button', { name: 'Back to TASK-1', exact: true }).click();
     await expect(title).toHaveValue('Write the launch plan');
   });
   await expect(subtask).toBeFocused();
-  expect(sprung(widths, full, full - 268)).toBe(0);
+  expect(sprung(room)).toBe(0);
 
   // Narrowed past the breakpoint, the layout springs back to stacked: the card widens on the
   // spring while the subtasks unfold below the description, and only one copy is reachable.
   await handle.focus();
-  const wide = await paneWidth();
-  widths = await cardWidths(page, async () => {
+  room = await columnRoom(page, async () => {
     while ((await paneWidth()) >= 700) await handle.press('ArrowRight');
   });
   await expect(column).toHaveCount(0);
   await expect.poll(width).toBe(await paneWidth());
-  expect(sprung(widths, wide - 268, await paneWidth())).toBeGreaterThanOrEqual(3);
+  expect(sprung(room)).toBeGreaterThanOrEqual(3);
   await expect(card.getByRole('article', { name: /Draft the announcement$/ })).toBeVisible();
   await expect(pane.getByRole('article')).toHaveCount(1);
   await expect(addSubtask).toHaveCount(1);
