@@ -13,7 +13,10 @@ The repository has the stack end to end (auth, sync, the outbox, local persisten
 task model (workspaces, projects, statuses, tasks and subtasks, with keys, numbers, the trash
 and ADR 0005's conflict rule; see `docs/data-model.md`), and the responsive app shell. The
 shell owns workspace and project management, a desktop navigation rail and remembered
-navigation; each phone board brings its own dock. Its project board uses the shared Board
+navigation; each phone board brings its own dock. Page changes animate through the router's
+view transitions (`lib/pageTransition.ts`, ADR 0013): boards cross-fade, ordered pages
+slide, and content enters once per document with `useEntryMotion` (`lib/entryMotion.ts`).
+Its project board uses the shared Board
 components on synced tasks and statuses, and the cross-project board
 (`Board/WorkspaceBoard.tsx`) adapts every project of the workspace into one virtual project
 whose columns are categories (`workspaceBoardData` in `Board/selection.ts`; a task's own
