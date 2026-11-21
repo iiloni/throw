@@ -27,3 +27,8 @@ it('keeps the parameters that are not credentials', () => {
   );
   expect(loggedPath('http://app/api/health')).toBe('/api/health');
 });
+
+it('omits every query parameter on the MCP endpoint', () => {
+  expect(loggedPath('http://app/api/mcp?token=test-token&source=client')).toBe('/api/mcp');
+  expect(loggedPath('http://app/api/mcp/?token=test-token')).toBe('/api/mcp/');
+});

@@ -132,6 +132,23 @@ try {
     headers: { Authorization: `Bearer ${token}` },
   });
   assert.deepEqual(await updates.json(), { version: '0.0.1-preview', channel: 'preview' });
+  const protocol = await fetch(`${base}/api/compatibility`).then((response) => response.json());
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    'X-Throw-Protocol': String(protocol.max),
+  };
+  const inventoryResponse = await fetch(`${base}/api/mcp-tokens`, { headers });
+  assert.equal(inventoryResponse.status, 200);
+  const inventory = await inventoryResponse.json();
+  const issued = await fetch(`${base}/api/mcp-tokens`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ workspaceId: inventory.workspaces[0].id, name: 'Backup smoke test' }),
+  });
+  assert.equal(issued.status, 201);
+  await issued.body.cancel();
+  assert.equal(sql('SELECT count(*) FROM mcp_tokens;'), '1');
   const id = randomUUID();
   sql(`INSERT INTO workspaces (id, name, position) VALUES ('${id}', 'before backup', 'a1');`);
   sql(
@@ -153,6 +170,7 @@ try {
   dc(['run', '--rm', '-T', 'throw', 'node', 'dist/backups/cli.mjs', 'restore', name, '--yes']);
   assert.equal(sql(`SELECT name FROM workspaces WHERE id = '${id}';`), 'before backup');
   assert.equal(sql('SELECT count(*) FROM session;'), '0');
+  assert.equal(sql('SELECT count(*) FROM mcp_tokens;'), '0');
   assert.equal(sql("SELECT 'public.workspaces'::regclass::oid;"), oid);
   assert.equal(sql('SELECT value FROM smoke_sibling;', 'catch', 'catch'), 'Catch stays intact');
   assert.equal(
@@ -207,7 +225,7 @@ try {
   }
   assert.match(scheduled, /-scheduled.zip/);
   console.log(
-    'PASS: production boot/migrations/web metadata, non-superuser backup/restore, session exclusion, table identity, sibling database preservation, scratch cleanup, pre-update and scheduled backups.',
+    'PASS: production boot/migrations/web metadata, non-superuser backup/restore, session and MCP token exclusion, table identity, sibling database preservation, scratch cleanup, pre-update and scheduled backups.',
   );
 } catch (error) {
   dc(['logs', '--tail', '80', 'throw'], { allowFailure: true });

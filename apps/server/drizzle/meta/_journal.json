@@ -29,6 +29,13 @@
       "when": 1792096761095,
       "tag": "0003_natural_scarecrow",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795210187293,
+      "tag": "0004_mcp_tokens",
+      "breakpoints": true
     }
   ]
 }

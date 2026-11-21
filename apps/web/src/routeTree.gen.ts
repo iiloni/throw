@@ -20,6 +20,7 @@ import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/ind
 import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/account'
 import { Route as AppSettingsAdminRouteImport } from './routes/_app/settings/admin'
 import { Route as AppSettingsGeneralRouteImport } from './routes/_app/settings/general'
+import { Route as AppSettingsMcpRouteImport } from './routes/_app/settings/mcp'
 import { Route as AppSettingsUpdateRouteImport } from './routes/_app/settings/update'
 import { Route as AppSettingsAdminIndexRouteImport } from './routes/_app/settings/admin/index'
 import { Route as AppSettingsAdminBackupsRouteImport } from './routes/_app/settings/admin/backups'
@@ -84,6 +85,11 @@ const AppSettingsGeneralRoute = AppSettingsGeneralRouteImport.update({
   path: '/general',
   getParentRoute: () => AppSettingsRoute,
 } as any)
+const AppSettingsMcpRoute = AppSettingsMcpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
 const AppSettingsUpdateRoute = AppSettingsUpdateRouteImport.update({
   id: '/update',
   path: '/update',
@@ -143,6 +149,7 @@ export interface FileRoutesByFullPath {
   '/settings/account': typeof AppSettingsAccountRoute
   '/settings/admin': typeof AppSettingsAdminRouteWithChildren
   '/settings/general': typeof AppSettingsGeneralRoute
+  '/settings/mcp': typeof AppSettingsMcpRoute
   '/settings/update': typeof AppSettingsUpdateRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
@@ -162,6 +169,7 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/settings/account': typeof AppSettingsAccountRoute
   '/settings/general': typeof AppSettingsGeneralRoute
+  '/settings/mcp': typeof AppSettingsMcpRoute
   '/settings/update': typeof AppSettingsUpdateRoute
   '/settings': typeof AppSettingsIndexRoute
   '/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
@@ -185,6 +193,7 @@ export interface FileRoutesById {
   '/_app/settings/account': typeof AppSettingsAccountRoute
   '/_app/settings/admin': typeof AppSettingsAdminRouteWithChildren
   '/_app/settings/general': typeof AppSettingsGeneralRoute
+  '/_app/settings/mcp': typeof AppSettingsMcpRoute
   '/_app/settings/update': typeof AppSettingsUpdateRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
@@ -208,6 +217,7 @@ export interface FileRouteTypes {
     | '/settings/account'
     | '/settings/admin'
     | '/settings/general'
+    | '/settings/mcp'
     | '/settings/update'
     | '/settings/'
     | '/settings/admin/backups'
@@ -227,6 +237,7 @@ export interface FileRouteTypes {
     | '/'
     | '/settings/account'
     | '/settings/general'
+    | '/settings/mcp'
     | '/settings/update'
     | '/settings'
     | '/settings/admin/backups'
@@ -249,6 +260,7 @@ export interface FileRouteTypes {
     | '/_app/settings/account'
     | '/_app/settings/admin'
     | '/_app/settings/general'
+    | '/_app/settings/mcp'
     | '/_app/settings/update'
     | '/_app/settings/'
     | '/_app/settings/admin/backups'
@@ -348,6 +360,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsGeneralRouteImport
       parentRoute: typeof AppSettingsRoute
     }
+    '/_app/settings/mcp': {
+      id: '/_app/settings/mcp'
+      path: '/mcp'
+      fullPath: '/settings/mcp'
+      preLoaderRoute: typeof AppSettingsMcpRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
     '/_app/settings/update': {
       id: '/_app/settings/update'
       path: '/update'
@@ -431,6 +450,7 @@ interface AppSettingsRouteChildren {
   AppSettingsAccountRoute: typeof AppSettingsAccountRoute
   AppSettingsAdminRoute: typeof AppSettingsAdminRouteWithChildren
   AppSettingsGeneralRoute: typeof AppSettingsGeneralRoute
+  AppSettingsMcpRoute: typeof AppSettingsMcpRoute
   AppSettingsUpdateRoute: typeof AppSettingsUpdateRoute
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute
 }
@@ -439,6 +459,7 @@ const AppSettingsRouteChildren: AppSettingsRouteChildren = {
   AppSettingsAccountRoute: AppSettingsAccountRoute,
   AppSettingsAdminRoute: AppSettingsAdminRouteWithChildren,
   AppSettingsGeneralRoute: AppSettingsGeneralRoute,
+  AppSettingsMcpRoute: AppSettingsMcpRoute,
   AppSettingsUpdateRoute: AppSettingsUpdateRoute,
   AppSettingsIndexRoute: AppSettingsIndexRoute,
 }

@@ -39,11 +39,13 @@ function withDatabase(url: string, name: string, login?: { user: string; passwor
 }
 
 /**
- * Sessions stay out of backups, and out of what a restore loads from an older backup that
- * has them: a backup is a file that gets copied around, and a session is a way in. The
- * table itself is kept, so a restore leaves everyone to sign in again.
+ * Keep credentials out of archives and out of the data restored from imported archives.
+ * Restore truncates the tables, so it also clears any active credentials on the server.
  */
-const WITHOUT_SESSIONS = '--exclude-table-data=public.session';
+const WITHOUT_CREDENTIALS = [
+  '--exclude-table-data=public.session',
+  '--exclude-table-data=public.mcp_tokens',
+];
 
 const UNSAFE_ROLE =
   'The database user can make roles or reach the database host’s files or programs, which a backup could misuse. Restore with a superuser, or with a user that has none of those powers.';
@@ -140,7 +142,7 @@ export async function dumpDatabase(url: string, file: string) {
       // Electric's publication belongs to the running server, not to the data.
       '--no-publications',
       '--no-subscriptions',
-      WITHOUT_SESSIONS,
+      ...WITHOUT_CREDENTIALS,
       '--file',
       file,
     ],
@@ -254,7 +256,7 @@ export async function restoreDatabase(
         '--schema=public',
         '--no-owner',
         '--no-privileges',
-        WITHOUT_SESSIONS,
+        ...WITHOUT_CREDENTIALS,
         '--file',
         dataFile,
       ],

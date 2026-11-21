@@ -86,7 +86,11 @@ export default defineConfig(({ command }) => ({
     allowedHosts: process.env.THROW_DEV_ALLOWED_HOSTS?.split(','),
     // Vite answers preflights before the API proxy; native auth sends credentials.
     cors: { origin: [defaultAllowedOrigins, 'capacitor://localhost'], credentials: true },
-    proxy: { '/api': 'http://localhost:3000' },
+    proxy: {
+      // MCP validates the original authority. Keep it through the development proxy too.
+      '^/api/mcp(?:[?]|$)': { target: 'http://localhost:3000', changeOrigin: false },
+      '/api': 'http://localhost:3000',
+    },
   },
   test: {
     environment: 'jsdom',

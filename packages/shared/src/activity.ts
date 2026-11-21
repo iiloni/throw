@@ -16,7 +16,7 @@ import { taskFieldSchema } from './tasks';
  * entry"), so a device must expect items whose field it does not know.
  */
 export const activityChangeSchema = z.object({
-  field: taskFieldSchema,
+  field: taskFieldSchema.or(z.literal('position')),
   /** Identifies one independent secondary-tag operation. */
   tagId: z.uuid().optional(),
   previous: z.unknown(),
@@ -49,8 +49,9 @@ export const activityEntrySchema = z.object({
   taskId: z.uuid(),
   /** Who sent the write; null once their account is deleted. */
   userId: z.string().nullable(),
+  viaTokenName: z.string().nullish(),
   kind: z.enum(SYNCED_ACTIVITY_KINDS),
-  /** One item per field the write named, position excepted. */
+  /** One item per field the write named. Device reorders are replay-only. */
   changes: z.array(activityChangeSchema),
   /** When the server applied the write. */
   createdAt: timestampSchema,

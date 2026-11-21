@@ -112,6 +112,24 @@ export const workspaces = pgTable('workspaces', {
   updatedAt: updatedAt(),
 });
 
+/** Workspace-scoped credentials used only by the external MCP endpoint. */
+export const mcpTokens = pgTable(
+  'mcp_tokens',
+  {
+    id: uuid().primaryKey(),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    name: text().notNull(),
+    digest: text().notNull().unique(),
+    createdAt: createdAt(),
+  },
+  (table) => [index().on(table.userId), index().on(table.workspaceId)],
+);
+
 export const workspaceMembers = pgTable(
   'workspace_members',
   {
@@ -268,6 +286,7 @@ export const taskActivity = pgTable(
       .references(() => tasks.id, { onDelete: 'cascade' }),
     /** Who sent the write. Kept when the account is deleted, as the entry is the task's. */
     userId: text().references(() => user.id, { onDelete: 'set null' }),
+    viaTokenName: text(),
     kind: text().$type<ActivityKind>().notNull(),
     changes: jsonb().$type<ActivityChange[]>().notNull(),
     createdAt: createdAt(),
@@ -294,6 +313,7 @@ export const comments = pgTable(
       .references(() => tasks.id, { onDelete: 'cascade' }),
     /** The author, the only one who can edit or delete it. Kept as null if the account goes. */
     userId: text().references(() => user.id, { onDelete: 'set null' }),
+    viaTokenName: text(),
     /** A BlockNote document. */
     body: jsonb().$type<CommentBody>().notNull(),
     createdAt: createdAt(),

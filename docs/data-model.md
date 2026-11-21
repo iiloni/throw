@@ -260,8 +260,9 @@ What happens to the write:
 
 - Fields that pass are applied. Fields that do not are left as the server has them. The
   rule is per field, and the request succeeds either way.
-- One log entry records the fields applied and the fields not applied. A position is never
-  recorded, applied or not.
+- One log entry records the fields applied and the fields not applied. App position changes
+  are omitted from history. MCP position outcomes are kept for replay, and successful agent
+  reorders appear in the task history.
 - The server substitutes nothing in an update. A task moved to a deleted status stays where
   it was.
 - The response returns the transaction id when the task row changed and `{ txid: null }`
@@ -285,10 +286,11 @@ clients, which cannot write to it.
 | --- | --- |
 | `id` | The task's id for the "created" entry, otherwise the change id of the update. |
 | `taskId` | |
-| `userId` | The signed-in user who sent the write. |
+| `userId` | The user who sent the write or authorized the MCP token. |
+| `viaTokenName` | The MCP token name at the time of the write, or null for an app write. |
 | `createdAt` | The server's time when it applied the write. |
-| `kind` | `created` or `updated`. An update that only moved a position is kept as `reordered`, on the server only (see [Implementation notes](#the-log-and-comments)). |
-| Changes | A list; one item per field the write touched, position excepted. |
+| `kind` | `created` or `updated`. An app update that only moved a position is kept as `reordered`, on the server only (see [Implementation notes](#the-log-and-comments)). |
+| Changes | A list with one item per field the write touched. A successful MCP reorder can add a position item. |
 
 Each item in the list holds:
 
@@ -326,6 +328,7 @@ Created, edited and deleted by clients through the outbox, like projects are tod
 | `id` | Client | |
 | `taskId` | Fixed | |
 | `userId` | Server | The author. |
+| `viaTokenName` | Server | The MCP token name at posting time, or null for an app comment. |
 | `body` | Client | BlockNote JSON, text only, as the description **(default)**. |
 | `createdAt` | Server | When the server received it. Empty on the device until it syncs. |
 | `editedAt` | Server | Empty until the body is edited. |
@@ -441,8 +444,8 @@ The owner has not reviewed these yet.
 Decided while building the log's sync and comments (2026-10-14). The owner has not reviewed
 these yet.
 
-- **Updates that only move a position are kept on the server.** The log leaves reordering
-  out, but the entry is still the record of its change id, without which a resent reorder
+- **App updates that only move a position are kept on the server.** The entry records the
+  change id, without which a resent reorder
   could undo a later one. Such an entry has the kind `reordered`, and the shape syncs only
   `created` and `updated` entries. (Electric's `where` cannot test a `jsonb` value, so the
   shape cannot filter on an empty `changes` list.) The migration gave existing entries with

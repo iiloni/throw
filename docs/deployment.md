@@ -61,6 +61,22 @@ networks:
 Adapt the resolver and network to the proxy already installed. HTTPS, DNS and certificates
 are operator configuration, not managed by the release workflow.
 
+## Connect an MCP client
+
+On a build with [MCP support](decisions/0014-mcp-server.md), open **Settings → MCP tokens**
+and create a named token for a workspace. The token lets the client act as your account
+in that workspace. Use a separate token for each client so you can identify and revoke
+its access independently. Copy the value when shown and store it in the client's secret
+store. The client needs Streamable HTTP and support for a custom bearer token. Set the
+URL to `https://tasks.example.com/api/mcp` and send `Authorization: Bearer <token>`.
+
+Use the existing HTTPS proxy and preserve the configured Host and the Authorization
+header. Disable caching on this path and keep credentials and request bodies out of proxy
+logs. The endpoint has its own request limits. Forward client IPs only through the
+configured trusted proxies. To disable access from outside the server for every account,
+block `/api/mcp` at the proxy. To disable one credential, revoke it in Settings. After a
+server restore, create fresh tokens for the clients you want to reconnect.
+
 ## Catch and Throw together
 
 Copy the contents (including `.env.example`) of [deploy/combined](../deploy/combined) to

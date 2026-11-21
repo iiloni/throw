@@ -6,7 +6,8 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { db, type Transaction } from '../db/client';
-import { comments, tasks } from '../db/schema';
+import { comments } from '../db/schema';
+import { createComment } from '../lib/commentWrites';
 import { requireUser } from '../lib/requireUser';
 import { currentTxid } from '../lib/txid';
 import { memberWorkspaces } from '../lib/workspaces';
@@ -38,27 +39,7 @@ export const commentRoutes = new Hono<AppEnv>()
   .post('/', zValidator('json', createCommentSchema), async (c) => {
     const userId = c.get('user')!.id;
     const body = c.req.valid('json');
-    const result = await db.transaction(async (tx) => {
-      // A purge cannot remove the task between this read and the insert.
-      const [task] = await tx
-        .select({ workspaceId: tasks.workspaceId, projectId: tasks.projectId })
-        .from(tasks)
-        .where(
-          and(eq(tasks.id, body.taskId), inArray(tasks.workspaceId, memberWorkspaces(tx, userId))),
-        )
-        .for('key share', { of: tasks });
-      if (!task) return 'not-found';
-      // Clients replay queued writes, so the comment may already be here from an earlier try.
-      const [existing] = await tx
-        .select({ taskId: comments.taskId })
-        .from(comments)
-        .where(eq(comments.id, body.id));
-      if (existing) return existing.taskId === body.taskId ? 'replayed' : 'taken';
-      // Timed once the task is held, so a comment that waited for a task update is dated
-      // after that update's entry, as the timeline shows them.
-      await tx.insert(comments).values({ ...body, ...task, userId, createdAt: appliedAt });
-      return currentTxid(tx);
-    });
+    const result = await createComment({ userId }, body);
     // Also a task purged while the comment waited in an outbox: it is dropped with a notice.
     if (result === 'not-found') return c.json({ error: 'Task not found' }, 404);
     if (result === 'taken') return c.json({ error: 'Comment id is in use' }, 409);

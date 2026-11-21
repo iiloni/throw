@@ -1,5 +1,6 @@
 import type {
   CreateComment,
+  CreateMcpToken,
   CreateProject,
   CreateStatus,
   CreateTag,
@@ -17,6 +18,7 @@ import type {
   UpdateWorkspace,
   VersionInfo,
 } from '@throw/shared';
+import { createMcpTokenResponseSchema, mcpTokensResponseSchema } from '@throw/shared';
 import { getAuthToken } from './auth';
 import { compatibleFetch } from './compatibility';
 import { getServerUrl } from './serverUrl';
@@ -32,7 +34,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit): Promise<T> {
+async function apiResponse(path: string, init: RequestInit) {
   const token = getAuthToken();
   const response = await compatibleFetch(`${getServerUrl()}/api${path}`, {
     ...init,
@@ -46,6 +48,11 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
     const stale = response.status === 401 && token !== getAuthToken();
     throw new ApiError(response.status, await response.text(), stale);
   }
+  return response;
+}
+
+async function request<T>(path: string, init: RequestInit): Promise<T> {
+  const response = await apiResponse(path, init);
   return response.json() as Promise<T>;
 }
 
@@ -60,6 +67,21 @@ async function bootstrap<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 export const api = {
+  mcpTokens: (signal?: AbortSignal) =>
+    request<unknown>('/mcp-tokens', { cache: 'no-store', signal }).then(
+      mcpTokensResponseSchema.parse,
+    ),
+  createMcpToken: (body: CreateMcpToken) =>
+    request<unknown>('/mcp-tokens', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20_000),
+    }).then(createMcpTokenResponseSchema.parse),
+  revokeMcpToken: (id: string) =>
+    apiResponse(`/mcp-tokens/${id}`, {
+      method: 'DELETE',
+      signal: AbortSignal.timeout(20_000),
+    }),
   versionInfo: () => bootstrap<VersionInfo>('/updates'),
   releases: () => bootstrap<ReleasesResponse>('/updates/releases'),
   createWorkspace: (body: CreateWorkspace) =>

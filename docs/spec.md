@@ -27,9 +27,10 @@ integrations.
 - **The board is the product.** If it is generic there is no reason to build the app.
 - **Motion and touch are first-class.** Phone interaction is designed, not adapted.
 - **Controls appear only when they are usable.** The UI does not advertise capability.
-- **Changes to a task's core attributes are user-driven.** Nothing moves or completes a task
-  on the user's behalf.
-- **Few integrations, all opt-in.** None in the first version.
+- **Changes to a task's core attributes are user-driven.** A user can initiate work in an
+  external agent and authorize it to act in a workspace. Throw records which credential the
+  agent used for each change. Throw itself never moves or completes a task on a schedule.
+- **Few integrations, all opt-in.** The first is [MCP](decisions/0014-mcp-server.md).
 - **Boards are for managing, task views are for executing.** A card carries enough to manage
   a task's lifecycle; the work happens in the task's own view.
 
@@ -63,6 +64,9 @@ integrations.
 - Search through a command palette or an integrated input.
 - Trash with restore.
 - Offline-first web app and Android app.
+- An MCP server for reading workspace data and managing tasks. The account holder creates
+  a named token for one workspace in Settings and can revoke it there. Agent changes sync
+  to the board and show their source in the task's history or comments.
 
 ### Out of scope
 
@@ -75,8 +79,8 @@ integrations.
 | Attachments, images in descriptions | First follow-up after launch. |
 | List view | The board is the only layout. |
 | Filtering by tag across projects | Tags are per project. |
-| Automation | Out of scope, and it may never fit the product. |
-| Integrations, import, export | None. |
+| Automation inside Throw | Scheduled jobs and rules that change tasks are out of scope. |
+| Other integrations, import, export | Out of scope for the first version. |
 | Task relations (blocks, duplicate of) | Later. |
 | Reports (cycle time, burndown) | Later; the activity log makes them possible. |
 | Time tracking | Out of scope until further notice. |
@@ -198,8 +202,9 @@ beside it on the task, each under its own tab.
 
 - The server writes the log from the changes it applies; no device writes to it (ADR 0006).
 - It records creation and changes to the title, description, status, priority, parent,
-  tags and trash state. Reordering is not recorded. A description entry says the
-  description changed and holds no text.
+  tags and trash state. History also records agent reorders and names the token used for
+  agent writes. Agent comments show the same attribution in Comments. A description
+  entry says the description changed and holds no text.
 - Entries are dated and ordered by the server's clock. A change made offline is dated when
   it synced.
 - A change that was not applied because of a conflict is recorded too; see
@@ -640,8 +645,9 @@ dock rather than opening as a page. Desktop has no drawer. The rules are in
   confirmed permanent removal and confirmed emptying of that scope.
 - `/settings` redirects to `/settings/general`. Settings has Catch's pages: General
   (theme and board), Account (name, password, the server on Android, signing out), Update,
-  and Backups for the server's admin at `/settings/admin/backups`. Wide, the pages are
-  listed beside the open one; on a phone the dock picks between them. Changing the
+  and Backups for the server's admin at `/settings/admin/backups`. Throw adds MCP tokens
+  at `/settings/mcp` for creating and revoking the account's workspace tokens. Wide, the
+  pages are listed beside the open one; on a phone the dock picks between them. Changing the
   password signs the account's other devices out; they keep their unsaved changes until
   the same account signs in again (ADR 0002).
 - `/` restores the device's last workspace and project for the signed-in account.

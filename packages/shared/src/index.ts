@@ -2,6 +2,8 @@ export * from './activity';
 export * from './backups';
 export * from './colors';
 export * from './comments';
+export * from './mcp';
+export * from './mcpTokens';
 export * from './position';
 export * from './priorities';
 export * from './projects';
