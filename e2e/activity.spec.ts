@@ -140,10 +140,16 @@ test('the log and comments are visible and writable only to members of their wor
       'project_id',
       'task_id',
       'user_id',
+      'via_token_name',
       'workspace_id',
     ].sort(),
   );
-  expect(entry).toMatchObject({ id: taskId, user_id: owner.user.id, kind: 'created' });
+  expect(entry).toMatchObject({
+    id: taskId,
+    user_id: owner.user.id,
+    kind: 'created',
+    via_token_name: null,
+  });
   await expect
     .poll(async () =>
       (await shapeRows(request, 'comments', owner.headers)).map((row) => ({
@@ -161,6 +167,7 @@ test('the log and comments are visible and writable only to members of their wor
         body: text('Mine'),
         created_at: expect.any(String),
         edited_at: null,
+        via_token_name: null,
       },
     ]);
 });
