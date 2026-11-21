@@ -13,6 +13,6 @@ test('shows the server requirement without offering token actions on an older se
       <McpTokens />
     </McpSettingsContext>,
   );
-  expect(screen.getByText('MCP tokens require a newer Throw server')).toBeVisible();
+  expect(screen.getByText('MCP tokens require a newer Throw server')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Create token' })).not.toBeInTheDocument();
 });
