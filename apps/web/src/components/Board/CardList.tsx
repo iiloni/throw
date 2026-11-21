@@ -1,5 +1,7 @@
+import { motion } from 'motion/react';
 import { Fragment, type ReactNode } from 'react';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
+import { entryDelay, useEntryMotion } from '@/lib/entryMotion';
 import { cn } from '@/lib/utils';
 import { CARD_SPACING, drag, makingWay } from './drag';
 import { hasPriorityIcon, PriorityIcon } from './glyphs';
@@ -7,6 +9,7 @@ import { groupByPriority, type Priority, priorityName, taskColor } from './model
 import { SwipeReveal } from './SwipeReveal';
 import { board, createTask, current, type ListId, listTasks, useBoardSettings } from './state';
 import { TaskCard } from './TaskCard';
+import { useTaskCardHidden } from './taskTransition';
 
 /** A rail's height with the space under it, which is also how far apart they stack. */
 const RAIL = 44;
@@ -63,6 +66,12 @@ export function CardList({
   const groups = groupByPriority(tasks);
   const open = held?.priority;
   const gapHeight = held ? held.height + CARD_SPACING : 0;
+  // Cards arrive in a diagonal wave: across the columns, then down each one.
+  const column = Math.max(
+    0,
+    project.statuses.findIndex((status) => `status:${status.id}` === listId),
+  );
+  const rows = new Map(tasks.map((task, row) => [task.id, row]));
 
   function mode(priority: Priority, count: number): HeaderMode {
     if (stretch) return priority === open ? 'open' : 'rail';
@@ -82,7 +91,11 @@ export function CardList({
       data-surface={surface && settings.surfaces ? '' : undefined}
       className={cn('board-column relative flex min-h-0 min-w-0 flex-col rounded-3xl', className)}
     >
-      {header}
+      {header && (
+        <EnteringHeader listId={listId} delay={entryDelay(column)}>
+          {header}
+        </EnteringHeader>
+      )}
       <ScrollArea edges className="card-scroller flex-1 [--scrollbar-inset:0.5rem]">
         <ScrollAreaViewport data-autoscroll="">
           <div
@@ -173,10 +186,14 @@ export function CardList({
                           className="board-slot"
                         >
                           <div>
-                            <div className="relative pb-3">
+                            <EnteringCard
+                              taskId={task.id}
+                              delay={entryDelay(column + (rows.get(task.id) ?? 0))}
+                              held={!!held}
+                            >
                               <SwipeReveal taskId={task.id} />
                               <TaskCard task={task} showStatus={showStatus} />
-                            </div>
+                            </EnteringCard>
                           </div>
                         </div>
                         {accepts && !away && (
@@ -226,5 +243,44 @@ function Gap({ active, height }: { active: boolean; height: number }) {
     <div data-gap="" className="board-gap" style={{ height: active ? height : 0 }}>
       <div style={{ height: height - CARD_SPACING }} />
     </div>
+  );
+}
+
+/**
+ * A card's first arrival in the document (lib/entryMotion.ts): never again when it moves
+ * column or sync updates it. A held card, or one a task is opening from or landing in, is
+ * measured where it rests, so it shows at once.
+ */
+function EnteringCard({
+  taskId,
+  delay,
+  held,
+  children,
+}: {
+  taskId: string;
+  delay: number;
+  held: boolean;
+  children: ReactNode;
+}) {
+  const hidden = useTaskCardHidden(taskId);
+  const entry = useEntryMotion(`card:${taskId}`, true, delay, held || hidden);
+  return (
+    <motion.div className="relative pb-3" style={entry}>
+      {children}
+    </motion.div>
+  );
+}
+
+function EnteringHeader({
+  listId,
+  delay,
+  children,
+}: {
+  listId: ListId;
+  delay: number;
+  children: ReactNode;
+}) {
+  return (
+    <motion.div style={useEntryMotion(`column:${listId}`, true, delay)}>{children}</motion.div>
   );
 }

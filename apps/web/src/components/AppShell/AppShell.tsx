@@ -128,6 +128,7 @@ export function AppShell() {
     projectId: string,
     nextView: ProjectView = 'board',
     replace = false,
+    viewTransition?: false,
   ) {
     remember({ workspaceId, projects: { ...remembered.projects, [workspaceId]: projectId } });
     void navigate({
@@ -135,9 +136,15 @@ export function AppShell() {
       params: { workspaceId, projectId },
       search: { view: nextView },
       replace,
+      viewTransition,
     });
   }
-  function selectWorkspace(id: string) {
+  function selectWorkspace(id: string, leaving?: string) {
+    // Straight to the board the workspace would open, so the switch is one cross-fade rather
+    // than a fade to its loading page and another to the board.
+    const inWorkspace = projectsIn(allProjects, id).filter((item) => item.id !== leaving);
+    const next = inWorkspace.find((item) => item.id === remembered.projects[id]) ?? inWorkspace[0];
+    if (next) return selectProject(id, next.id);
     remember({ ...remembered, workspaceId: id });
     void navigate({ to: '/w/$workspaceId', params: { workspaceId: id } });
   }
@@ -219,7 +226,8 @@ export function AppShell() {
       // The cross-project board opens any of its projects' tasks in place. While a navigation
       // loads, the board still on screen is leaving, so the task goes to its own board.
       const inPlace = !navigating && (crossBoard || (project?.id === projectId && projectBoard));
-      if (!inPlace) selectProject(workspace.id, projectId);
+      // The task's own opening is the motion here; a cross-fade would run under it.
+      if (!inPlace) selectProject(workspace.id, projectId, 'board', false, false);
     },
     goProjectSettings: (project) => {
       void navigate({
@@ -254,6 +262,7 @@ export function AppShell() {
           {desktop && (
             <motion.aside
               aria-label="Navigation rail"
+              data-rail=""
               data-expanded={expanded}
               initial={false}
               animate={{ width: expanded ? 248 : 80 }}

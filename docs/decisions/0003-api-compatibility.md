@@ -40,4 +40,4 @@ and the server's maximum, with tests at the boundaries and a documented upgrade 
   signed ticket and a current server-admin check instead of protocol/auth headers (ADR 0011).
 - `/api/mcp` is an external protocol endpoint. The MCP transport handles MCP protocol
   versions, and requests use a separate credential. The app's token management routes
-  follow the Throw data gate as usual. See [ADR 0013](0013-mcp-server.md).
+  follow the Throw data gate as usual. See [ADR 0014](0014-mcp-server.md).

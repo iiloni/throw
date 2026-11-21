@@ -399,6 +399,7 @@ export function Drawer({
         tabIndex={-1}
         data-drawer=""
         data-detent={detent}
+        data-sunk={sunk && !moveInHead && !paged ? '' : undefined}
         data-page={page?.key}
         data-drop-block=""
         // The whole visible drawer, safe area too, opens the move target under a held card.

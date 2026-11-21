@@ -63,7 +63,7 @@ are operator configuration, not managed by the release workflow.
 
 ## Connect an MCP client
 
-On a build with [MCP support](decisions/0013-mcp-server.md), open **Settings → MCP tokens**
+On a build with [MCP support](decisions/0014-mcp-server.md), open **Settings → MCP tokens**
 and create a named token for a workspace. The token lets the client act as your account
 in that workspace. Use a separate token for each client so you can identify and revoke
 its access independently. Copy the value when shown and store it in the client's secret

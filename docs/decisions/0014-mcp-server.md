@@ -1,4 +1,4 @@
-# 0013 — MCP access to Throw
+# 0014 — MCP access to Throw
 
 Status: accepted (2026-11-20)
 

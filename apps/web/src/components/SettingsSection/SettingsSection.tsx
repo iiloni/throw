@@ -1,5 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
-import { type ReactNode, useId } from 'react';
+import { motion } from 'motion/react';
+import { type ReactNode, useCallback, useId, useRef } from 'react';
+import { entryDelayForTop, useEntryMotion } from '@/lib/entryMotion';
 import { cn } from '@/lib/utils';
 
 type SectionProps = {
@@ -13,8 +15,20 @@ type SectionProps = {
 /** A titled group of settings on one card. Rows inside it are divided by hairlines. */
 export function SettingsSection({ title, description, children, className }: SectionProps) {
   const id = useId();
+  const ref = useRef<HTMLElement>(null);
+  // Staggered down the page, as Catch's notes are, from where the section sits in it.
+  const delay = useCallback(() => {
+    const page = document.getElementById('main-content')?.getBoundingClientRect().top ?? 0;
+    return entryDelayForTop((ref.current?.getBoundingClientRect().top ?? 0) - page);
+  }, []);
+  const entry = useEntryMotion(`section:${window.location.pathname}:${title}`, true, delay);
   return (
-    <section aria-labelledby={id} className={cn('flex flex-col gap-2', className)}>
+    <motion.section
+      ref={ref}
+      aria-labelledby={id}
+      style={entry}
+      className={cn('flex flex-col gap-2', className)}
+    >
       <h2 id={id} className="px-4 font-medium text-muted-foreground text-sm">
         {title}
       </h2>
@@ -22,7 +36,7 @@ export function SettingsSection({ title, description, children, className }: Sec
         {children}
       </div>
       {description && <p className="px-4 text-muted-foreground text-xs">{description}</p>}
-    </section>
+    </motion.section>
   );
 }
 

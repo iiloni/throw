@@ -27,7 +27,11 @@ export type ShellState = {
     view?: ProjectView,
     replace?: boolean,
   ) => void;
-  selectWorkspace: (id: string) => void;
+  /**
+   * Opens a workspace at the board it would open. `leaving` is a project just trashed, which
+   * the shell has not seen go yet.
+   */
+  selectWorkspace: (id: string, leaving?: string) => void;
   openForm: (form: ShellForm) => void;
   openPalette: (mode?: PaletteMode) => void;
   /** Opens a task in its project's board, moving to that project first if needed. */

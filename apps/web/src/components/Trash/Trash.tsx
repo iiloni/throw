@@ -1,10 +1,12 @@
 import { Link } from '@tanstack/react-router';
 import { type Task, taskIdentifier } from '@throw/shared';
+import { motion } from 'motion/react';
 import { useMemo, useState } from 'react';
 import { useShell } from '@/components/AppShell/shell';
 import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
 import { Button } from '@/components/ui/button';
 import { useProjects, useTasks } from '@/lib/collections';
+import { useEntryMotion } from '@/lib/entryMotion';
 import { haptics } from '@/lib/haptics';
 import { trashRoots } from '@/lib/projectSettings';
 import { purgeProject, restoreProject } from '@/lib/projects';
@@ -39,6 +41,7 @@ export function Trash({
     return { inProject, children };
   }, [tasks]);
   const awaiting = useAwaitingSync(loadingProjects || loadingTasks, count);
+  const entry = useEntryMotion(`trash:${projectId ?? workspaceId}`, !awaiting && count > 0, 40);
   const [confirmation, setConfirmation] = useState<{
     kind: 'project' | 'task' | 'all';
     id?: string;
@@ -93,7 +96,7 @@ export function Trash({
       ) : !count ? (
         <p className="py-10 text-center text-sm text-muted-foreground">The trash is empty.</p>
       ) : (
-        <div className="space-y-8">
+        <motion.div style={entry} className="space-y-8">
           {roots.projects.length > 0 && (
             <section aria-label="Trashed projects">
               <h3 className="mb-3 font-semibold">Projects</h3>
@@ -178,7 +181,7 @@ export function Trash({
               </ul>
             </section>
           )}
-        </div>
+        </motion.div>
       )}
       <ManagementSurface
         open={!!confirmation}

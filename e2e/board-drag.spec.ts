@@ -69,6 +69,8 @@ test.describe('desktop', () => {
       card(page, title),
     );
     const tops = () => Promise.all(neighbours.map(async (item) => (await item.boundingBox())!.y));
+    // Cards settle into place as the board first appears; measure them at rest.
+    for (const item of [...neighbours, card(page, 'Earlier position')]) await settled(item);
     const before = await tops();
     const start = await centre(card(page, 'Earlier position'));
     const lift = async () => {

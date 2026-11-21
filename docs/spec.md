@@ -30,7 +30,7 @@ integrations.
 - **Changes to a task's core attributes are user-driven.** A user can initiate work in an
   external agent and authorize it to act in a workspace. Throw records which credential the
   agent used for each change. Throw itself never moves or completes a task on a schedule.
-- **Few integrations, all opt-in.** The first is [MCP](decisions/0013-mcp-server.md).
+- **Few integrations, all opt-in.** The first is [MCP](decisions/0014-mcp-server.md).
 - **Boards are for managing, task views are for executing.** A card carries enough to manage
   a task's lifecycle; the work happens in the task's own view.
 

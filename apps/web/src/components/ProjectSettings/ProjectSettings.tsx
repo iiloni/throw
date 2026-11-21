@@ -232,7 +232,7 @@ function DeleteProject({ project }: { project: Project }) {
               haptics.warning();
               trashProject(project.id);
               setConfirming(false);
-              shell.selectWorkspace(project.workspaceId);
+              shell.selectWorkspace(project.workspaceId, project.id);
               // Deleting leaves the project, so the way back is offered where the user lands.
               const { id, workspaceId } = project;
               toast(`${project.name} moved to the trash`, {
