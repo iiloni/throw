@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1591.94405594" viewBox="0 0 1536 1591.94405594" role="img" aria-label="Throw stable stacked wordmark"><title>Throw stable stacked wordmark</title><svg width="1024" height="1024" viewBox="0 0 1024 1024" x="256" y="0">
 <title>Throw stable primary icon</title>
 <defs>
-<linearGradient id="icon-channel-background" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="1024" y2="1024" color-interpolation="sRGB"><stop offset="0" stop-color="#34D5B5" /><stop offset="0.55" stop-color="#20AE96" /><stop offset="1" stop-color="#179A86" /></linearGradient>
+<linearGradient id="icon-channel-background" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="1024" y2="1024" color-interpolation="sRGB"><stop offset="0" stop-color="#43DEBD" /><stop offset="0.55" stop-color="#20AE96" /><stop offset="1" stop-color="#148B79" /></linearGradient>
 <linearGradient id="icon-ribbon-upper-paint" gradientUnits="userSpaceOnUse" x1="36" y1="916" x2="690" y2="340" color-interpolation="sRGB"><stop offset="0" stop-color="#32BFA7" /><stop offset="0.48" stop-color="#B9FFE6" /><stop offset="1" stop-color="#55D6B8" /></linearGradient>
 <linearGradient id="icon-ribbon-lower-paint" gradientUnits="userSpaceOnUse" x1="60" y1="950" x2="750" y2="565" color-interpolation="sRGB"><stop offset="0" stop-color="#20AE96" /><stop offset="0.52" stop-color="#82EBD0" /><stop offset="1" stop-color="#33BDA3" /></linearGradient>
 <linearGradient id="icon-project-accent-paint" gradientUnits="userSpaceOnUse" x1="-114" y1="-126" x2="4" y2="-8" color-interpolation="sRGB"><stop offset="0" stop-color="#34DDBA" /><stop offset="0.55" stop-color="#20AE96" /><stop offset="1" stop-color="#119F88" /></linearGradient>

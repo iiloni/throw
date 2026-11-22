@@ -26,9 +26,9 @@ Every listed gradient color has alpha 1; attached-shadow alpha is 0.14. No addit
 
 | Semantic name | HEX | RGB | Alpha | Usage |
 |---|---|---|---:|---|
-| backgroundStart | `#34D5B5` | 52, 213, 181 | 1 | stable background gradient stop at 0% |
+| backgroundStart | `#43DEBD` | 67, 222, 189 | 1 | stable background gradient stop at 0% |
 | backgroundMid | `#20AE96` | 32, 174, 150 | 1 | stable background gradient stop at 55% |
-| backgroundEnd | `#179A86` | 23, 154, 134 | 1 | stable background gradient stop at 100% |
+| backgroundEnd | `#148B79` | 20, 139, 121 | 1 | stable background gradient stop at 100% |
 | ribbonUpperStart | `#32BFA7` | 50, 191, 167 | 1 | stable ribbonUpper gradient stop at 0% |
 | ribbonUpperMid | `#B9FFE6` | 185, 255, 230 | 1 | stable ribbonUpper gradient stop at 48% |
 | ribbonUpperEnd | `#55D6B8` | 85, 214, 184 | 1 | stable ribbonUpper gradient stop at 100% |
@@ -95,7 +95,7 @@ Every listed gradient color has alpha 1; attached-shadow alpha is 0.14. No addit
 
 ## Scope and source decisions
 
-Stable uses the agreed #20AE96 primary jade anchor. The final light stop #34D5B5 is slightly brighter than the provisional #34CDB2 to better match the approved upper-left light, with #179A86 providing restrained depth. This is deliberately lighter and simpler than the reference's darker right-edge shading.
+Stable uses the primary jade `#20AE96` at 55%. A brighter `#43DEBD` upper-left stop and deeper `#148B79` lower-right stop give the background more depth. The end-to-end luminance contrast is 2.48:1.
 
 Preview uses Catch Preview's `#8C68FF` / `#6044CF` / `#3B2AA6` stops and horizontal vector. Matching the direction puts the same purple at each horizontal position under the launcher mask. Preview's lighter upper ribbon and darker lower ribbon preserve tonal separation through the sweep, and the micro fills maintain that separation at favicon sizes. The mid-purple square contrasts with the cream tile. Throw uses Catch Preview's `#231457` shadow tint at Throw's 14% tile-attached opacity.
 
