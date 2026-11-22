@@ -80,3 +80,26 @@ it('creates a new tag with its starting color, and hands its id to whoever asked
   fireEvent.click(screen.getByRole('button', { name: 'Save tag' }));
   expect(actions.createTag).toHaveBeenCalledOnce();
 });
+
+it('clears a tag’s color and icon from the empty choices', () => {
+  render(
+    <TagEditor
+      projectId="project"
+      tags={[root]}
+      initial={{ tag: root, parentId: null }}
+      onDone={() => {}}
+    />,
+  );
+  const noColor = screen.getByRole('button', { name: 'No color' });
+  const noIcon = screen.getByRole('button', { name: 'No icon' });
+  expect(noColor).toHaveAttribute('aria-pressed', 'false');
+  fireEvent.click(noColor);
+  fireEvent.click(noIcon);
+  expect(noColor).toHaveAttribute('aria-pressed', 'true');
+  expect(noIcon).toHaveAttribute('aria-pressed', 'true');
+  fireEvent.click(screen.getByRole('button', { name: 'Save tag' }));
+  expect(actions.updateTag).toHaveBeenCalledWith(
+    'root',
+    expect.objectContaining({ color: null, icon: null }),
+  );
+});
