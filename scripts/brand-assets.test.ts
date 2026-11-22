@@ -26,27 +26,6 @@ test('the Android Preview background retains Catch’s horizontal purple gradien
   }
 });
 
-test('the Android Preview background retains Catch’s horizontal purple gradient', async () => {
-  const { data, info } = await sharp(
-    'apps/web/android/app/src/preview/res/mipmap-xhdpi/ic_launcher_background.png',
-  )
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-  const pixel = (x: number, y: number) => {
-    const start = (y * info.width + x) * info.channels;
-    return data.subarray(start, start + 3);
-  };
-  for (const [position, color] of [
-    [0, [140, 104, 255]],
-    [0.55, [96, 68, 207]],
-    [1, [59, 42, 166]],
-  ] as const) {
-    const x = Math.round(position * (info.width - 1));
-    assert.deepEqual(pixel(x, 0), pixel(x, info.height - 1));
-    assert(pixel(x, 0).every((component, index) => Math.abs(component - color[index]!) <= 1));
-  }
-});
-
 test('ICO frames use the assigned display-size tiers and retain transparent corners', async () => {
   for (const channel of channels) {
     const base = `apps/web/public${channel === 'stable' ? '' : `/${channel}`}`;
