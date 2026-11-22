@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import { snakeCamelMapper } from '@electric-sql/client';
 import {
   type PersistedCollectionPersistence,
@@ -41,6 +42,7 @@ import {
   updateWorkspaceSchema,
   workspaceSchema,
 } from '@throw/shared';
+import { useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
 import { uuidv7 } from 'uuidv7';
 import { z } from 'zod';
@@ -99,6 +101,23 @@ const memoryOnly: PersistedCollectionPersistence = {
 };
 const persistence = database?.persistence ?? memoryOnly;
 
+const trackLocalRows = database !== null && Capacitor.getPlatform() === 'android';
+const localRowsReady = new Set<string>();
+const localRowsListeners = new Set<() => void>();
+
+function subscribeToLocalRows(listener: () => void) {
+  localRowsListeners.add(listener);
+  return () => localRowsListeners.delete(listener);
+}
+
+/** For cold start, wait for SQLite even if the device was already offline or the table is empty. */
+export function useLocalRowsReady(...collections: string[]) {
+  return useSyncExternalStore(
+    subscribeToLocalRows,
+    () => !trackLocalRows || collections.every((id) => localRowsReady.has(id)),
+  );
+}
+
 /**
  * Adds the database to a synced collection's options. The wrapper swaps in a `sync` that
  * serves rows from the database first and saves synced changes to it; the rest of the
@@ -109,11 +128,37 @@ const persistence = database?.persistence ?? memoryOnly;
  * collection and sync it again, rather than reading rows of the old shape.
  */
 function persisted<TOptions extends object>(options: TOptions, schemaVersion: number): TOptions {
-  return persistedCollectionOptions({
+  const wrapped = persistedCollectionOptions({
     ...(options as PersistedSyncWrappedOptions<object, string | number>),
     persistence,
     schemaVersion,
-  }) as unknown as TOptions;
+  });
+  if (trackLocalRows) {
+    const sync = wrapped.sync.sync;
+    // Eager persistence publishes its baseline in a commit, including for empty tables.
+    // The collection's normal ready state also waits for Electric to catch up.
+    wrapped.sync = {
+      ...wrapped.sync,
+      sync: (params) => {
+        const id = params.collection.id;
+        const ready = () => {
+          if (localRowsReady.has(id)) return;
+          localRowsReady.add(id);
+          for (const listener of localRowsListeners) listener();
+        };
+        return sync({
+          ...params,
+          commit: (signal) => {
+            const committed = params.commit(signal);
+            if (committed === true) ready();
+            else void committed.then(ready, () => {});
+            return committed;
+          },
+        });
+      },
+    };
+  }
+  return wrapped as unknown as TOptions;
 }
 
 const shapeOptions = (shape: string) => ({

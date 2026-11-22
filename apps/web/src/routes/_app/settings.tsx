@@ -1,11 +1,17 @@
 import { createFileRoute, Outlet, useChildMatches } from '@tanstack/react-router';
+import { useShell } from '@/components/AppShell/shell';
 import { SettingsLayout } from '@/components/SettingsLayout/SettingsLayout';
+import { useLocalRowsReady } from '@/lib/collections';
+import { useLaunchScreenReady } from '@/lib/launchScreen';
 import { McpSettingsContext, useMcpSettings } from '@/lib/mcpSettings';
 import { useDesktop } from '@/lib/media';
 import { settingsGroupsFor, settingsPageFor, useAdminAccess } from '@/lib/settings';
 import { useWebhookSettings, WebhookSettingsContext } from '@/lib/webhookSettings';
 
-export const Route = createFileRoute('/_app/settings')({ component: SettingsPage });
+export const Route = createFileRoute('/_app/settings')({
+  staticData: { holdsLaunchScreen: true },
+  component: SettingsPage,
+});
 
 /** A page whose API an older server lacks is listed once the server confirms it, or while open. */
 const listed = (status: string, open: boolean) =>
@@ -13,6 +19,9 @@ const listed = (status: string, open: boolean) =>
 
 function SettingsPage() {
   const pathname = useChildMatches({ select: (matches) => matches.at(-1)?.pathname ?? '' });
+  const shell = useShell();
+  const localReady = useLocalRowsReady('workspaces', 'projects');
+  useLaunchScreenReady(localReady && !shell.awaitingWorkspaces && !shell.awaitingProjects);
   const admin = useAdminAccess();
   const page = settingsPageFor(pathname);
   const mcp = useMcpSettings();

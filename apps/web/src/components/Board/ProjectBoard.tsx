@@ -6,7 +6,14 @@ import { useShell } from '@/components/AppShell/shell';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { type TaskPanel, taskDrawerContent } from '@/components/TaskDetails/TaskControls';
 import { TaskDetails } from '@/components/TaskDetails/TaskDetails';
-import { useProjectTaskTags, useStatuses, useTags, useTasks } from '@/lib/collections';
+import {
+  useLocalRowsReady,
+  useProjectTaskTags,
+  useStatuses,
+  useTags,
+  useTasks,
+} from '@/lib/collections';
+import { useLaunchScreenReady } from '@/lib/launchScreen';
 import { useDesktop } from '@/lib/media';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { createTask } from '@/lib/tasks';
@@ -16,7 +23,7 @@ import { DesktopBoard } from './DesktopBoard';
 import { DragOverlay } from './DragOverlay';
 import { PhoneBoard } from './PhoneBoard';
 import { projectBoardData, secondaryTagsByTask } from './selection';
-import { board } from './state';
+import { board, canOpenTask } from './state';
 import { TaskScreen } from './TaskView';
 import { TaskContentContext } from './taskContent';
 import { useTaskUrl } from './taskUrl';
@@ -58,6 +65,22 @@ export function ProjectBoard({
   // Whether the board holds this page's data, and whether its tasks have caught up.
   const ready = state.projectId === project.id && state.actions !== null && !awaitingTasks;
   useTaskUrl(task, ready, !loadingTasks);
+  const localReady = useLocalRowsReady(
+    'workspaces',
+    'projects',
+    'statuses',
+    'tasks',
+    'tags',
+    'task-tags',
+  );
+  const linkedTask = task && canOpenTask(task, data);
+  useLaunchScreenReady(
+    localReady &&
+      !awaiting &&
+      state.projectId === data.project.id &&
+      state.actions !== null &&
+      (!linkedTask || state.openTaskId === task),
+  );
   if (awaiting || state.projectId !== project.id || state.actions === null)
     return (
       <p role="status" className="p-6 text-muted-foreground">

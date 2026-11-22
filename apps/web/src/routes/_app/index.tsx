@@ -4,8 +4,13 @@ import { useEffect } from 'react';
 import { useShell } from '@/components/AppShell/shell';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { Button } from '@/components/ui/button';
+import { useLocalRowsReady } from '@/lib/collections';
+import { useLaunchScreenReady } from '@/lib/launchScreen';
 
-export const Route = createFileRoute('/_app/')({ component: Home });
+export const Route = createFileRoute('/_app/')({
+  staticData: { holdsLaunchScreen: true },
+  component: Home,
+});
 function Home() {
   const shell = useShell();
   const navigate = useNavigate();
@@ -13,6 +18,8 @@ function Home() {
   const navigating = useRouterState({ select: (state) => state.isLoading });
   // A remembered route remains valid while its rows hydrate or Electric replays its log.
   const workspaceId = shell.remembered.workspaceId ?? shell.workspace?.id;
+  const localReady = useLocalRowsReady('workspaces');
+  useLaunchScreenReady(localReady && !shell.awaitingWorkspaces && !workspaceId);
   useEffect(() => {
     if (pathname === '/' && !navigating && workspaceId)
       void navigate({ to: '/w/$workspaceId', params: { workspaceId }, replace: true });
