@@ -26,7 +26,7 @@ change no task: the spec's no-automation rule stands.
 | --- | --- |
 | `task.created` | A task or subtask is created. |
 | `task.updated` | A task's fields, tags, position (from MCP), trash state or parent change. `kind` is `updated`, `reordered`, `trashed` or `restored`. |
-| `task.deleted` | A task is purged from the trash. |
+| `task.deleted` | A task is purged from the trash. Purging a parent announces each subtask too. |
 | `comment.created`, `comment.updated`, `comment.deleted` | A comment changes. |
 | `structure.updated` | A project, status or tag is created, edited, reordered by MCP, trashed, restored or deleted. One per project per transaction. |
 | `webhook.test` | Settings' **Send test**. Sent at once, not queued. |
@@ -57,7 +57,8 @@ so a receiver can filter without reading the feed. Shared Zod schemas in
 
 Deliveries are inserted in the same transaction as the write, from the shared write
 functions MCP and REST already use, so a rolled-back write announces nothing and a
-committed one is never missed. Replayed and no-op writes, writes where every field was
+committed one is never missed. The write holds a key-share lock on the webhooks it queues
+for, so a concurrent delete waits rather than breaking the write. Replayed and no-op writes, writes where every field was
 refused, and a device's drag reorders (task or structure) are not announced. Writes made
 through an MCP token are skipped by default (`ignoreTokenWrites`), so an agent is not woken
 by its own changes; the payload's `actor` says which kind of write it was otherwise.
@@ -73,7 +74,8 @@ widening it to the workspace. Deleting the account or workspace deletes its webh
 A worker in the server process sends queued deliveries. A commit wakes it through
 `LISTEN`/`NOTIFY`, with a 30-second poll as fallback. It claims rows with
 `FOR UPDATE SKIP LOCKED` and a two-minute lease, so a crash mid-send is retried. A send
-has a ten-second timeout. A non-2xx answer, including a redirect, is a failure. Five
+has a ten-second budget that covers resolving the name, connecting and the answer; at most
+two system DNS lookups run at once, so stalled name servers cannot fill libuv's thread pool. A non-2xx answer, including a redirect, is a failure. Five
 attempts are made, waiting 10 s, 30 s, 2 min and 5 min between them, and the delivery is
 then marked failed. Settings shows each webhook's last outcome. Finished deliveries are
 deleted after a day. The worker pauses during a backup or restore and stops on shutdown.

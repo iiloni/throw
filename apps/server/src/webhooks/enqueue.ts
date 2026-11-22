@@ -3,6 +3,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import type { Transaction } from '../db/client';
 import { projects, webhookDeliveries, webhooks, workspaceMembers } from '../db/schema';
+import { memberWorkspaces } from '../lib/workspaces';
 import type { WriteActor } from '../lib/writeActor';
 
 export const WEBHOOK_CHANNEL = 'throw_webhooks';
@@ -56,15 +57,14 @@ export function buildPayload(
 /** Whether an enabled webhook whose owner can reach the workspace announces a change. */
 export function followsChange(
   webhook: { projectId: string | null; ignoreTokenWrites: boolean; projectTrashed: boolean },
-  change: Pick<WebhookChange, 'projectId' | 'kind'>,
+  change: Pick<WebhookChange, 'projectId' | 'entityType' | 'kind'>,
   actor: WriteActor,
 ) {
   if (actor.tokenId && webhook.ignoreTokenWrites) return false;
   if (webhook.projectId === null) return true;
   // A project in the trash is quiet, apart from the change that put it there.
-  return (
-    webhook.projectId === change.projectId && (!webhook.projectTrashed || change.kind === 'trashed')
-  );
+  const trashingProject = change.entityType === 'project' && change.kind === 'trashed';
+  return webhook.projectId === change.projectId && (!webhook.projectTrashed || trashingProject);
 }
 
 /** Structure writes record one entry per row. A transaction announces each project once. */
@@ -112,7 +112,10 @@ export async function enqueueWebhooks(tx: Transaction, actor: WriteActor, change
       ),
     )
     .leftJoin(projects, eq(projects.id, webhooks.projectId))
-    .where(and(eq(webhooks.workspaceId, change.workspaceId), eq(webhooks.enabled, true)));
+    .where(and(eq(webhooks.workspaceId, change.workspaceId), eq(webhooks.enabled, true)))
+    // A webhook deleted before this write commits would break the deliveries' foreign key.
+    // Holding its key makes the delete wait for this transaction instead.
+    .for('key share', { of: webhooks });
   const matching = targets.filter((target) => followsChange(target, change, actor));
 
   let projectKey = change.projectKey ?? null;
@@ -120,7 +123,12 @@ export async function enqueueWebhooks(tx: Transaction, actor: WriteActor, change
     const [project] = await tx
       .select({ key: projects.key })
       .from(projects)
-      .where(eq(projects.id, change.projectId));
+      .where(
+        and(
+          eq(projects.id, change.projectId),
+          inArray(projects.workspaceId, memberWorkspaces(tx, actor.userId, actor.workspaceId)),
+        ),
+      );
     projectKey = project?.key ?? null;
   }
   const occurredAt = new Date();

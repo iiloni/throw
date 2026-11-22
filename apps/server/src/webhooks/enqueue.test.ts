@@ -17,22 +17,44 @@ describe('followsChange', () => {
   const scoped = { projectId, ignoreTokenWrites: false, projectTrashed: false };
 
   it('skips token writes when the webhook ignores them', () => {
-    const change = { projectId, kind: 'updated' };
+    const change = { projectId, entityType: 'task' as const, kind: 'updated' };
     expect(followsChange(workspaceWide, change, user)).toBe(true);
     expect(followsChange(workspaceWide, change, token)).toBe(false);
     expect(followsChange({ ...workspaceWide, ignoreTokenWrites: false }, change, token)).toBe(true);
   });
 
   it('limits a project webhook to its project', () => {
-    expect(followsChange(scoped, { projectId, kind: 'updated' }, token)).toBe(true);
-    expect(followsChange(scoped, { projectId: otherProject, kind: 'updated' }, user)).toBe(false);
-    expect(followsChange(scoped, { projectId: null, kind: 'updated' }, user)).toBe(false);
+    expect(
+      followsChange(scoped, { projectId, entityType: 'task' as const, kind: 'updated' }, token),
+    ).toBe(true);
+    expect(
+      followsChange(
+        scoped,
+        { projectId: otherProject, entityType: 'task' as const, kind: 'updated' },
+        user,
+      ),
+    ).toBe(false);
+    expect(
+      followsChange(
+        scoped,
+        { projectId: null, entityType: 'task' as const, kind: 'updated' },
+        user,
+      ),
+    ).toBe(false);
   });
 
   it('keeps a trashed project quiet apart from its trashing', () => {
     const trashed = { ...scoped, projectTrashed: true };
-    expect(followsChange(trashed, { projectId, kind: 'trashed' }, user)).toBe(true);
-    expect(followsChange(trashed, { projectId, kind: 'updated' }, user)).toBe(false);
+    expect(
+      followsChange(trashed, { projectId, entityType: 'project', kind: 'trashed' }, user),
+    ).toBe(true);
+    // A task trashed inside the trashed project is part of the quiet.
+    expect(followsChange(trashed, { projectId, entityType: 'task', kind: 'trashed' }, user)).toBe(
+      false,
+    );
+    expect(
+      followsChange(trashed, { projectId, entityType: 'task' as const, kind: 'updated' }, user),
+    ).toBe(false);
   });
 });
 

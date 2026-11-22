@@ -360,6 +360,46 @@ test('webhooks deliver signed thin pokes for task, comment and structure writes 
       await client.close();
     }
 
+    // Purging a parent announces its subtasks, which go with it.
+    const subtaskId = randomUUID();
+    expect(
+      (
+        await request.post('/api/tasks', {
+          headers: account.headers,
+          data: {
+            id: subtaskId,
+            projectId: project.id,
+            title: 'Follow up',
+            description: null,
+            descriptionVersion: null,
+            position: 'a0',
+            parentId: taskId,
+          },
+        })
+      ).status(),
+    ).toBe(201);
+    expect(
+      (
+        await request.patch(`/api/tasks/${taskId}`, {
+          headers: account.headers,
+          data: { changeId: randomUUID(), changes: { trashed: { before: false, after: true } } },
+        })
+      ).status(),
+    ).toBe(200);
+    const purging = receiver.received.length;
+    expect(
+      (await request.delete(`/api/tasks/${taskId}`, { headers: account.headers })).status(),
+    ).toBe(200);
+    for (const id of [taskId, subtaskId])
+      expect(
+        (
+          await receiver.next(
+            ({ payload }) => payload.event === 'task.deleted' && payload.taskId === id,
+            purging,
+          )
+        ).payload.kind,
+      ).toBe('deleted');
+
     // A project webhook ignores the rest of the workspace.
     const other = await makeProject(request, account, workspaceId);
     const quiet = receiver.received.length;

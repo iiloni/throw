@@ -1,5 +1,6 @@
 import type { Webhook, WebhooksResponse } from '@throw/shared';
 import { createContext, useEffect, useState } from 'react';
+import { z } from 'zod';
 import { ApiError, api } from './api';
 
 type State =
@@ -55,12 +56,13 @@ export const WebhookSettingsContext = createContext<ReturnType<typeof useWebhook
   null,
 );
 
+// A route's own refusal names its reason. A request validator's 400 has a structured error.
+const refusalSchema = z.object({ error: z.string() });
+
 const errorBody = (message: string) => {
   try {
-    const parsed: unknown = JSON.parse(message);
-    return typeof parsed === 'object' && parsed !== null && 'error' in parsed
-      ? String(parsed.error)
-      : null;
+    const parsed = refusalSchema.safeParse(JSON.parse(message));
+    return parsed.success ? parsed.data.error : null;
   } catch {
     return null;
   }

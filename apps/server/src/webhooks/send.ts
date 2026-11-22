@@ -24,12 +24,42 @@ export type SendResult = { ok: boolean; responseStatus: number | null; error: st
 
 type Resolve = (hostname: string) => Promise<LookupAddress[]>;
 
-const systemResolve: Resolve = (hostname) =>
-  new Promise((resolve, reject) =>
-    dnsLookup(hostname, { all: true, verbatim: true }, (error, addresses) =>
-      error ? reject(error) : resolve(addresses),
-    ),
-  );
+/**
+ * The system resolver runs on libuv's small thread pool, which the rest of the server shares.
+ * A receiver whose name servers stall would hold those threads, so few lookups run at once.
+ */
+const MAX_CONCURRENT_LOOKUPS = 2;
+let activeLookups = 0;
+const waitingLookups: (() => void)[] = [];
+
+async function systemResolve(hostname: string): Promise<LookupAddress[]> {
+  if (activeLookups >= MAX_CONCURRENT_LOOKUPS)
+    await new Promise<void>((resolve) => waitingLookups.push(resolve));
+  activeLookups += 1;
+  try {
+    return await new Promise((resolve, reject) =>
+      dnsLookup(hostname, { all: true, verbatim: true }, (error, addresses) =>
+        error ? reject(error) : resolve(addresses),
+      ),
+    );
+  } finally {
+    activeLookups -= 1;
+    waitingLookups.shift()?.();
+  }
+}
+
+const timedOut = () => Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' });
+
+/** Rejects when the delivery's time runs out, whatever step it is in. */
+function withDeadline<T>(work: Promise<T>, deadline: number) {
+  let timer: NodeJS.Timeout | undefined;
+  return Promise.race([
+    work,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(timedOut()), Math.max(0, deadline - Date.now()));
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
 
 export const boundedError = (message: string) =>
   message.length > MAX_ERROR_LENGTH ? `${message.slice(0, MAX_ERROR_LENGTH - 1)}…` : message;
@@ -82,8 +112,14 @@ export async function sendWebhook(
   const checked = checkWebhookUrl(url, policy);
   if (!checked.ok) return { ok: false, responseStatus: null, error: checked.reason };
   const { url: target, hostname, hostTrusted } = checked.checked;
+  // One budget covers resolving the name, connecting and the answer.
+  const deadline = Date.now() + timeoutMs;
   try {
-    const addresses = await resolveAllowed(hostname, hostTrusted, policy, resolve);
+    const addresses = await withDeadline(
+      resolveAllowed(hostname, hostTrusted, policy, resolve),
+      deadline,
+    );
+    const remaining = Math.max(1, deadline - Date.now());
     const status = await new Promise<number>((resolve, reject) => {
       const request = (target.protocol === 'https:' ? httpsRequest : httpRequest)(
         target,
@@ -100,7 +136,7 @@ export async function sendWebhook(
           },
           // No pooled sockets: each delivery resolves and checks its own address.
           agent: false,
-          timeout: timeoutMs,
+          timeout: remaining,
         },
         (response) => {
           let received = 0;
@@ -113,13 +149,8 @@ export async function sendWebhook(
           response.on('error', () => resolve(response.statusCode ?? 0));
         },
       );
-      const timer = setTimeout(
-        () => request.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })),
-        timeoutMs,
-      );
-      request.on('timeout', () =>
-        request.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })),
-      );
+      const timer = setTimeout(() => request.destroy(timedOut()), remaining);
+      request.on('timeout', () => request.destroy(timedOut()));
       request.on('error', reject);
       request.on('close', () => clearTimeout(timer));
       request.end(body);

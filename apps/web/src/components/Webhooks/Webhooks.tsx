@@ -1,6 +1,7 @@
 import {
   createWebhookSchema,
   type UpdateWebhook,
+  updateWebhookSchema,
   type Webhook,
   type WebhooksResponse,
   webhookUrlSchema,
@@ -523,10 +524,19 @@ function EditWebhook({
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy || !dirty) return;
+    const body = updateWebhookSchema.safeParse(changes);
+    if (!body.success) {
+      setError(
+        changes.url === undefined || webhookUrlSchema.safeParse(changes.url).success
+          ? 'Enter a name.'
+          : 'Enter a full URL, starting with https://',
+      );
+      return;
+    }
     setBusy('save');
     setError('');
     try {
-      onChange((await api.updateWebhook(webhook.id, changes)).webhook);
+      onChange((await api.updateWebhook(webhook.id, body.data)).webhook);
       onClose();
     } catch (failure) {
       setError(webhookErrorMessage(failure, 'Could not save the webhook. Try again.'));

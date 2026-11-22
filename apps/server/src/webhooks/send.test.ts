@@ -104,6 +104,20 @@ describe('sendWebhook', () => {
     expect(result.error).toMatch(/in time/);
   });
 
+  it('counts a stalled name lookup against the delivery’s time', async () => {
+    const started = Date.now();
+    const result = await sendWebhook(delivery('https://stalled.example.com/hook'), strict, {
+      resolve: () => new Promise(() => {}),
+      timeoutMs: 200,
+    });
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(result).toEqual({
+      ok: false,
+      responseStatus: null,
+      error: 'The receiver did not answer in time',
+    });
+  });
+
   it('connects to the address it checked, not a second lookup', async () => {
     const { received, port } = await receiver((_, response) => response.writeHead(200).end());
     const result = await sendWebhook(delivery(`http://localhost:${port}/pinned`), testing, {

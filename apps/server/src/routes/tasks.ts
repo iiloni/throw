@@ -80,21 +80,27 @@ export const taskRoutes = new Hono<AppEnv>()
               .where(eq(tasks.id, task.parentId))
               .for('share');
       if (!task.deletedAt && !parent?.deletedAt && !project?.deletedAt) return null;
+      // Subtasks go with their parent through the foreign key; each is announced too.
+      const subtasks = await tx
+        .select({ id: tasks.id, number: tasks.number })
+        .from(tasks)
+        .where(eq(tasks.parentId, id));
       await tx.delete(tasks).where(eq(tasks.id, id));
-      await enqueueWebhooks(
-        tx,
-        { userId },
-        {
-          event: 'task.deleted',
-          workspaceId: task.workspaceId,
-          projectId: task.projectId,
-          projectKey: project?.key ?? null,
-          entityType: 'task',
-          kind: 'deleted',
-          taskId: id,
-          taskNumber: task.number,
-        },
-      );
+      for (const purged of [{ id, number: task.number }, ...subtasks])
+        await enqueueWebhooks(
+          tx,
+          { userId },
+          {
+            event: 'task.deleted',
+            workspaceId: task.workspaceId,
+            projectId: task.projectId,
+            projectKey: project?.key ?? null,
+            entityType: 'task',
+            kind: 'deleted',
+            taskId: purged.id,
+            taskNumber: purged.number,
+          },
+        );
       return currentTxid(tx);
     });
     // Already gone, perhaps purged by an earlier try of this same queued write.
