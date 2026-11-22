@@ -16,6 +16,14 @@
   font-size: 0.9375rem;
   line-height: 1.65;
 }
+/* BlockNote's stylesheet resets .bn-block-outer to 1.5, which shrank text after the preview swap. */
+.bn-container.task-editor .bn-block-outer {
+  line-height: inherit;
+}
+/* Match BlockNote's .bn-block-content padding directly on each preview block (including code blocks). */
+.description-preview-block > :first-child {
+  padding-block: 3px;
+}
 /* A posted comment is as tall as its text; only an editor keeps room to write in. */
 .comment-body .bn-container.task-editor .bn-editor {
   min-height: 0;

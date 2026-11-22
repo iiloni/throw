@@ -45,7 +45,7 @@ function block(row: Json, index: number): ReactNode {
     case 'heading':
       body = (
         <h3
-          className="pt-4 font-bold font-display"
+          className="pt-[18px]! font-bold font-display"
           style={{
             fontSize:
               ({ 1: '3em', 2: '2em', 3: '1.3em' } as Record<number, string>)[Number(props.level)] ??
@@ -142,7 +142,7 @@ function block(row: Json, index: number): ReactNode {
       return null;
   }
   return (
-    <div key={String(row.id ?? index)} className="py-[3px]">
+    <div key={String(row.id ?? index)} className="description-preview-block">
       {body}
       {Array.isArray(row.children) && (
         <div className="pl-5">{row.children.filter(object).map(block)}</div>
