@@ -24,7 +24,7 @@ const jobsSchema = z.object({
     z.object({ name: z.string(), status: z.string(), conclusion: z.string().nullable() }),
   ),
 });
-const requiredJobs = ['check', 'android build', 'e2e (desktop)', 'e2e (android)'];
+export const requiredJobs = ['check', 'android build', 'e2e (desktop)', 'e2e (android)'] as const;
 
 type ReadJobs = (runId: number) => Promise<unknown>;
 

@@ -31,10 +31,9 @@ jobs:
       actions: read
     outputs:
       run_checks: ${{ steps.ci.outputs.run_checks }}
+      pr_ci_source: ${{ steps.ci.outputs.pr_ci_source }}
       docs_only: ${{ steps.scope.outputs.docs_only }}
-      # `run e2e` always tests. Otherwise a change confined to documentation skips E2E, and
-      # a PR waits for `merge on pass`.
-      run_e2e: ${{ contains(github.event.pull_request.labels.*.name, 'run e2e') || steps.scope.outputs.docs_only != 'true' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'merge on pass')) }}
+      run_e2e: ${{ steps.ci.outputs.run_e2e }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -70,9 +69,22 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          DOCS_ONLY: ${{ steps.scope.outputs.docs_only }}
+          # `run e2e` always tests. Other PRs wait for `merge on pass` and skip E2E for docs.
+          E2E_REQUESTED: ${{ contains(github.event.pull_request.labels.*.name, 'run e2e') || steps.scope.outputs.docs_only != 'true' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'merge on pass')) }}
         run: |
-          if [[ "$EVENT_NAME" == pull_request || "$EVENT_NAME" == merge_group ]]; then
-            # Test the combined code on every update; release reuse is for exact main/tag commits.
+          echo "run_e2e=$E2E_REQUESTED" >> "$GITHUB_OUTPUT"
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            if [[ "$E2E_REQUESTED" == true && "$DOCS_ONLY" == false && "$GITHUB_RUN_ATTEMPT" == 1 &&
+                  ( "$EVENT_ACTION" == labeled || "$EVENT_ACTION" == unlabeled ) ]]; then
+              node scripts/pr-ci-reuse.ts
+            else
+              echo 'run_checks=true' >> "$GITHUB_OUTPUT"
+            fi
+          elif [[ "$EVENT_NAME" == merge_group ]]; then
             echo 'run_checks=true' >> "$GITHUB_OUTPUT"
           else
             node scripts/wait-for-ci.ts check
@@ -85,6 +97,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The Actions run's head_sha is the branch tip, not the merge commit tested here.
+      - name: Full CI for PR ${{ github.event.pull_request.number }} at ${{ github.sha }}
+        if: github.event_name == 'pull_request' && needs.reuse.outputs.run_e2e == 'true'
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -123,11 +139,9 @@ jobs:
             (cd apps/web/android && ./gradlew "$task" --no-daemon --no-configuration-cache)
           done
 
-  # Each project runs on a runner with a stack of its own. The suite is small enough for one
-  # shard per project; add shards to the matrix (and to `--shard` below) as it grows, so
-  # they do not compete for one machine the way a second worker would.
+  # Each shard has its own runner and dev stack.
   e2e-desktop:
-    name: e2e desktop (${{ matrix.shard }}/1)
+    name: e2e desktop (${{ matrix.shard }}/${{ strategy.job-total }})
     needs: reuse
     if: needs.reuse.outputs.run_checks == 'true' && needs.reuse.outputs.run_e2e == 'true'
     runs-on: ubuntu-latest
@@ -135,7 +149,7 @@ jobs:
     strategy: &e2e-shards
       fail-fast: false
       matrix:
-        shard: [1]
+        shard: [1, 2]
     env:
       PROJECT: desktop
     steps: &e2e-steps
@@ -183,7 +197,7 @@ jobs:
       # The tests that only call the API open no page, so they run once.
       - if: env.PROJECT == 'android' && matrix.shard == 1
         run: ./scripts/dev.sh e2e --project=api --workers=1
-      - run: ./scripts/dev.sh e2e --project=$PROJECT --shard=${{ matrix.shard }}/1 --workers=1
+      - run: ./scripts/dev.sh e2e --project=$PROJECT --shard=${{ matrix.shard }}/${{ strategy.job-total }} --workers=1
       - if: failure()
         run: ./scripts/dev.sh logs-once
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -194,7 +208,7 @@ jobs:
           retention-days: 7
 
   e2e-android:
-    name: e2e android (${{ matrix.shard }}/1)
+    name: e2e android (${{ matrix.shard }}/${{ strategy.job-total }})
     needs: reuse
     if: needs.reuse.outputs.run_checks == 'true' && needs.reuse.outputs.run_e2e == 'true'
     runs-on: ubuntu-latest
@@ -232,18 +246,37 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Verify current approval before reusing PR checks
+        id: approval
+        if: github.event_name == 'pull_request' && needs.reuse.outputs.pr_ci_source != '' && contains(github.event.pull_request.labels.*.name, 'merge on pass')
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const eventPR = context.payload.pull_request;
+            const { data: pr } = await github.rest.pulls.get({
+              ...context.repo,
+              pull_number: eventPR.number,
+            });
+            core.setOutput('current', pr.state === 'open' && pr.base.ref === eventPR.base.ref &&
+              pr.head.sha === eventPR.head.sha && pr.labels.some(label => label.name === 'merge on pass'));
       - name: Require completed validation
         env:
           EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
           E2E_REQUESTED: ${{ needs.reuse.outputs.run_e2e }}
           DOCS_ONLY: ${{ needs.reuse.outputs.docs_only }}
           MERGE_APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'merge on pass') }}
           REUSE_RESULT: ${{ needs.reuse.result }}
           RUN_CHECKS: ${{ needs.reuse.outputs.run_checks }}
+          PR_CI_SOURCE: ${{ needs.reuse.outputs.pr_ci_source }}
+          PR_APPROVED_NOW: ${{ steps.approval.outputs.current }}
           CHECK_RESULT: ${{ needs.check.result }}
           NATIVE_RESULT: ${{ needs.android-build.result }}
           DESKTOP_RESULT: ${{ needs.e2e-desktop-passed.result }}

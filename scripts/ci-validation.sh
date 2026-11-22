@@ -29,28 +29,37 @@ if [[ "${EVENT_NAME:-}" == pull_request && "${E2E_REQUESTED:-}" != true && "$e2e
     fail 'Full E2E has not been requested. Apply "run e2e" for testing, or "merge on pass" once functionality and design are approved for merging after tests pass.'
 fi
 
-# Only main/tag CI may reuse an exact commit whose checks and both E2E projects passed.
 if [[ "${RUN_CHECKS:-}" == false ]]; then
     case "${EVENT_NAME:-}" in
         push|workflow_dispatch)
             report 'Full CI for this exact commit already passed; the reuse job verified it.'
             exit 0
             ;;
-        *) fail 'PR and merge-group validation must run checks and E2E for the combined code.' ;;
+        pull_request)
+            [[ "${EVENT_ACTION:-}" == labeled || "${EVENT_ACTION:-}" == unlabeled ]] ||
+                fail 'Only a PR label change may reuse full CI.'
+            [[ "${E2E_REQUESTED:-}" == true && "${DOCS_ONLY:-}" == false && "${PR_CI_SOURCE:-}" =~ ^[1-9][0-9]*$ ]] ||
+                fail 'PR validation requires a full CI pass for the tested merge commit.'
+            if [[ "${MERGE_APPROVED:-}" == true && "${PR_APPROVED_NOW:-}" != true ]]; then
+                fail 'This PR no longer has current merge approval for its tested head.'
+            fi
+            passed="Full CI already passed for this merge commit in run $PR_CI_SOURCE"
+            ;;
+        *) fail 'This event must run checks and E2E for the tested commit.' ;;
     esac
-fi
-
-[[ "${RUN_CHECKS:-}" == true ]] || fail 'CI setup did not produce a valid test plan.'
-[[ "${CHECK_RESULT:-}" == success ]] || fail 'Lint, type checks, unit tests and build must all pass.'
-if [[ "${DOCS_ONLY:-}" != true ]]; then
-    [[ "${NATIVE_RESULT:-}" == success ]] || fail 'Native Android builds must pass; skipped or cancelled builds do not count.'
-fi
-if [[ "$e2e_exempt" == true ]]; then
-    passed='Checks passed; E2E is not required for a documentation-only change'
 else
-    [[ "${DESKTOP_RESULT:-}" == success ]] || fail 'Desktop E2E must pass; skipped or cancelled tests do not count.'
-    [[ "${ANDROID_RESULT:-}" == success ]] || fail 'Android E2E must pass; skipped or cancelled tests do not count.'
-    passed='Checks and both E2E projects passed'
+    [[ "${RUN_CHECKS:-}" == true ]] || fail 'CI setup did not produce a valid test plan.'
+    [[ "${CHECK_RESULT:-}" == success ]] || fail 'Lint, type checks, unit tests and build must all pass.'
+    if [[ "${DOCS_ONLY:-}" != true ]]; then
+        [[ "${NATIVE_RESULT:-}" == success ]] || fail 'Native Android builds must pass; skipped or cancelled builds do not count.'
+    fi
+    if [[ "$e2e_exempt" == true ]]; then
+        passed='Checks passed; E2E is not required for a documentation-only change'
+    else
+        [[ "${DESKTOP_RESULT:-}" == success ]] || fail 'Desktop E2E must pass; skipped or cancelled tests do not count.'
+        [[ "${ANDROID_RESULT:-}" == success ]] || fail 'Android E2E must pass; skipped or cancelled tests do not count.'
+        passed='Checks and both E2E projects passed'
+    fi
 fi
 
 if [[ "${EVENT_NAME:-}" == pull_request && "${MERGE_APPROVED:-}" != true ]]; then
