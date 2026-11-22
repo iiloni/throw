@@ -4,8 +4,13 @@ import { useEffect } from 'react';
 import { useShell } from '@/components/AppShell/shell';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { Button } from '@/components/ui/button';
+import { useLocalRowsReady } from '@/lib/collections';
+import { useLaunchScreenReady } from '@/lib/launchScreen';
 
-export const Route = createFileRoute('/_app/w/$workspaceId/')({ component: WorkspaceHome });
+export const Route = createFileRoute('/_app/w/$workspaceId/')({
+  staticData: { holdsLaunchScreen: true },
+  component: WorkspaceHome,
+});
 function WorkspaceHome() {
   const shell = useShell();
   const params = Route.useParams();
@@ -19,6 +24,8 @@ function WorkspaceHome() {
   const workspaceId = first?.workspaceId;
   const projectId = first?.id;
   const waiting = shell.awaitingWorkspaces || shell.awaitingProjects;
+  const localReady = useLocalRowsReady('workspaces', 'projects');
+  useLaunchScreenReady(localReady && !waiting && !first);
   useEffect(() => {
     if (
       !navigating &&

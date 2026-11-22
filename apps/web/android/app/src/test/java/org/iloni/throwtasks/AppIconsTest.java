@@ -73,6 +73,16 @@ public class AppIconsTest {
     }
 
     @Test
+    public void launchSplashFollowsTheSelectedAlias() {
+        for (int i = 0; i <= channel; i++) {
+            AppIcons.set(context, ICONS[i]);
+            int launchIcon = AppIcons.launchIndex(context, launcher());
+            assertEquals(i, launchIcon);
+            assertChannelHue(i, AppIcons.glowColor(context, launchIcon));
+        }
+    }
+
+    @Test
     public void buildsRefuseIconsOfEarlierChannels() {
         for (int i = channel + 1; i < ICONS.length; i++) {
             String icon = ICONS[i];

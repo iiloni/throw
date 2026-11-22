@@ -63,6 +63,12 @@ while a page transition moves the whole page (`forward`, `back`, `enter`, `inner
 once, since the page's motion already carries it. A cross-fade leaves the page still, so a
 board seen for the first time enters its cards inside it, as on a cold start.
 
+**Android cold starts** keep the native splash over the WebView until the first route has
+drawn. Boards and other routes that read synced data wait for their local SQLite rows to be
+published. Login and server setup release as soon as their page draws. The icon breathes in
+its channel color and collapses as the background fades. Android's animator settings control
+the motion. A three-second native timeout releases the splash if the page never signals.
+
 **Reduced motion** turns every page transition into a 150 ms cross-fade and shows content at
 once.
 

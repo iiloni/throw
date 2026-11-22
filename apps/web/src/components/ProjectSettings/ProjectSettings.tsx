@@ -19,8 +19,9 @@ import { SettingsSection } from '@/components/SettingsSection/SettingsSection';
 import { TagManager } from '@/components/TagManager/TagManager';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useProjects, useStatuses, useTasks } from '@/lib/collections';
+import { useLocalRowsReady, useProjects, useStatuses, useTasks } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
+import { useLaunchScreenReady } from '@/lib/launchScreen';
 import { useDesktop } from '@/lib/media';
 import {
   type SettingsSection as ProjectSection,
@@ -113,6 +114,12 @@ export function ProjectSettings({
   const awaitingStatuses = useAwaitingSync(isLoading, ownStatuses.length);
   const awaitingTasks = useAwaitingSync(loadingTasks, tasks.length);
   const awaiting = awaitingStatuses || awaitingTasks;
+  const localReady = useLocalRowsReady(
+    'workspaces',
+    'projects',
+    ...(section === 'statuses' ? ['statuses', 'tasks'] : section === 'tags' ? ['tags'] : []),
+  );
+  useLaunchScreenReady(localReady && (section !== 'statuses' || !awaiting));
   return (
     <ProjectSettingsFrame project={project} current={section}>
       {section === 'general' && (

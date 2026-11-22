@@ -45,6 +45,7 @@ vi.mock('@/components/AppShell/shell', () => ({
   useShell: () => ({ workspace: { id: 'workspace' } }),
 }));
 vi.mock('@/lib/collections', () => ({
+  useLocalRowsReady: () => true,
   useProjects: () => ({ projects: data.projects, isLoading: false }),
   useTasks: () => ({ tasks: data.tasks, isLoading: false }),
 }));

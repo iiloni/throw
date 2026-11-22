@@ -82,6 +82,7 @@ const nativeRoot = 'apps/web/android/app/src';
 for (const channel of ['stable', 'preview', 'dev']) {
   const publicRoot = `apps/web/public${channel === 'stable' ? '' : `/${channel}`}`;
   const native = `${nativeRoot}/${channel === 'stable' ? 'main' : channel}/res`;
+  const suffix = channel === 'stable' ? '' : `_${channel}`;
   const primary = `${channel}/throw-icon-${channel}.svg`;
   const small = `${channel}/throw-icon-${channel}-small.svg`;
   const micro = `${channel}/throw-favicon-${channel}.svg`;
@@ -123,12 +124,15 @@ for (const channel of ['stable', 'preview', 'dev']) {
   }
 
   for (const [density, scale] of densities) {
-    // Android's icon-only system splash slot is 288 dp without a separate icon background.
-    await output(`${native}/drawable-${density}/splash.png`, await render(primary, 288 * scale));
+    // AndroidX uses this 288 dp icon on Android 11 and earlier. Newer Android versions
+    // supply the launched alias's adaptive icon themselves.
+    await output(
+      `${nativeRoot}/main/res/drawable-${density}/splash${suffix}.png`,
+      await render(primary, 288 * scale),
+    );
     // Every flavor ships every channel's launcher artwork under its own name, so the app
     // icon switcher can select any of them (see docs/branding.md).
     const mipmap = `${nativeRoot}/main/res/mipmap-${density}`;
-    const suffix = channel === 'stable' ? '' : `_${channel}`;
     // The legacy launcher displays a 48 dp icon at every density: always small-tier.
     await output(`${mipmap}/ic_launcher${suffix}.png`, await render(small, 48 * scale));
     // The sources already contain their safe-zone transform. Map the entire canvas to
