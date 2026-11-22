@@ -4,12 +4,16 @@ Throw's [CI workflow](../.github/workflows/ci.yml) separates PR iteration from f
 validation. Every PR update targeting `main` runs lint, type checks, unit tests and builds.
 The `run e2e` label requests the full suite on a draft without merge approval. The
 `merge on pass` label means functionality and design are approved and the agent may
-merge once all required checks pass. Either label requests the Docker-backed test suite: a
-desktop run, a mobile run, the API tests and the unit tests run beside a real Postgres. Mobile
-E2E emulates Android in Chromium; it does not test a native APK.
+merge once all required checks pass. Either label requests the Docker-backed test suite with
+two desktop shards, two mobile shards, the API tests and the unit tests run beside a real
+Postgres. Each shard gets its own stack and one Playwright worker. The API and container unit
+tests run once on the first mobile shard. Playwright logs each test's result and duration.
+Mobile E2E emulates Android in Chromium.
 
-The required check is **`validation`**. For a PR, it fails until `merge on pass` is present
-and checks and both E2E projects succeed in the same run. A PR with only `run e2e` still
+The required check is **`validation`**. For a code PR, it requires `merge on pass`, passing
+checks and a native Android build, and passing results for both E2E projects. On a label change,
+CI can reuse those results from a completed run on the same PR and exact merge commit.
+The gate verifies current approval when it reuses results. A PR with only `run e2e` still
 has a failing `validation` check after successful E2E, with a message that approval is
 required. A PR with neither label also has a failing `validation` check; its ordinary
 `check` job still reports whether development checks passed. Skipped E2E jobs do not satisfy
@@ -179,10 +183,10 @@ remove `merge on pass`. Removing the label withdraws merge authorization and tri
 new run that fails the gate. E2E continues if `run e2e` remains; remove both labels to
 stop requesting the full suite.
 To rerun full E2E for the same commit, use **Re-run all jobs** on the latest CI run that
-requested E2E, or remove and reapply `run e2e`. Full merge validation also requires
-`merge on pass`. Rerunning an older unlabeled event uses
-that event's original label state. Label changes trigger CI, so unrelated label edits can
-also rerun E2E while either test-requesting label is present.
+requested E2E. A manual rerun runs fresh checks using the original event's label state.
+Applying `merge on pass` after a passing draft run can reuse those test results for the
+same merge commit. Unrelated label edits can do the same while full E2E is requested.
+If the merge commit changed or evidence is unavailable, CI runs the suite again.
 
 ## Targeted Firefox testing
 
