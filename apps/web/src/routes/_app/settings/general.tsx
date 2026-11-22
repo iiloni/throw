@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { AppIconPicker } from '@/components/AppIconPicker/AppIconPicker';
 import { BoardSettingsControls } from '@/components/Board/BoardSettingsPanel';
 import { SettingsSection } from '@/components/SettingsSection/SettingsSection';
 import { ThemePicker } from '@/components/ThemePicker/ThemePicker';
@@ -13,6 +14,7 @@ function GeneralSettings() {
       <SettingsSection title="Appearance">
         <ThemePicker value={theme} onChange={setTheme} />
       </SettingsSection>
+      <AppIconPicker />
       <SettingsSection title="Board">
         <div className="px-4 py-1.5">
           <BoardSettingsControls includeTheme={false} />

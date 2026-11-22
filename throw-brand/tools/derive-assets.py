@@ -36,6 +36,10 @@ def shape(r,channel,tier='primary'):
     byid(r,'project-line').set('fill',shared['sharedColors']['tileLine']['hex'])
     for role,g in ct['gradientOverrides'].items():
         grad=byid(r,g['gradientId'])
+        if role=='background' and 'vector' in g:
+            vector=g['vector']
+            for key,value in zip(('x1','y1','x2','y2'),vector['from']+vector['to'],strict=True):
+                grad.set(key,str(value))
         for e,stop in zip(grad,g['stops']):e.set('offset',str(stop['offset']));e.set('stop-color',pal[stop['color']]['hex'])
     shadow=byid(r,'tile-depth').find(tag('feDropShadow'));shadow.set('flood-color',pal[ct['shadowOverride']['color']]['hex']);shadow.set('flood-opacity',str(ct['shadowOverride']['opacity']))
     if tier!='primary':

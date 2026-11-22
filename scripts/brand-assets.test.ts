@@ -1,9 +1,30 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import sharp from 'sharp';
 
 const channels = ['stable', 'preview', 'dev'] as const;
+const launcher = 'apps/web/android/app/src/main/res';
+const suffix = (channel: (typeof channels)[number]) => (channel === 'stable' ? '' : `_${channel}`);
+
+test('the Android Preview background retains Catch’s horizontal purple gradient', async () => {
+  const { data, info } = await sharp(`${launcher}/mipmap-xhdpi/ic_launcher_background_preview.png`)
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const pixel = (x: number, y: number) => {
+    const start = (y * info.width + x) * info.channels;
+    return data.subarray(start, start + 3);
+  };
+  for (const [position, color] of [
+    [0, [140, 104, 255]],
+    [0.55, [96, 68, 207]],
+    [1, [59, 42, 166]],
+  ] as const) {
+    const x = Math.round(position * (info.width - 1));
+    assert.deepEqual(pixel(x, 0), pixel(x, info.height - 1));
+    assert(pixel(x, 0).every((component, index) => Math.abs(component - color[index]!) <= 1));
+  }
+});
 
 test('ICO frames use the assigned display-size tiers and retain transparent corners', async () => {
   for (const channel of channels) {
@@ -34,9 +55,8 @@ test('maskable and Apple icons are full bleed; adaptive and themed ink stays in 
       const { data } = await sharp(`${base}/${file}`).raw().toBuffer({ resolveWithObject: true });
       for (let index = 3; index < data.length; index += 4) assert.equal(data[index], 255);
     }
-    const native = `apps/web/android/app/src/${channel === 'stable' ? 'main' : channel}/res`;
-    const sources = [`${native}/mipmap-xhdpi/ic_launcher_foreground.png`];
-    if (channel === 'stable') sources.push(`${native}/mipmap-xhdpi/ic_launcher_monochrome.png`);
+    const sources = [`${launcher}/mipmap-xhdpi/ic_launcher_foreground${suffix(channel)}.png`];
+    if (channel === 'stable') sources.push(`${launcher}/mipmap-xhdpi/ic_launcher_monochrome.png`);
     for (const source of sources) {
       const { data, info } = await sharp(source).raw().toBuffer({ resolveWithObject: true });
       assert.equal(info.width, 216);
@@ -56,6 +76,35 @@ test('maskable and Apple icons are full bleed; adaptive and themed ink stays in 
       assert(painted > 1000, `Foreground must contain artwork: ${source}`);
     }
   }
+});
+
+test('every flavor ships each channel launcher with its own background and foreground', async () => {
+  for (const channel of channels) {
+    for (const version of [26, 33]) {
+      const xml = await readFile(
+        `${launcher}/mipmap-anydpi-v${version}/ic_launcher${suffix(channel)}.xml`,
+        'utf8',
+      );
+      assert.match(xml, new RegExp(`@mipmap/ic_launcher_background${suffix(channel)}"`));
+      assert.match(xml, new RegExp(`@mipmap/ic_launcher_foreground${suffix(channel)}"`));
+      assert.equal(xml.includes('@mipmap/ic_launcher_monochrome"'), version === 33);
+    }
+  }
+  // A flavor's own ic_launcher* resources would replace main's stable choice in that flavor.
+  for (const flavor of ['preview', 'dev']) {
+    const resources = await readdir(`apps/web/android/app/src/${flavor}/res`);
+    assert.deepEqual(
+      resources.filter((name) => name.startsWith('mipmap')),
+      [],
+    );
+  }
+  // Throw's ribbons and project accent take the channel's color, unlike Catch's shared note.
+  const foregrounds = await Promise.all(
+    channels.map((channel) =>
+      readFile(`${launcher}/mipmap-xhdpi/ic_launcher_foreground${suffix(channel)}.png`),
+    ),
+  );
+  assert.equal(new Set(foregrounds.map((bytes) => bytes.toString('base64'))).size, 3);
 });
 
 test('the shared Android monochrome keeps transparent project-detail knockouts', async () => {

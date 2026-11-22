@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1591.94405594" viewBox="0 0 1536 1591.94405594" role="img" aria-label="Throw stable stacked wordmark"><title>Throw stable stacked wordmark</title><svg width="1024" height="1024" viewBox="0 0 1024 1024" x="256" y="0">
 <title>Throw stable micro icon</title>
 <defs>
-<linearGradient id="icon-channel-background" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="1024" y2="1024" color-interpolation="sRGB"><stop offset="0" stop-color="#34D5B5" /><stop offset="0.55" stop-color="#20AE96" /><stop offset="1" stop-color="#179A86" /></linearGradient>
+<linearGradient id="icon-channel-background" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="1024" y2="1024" color-interpolation="sRGB"><stop offset="0" stop-color="#43DEBD" /><stop offset="0.55" stop-color="#20AE96" /><stop offset="1" stop-color="#148B79" /></linearGradient>
 </defs>
 <rect id="icon-background-tile" x="0" y="0" width="1024" height="1024" rx="228" fill="url(#icon-channel-background)" />
 <g id="icon-arc-forward-foreground">

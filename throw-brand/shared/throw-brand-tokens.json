@@ -366,8 +366,8 @@
     "sharedCream": "#FFF9F0",
     "sharedCharcoal": "#292B2D",
     "sharedWordmarkFont": "Manrope ExtraBold 800",
-    "devBackground": "matches saved Catch dev tokens",
-    "previewBackground": "matches saved Catch preview tokens; current external repository correction not supplied"
+    "devBackground": "matches Catch Dev stops and diagonal gradient vector",
+    "previewBackground": "matches Catch Preview stops and horizontal gradient vector"
   },
   "standaloneColorMark": "omitted: pale ribbons and cream need the tile for dependable contrast; monochrome marks are supplied"
 }

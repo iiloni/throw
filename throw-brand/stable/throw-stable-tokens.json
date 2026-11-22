@@ -7,11 +7,11 @@
   "scope": "icon and lockup icon paints only",
   "palette": {
     "backgroundStart": {
-      "hex": "#34D5B5",
+      "hex": "#43DEBD",
       "rgb": [
-        52,
-        213,
-        181
+        67,
+        222,
+        189
       ],
       "alpha": 1,
       "usage": "stable background gradient stop at 0%"
@@ -27,11 +27,11 @@
       "usage": "stable background gradient stop at 55%"
     },
     "backgroundEnd": {
-      "hex": "#179A86",
+      "hex": "#148B79",
       "rgb": [
-        23,
-        154,
-        134
+        20,
+        139,
+        121
       ],
       "alpha": 1,
       "usage": "stable background gradient stop at 100%"
