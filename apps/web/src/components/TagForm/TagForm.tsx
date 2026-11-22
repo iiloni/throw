@@ -1,7 +1,9 @@
 import { COLORS, TAG_ICONS, type Tag, tagPath, tagSubtreeIds, tagTree } from '@throw/shared';
+import { Slash, X } from 'lucide-react';
 import { type FormEvent, type RefObject, useId, useMemo, useState } from 'react';
 import { colorName } from '@/components/ColorPicker/ColorPicker';
 import { Hint } from '@/components/Hint/Hint';
+import { Swatch } from '@/components/Swatch/Swatch';
 import { TAG_ICON_LABELS, TagIcon } from '@/components/TagIcon/TagIcon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -111,45 +113,23 @@ export function TagEditor({
           <fieldset>
             <legend className="mb-2 text-sm font-medium">Color</legend>
             <div className="grid grid-cols-6 justify-items-center gap-2">
-              <button
-                type="button"
-                aria-label="No color"
-                aria-pressed={color === null}
-                onClick={() => setColor(null)}
-                className={cn(
-                  'size-10 rounded-full border text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  color === null && 'ring-2 ring-foreground/40',
-                )}
-              >
-                None
-              </button>
+              <Swatch label="No color" pressed={color === null} onClick={() => setColor(null)}>
+                <Slash className="size-4" aria-hidden />
+              </Swatch>
               {COLORS.map((value) => {
                 const used = usedColors.has(value);
                 return (
-                  // A used color stays hoverable and focusable (`aria-disabled`, not
-                  // `disabled`), so its hint can say why it cannot be picked.
-                  <Hint
+                  <Swatch
                     key={value}
-                    label={
+                    color={value}
+                    label={colorName(value)}
+                    hint={
                       used ? `${colorName(value)}: already used by another root` : colorName(value)
                     }
-                    describe={used}
-                  >
-                    <button
-                      type="button"
-                      data-color={value}
-                      aria-label={colorName(value)}
-                      aria-pressed={color === value}
-                      aria-disabled={used || undefined}
-                      onClick={() => {
-                        if (!used) setColor(value);
-                      }}
-                      className={cn(
-                        'size-10 rounded-full border border-foreground/10 bg-tint outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-not-allowed aria-disabled:opacity-25',
-                        color === value && 'ring-2 ring-foreground/50',
-                      )}
-                    />
-                  </Hint>
+                    pressed={color === value}
+                    unavailable={used}
+                    onClick={() => setColor(value)}
+                  />
                 );
               })}
             </div>
@@ -164,18 +144,20 @@ export function TagEditor({
               className="mb-2 h-10 rounded-xl"
             />
             <div className="grid max-h-36 grid-cols-6 gap-1 overflow-y-auto overscroll-contain p-1">
-              <button
-                type="button"
-                aria-label="No icon"
-                aria-pressed={icon === null}
-                onClick={() => setIcon(null)}
-                className={cn(
-                  'flex h-11 items-center justify-center rounded-xl text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  icon === null && 'bg-accent',
-                )}
-              >
-                None
-              </button>
+              <Hint label="No icon">
+                <button
+                  type="button"
+                  aria-label="No icon"
+                  aria-pressed={icon === null}
+                  onClick={() => setIcon(null)}
+                  className={cn(
+                    'flex h-11 items-center justify-center rounded-xl outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring',
+                    icon === null && 'bg-accent',
+                  )}
+                >
+                  <X className="size-4" aria-hidden />
+                </button>
+              </Hint>
               {TAG_ICONS.filter(
                 (value) =>
                   TAG_ICON_LABELS[value].toLowerCase().includes(iconSearch.toLowerCase()) ||

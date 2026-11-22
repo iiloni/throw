@@ -4,12 +4,11 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { type ReactNode, useMemo, useRef, useState } from 'react';
 import { AnimatedHeight } from '@/components/AnimatedHeight/AnimatedHeight';
 import { colorName } from '@/components/ColorPicker/ColorPicker';
-import { Hint } from '@/components/Hint/Hint';
 import { NewTagButton } from '@/components/NewTag/NewTag';
+import { Swatch } from '@/components/Swatch/Swatch';
 import { TagBadge } from '@/components/TagBadge/TagBadge';
 import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { haptics } from '@/lib/haptics';
-import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
 /** The open branch: the swatches, the roots without a color, or a tag's children. */
@@ -248,41 +247,5 @@ export function ColorTagPicker({
         </AnimatePresence>
       </AnimatedHeight>
     </fieldset>
-  );
-}
-
-function Swatch({
-  color,
-  label,
-  pressed,
-  onClick,
-  children,
-}: {
-  color?: Tag['color'];
-  label: string;
-  pressed: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  const reduced = useReducedMotion();
-  return (
-    <Hint label={label}>
-      <motion.button
-        type="button"
-        data-color={color ?? undefined}
-        aria-label={label}
-        aria-pressed={pressed}
-        whileTap={reduced ? undefined : { scale: 0.85 }}
-        transition={springs.snappy}
-        onClick={onClick}
-        className={cn(
-          'flex size-10 shrink-0 items-center justify-center rounded-full border outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
-          color ? 'bg-tint text-tint-accent' : 'bg-card text-muted-foreground',
-          pressed ? 'border-foreground/70 ring-2 ring-foreground/15' : 'border-foreground/10',
-        )}
-      >
-        {children}
-      </motion.button>
-    </Hint>
   );
 }
