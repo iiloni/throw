@@ -1227,13 +1227,13 @@ test('description code blocks dedent pasted code, highlight it and export the so
   // The dev server has no service worker. Allow locally bundled modules while the API is offline.
   await page.route('**/api/**', (route) => route.abort());
   const source = 'def greet(name):\n    print("Hello", name)';
-  await code.dispatchEvent('paste', {
-    clipboardData: await page.evaluateHandle((value) => {
-      const data = new DataTransfer();
-      data.setData('text/plain', value);
-      return data;
-    }, '    def greet(name):\r\n        print("Hello", name)'),
-  });
+  await code.evaluate((node, value) => {
+    const clipboardData = new DataTransfer();
+    clipboardData.setData('text/plain', value);
+    node.dispatchEvent(
+      new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }),
+    );
+  }, '    def greet(name):\r\n        print("Hello", name)');
   await expect(code).toHaveJSProperty('textContent', source);
   const python = block.getByRole('button', { name: 'Code language: Python', exact: true });
   await expect(python).toBeVisible();
