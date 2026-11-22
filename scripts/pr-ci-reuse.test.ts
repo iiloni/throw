@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { reusablePrRun } from './pr-ci-reuse.ts';
+import { e2eJobs, requiredJobs } from './wait-for-ci.ts';
 
 const mergeSha = 'a'.repeat(40);
 const request = { runId: 50, prNumber: 17, mergeSha };
@@ -24,7 +25,7 @@ function result(name: string, conclusion = 'success') {
 function fullJobs(stepName = marker) {
   return [
     { ...result('check'), steps: [result(stepName)] },
-    ...['android build', 'e2e (desktop)', 'e2e (android)'].map((name) => ({
+    ...requiredJobs.slice(1).map((name) => ({
       ...result(name),
       steps: [],
     })),
@@ -94,11 +95,39 @@ test('ignore other workflows, current runs, and label runs that did not request 
   const read: number[] = [];
   const reused = await reusablePrRun(request, response, async (id) => {
     read.push(id);
-    if (id === 32) return { jobs: [{ ...result('check'), steps: [result(marker, 'skipped')] }] };
+    if (id === 32) {
+      return {
+        jobs: [
+          { ...result('check'), steps: [result(marker, 'skipped')] },
+          ...e2eJobs.map((name) => ({ ...result(name, 'skipped'), steps: [] })),
+        ],
+      };
+    }
     return { jobs: id === 30 ? [] : fullJobs() };
   });
   assert.equal(reused, 25);
   assert.deepEqual(read, [32, 30, 25]);
+});
+
+test('a newer failed or canceled run with a skipped marker blocks reuse', async () => {
+  for (const conclusion of ['cancelled', 'failure']) {
+    const response = { workflow_runs: [run(25), run(30, { conclusion })] };
+    const check = { ...result('check', conclusion), steps: [result(marker, 'skipped')] };
+    const desktop = { ...result(e2eJobs[0], conclusion), steps: [] };
+    const android = { ...result(e2eJobs[1], 'skipped'), steps: [] };
+    for (const jobs of [
+      [check, desktop, android],
+      [check, android],
+      [check, { ...desktop, conclusion: 'skipped' }, android],
+      [{ ...check, conclusion: 'success' }, desktop, android],
+    ]) {
+      const reused = await reusablePrRun(request, response, async (id) => {
+        assert.equal(id, 30);
+        return { jobs };
+      });
+      assert.equal(reused, null);
+    }
+  }
 });
 
 test('a later canceled or failing test run supersedes an earlier pass for the same snapshot', async () => {

@@ -3,7 +3,7 @@ import { appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { z } from 'zod';
-import { requiredJobs } from './wait-for-ci.ts';
+import { e2eJobs, requiredJobs } from './wait-for-ci.ts';
 
 const runsSchema = z.object({
   workflow_runs: z.array(
@@ -51,8 +51,19 @@ export async function reusablePrRun(
     const { jobs } = jobsSchema.parse(await readJobs(run.id));
     const check = jobs.find((job) => job.name === 'check');
     const recorded = check?.steps.find((step) => step.name === marker);
-    // GitHub also lists the step when a label run did not request full E2E.
-    if (!recorded || recorded.conclusion === 'skipped') continue;
+    if (!recorded) continue;
+    if (
+      recorded.conclusion === 'skipped' &&
+      passed(check) &&
+      e2eJobs.every((name) =>
+        jobs.some(
+          (job) => job.name === name && job.status === 'completed' && job.conclusion === 'skipped',
+        ),
+      )
+    ) {
+      // A passing check and skipped aggregates identify a run without full E2E.
+      continue;
+    }
 
     // A newer attempt to test this snapshot takes precedence over an older pass.
     // Draft validation can fail for lack of approval even when every test job passed.
