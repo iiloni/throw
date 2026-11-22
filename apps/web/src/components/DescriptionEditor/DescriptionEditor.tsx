@@ -77,13 +77,15 @@ export function DescriptionEditor({
   useEffect(() => {
     if (autoFocus && editable) editor.focus();
   }, [autoFocus, editable, editor]);
-  const [languageBlock, setLanguageBlock] = useState<string | null>(null);
+  const [languageBlock, setLanguageBlock] = useState<{ id: string; anchor: Element } | null>(null);
   function openCodeLanguage(event: MouseEvent<HTMLDivElement>) {
     if (!editable || !(event.target instanceof Element)) return;
-    const button = event.target.closest<HTMLButtonElement>('button[data-code-block-id]');
-    if (!button || !editor.domElement?.contains(button)) return;
-    button.focus({ preventScroll: true });
-    setLanguageBlock(button.dataset.codeBlockId ?? null);
+    // A code block draws its language button itself, outside React (see codeBlock.ts).
+    const language = event.target.closest('.description-code-language > button');
+    if (language && editor.domElement?.contains(language)) {
+      const id = language.closest<HTMLElement>('[data-node-type="blockContainer"]')?.dataset.id;
+      if (id) setLanguageBlock((open) => (open?.id === id ? null : { id, anchor: language }));
+    }
   }
   const controls = useMemo(() => createControls(editor), [editor]);
   // While it has focus on a touch screen, this editor is the one the dock formats.
@@ -154,8 +156,10 @@ export function DescriptionEditor({
       />
       {editable && languageBlock && (
         <CodeLanguagePicker
+          key={languageBlock.id}
           editor={editor}
-          blockId={languageBlock}
+          blockId={languageBlock.id}
+          anchor={languageBlock.anchor}
           onClose={() => setLanguageBlock(null)}
         />
       )}

@@ -1248,11 +1248,20 @@ test('description code blocks dedent pasted code, highlight it and export the so
   await expect.poll(() => keyword.evaluate((node) => getComputedStyle(node).color)).not.toBe(light);
 
   if (isMobile) {
-    await python.locator('.description-code-icon').tap();
+    await python.locator('.code-language-icon').tap();
   } else {
     await python.focus();
   }
   const copy = block.getByRole('button', { name: 'Copy snippet', exact: true });
+  await expect(copy).toBeVisible();
+  await expect
+    .poll(() =>
+      copy.locator('svg').evaluate((node) => {
+        const rect = node.getBoundingClientRect();
+        return [Math.round(rect.width), Math.round(rect.height)];
+      }),
+    )
+    .toEqual([16, 16]);
   if (isMobile) await copy.tap();
   else await copy.press('Enter');
   await expect(page.getByText('Snippet copied', { exact: true })).toBeVisible();
@@ -1267,12 +1276,24 @@ test('description code blocks dedent pasted code, highlight it and export the so
   for await (const chunk of await snippet.createReadStream()) chunks.push(chunk);
   expect(Buffer.concat(chunks).toString('utf8')).toBe(source);
 
-  if (isMobile) await python.locator('.description-code-icon').tap();
+  if (isMobile) await python.locator('.code-language-icon').tap();
   else await python.press('Enter');
-  await page.getByRole('searchbox', { name: 'Search languages' }).fill('ts');
-  await page.getByRole('button', { name: 'TypeScript', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Search languages' }).fill('ts');
+  await page.getByRole('option', { name: 'TypeScript', exact: true }).click();
   await expect(
     block.getByRole('button', { name: 'Code language: TypeScript', exact: true }),
   ).toBeVisible();
   await expect(code).toHaveJSProperty('textContent', source);
+
+  // Inline code uses Catch's rounded tinted chip styling.
+  await editor.locator('.bn-trailing-block').click();
+  await page.keyboard.type('Use `inline_code` here');
+  const inlineCode = editor.locator('.bn-inline-content code', { hasText: 'inline_code' });
+  await expect(inlineCode).toBeVisible();
+  const inlineStyle = await inlineCode.evaluate((node) => {
+    const s = getComputedStyle(node);
+    return { bg: s.backgroundColor, radius: Number.parseFloat(s.borderTopLeftRadius) };
+  });
+  expect(inlineStyle.bg).not.toBe('rgba(0, 0, 0, 0)');
+  expect(inlineStyle.radius).toBeGreaterThan(2);
 });

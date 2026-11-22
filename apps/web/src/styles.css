@@ -28,72 +28,116 @@
   height: 1.25rem;
   accent-color: var(--brand);
 }
-/* Long lines wrap so they remain readable in the split pane and on phones. */
+/*
+ * Inline code is set as the preview sets it (DescriptionPreview), so it holds through the swap.
+ * A monospace face runs large beside the text, hence the smaller size.
+ */
+.bn-container.task-editor .bn-inline-content code {
+  border-radius: 0.375em;
+  /*
+   * The background spans the font's ascent and descent, which leave more room below the
+   * letters than above them in most system monospace faces, so the top gets the padding.
+   */
+  padding: 0.12em 0.4em 0.05em;
+  background: color-mix(in oklab, var(--foreground) 10%, transparent);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+/*
+ * Code blocks, in the editor and in the preview it opens from. BlockNote paints them black
+ * in both themes and shows its language picker only on hover.
+ */
+.description-code-block,
 .bn-container.task-editor .bn-block-content[data-content-type="codeBlock"] {
   position: relative;
   display: block;
   container-type: inline-size;
+  /* Keeps blocks that follow each other apart. */
   margin-block: 3px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   background: var(--code-background);
   color: var(--code-foreground);
   direction: ltr;
-  --code-pill-button: 1.75rem;
-  --code-pill-inset: 2px;
-  --code-pill-radius: 0.75rem;
 }
+.description-code-block > pre,
 .bn-container.task-editor .bn-block-content[data-content-type="codeBlock"] > pre {
   width: 100%;
-  min-height: calc(var(--code-pill-button) + 1rem);
   margin: 0;
-  padding: 0.875rem calc(var(--code-pill-button) + 1.25rem) 0.875rem 1rem;
-  font: 0.875rem / 1.55 var(--font-mono);
+  padding: 0.875rem 3rem 0.875rem 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.55;
   tab-size: 2;
 }
-.bn-container.task-editor .bn-block-content[data-content-type="codeBlock"] > pre > code {
+:is(
+    .description-code-block,
+    .bn-container.task-editor .bn-block-content[data-content-type="codeBlock"]
+  )
+  > pre
+  > code {
   display: block;
   min-height: 1.55em;
-  font: inherit;
+  font-family: inherit;
+  /* Long lines wrap: a sideways scroll would fight the page's swipes on a phone. */
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .description-code-toolbar {
   position: absolute;
-  inset: 0.375rem 0.375rem auto auto;
+  top: 0.375rem;
+  right: 0.375rem;
   z-index: 1;
-  box-sizing: border-box;
   display: flex;
   width: max-content;
+  /* One inset button plus the rim and the glass border. */
   max-width: calc(var(--code-pill-button) + 2 * var(--code-pill-inset) + 2px);
   flex-direction: row-reverse;
   align-items: center;
   padding: var(--code-pill-inset);
   overflow: clip;
+  /* A rounded rectangle like the dock, its radius scaled down with the height, and the
+     buttons inset to stay concentric. */
   border-radius: var(--code-pill-radius);
+  --code-pill-button: 1.75rem;
+  --code-pill-inset: 2px;
+  --code-pill-radius: 0.75rem;
   color: var(--muted-foreground);
-  font: 500 0.75rem / 1.25 var(--font-sans);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 500;
 }
-.bn-container.task-editor .description-code-toolbar button {
+.description-code-language {
   display: flex;
-  flex: none;
-  height: var(--code-pill-button);
+  min-width: 0;
+  flex-shrink: 0;
+}
+.description-code-label {
+  max-width: min(8rem, calc(100cqw - 11rem));
+}
+.description-code-language > button,
+.description-code-language > span,
+.description-code-action {
+  position: static;
+  display: flex;
   min-width: var(--code-pill-button);
+  height: var(--code-pill-button);
+  flex-direction: row-reverse;
   align-items: center;
   justify-content: center;
+  gap: 0.375rem;
+  padding-inline: 0.375rem;
   border: 0;
   border-radius: calc(var(--code-pill-radius) - var(--code-pill-inset) - 1px);
   background: transparent;
   color: inherit;
-  cursor: pointer;
+  font: inherit;
 }
-.description-code-language {
-  flex-direction: row-reverse;
-  gap: 0.375rem;
-  padding-inline: calc((var(--code-pill-button) - 1rem) / 2);
+.description-code-action {
+  width: var(--code-pill-button);
+  flex-shrink: 0;
 }
-.description-code-label {
-  max-width: max(0px, min(8rem, calc(100cqw - 3 * var(--code-pill-button) - 3rem)));
-}
+/* Revealed and hidden by codeBlock.ts, which animates them in and out. */
 .description-code-label,
 .description-code-chevron,
 .description-code-action {
@@ -101,14 +145,21 @@
   opacity: 0;
 }
 .description-code-chevron {
+  display: flex;
+  width: 0.875rem;
+  flex-shrink: 0;
+  justify-content: center;
+}
+.description-code-chevron::before {
   width: 0.375rem;
   height: 0.375rem;
-  flex: none;
   border: solid currentColor;
   border-width: 0 1.5px 1.5px 0;
+  content: "";
   transform: translateY(-25%) rotate(45deg);
 }
-.description-code-action > svg {
+.description-code-block .description-code-action > svg,
+.bn-container.task-editor .description-code-action > svg {
   width: 1rem;
   height: 1rem;
   fill: none;
@@ -117,33 +168,30 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.description-code-icon {
+.code-language-icon {
   display: inline-block;
   width: 1rem;
   height: 1rem;
-  flex: none;
+  flex-shrink: 0;
   background: var(--code-language-icon) center / contain no-repeat;
 }
-.description-code-icon[data-tinted] {
+.code-language-icon[data-tinted] {
   background: currentColor;
   mask: var(--code-language-icon) center / contain no-repeat;
 }
-.bn-container.task-editor .description-code-toolbar button:focus-visible {
-  outline: none;
-  color: var(--foreground);
-  box-shadow: inset 0 0 0 2px var(--ring);
+.description-code-toolbar button:enabled {
+  cursor: pointer;
 }
 @media (hover: hover) {
-  .bn-container.task-editor .description-code-toolbar button:enabled:hover {
+  .description-code-toolbar button:enabled:hover {
     background: var(--code-background);
     color: var(--foreground);
   }
 }
-@media (pointer: coarse) {
-  .bn-container.task-editor .bn-block-content[data-content-type="codeBlock"] {
-    --code-pill-button: 2.75rem;
-    --code-pill-radius: 1rem;
-  }
+.description-code-toolbar button:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--ring);
+  color: var(--foreground);
+  outline: none;
 }
 .bn-container.task-editor a {
   color: var(--brand-link);

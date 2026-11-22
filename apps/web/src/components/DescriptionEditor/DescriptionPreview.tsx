@@ -1,6 +1,8 @@
 import type { Description } from '@throw/shared';
+import { Copy, Download } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { codeLanguageIconProps, codeLanguageName } from './codeLanguages';
 
 type Json = Record<string, unknown>;
 const object = (value: unknown): value is Json => value !== null && typeof value === 'object';
@@ -26,7 +28,8 @@ function inline(content: unknown, key = 0): ReactNode {
         Boolean(styles.italic) && 'italic',
         Boolean(styles.underline) && 'underline',
         Boolean(styles.strike) && 'line-through',
-        Boolean(styles.code) && 'rounded bg-foreground/10 px-1 font-mono',
+        Boolean(styles.code) &&
+          'rounded-[0.375em] bg-foreground/10 px-[0.4em] pt-[0.12em] pb-[0.05em] font-mono text-[0.9em]',
       )}
     >
       {content.text}
@@ -82,9 +85,31 @@ function block(row: Json, index: number): ReactNode {
       break;
     case 'codeBlock':
       body = (
-        <pre className="whitespace-pre-wrap rounded-xl bg-foreground/[0.06] p-3 font-mono">
-          {text}
-        </pre>
+        <div className="description-code-block">
+          <div className="description-code-toolbar glass">
+            <div className="description-code-language">
+              <span>
+                <span
+                  aria-hidden
+                  className="code-language-icon"
+                  {...codeLanguageIconProps(props.language)}
+                />
+                <span className="description-code-label truncate">
+                  {codeLanguageName(props.language)}
+                </span>
+              </span>
+            </div>
+            <span aria-hidden className="description-code-action">
+              <Copy />
+            </span>
+            <span aria-hidden className="description-code-action">
+              <Download />
+            </span>
+          </div>
+          <pre>
+            <code>{text}</code>
+          </pre>
+        </div>
       );
       break;
     case 'divider':
