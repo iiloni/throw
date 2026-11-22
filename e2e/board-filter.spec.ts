@@ -274,7 +274,7 @@ test.describe('desktop', () => {
       ]);
   });
 
-  test('a wide window docks search beside the backlog, its filters open and nothing over the cards', async ({
+  test('a wide window docks search beside the backlog as Catch’s search page, with tags to browse', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
@@ -282,20 +282,52 @@ test.describe('desktop', () => {
     await openBar(page);
     const docked = bar(page);
     await expect(docked).toHaveAttribute('data-docked', '');
-    // The filters need no button, and the search sits left of the backlog, not over a column.
-    await expect(filters(page)).toBeVisible();
-    await expect(docked.getByRole('button', { name: 'Filter and sort' })).toHaveCount(0);
-    const [search, backlog] = await Promise.all([
-      docked.boundingBox(),
-      page.getByRole('complementary', { name: 'Backlog' }).boundingBox(),
-    ]);
-    expect(search!.x + search!.width).toBeLessThanOrEqual(backlog!.x);
+    // Left of the backlog, not over a column, with its field at the foot below the tags.
+    const browse = docked.getByRole('region', { name: 'Browse tags' });
+    // Measured once the sidebar has opened to its width.
+    await expect
+      .poll(async () => {
+        const [search, backlog] = await Promise.all([
+          docked.boundingBox(),
+          page.getByRole('complementary', { name: 'Backlog' }).boundingBox(),
+        ]);
+        return search!.x + search!.width <= backlog!.x;
+      })
+      .toBe(true);
+    const [tiles, input] = await Promise.all([browse.boundingBox(), field(page).boundingBox()]);
+    expect(input!.y).toBeGreaterThan(tiles!.y + tiles!.height);
+    await expect(filters(page)).toHaveCount(0);
+    // Board parent and Review this have no tag.
+    await expect(browse.getByRole('button', { name: /^Untagged/ })).toContainText('2');
+    // A tag's tile filters by it, and the tags beneath it.
+    const home = browse.getByRole('button', { name: /^Home/ });
+    await expect(home).toContainText('2');
+    await home.click();
+    await expect(home).toHaveAttribute('aria-pressed', 'true');
+    await expect
+      .poll(() => cardIds(page, 'Build'))
+      .toEqual([board.ids['Earlier position'], board.ids['Later position']]);
+    // The filter button raises the filter card over the tiles, above the field.
     await field(page).fill('position');
+    await docked.getByRole('button', { name: 'Filter and sort', exact: true }).click();
+    await expect(filters(page)).toBeVisible();
+    await expect
+      .poll(async () => {
+        const [card, foot] = await Promise.all([
+          filters(page).boundingBox(),
+          field(page).boundingBox(),
+        ]);
+        return card!.y + card!.height <= foot!.y;
+      })
+      .toBe(true);
     await filters(page)
       .getByRole('button', { name: /^Size L,/ })
       .click();
     await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Later position']]);
-    // Escape clears, then closes.
+    // Escape closes the filters, then clears, then closes.
+    await page.keyboard.press('Escape');
+    await expect(filters(page)).toHaveCount(0);
+    await expect(browse).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(field(page)).toHaveValue('');
     await expect(

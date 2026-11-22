@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { expect, type Page, test } from '@playwright/test';
-import { APP_LOAD_TIMEOUT, shapeRows, signUp, waitForDeviceSync } from './helpers';
+import {
+  APP_LOAD_TIMEOUT,
+  shapeRows,
+  signUp,
+  waitForCachedProject,
+  waitForDeviceSync,
+} from './helpers';
 import { newTag, taggedTask } from './tag-helpers';
 
 async function fixture(page: Page) {
@@ -248,9 +254,6 @@ test('quick capture lands in the board it was opened from', async ({ page, isMob
     // The search bar captures into its board's backlog.
     await open(page);
     await input(page).fill('A newly captured task');
-    await expect(
-      page.getByRole('button', { name: 'Create “A newly captured task”', exact: true }),
-    ).toBeVisible();
     await input(page).press('ControlOrMeta+Enter');
   }
   await expect(taskPane(page, isMobile).getByRole('textbox', { name: 'Task title' })).toHaveValue(
@@ -276,6 +279,12 @@ test('offline capture is immediate, searchable, persists and receives a number o
   test.setTimeout(120_000);
   const account = await fixture(page);
   await waitForDeviceSync(page);
+  // The reload below happens offline, so the project must be in the device's database first.
+  await waitForCachedProject(
+    page,
+    account.catchProject.id,
+    account.catchProject.statuses.map((status) => status.id),
+  );
   await page.route('**/api/**', (route) => route.abort('connectionfailed'));
   await open(page);
   await input(page).fill('Captured with no connection');

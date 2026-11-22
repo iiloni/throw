@@ -557,6 +557,118 @@ function ClearAll({ onClear = clearFilters }: { onClear?: () => void }) {
   );
 }
 
+const tile =
+  'flex min-h-16 min-w-0 items-center gap-3 rounded-2xl border px-3 py-3 text-left outline-none transition-[box-shadow,border-color] focus-visible:ring-2 focus-visible:ring-ring';
+
+/**
+ * Catch's Browse tags, as quick filters: the board's root tags as tiles in their color, each
+ * with the cards it would leave, and Untagged. A tap toggles the tag in the filter, which takes
+ * the tags beneath it too. The workspace board has no tags of its own, so its tiles scope the
+ * board to a project instead.
+ */
+export function QuickFilters() {
+  const state = board.use();
+  const data = current(state);
+  const { project } = data;
+  const { filter } = state;
+  const counts = useMemo(
+    () => facetCounts(data, filter, state.subtasksAsCards),
+    [data, filter, state.subtasksAsCards],
+  );
+  const pressed = (on: boolean) =>
+    on
+      ? 'border-foreground/60 shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--foreground)_60%,transparent)]'
+      : 'border-foreground/10';
+  if (project.members) {
+    return (
+      <section aria-labelledby="board-browse-heading">
+        <h2 id="board-browse-heading" className="mb-3 px-1 font-medium text-sm">
+          Browse projects
+        </h2>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-2">
+          {project.members.map((member) => {
+            const on = filter.projectId === member.id;
+            return (
+              <button
+                key={member.id}
+                type="button"
+                data-color={member.color}
+                aria-pressed={on}
+                onClick={() => {
+                  haptics.selection();
+                  setFilter({ projectId: on ? null : member.id });
+                }}
+                className={cn(tile, 'bg-tint', pressed(on))}
+              >
+                <ProjectIcon name={member.icon} className="size-5 shrink-0" />
+                <span className="min-w-0 flex-1 truncate font-medium text-sm">{member.name}</span>
+                <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
+                  {counts.projects.get(member.id) ?? 0}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+    );
+  }
+  const roots = project.tags
+    .filter((tag) => tag.parentId === null)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  if (roots.length === 0) return null;
+  const toggle = (id: string) => {
+    haptics.selection();
+    const chosen = filter.tagIds.includes(id);
+    setFilter({
+      untagged: false,
+      tagIds: chosen ? filter.tagIds.filter((value) => value !== id) : [...filter.tagIds, id],
+    });
+  };
+  return (
+    <section aria-labelledby="board-browse-heading">
+      <h2 id="board-browse-heading" className="mb-3 px-1 font-medium text-sm">
+        Browse tags
+      </h2>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-2">
+        {roots.map((tag) => {
+          const on = filter.tagIds.includes(tag.id);
+          return (
+            <button
+              key={tag.id}
+              type="button"
+              data-color={tag.color ?? undefined}
+              aria-pressed={on}
+              onClick={() => toggle(tag.id)}
+              className={cn(tile, tag.color ? 'bg-tint' : 'bg-card/60', pressed(on))}
+            >
+              <TagIcon name={tag.icon ?? null} className="size-5 shrink-0" />
+              <span className="min-w-0 flex-1 truncate font-medium text-sm">{tag.name}</span>
+              <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
+                {counts.tags.get(tag.id) ?? 0}
+              </span>
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          aria-pressed={filter.untagged}
+          onClick={() => {
+            haptics.selection();
+            setFilter({ untagged: !filter.untagged, tagIds: [] });
+          }}
+          className={cn(tile, 'bg-card/60', pressed(filter.untagged))}
+        >
+          <Tags className="size-5 shrink-0 text-muted-foreground" aria-hidden />
+          <span className="min-w-0 flex-1 truncate font-medium text-sm">Untagged</span>
+          <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
+            {counts.untagged}
+          </span>
+        </button>
+      </div>
+    </section>
+  );
+}
+
 /** Whether `ActiveFilters` has anything to show beyond the query. */
 export function hasChips(state: BoardState) {
   return state.sort !== 'priority' || isFiltering({ ...state.filter, query: '' });

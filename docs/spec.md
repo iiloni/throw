@@ -625,10 +625,14 @@ and sort, then closes the bar and returns focus. Project jumps are not offered t
 lists the projects.
 
 When the board is at least 1320 CSS pixels wide (the window less the rail), search docks as a
-sidebar between the rail and the backlog instead of floating (2026-11-22): the field and create
-button at its head, the chips under them, and the filters and sort open beneath for as long as
-it is open, so nothing sits over the cards. It opens and closes the same way; Escape clears,
-then closes.
+sidebar between the rail and the backlog instead of floating, so nothing sits over the cards
+(2026-11-22). It is laid out as Catch's search page: the field and filter button at its foot,
+the chips above them, and above those Catch's Browse tags, the project's root tags as tiles in
+their color with the cards each would leave, and Untagged. A tile toggles its tag in the
+filter; on the cross-project board the tiles are the projects and scope the board to one. The
+filter button raises Catch's filter card over the tiles, anchored above the field, with the
+full filters and sort; a press outside it closes it. It opens, closes and steps back on Escape as
+the bar does.
 
 Away from the boards (settings, trash, an empty workspace) search is a command palette. There
 is no search page. The palette also captures tasks. It takes Catch's search and quick note as
@@ -656,10 +660,11 @@ shown. Enter opens the selected result; arrows change the selection. An Enter pr
 tasks or projects are still loading waits and chooses the selected result once they appear,
 rather than choosing a jump or Create the list has not shown (2026-11-18).
 
-Typing a title also offers Create, as a button on the board's bar; Ctrl/⌘Enter captures it
-directly into the board's project, or on the cross-project board the project search is
-filtered to. With neither, the title moves to the capture window, which opens on its project
-list. The capture window on
+Typing a title also offers Create in the palette. Ctrl/⌘Enter, in the palette or the board's
+search, captures it directly into the board's project, or on the cross-project board the
+project search is filtered to. The board's search has no create button of its own; the board
+has one. With neither project, the title moves to the capture window, which opens on its
+project list. The capture window on
 desktop is Catch's quick note: a card-colored window with the title, the board's project (a
 chip that opens a searchable project list in place on the cross-project board), the backlog
 status it lands in, and a create button. A new task appears optimistically with “Pending”

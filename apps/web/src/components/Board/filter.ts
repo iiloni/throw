@@ -202,12 +202,14 @@ export type FacetCounts = {
   tags: ReadonlyMap<string, number>;
   untagged: number;
   sizes: ReadonlyMap<Size | null, number>;
+  /** The workspace board's projects. */
+  projects: ReadonlyMap<string, number>;
 };
 
 /**
  * How many cards each choice would leave, given the rest of the filter: a tag's count is of
  * cards that match everything but the tags, a size's of those that match everything but the
- * sizes.
+ * sizes, and a project's of those that match everything but the project scope.
  */
 export function facetCounts(
   data: BoardData,
@@ -217,9 +219,11 @@ export function facetCounts(
   const query = prepareQuery(filter.query);
   const tags = new Map<string, number>();
   const sizes = new Map<Size | null, number>([...SIZES, null].map((size) => [size, 0]));
+  const projects = new Map<string, number>();
   let untagged = 0;
   const anyTag = { ...filter, tagIds: [], untagged: false };
   const anySize = { ...filter, sizes: [], unsized: false };
+  const anyProject = { ...filter, projectId: null };
   for (const task of data.tasks) {
     if (!subtasksAsCards && task.parentId !== null) continue;
     if (matchesFilter(data.project, task, anyTag, query)) {
@@ -229,8 +233,10 @@ export function facetCounts(
     }
     if (matchesFilter(data.project, task, anySize, query))
       sizes.set(task.size, (sizes.get(task.size) ?? 0) + 1);
+    if (task.projectId && matchesFilter(data.project, task, anyProject, query))
+      projects.set(task.projectId, (projects.get(task.projectId) ?? 0) + 1);
   }
-  return { tags, untagged, sizes };
+  return { tags, untagged, sizes, projects };
 }
 
 function time(at: string | undefined) {

@@ -1,4 +1,4 @@
-import { Plus, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Search, SlidersHorizontal, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
   type KeyboardEvent,
@@ -29,7 +29,7 @@ import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { createTask } from '@/lib/tasks';
 import { cn } from '@/lib/utils';
-import { ActiveFilters, BoardFilters, hasChips } from './BoardFilters';
+import { ActiveFilters, BoardFilters, hasChips, QuickFilters } from './BoardFilters';
 
 /** Room the open bar takes at the foot of the board, so a column's last card can scroll clear. */
 export const SEARCH_SPACE = 'var(--board-search-space, 0.25rem)';
@@ -37,7 +37,7 @@ export const SEARCH_SPACE = 'var(--board-search-space, 0.25rem)';
 /**
  * The board's width (the window less the navigation rail) from which search docks as a sidebar
  * beside the backlog instead of floating over the columns: room for the sidebar, the backlog
- * and a few columns, with the filters open for good.
+ * and a few columns.
  */
 export const SEARCH_SIDEBAR_MIN = 1320;
 const SIDEBAR_WIDTH = 368;
@@ -62,6 +62,26 @@ function useDismiss(root: RefObject<HTMLElement | null>, searching: boolean) {
 }
 
 /**
+ * The filter card's open state, as Catch's: it closes with the search, and when the board is
+ * used, by a press anywhere outside the search.
+ */
+function useFilterCard(root: RefObject<HTMLElement | null>, searching: boolean) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!searching) setOpen(false);
+  }, [searching]);
+  useEffect(() => {
+    if (!open) return;
+    function away(event: PointerEvent) {
+      if (event.target instanceof Node && !root.current?.contains(event.target)) setOpen(false);
+    }
+    document.addEventListener('pointerdown', away, true);
+    return () => document.removeEventListener('pointerdown', away, true);
+  }, [open, root]);
+  return [open, setOpen] as const;
+}
+
+/**
  * Catch's search, over a live board: a glass field and filter button floating at the foot of
  * the board, beside (never over) an open task. It is not a dialog. What is typed and chosen
  * narrows the board in place, so a card that matches can be opened, dragged or carried while
@@ -73,22 +93,9 @@ export function BoardSearch() {
   const reduced = useReducedMotion();
   const root = useRef<HTMLElement>(null);
   const searching = state.searching;
-  const [panel, setPanel] = useState(false);
+  const [panel, setPanel] = useFilterCard(root, searching);
   const capture = useCapture();
   const dismiss = useDismiss(root, searching);
-
-  useEffect(() => {
-    if (!searching) setPanel(false);
-  }, [searching]);
-  // As in Catch, the panel goes when the board is used: a press anywhere outside the bar.
-  useEffect(() => {
-    if (!panel) return;
-    function away(event: PointerEvent) {
-      if (event.target instanceof Node && !root.current?.contains(event.target)) setPanel(false);
-    }
-    document.addEventListener('pointerdown', away, true);
-    return () => document.removeEventListener('pointerdown', away, true);
-  }, [panel]);
 
   // The columns pad their ends by the bar's height, so nothing is left beneath it for good.
   // biome-ignore lint/correctness/useExhaustiveDependencies: the bar mounts and unmounts with `searching`
@@ -148,7 +155,6 @@ export function BoardSearch() {
             <div className="pointer-events-auto flex items-end gap-3">
               <SearchField onClose={dismiss} onCapture={capture.create} />
               <FilterButton open={panel} onToggle={() => setPanel(!panel)} />
-              <CreateButton onCapture={capture.create} />
             </div>
           </search>
         </motion.div>
@@ -158,15 +164,18 @@ export function BoardSearch() {
 }
 
 /**
- * Search on a wide board: a column between the navigation rail and the backlog, with the field
- * at its head and the filters open beneath it, so nothing floats over the cards. It narrows the
- * board as the bar does. Escape clears what it chose, then closes it.
+ * Search on a wide board: a column between the navigation rail and the backlog, laid out as
+ * Catch's search page, so nothing floats over the cards. The field and filter button sit at its
+ * foot with the chips above them, and the tags fill the column above as quick filters. The
+ * filter button raises Catch's filter card over the tags, anchored above the field. It narrows
+ * the board as the bar does, and Escape steps back the same way.
  */
 export function BoardSearchSidebar() {
   const state = board.use();
   const reduced = useReducedMotion();
   const root = useRef<HTMLElement>(null);
   const searching = state.searching;
+  const [panel, setPanel] = useFilterCard(root, searching);
   const capture = useCapture();
   const dismiss = useDismiss(root, searching);
 
@@ -174,7 +183,10 @@ export function BoardSearchSidebar() {
     if (event.key !== 'Escape' || event.nativeEvent.isComposing) return;
     event.preventDefault();
     event.stopPropagation();
-    if (narrowed(board.get())) clearFilters();
+    if (panel) {
+      setPanel(false);
+      root.current?.querySelector<HTMLElement>('[data-board-filter-trigger]')?.focus();
+    } else if (narrowed(board.get())) clearFilters();
     else dismiss();
   }
 
@@ -197,27 +209,28 @@ export function BoardSearchSidebar() {
             style={{ width: SIDEBAR_WIDTH }}
             className="flex h-full flex-col pt-[calc(var(--safe-top)+1.25rem)] pb-[max(1.5rem,calc(var(--safe-bottom)+0.75rem))] pl-5"
           >
-            <div className="flex items-end gap-2">
-              <SearchField onClose={dismiss} onCapture={capture.create} placeholder="Search" />
-              <CreateButton onCapture={capture.create} />
+            <div className="-mr-1 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 pb-3">
+              <QuickFilters />
             </div>
-            {capture.error && (
-              <p
-                role="alert"
-                className="glass mt-3 rounded-[1.25rem] px-4 py-2.5 text-destructive text-sm"
-              >
-                {capture.error}
-              </p>
-            )}
-            <div className="mt-3">
+            <div className="relative">
+              {/* Over the tags, rising from just above what sits at the foot. */}
+              <div className="absolute inset-x-0 bottom-full">
+                <FilterPanel open={panel} />
+              </div>
               <Chips />
+              {capture.error && (
+                <p
+                  role="alert"
+                  className="glass mb-3 rounded-[1.25rem] px-4 py-2.5 text-destructive text-sm"
+                >
+                  {capture.error}
+                </p>
+              )}
+              <div className="flex items-end gap-3">
+                <SearchField onClose={dismiss} onCapture={capture.create} placeholder="Search" />
+                <FilterButton open={panel} onToggle={() => setPanel(!panel)} />
+              </div>
             </div>
-            <section
-              aria-label="Filters and sort"
-              className="glass-thick min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-[var(--dock-radius)] p-3"
-            >
-              <BoardFilters />
-            </section>
           </search>
         </motion.div>
       )}
@@ -242,7 +255,7 @@ function FilterPanel({ open }: { open: boolean }) {
           <section
             id="board-filter-panel"
             aria-label="Filters and sort"
-            className="glass-thick mb-3 max-h-[min(34rem,calc(100dvh-var(--dock-height)-9rem))] overflow-y-auto overscroll-contain rounded-[var(--dock-radius)] p-3"
+            className="glass-thick mb-3 max-h-[min(34rem,calc(100dvh-var(--dock-height)-9rem))] overflow-y-auto overscroll-contain rounded-[var(--dock-radius)] p-3 shadow-[0_10px_30px_-10px_var(--glass-shadow)]"
           >
             <BoardFilters />
           </section>
@@ -447,29 +460,4 @@ function useCapture() {
     }
   }
   return { create, error };
-}
-
-function CreateButton({ onCapture }: { onCapture: () => void }) {
-  const state = board.use();
-  const words = state.filter.query.trim();
-  const label = words ? `Create “${words}”` : 'New task';
-  return (
-    <Hint label={`${label} (Ctrl/⌘Enter)`}>
-      <motion.button
-        type="button"
-        aria-label={label}
-        aria-keyshortcuts="Control+Enter Meta+Enter"
-        onPointerDown={(event) => event.preventDefault()}
-        onClick={() => {
-          haptics.toggle();
-          onCapture();
-        }}
-        whileTap={{ scale: 0.88 }}
-        transition={springs.snappy}
-        className="flex size-[var(--dock-height)] shrink-0 items-center justify-center rounded-[var(--dock-radius)] bg-brand text-brand-foreground shadow-[0_2px_6px_-2px_color-mix(in_oklab,var(--brand)_45%,transparent),inset_0_1px_0_rgb(255_255_255/0.35)] outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
-      >
-        <Plus className="size-7" strokeWidth={2.25} aria-hidden />
-      </motion.button>
-    </Hint>
-  );
 }

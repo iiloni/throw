@@ -80,7 +80,6 @@ describe('the board’s search bar', () => {
     fireEvent.change(field(), { target: { value: 'weed' } });
     expect(board.get().filter.query).toBe('weed');
     expect(field()).toHaveAccessibleDescription('1 matching. Enter opens BRD-1');
-    expect(screen.getByRole('button', { name: 'Create “weed”' })).toBeInTheDocument();
   });
 
   it('opens the best match on Enter', () => {
