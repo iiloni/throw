@@ -1,9 +1,16 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { once } from 'node:events';
+import { createInterface } from 'node:readline';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { type APIRequestContext, expect, type Route, test } from '@playwright/test';
-import { type McpOutput, type McpToolName, mcpTools } from '../packages/shared/src/mcp';
+import {
+  changeCursorErrorSchema,
+  type McpOutput,
+  type McpToolName,
+  mcpTools,
+} from '../packages/shared/src/mcp';
 import {
   createMcpTokenResponseSchema,
   mcpTokensResponseSchema,
@@ -866,4 +873,329 @@ test('reparenting a manually ordered tag offline clears its position immediately
       { timeout: APP_LOAD_TIMEOUT },
     )
     .toMatchObject({ parent_id: parentId, position: null });
+});
+
+test('list_changes follows REST and MCP writes with stable pages and token attribution @api', async ({
+  request,
+}) => {
+  const account = await createAccount(request);
+  const credential = await makeToken(request, account);
+  // These credentials deliberately have the same display name.
+  const teammate = await makeToken(request, account);
+  const foreign = await makeToken(request, await createAccount(request));
+  const [client, other, stranger] = await Promise.all([
+    connect(credential.token),
+    connect(teammate.token),
+    connect(foreign.token),
+  ]);
+  try {
+    const after = new Date(Date.now() - 60_000).toISOString();
+    const start = await call(client, 'list_changes');
+    expect(start).toEqual({ changes: [], cursor: expect.stringMatching(/^v1\./), hasMore: false });
+
+    await call(stranger, 'create_project', {
+      operationId: structureId(),
+      name: 'Outside the reader’s workspace',
+    });
+    const project = await makeProject(request, account, credential.metadata.workspaceId);
+    const id = randomUUID();
+    const { headers } = account;
+    expect(
+      (
+        await request.patch(`/api/projects/${project.id}`, {
+          headers,
+          data: { name: 'Renamed project' },
+        })
+      ).status(),
+    ).toBe(200);
+    const statuses = await call(client, 'list_statuses', { projectId: project.id });
+    const active = statuses.items.find(({ category }) => category === 'active')!;
+    expect(
+      (
+        await request.post('/api/statuses', {
+          headers,
+          data: {
+            id,
+            projectId: project.id,
+            category: 'active',
+            name: 'Review',
+            position: 'a1',
+            isDefault: false,
+          },
+        })
+      ).status(),
+    ).toBe(201);
+    expect(
+      (
+        await request.patch(`/api/statuses/${id}`, {
+          headers,
+          data: { name: 'In review', isDefault: true },
+        })
+      ).status(),
+    ).toBe(200);
+    expect(
+      (
+        await request.patch(`/api/statuses/${id}`, {
+          headers,
+          data: { position: 'a2' },
+        })
+      ).status(),
+    ).toBe(200);
+
+    const tag = await call(other, 'create_tag', {
+      operationId: structureId(),
+      projectId: project.id,
+      name: 'Review notes',
+    });
+    const { task } = await call(other, 'create_task', {
+      projectId: project.id,
+      title: 'Review me',
+    });
+    await call(client, 'create_task', { projectId: project.id, title: 'Own write' });
+    await call(other, 'update_task', {
+      task: task.id,
+      changes: { title: { before: 'Review me', after: 'Ready for review' } },
+    });
+    await call(other, 'move_task', {
+      task: task.id,
+      before: {
+        statusId: statuses.items.find(({ category }) => category === 'backlog')!.id,
+        parentId: null,
+        priority: 3,
+      },
+      statusId: active.id,
+    });
+    for (const before of [false, true]) {
+      await call(other, 'update_task', {
+        task: task.id,
+        changes: { trashed: { before, after: !before } },
+      });
+    }
+
+    const { commentId } = await call(other, 'add_comment', {
+      task: task.id,
+      body: 'Original comment',
+    });
+    expect(
+      (
+        await request.patch(`/api/comments/${commentId}`, {
+          headers,
+          data: {
+            body: [{ type: 'paragraph', content: [{ type: 'text', text: 'Edited comment' }] }],
+          },
+        })
+      ).status(),
+    ).toBe(200);
+    expect((await request.delete(`/api/comments/${commentId}`, { headers })).status()).toBe(200);
+    expect((await request.delete(`/api/tags/${tag.current.id}`, { headers })).status()).toBe(200);
+
+    const all = await call(client, 'list_changes', { since: start.cursor, limit: 50 });
+    expect(all.hasMore).toBe(false);
+    expect(all.changes.map(({ type, kind }) => `${type}:${kind}`)).toEqual([
+      'project:created',
+      'status:created',
+      'status:created',
+      'status:created',
+      'status:created',
+      'project:updated',
+      'status:created',
+      'status:updated',
+      'status:updated',
+      'status:reordered',
+      'tag:created',
+      'task:created',
+      'task:updated',
+      'task:moved',
+      'task:trashed',
+      'task:restored',
+      'comment:created',
+      'comment:updated',
+      'comment:deleted',
+      'tag:deleted',
+    ]);
+    expect(
+      all.changes.find(({ type, kind }) => type === 'task' && kind === 'updated'),
+    ).toMatchObject({
+      entity: { id: task.id, taskKey: task.key, taskTitle: 'Ready for review' },
+      actor: { userId: account.user.id, viaToken: 'Queue agent' },
+      changes: [{ field: 'title', before: 'Review me', after: 'Ready for review' }],
+    });
+    expect(
+      all.changes
+        .filter(({ type }) => type === 'comment')
+        .map(({ entity, changes }) => ({
+          id: entity.id,
+          before: changes[0]?.before,
+          after: changes[0]?.after,
+        })),
+    ).toEqual([
+      { id: commentId, before: null, after: { markdown: 'Original comment', lossy: false } },
+      {
+        id: commentId,
+        before: { markdown: 'Original comment', lossy: false },
+        after: { markdown: 'Edited comment', lossy: false },
+      },
+      { id: commentId, before: { markdown: 'Edited comment', lossy: false }, after: null },
+    ]);
+
+    let page = await call(client, 'list_changes', { since: start.cursor, limit: 3 });
+    const paged = [...page.changes];
+    expect(page.hasMore).toBe(true);
+    for (let i = 0; page.hasMore && i < 20; i++) {
+      page = await call(client, 'list_changes', { since: page.cursor, limit: 3 });
+      paged.push(...page.changes);
+    }
+    expect(page.hasMore).toBe(false);
+    expect(paged).toEqual(all.changes);
+    expect((await call(client, 'list_changes', { since: page.cursor })).changes).toEqual([]);
+    const includesOwn = await call(client, 'list_changes', {
+      since: start.cursor,
+      includeOwn: true,
+      limit: 50,
+    });
+    expect(includesOwn.changes).toHaveLength(all.changes.length + 1);
+    expect(
+      includesOwn.changes.find(({ entity }) => entity.taskTitle === 'Own write')?.actor.viaToken,
+    ).toBe('Queue agent');
+    const catchUp = await call(client, 'list_changes', { since: { after }, limit: 3 });
+    expect(catchUp.hasMore).toBe(true);
+    const rest = await call(client, 'list_changes', { since: catchUp.cursor, limit: 50 });
+    expect([...catchUp.changes, ...rest.changes]).toEqual(all.changes);
+    expect((await call(client, 'list_changes', { since: rest.cursor })).changes).toEqual([]);
+
+    const cursorPayload = JSON.parse(Buffer.from(start.cursor.slice(3), 'base64url').toString());
+    const future = `v1.${Buffer.from(
+      JSON.stringify({
+        ...cursorPayload,
+        snapshot: '9223372036854775807:9223372036854775807:',
+      }),
+    ).toString('base64url')}`;
+    for (const [reader, since] of [
+      [stranger, start.cursor],
+      [client, 'v2.invalid'],
+      [client, future],
+    ] as const) {
+      const failed = await reader.callTool({ name: 'list_changes', arguments: { since } });
+      expect(failed.isError).toBe(true);
+      const reset = changeCursorErrorSchema.parse(failed.structuredContent);
+      expect((await call(reader, 'list_changes', { since: reset.cursor })).changes).toEqual([]);
+    }
+
+    // Task and comment history follow the task lifetime. Structure rows survive project purge.
+    expect((await request.delete(`/api/statuses/${id}`, { headers })).status()).toBe(409);
+    expect(
+      (
+        await request.patch(`/api/statuses/${active.id}`, { headers, data: { isDefault: true } })
+      ).status(),
+    ).toBe(200);
+    expect((await request.delete(`/api/statuses/${id}`, { headers })).status()).toBe(200);
+    for (const trashed of [true, false, true]) {
+      expect(
+        (
+          await request.patch(`/api/projects/${project.id}`, { headers, data: { trashed } })
+        ).status(),
+      ).toBe(200);
+    }
+    expect((await request.delete(`/api/projects/${project.id}`, { headers })).status()).toBe(200);
+    expect(
+      (await call(client, 'list_changes', { since: all.cursor })).changes.map(({ kind }) => kind),
+    ).toEqual(['updated', 'updated', 'deleted', 'trashed', 'restored', 'trashed', 'deleted']);
+  } finally {
+    await Promise.all([client.close(), other.close(), stranger.close()]);
+  }
+});
+
+test('list_changes catches an in-flight lower transaction after the current batch finishes @api', async ({
+  request,
+}) => {
+  const account = await createAccount(request);
+  const credential = await makeToken(request, account);
+  const client = await connect(credential.token);
+  const project = await makeProject(request, account, credential.metadata.workspaceId);
+  const id = randomUUID();
+  const writer = spawn('./scripts/dev.sh', ['psql', '-XqAt', '-v', 'ON_ERROR_STOP=1']);
+  const lines = createInterface({ input: writer.stdout });
+  const exited = once(writer, 'close');
+  try {
+    const ready = once(lines, 'line');
+    writer.stdin.write(`
+      BEGIN;
+      INSERT INTO structure_activity (id, workspace_id, project_id, project_key, entity_type, entity_id, kind, changes)
+      VALUES ('${id}', '${credential.metadata.workspaceId}', '${project.id}', 'THR', 'project', '${project.id}', 'updated', '[]');
+      SELECT 'ready';
+    `);
+    await expect(Promise.race([ready, exited])).resolves.toEqual(['ready']);
+    const start = await call(client, 'list_changes');
+    for (const name of ['Second transaction', 'Third transaction']) {
+      expect(
+        (
+          await request.patch(`/api/projects/${project.id}`, {
+            headers: account.headers,
+            data: { name },
+          })
+        ).status(),
+      ).toBe(200);
+    }
+    const first = await call(client, 'list_changes', { since: start.cursor, limit: 1 });
+    expect(first).toMatchObject({
+      changes: [{ changes: [{ field: 'name', after: 'Second transaction' }] }],
+      hasMore: true,
+    });
+    writer.stdin.end('COMMIT;\n');
+    await expect(exited).resolves.toEqual([0, null]);
+
+    const second = await call(client, 'list_changes', { since: first.cursor, limit: 1 });
+    expect(second).toMatchObject({
+      changes: [{ changes: [{ field: 'name', after: 'Third transaction' }] }],
+      hasMore: false,
+    });
+    const late = await call(client, 'list_changes', { since: second.cursor });
+    expect(late.changes.map((change) => change.id)).toEqual([id]);
+    expect((await call(client, 'list_changes', { since: late.cursor })).changes).toEqual([]);
+  } finally {
+    if (!writer.stdin.destroyed && !writer.stdin.writableEnded) writer.stdin.end('ROLLBACK;\n');
+    await exited;
+    await client.close();
+  }
+});
+
+test('an offline task write reaches an existing list_changes cursor on replay', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'The outbox does not depend on the layout.');
+  const account = await signUp(page);
+  const credential = await makeToken(page.request, account);
+  const project = await makeProject(page.request, account, credential.metadata.workspaceId);
+  const client = await connect(credential.token);
+  try {
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(project.name, {
+      timeout: APP_LOAD_TIMEOUT,
+    });
+    const start = await call(client, 'list_changes');
+    const block = (route: Route) => route.abort('connectionfailed');
+    await page.route('**/api/**', block);
+    const taskId = await page.evaluate(async (projectId) => {
+      const { createTask } = await import(/* @vite-ignore */ '/src/lib/tasks.ts');
+      return createTask(projectId, { title: 'Queued offline' }) as string;
+    }, project.id);
+    await expect(page.getByRole('status')).toContainText('unsaved', { timeout: 40_000 });
+    expect((await call(client, 'list_changes', { since: start.cursor })).changes).toEqual([]);
+    await page.unroute('**/api/**', block);
+    await page.evaluate(() => window.dispatchEvent(new Event('online')));
+    await expect
+      .poll(async () => (await call(client, 'list_changes', { since: start.cursor })).changes, {
+        timeout: 40_000,
+      })
+      .toMatchObject([
+        {
+          type: 'task',
+          kind: 'created',
+          entity: { id: taskId, taskTitle: 'Queued offline' },
+          actor: { viaToken: null },
+        },
+      ]);
+  } finally {
+    await client.close();
+  }
 });

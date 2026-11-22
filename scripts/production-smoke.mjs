@@ -151,6 +151,13 @@ try {
   assert.equal(sql('SELECT count(*) FROM mcp_tokens;'), '1');
   const id = randomUUID();
   sql(`INSERT INTO workspaces (id, name, position) VALUES ('${id}', 'before backup', 'a1');`);
+  sql(`
+    INSERT INTO structure_activity
+      (id, workspace_id, entity_id, entity_type, kind, changes, txid)
+    VALUES ('${randomUUID()}', '${id}', '${randomUUID()}', 'project', 'deleted', '[]',
+            '9223372036854775807');
+  `);
+  const cursorGeneration = sql('SELECT generation FROM change_feed_generation;');
   sql(
     "CREATE TABLE smoke_sibling (value text); INSERT INTO smoke_sibling VALUES ('Catch stays intact');",
     'catch',
@@ -169,6 +176,13 @@ try {
   dc(['stop', 'throw']);
   dc(['run', '--rm', '-T', 'throw', 'node', 'dist/backups/cli.mjs', 'restore', name, '--yes']);
   assert.equal(sql(`SELECT name FROM workspaces WHERE id = '${id}';`), 'before backup');
+  assert.notEqual(sql('SELECT generation FROM change_feed_generation;'), cursorGeneration);
+  assert.equal(
+    sql(
+      'SELECT count(*) FROM structure_activity WHERE pg_visible_in_snapshot(txid, pg_current_snapshot());',
+    ),
+    '1',
+  );
   assert.equal(sql('SELECT count(*) FROM session;'), '0');
   assert.equal(sql('SELECT count(*) FROM mcp_tokens;'), '0');
   assert.equal(sql("SELECT 'public.workspaces'::regclass::oid;"), oid);

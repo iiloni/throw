@@ -1,11 +1,12 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { mcpTools } from '@throw/shared';
+import { changeCursorErrorSchema, mcpTools } from '@throw/shared';
 import type { z } from 'zod';
 import type { McpActor } from '../lib/mcpTokens';
 import { StarterStatusIdTaken } from '../lib/projectWrites';
 import { StatusIdTaken } from '../lib/statusWrites';
 import { TagError } from '../lib/tagWrites';
+import { InvalidChangeCursor, listChanges } from './listChanges';
 import { MarkdownError } from './markdown';
 import {
   getTask,
@@ -73,6 +74,18 @@ export function throwMcpServer(actor: McpActor) {
             content: [{ type: 'text', text: JSON.stringify(structuredContent) }],
           };
         } catch (caught) {
+          if (caught instanceof InvalidChangeCursor) {
+            const error = changeCursorErrorSchema.parse({
+              code: 'cursor_invalid',
+              message: caught.message,
+              cursor: caught.cursor,
+            });
+            return {
+              isError: true,
+              structuredContent: error,
+              content: [{ type: 'text', text: JSON.stringify(error) }],
+            };
+          }
           const error =
             caught instanceof StarterStatusIdTaken || caught instanceof StatusIdTaken
               ? new ToolError('Status ID is already in use.')
@@ -96,6 +109,13 @@ export function throwMcpServer(actor: McpActor) {
     );
   }
 
+  register(
+    'list_changes',
+    mcpTools.list_changes,
+    'Follow task, comment and board structure changes in this workspace. Start with list_changes({}) to get a cursor and no changes, then read the board with list_tasks or get_task. Changes that happen during those reads can appear again, so handle duplicates. Pass the cursor as since to read exact changes in transaction order, or pass since: { after: "<ISO timestamp>" } for an approximate catch-up that returns a normal snapshot cursor. Offline writes are dated when they arrive. Your token’s writes are excluded unless includeOwn is true. While hasMore is true, pass the latest cursor as since with the same includeOwn setting. Save the final cursor for the next poll. A cursor_invalid error supplies a new starting cursor.',
+    listChanges,
+    true,
+  );
   register(
     'list_workspaces',
     mcpTools.list_workspaces,

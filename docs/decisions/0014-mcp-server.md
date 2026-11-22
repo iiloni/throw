@@ -79,6 +79,7 @@ project key changes. Key resolution follows [ADR 0007](0007-task-identifiers.md)
 
 | Tool | Purpose |
 | --- | --- |
+| `list_changes` | Follow task, comment and board structure history in the token’s workspace. |
 | `list_workspaces` | Identify the token's workspace. |
 | `list_projects` | Find projects, their current keys, appearance, priority names and rail positions. |
 | `list_statuses` | List a project's statuses, categories, positions and defaults. |
@@ -180,10 +181,51 @@ Add attribution to the existing shape allowlists and bump both collections' `sch
 Historical and ordinary app rows can have no attribution. The two existing tabs and the
 offline timeline continue to use the same activity and comment shapes.
 
-Project, status and tag creates, edits and reorders have no activity entries in Throw.
-Their MCP equivalents have no user-facing attribution yet. Changing a project key or
-a tag's appearance can change how a task is displayed without changing the task itself.
-Replay records serve retries and do not appear in task history.
+Project, status and tag mutations append to the server-only `structure_activity` log in
+the same transaction as the write. The entries describe changed fields and carry the
+actor, the credential's display name and ID, and the project key at the time of the write.
+Creating a project also records its starter statuses. Default switches record each changed
+status, and ordering changes record each affected position. Deleting a tag records its
+subtree and the tag removals in task history. Deleting a status still requires that no task
+uses it, so there is no implicit task reassignment. A project purge is represented by a
+single project deletion that covers all its remaining children. Structure entries survive
+project purges and are retained for the lifetime of their workspace.
+
+## Change feed
+
+Start a session with `list_changes({})`, save its cursor, then read the board with
+`list_tasks` or `get_task`. A write between those reads can already be on the board and
+also appear on the next call. Handle overlap when applying the feed. Poll with
+`list_changes({ since: cursor })`. With no saved cursor, `since: { after: "<ISO time>" }`
+gives an approximate catch-up by server arrival time and then returns a snapshot cursor.
+All pages use transaction order and a stable ID tie-breaker. Metadata on task and comment
+changes uses the current task title and key. The field changes carry historical values.
+For refused task fields, `after` is the value that stood and `requested` is the refused
+value. Description changes carry versions. Set `includeOwn: true` to see the calling
+token's writes. Attribution uses IDs for filtering, so two credentials with the same name
+remain distinct. Pre-migration entries only have names and remain visible by default.
+
+Rows store the full writing transaction ID (`xid8`). An opaque `v1.` cursor holds the
+previous Postgres snapshot, so a write still in flight at that snapshot can be read
+after it commits. While paging, the cursor also holds the fixed upper snapshot for the
+batch and the last transaction and event ID (with a source tie-breaker). Pass each returned
+cursor forward until `hasMore` is false, keeping `includeOwn` consistent. The batch's upper
+snapshot then becomes the next checkpoint. Concurrent commits during paging are picked up
+by the next batch. No per-reader state is stored on the server. A malformed, foreign
+workspace, future or pre-restore cursor returns `cursor_invalid` with a fresh starting
+cursor. Membership and token scope are checked on every call.
+
+The feed uses the existing task log and a server-only journal of comment versions copied
+from the comment write transaction. It records comment additions, edits and explicit
+deletions and renders the before and after bodies in Markdown. Existing comments are
+backfilled with the version present at migration. Task and comment history are kept for
+the lifetime of their task. A task purge removes that history, including rows a reader
+has yet to fetch. The journals add no shapes, collection versions or outbox formats.
+
+Backups keep the journals. Restore re-stamps restored rows with the live restore
+transaction and changes the feed generation, even when the Postgres transaction counter
+has advanced. A newly issued credential can bootstrap and read the board again or use
+time-based catch-up to read restored history.
 
 ## Security and operation
 

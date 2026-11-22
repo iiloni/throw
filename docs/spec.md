@@ -67,7 +67,8 @@ integrations.
 - An MCP server for reading workspace data, managing tasks, and creating, editing and
   reordering projects, statuses and tags. The account holder creates a named token for one
   workspace in Settings and can revoke it there. Agent writes sync to the board. Task
-  changes show their source in the task's history or comments.
+  changes show their source in the task's history or comments. Agents can follow workspace
+  changes with a cursor-based feed.
 
 ### Out of scope
 

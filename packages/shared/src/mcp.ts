@@ -143,7 +143,51 @@ const projectFields = projectSchema.shape;
 const tagFields = tagSchema.shape;
 const nonEmpty = (fields: object) => Object.keys(fields).length > 0;
 
+const feedCursor = z.string().describe('The opaque cursor returned by list_changes.');
+const feedChange = z.object({
+  id: uuid,
+  type: z.enum(['task', 'comment', 'project', 'status', 'tag']),
+  kind: z.enum(['created', 'updated', 'moved', 'reordered', 'trashed', 'restored', 'deleted']),
+  entity: z.object({
+    id: uuid,
+    projectId: uuid.nullable(),
+    projectKey: z.string().nullable(),
+    taskId: uuid.nullable(),
+    taskKey: z.string().nullable(),
+    taskTitle: z.string().nullable(),
+  }),
+  actor: z.object({ userId: z.string().nullable(), viaToken: z.string().nullable() }),
+  changes: z.array(
+    z.object({
+      field: z.string(),
+      before: z.unknown(),
+      after: z.unknown(),
+      applied: z.boolean().optional(),
+      requested: z.unknown().optional(),
+      tagId: uuid.optional(),
+      reason: z.enum(['stale', 'invalid', 'replaced']).optional(),
+    }),
+  ),
+  createdAt: timestampSchema,
+});
+
+export const changeCursorErrorSchema = z.object({
+  code: z.literal('cursor_invalid'),
+  message: z.string(),
+  cursor: feedCursor,
+});
+
 export const mcpTools = {
+  list_changes: {
+    input: z.strictObject({
+      since: z
+        .union([feedCursor, z.strictObject({ after: z.iso.datetime({ offset: true }) })])
+        .optional(),
+      includeOwn: z.boolean().default(false),
+      limit: z.int().min(1).max(50).default(20),
+    }),
+    output: z.object({ changes: z.array(feedChange), cursor: feedCursor, hasMore: z.boolean() }),
+  },
   list_workspaces: {
     input: z.strictObject({}),
     output: z.object({ items: z.array(workspace) }),

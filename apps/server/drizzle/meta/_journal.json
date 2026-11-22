@@ -43,6 +43,13 @@
       "when": 1795327468922,
       "tag": "0005_mcp-structure",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795330252694,
+      "tag": "0006_mcp-list-changes",
+      "breakpoints": true
     }
   ]
 }

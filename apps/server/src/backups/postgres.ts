@@ -268,6 +268,19 @@ export async function restoreDatabase(
       clearFile,
       tables.length > 0 ? `TRUNCATE TABLE ${tables.join(', ')} CASCADE;\n` : '',
     );
+    const resetFeedFile = join(workDir, 'reset-feed.sql');
+    // Archived transaction IDs belong to the source cluster. Make the restored history
+    // visible at the live restore transaction, and retire all pre-restore feed cursors.
+    await writeFile(
+      resetFeedFile,
+      `INSERT INTO public.change_feed_generation (id, generation) VALUES (true, gen_random_uuid())
+ON CONFLICT (id) DO UPDATE SET generation = EXCLUDED.generation;
+UPDATE public.task_activity SET txid = pg_current_xact_id();
+UPDATE public.comments SET txid = pg_current_xact_id();
+UPDATE public.comment_activity SET txid = pg_current_xact_id();
+UPDATE public.structure_activity SET txid = pg_current_xact_id();
+`,
+    );
     await run(
       'psql',
       [
@@ -280,6 +293,8 @@ export async function restoreDatabase(
         clearFile,
         '--file',
         dataFile,
+        '--file',
+        resetFeedFile,
       ],
       url,
     );
