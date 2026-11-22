@@ -68,6 +68,10 @@ export async function listProjects(
       id: projects.id,
       name: projects.name,
       key: projects.key,
+      color: projects.color,
+      icon: projects.icon,
+      position: projects.position,
+      priorityNames: projects.priorityNames,
       trashed: sql<boolean>`${projects.deletedAt} IS NOT NULL`,
     })
     .from(projects)
@@ -123,7 +127,14 @@ export async function listTags(
 ): Promise<McpOutput<'list_tags'>> {
   await requireProject(actor, input.projectId);
   const rows = await db
-    .select({ id: tags.id, name: tags.name, parentId: tags.parentId })
+    .select({
+      id: tags.id,
+      name: tags.name,
+      parentId: tags.parentId,
+      color: tags.color,
+      icon: tags.icon,
+      position: tags.position,
+    })
     .from(tags)
     .where(
       and(

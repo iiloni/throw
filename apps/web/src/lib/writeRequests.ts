@@ -225,6 +225,6 @@ export function changeIdFor(idempotencyKey: string, taskId: string) {
 
 /** Only client-set tag fields travel; workspace ownership is assigned by the server. */
 export function tagCreateRequest(tag: Tag) {
-  const { workspaceId: _workspaceId, ...body } = tag;
+  const { workspaceId: _workspaceId, position: _position, ...body } = tag;
   return createTagSchema.parse(body);
 }

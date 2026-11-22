@@ -1,4 +1,4 @@
-import { COLORS, type Tag, tagPath } from '@throw/shared';
+import { COLORS, compareTags, type Tag, tagPath } from '@throw/shared';
 import { Check, ChevronLeft, ChevronRight, Slash } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { type ReactNode, useMemo, useRef, useState } from 'react';
@@ -70,7 +70,7 @@ export function ColorTagPicker({
         ? tag.parentId === null && tag.color === null
         : tag.parentId === branch,
     )
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort(compareTags);
 
   function open(next: Branch, travel: number) {
     refocus.current = true;

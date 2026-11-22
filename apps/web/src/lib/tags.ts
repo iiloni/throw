@@ -52,7 +52,12 @@ export function updateTag(id: string, changes: UpdateTag) {
   if (!tag) throw new Error('Tag not found');
   const valid = updateTagSchema.parse(changes);
   validate({ ...tag, ...valid });
-  write(() => tagsCollection.update(id, (draft) => Object.assign(draft, valid)));
+  write(() =>
+    tagsCollection.update(id, (draft) => {
+      if (valid.parentId !== undefined && valid.parentId !== draft.parentId) draft.position = null;
+      Object.assign(draft, valid);
+    }),
+  );
 }
 export function deleteTag(id: string) {
   const tag = tagsCollection.get(id);

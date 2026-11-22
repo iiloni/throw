@@ -26,7 +26,7 @@ import {
 export function projectsIn(projects: readonly Project[], workspaceId: string) {
   return projects
     .filter((project) => project.workspaceId === workspaceId && project.deletedAt === null)
-    .sort((a, b) => comparePositions(a.position, b.position));
+    .sort((a, b) => comparePositions(a.position, b.position) || comparePositions(a.id, b.id));
 }
 
 /**

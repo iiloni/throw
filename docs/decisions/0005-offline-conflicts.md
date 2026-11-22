@@ -51,9 +51,10 @@ default status, and a tag that no longer exists is left off. The log says so.
 **What can still be dropped.** A write to a task, project or parent that was purged from the
 trash answers 404 and is dropped with a notice, as before (ADR 0002).
 
-**Scope.** The rule covers tasks. Workspaces, projects, statuses and comments keep the
-scaffold's rule, applied in the order writes arrive: they have no log to record a refused
-field in, and they change rarely.
+**Scope.** The per-field rule covers tasks. App writes to workspaces, projects, statuses,
+tags and comments still apply in arrival order. MCP structure tools compare before values
+atomically and return stale conflicts directly to the caller, as described in
+[ADR 0014](0014-mcp-server.md).
 
 ## Consequences
 

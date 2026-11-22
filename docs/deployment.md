@@ -70,6 +70,11 @@ its access independently. Copy the value when shown and store it in the client's
 store. The client needs Streamable HTTP and support for a custom bearer token. Set the
 URL to `https://tasks.example.com/api/mcp` and send `Authorization: Bearer <token>`.
 
+The [MCP tools](decisions/0014-mcp-server.md#tools) can read and manage tasks and can
+create, edit and reorder projects, statuses and tags in that workspace. Each structure
+write takes a UUIDv7 operation ID. Reuse it to retry the same request. Existing tokens
+gain the structure tools when the server is upgraded.
+
 Use the existing HTTPS proxy and preserve the configured Host and the Authorization
 header. Disable caching on this path and keep credentials and request bodies out of proxy
 logs. The endpoint has its own request limits. Forward client IPs only through the

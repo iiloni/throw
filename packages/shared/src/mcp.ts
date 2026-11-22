@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { activityChangeSchema } from './activity';
+import { positionSchema } from './position';
 import { prioritySchema } from './priorities';
+import { projectKeySchema, projectSchema, storedProjectKeySchema } from './projects';
 import { statusCategorySchema, statusSchema } from './statuses';
 import { timestampSchema } from './sync';
 import { secondaryTagChangesSchema, tagSchema } from './tags';
@@ -33,7 +35,9 @@ const timelinePageInput = z
   .default({ limit: 10 });
 
 const workspace = z.object({ id: uuid, name: z.string() });
-const project = workspace.extend({ key: z.string(), trashed: z.boolean() });
+const project = projectSchema
+  .pick({ id: true, name: true, color: true, icon: true, position: true, priorityNames: true })
+  .extend({ key: storedProjectKeySchema, trashed: z.boolean() });
 const taskReference = z.object({ id: uuid, key: z.string() });
 const task = taskReference.extend({
   projectId: uuid,
@@ -68,7 +72,10 @@ const comment = z.object({
   body: textDocument,
 });
 const status = statusSchema.omit({ projectId: true, workspaceId: true });
-const tag = tagSchema.pick({ id: true, name: true, parentId: true }).extend({
+const tag = tagSchema
+  .pick({ id: true, name: true, parentId: true, color: true, icon: true })
+  .extend({ position: positionSchema.nullable() });
+const tagWithPath = tag.extend({
   path: z.array(z.string()).describe('Tag names from the root to this tag.'),
 });
 const uuidPage = <T extends z.ZodType>(item: T) =>
@@ -110,6 +117,32 @@ const moveScope = z.strictObject({
   parentId: uuid.nullable(),
 });
 
+const structureId = uuid.toLowerCase();
+const structureOperationId = z
+  .uuidv7()
+  .toLowerCase()
+  .describe('Use a new UUIDv7 for each write and reuse it only to retry that same write.');
+const structurePlacement = z.strictObject({
+  side: z.enum(['before', 'after']),
+  neighborId: structureId,
+});
+const structureResult = <T extends z.ZodType>(item: T) =>
+  z.object({
+    operationId: z.uuidv7(),
+    outcome: z.enum(['applied', 'conflict']),
+    current: item,
+    conflicts: z
+      .array(z.string())
+      .describe('Fields whose before values differ from the current values.'),
+  });
+const projectResult = structureResult(project);
+const statusResult = structureResult(status.extend({ defaultStatusId: uuid }));
+const tagResult = structureResult(tag);
+
+const projectFields = projectSchema.shape;
+const tagFields = tagSchema.shape;
+const nonEmpty = (fields: object) => Object.keys(fields).length > 0;
+
 export const mcpTools = {
   list_workspaces: {
     input: z.strictObject({}),
@@ -125,7 +158,120 @@ export const mcpTools = {
   },
   list_tags: {
     input: pageInput.extend({ projectId: uuid }),
-    output: uuidPage(tag),
+    output: uuidPage(tagWithPath),
+  },
+  create_project: {
+    input: z.strictObject({
+      operationId: structureOperationId,
+      name: projectFields.name,
+      key: projectKeySchema
+        .optional()
+        .describe(
+          'Proposed key: 1–6 uppercase letters or digits, starting with a letter. Defaults to a key derived from the name.',
+        ),
+      color: projectFields.color.optional(),
+      icon: projectFields.icon.optional(),
+    }),
+    output: projectResult,
+  },
+  update_project: {
+    input: z.strictObject({
+      operationId: structureOperationId,
+      projectId: structureId,
+      changes: z
+        .strictObject({
+          name: change(projectFields.name),
+          key: z.strictObject({ before: storedProjectKeySchema, after: projectKeySchema }),
+          color: change(projectFields.color),
+          icon: change(projectFields.icon),
+          priorityNames: change(projectFields.priorityNames),
+        })
+        .partial()
+        .refine(nonEmpty, 'Supply a change.'),
+    }),
+    output: projectResult,
+  },
+  move_project: {
+    input: z.strictObject({
+      operationId: structureOperationId,
+      projectId: structureId,
+      before: z.strictObject({ position: positionSchema }),
+      placement: structurePlacement,
+    }),
+    output: projectResult,
+  },
+  create_status: {
+    input: z.strictObject({
+      operationId: structureOperationId,
+      projectId: structureId,
+      name: statusSchema.shape.name,
+      category: statusCategorySchema,
+    }),
+    output: statusResult,
+  },
+  update_status: {
+    input: z.strictObject({
+      operationId: structureOperationId,
+      statusId: structureId,
+      changes: z
+        .strictObject({
+          name: change(statusSchema.shape.name),
+          defaultStatusId: change(structureId).describe(
+            'Use the current category default UUID as before, and this status UUID as after.',
+          ),
+        })
+        .partial()
+        .refine(nonEmpty, 'Supply a change.'),
+    }),
+    output: statusResult,
+  },
+  move_status: {
+    input: z.strictObject({
+      operationId: structureOperationId,
+      statusId: structureId,
+      before: z.strictObject({ position: positionSchema }),
+      placement: structurePlacement,
+    }),
+    output: statusResult,
+  },
+  create_tag: {
+    input: z.strictObject({
+      operationId: structureOperationId,
+      projectId: structureId,
+      name: tagFields.name,
+      parentId: structureId.nullable().default(null),
+      color: tagFields.color.default(null),
+      icon: tagFields.icon.default(null),
+    }),
+    output: tagResult,
+  },
+  update_tag: {
+    input: z.strictObject({
+      operationId: structureOperationId,
+      tagId: structureId,
+      changes: z
+        .strictObject({
+          name: change(tagFields.name),
+          parentId: change(structureId.nullable()),
+          color: change(tagFields.color),
+          icon: change(tagFields.icon),
+        })
+        .partial()
+        .refine(nonEmpty, 'Supply a change.'),
+    }),
+    output: tagResult,
+  },
+  move_tag: {
+    input: z.strictObject({
+      operationId: structureOperationId,
+      tagId: structureId,
+      before: z.strictObject({
+        position: positionSchema.nullable(),
+        parentId: structureId.nullable(),
+      }),
+      placement: structurePlacement,
+    }),
+    output: tagResult,
   },
   list_tasks: {
     input: pageInput.extend({

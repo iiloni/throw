@@ -18,6 +18,8 @@ In `apps/web/src/lib`:
 
 - `tags.ts`: `createTag(projectId, fields)` returns the new id; `updateTag(id, changes)` and
   `deleteTag(id)` manage the tree. Reparenting a root must include `color: null, icon: null`.
+  The [MCP tools](decisions/0014-mcp-server.md#tools) can reorder siblings, and the app
+  displays the synced order. Any tag can be assigned to a task in either role.
 - `tasks.ts`: `createTask` accepts `primaryTagId` and `secondaryTagIds`; `updateTask` accepts
   `primaryTagId` with the other task fields. Both keep the existing conflict/replay behavior.
 - `tags.ts`: `setPrimaryTag(taskId, tagId | null)` and

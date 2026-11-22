@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { type Color, colorSchema } from './colors';
+import { comparePositions, positionSchema } from './position';
 import { txidResponseSchema } from './sync';
 
 // Ported from Catch ADR 0016; ownership is a project, assignments are independent rows.
@@ -78,11 +79,13 @@ export const tagSchema = z.object({
   parentId: z.uuid().nullable(),
   icon: z.enum(TAG_ICONS).nullable(),
   color: colorSchema.nullable(),
+  // Older servers and queued offline creates have no manual position.
+  position: positionSchema.nullable().optional(),
 });
 export type Tag = z.infer<typeof tagSchema>;
 export type TagIconName = (typeof TAG_ICONS)[number];
 export const createTagSchema = tagSchema
-  .omit({ workspaceId: true })
+  .omit({ workspaceId: true, position: true })
   .strict()
   .refine(
     (tag) => tag.parentId === null || (tag.color === null && tag.icon === null),
@@ -90,7 +93,7 @@ export const createTagSchema = tagSchema
   );
 export type CreateTag = z.infer<typeof createTagSchema>;
 export const updateTagSchema = tagSchema
-  .omit({ id: true, workspaceId: true, projectId: true })
+  .omit({ id: true, workspaceId: true, projectId: true, position: true })
   .partial()
   .strict();
 export type UpdateTag = z.infer<typeof updateTagSchema>;
@@ -121,6 +124,12 @@ export const tagWriteResponseSchema = txidResponseSchema.extend({
 export type TagWriteResponse = z.infer<typeof tagWriteResponseSchema>;
 
 export function compareTags(a: Tag, b: Tag) {
+  if (a.position && b.position) {
+    const order = comparePositions(a.position, b.position);
+    if (order) return order;
+  } else if (a.position || b.position) {
+    return a.position ? -1 : 1;
+  }
   return a.name.localeCompare(b.name) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 }
 

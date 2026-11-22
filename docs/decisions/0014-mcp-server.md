@@ -16,7 +16,7 @@ agent and gives it a credential that acts under their authority. Throw starts wi
 usable MCP credentials. Changes carry the credential's name back to the task, and Throw
 runs no scheduled agent jobs or task rules.
 
-**Each token grants read and task-write access to one workspace.** This is the scope of a
+**Each token grants read, task-write and board structure access to one workspace.** This is the scope of a
 Throw board and keeps a client working on one queue from reaching unrelated work. A client
 that needs another workspace uses another token. `list_workspaces` returns the one
 workspace the credential can reach. Every MCP query intersects the token's scope with
@@ -56,7 +56,7 @@ TypeScript SDK `@modelcontextprotocol/sdk` pinned to `1.32.2`. Use the Web-stand
 transport with a fresh server and transport per request and JSON replies to POST. The
 tool catalog is fixed and calls are short and independent, so there is no MCP session ID,
 server push or stream resumption. Authenticated GET and DELETE return 405. Electric
-delivers task changes to Throw devices as it does for writes made in the app.
+delivers task and board structure changes to Throw devices as it does for writes made in the app.
 [Streamable HTTP specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports),
 [TypeScript SDK release](https://github.com/modelcontextprotocol/typescript-sdk/releases/tag/1.32.2).
 
@@ -64,9 +64,9 @@ Mount this route outside the app session middleware and [ADR 0003](0003-api-comp
 `X-Throw-Protocol` gate, under the existing server restore guard. The SDK handles MCP
 version negotiation. Token management uses the signed app session and the Throw protocol
 gate. Both surfaces use shared Zod input and output schemas. Throw's protocol stays at 1
-before the first release. Existing app clients can ignore the new attribution columns.
-New app clients must tolerate absent attribution on an older server and hide token
-management when the server lacks its API. Queued app writes keep their existing format.
+before the first release. Existing app clients can ignore the new attribution columns and
+tag positions. New app clients tolerate absent tag positions and attribution on older
+servers and hide token management when the server lacks its API. Queued app writes keep their existing format.
 
 ## Tools
 
@@ -80,9 +80,18 @@ project key changes. Key resolution follows [ADR 0007](0007-task-identifiers.md)
 | Tool | Purpose |
 | --- | --- |
 | `list_workspaces` | Identify the token's workspace. |
-| `list_projects` | Find projects and their current keys. |
-| `list_statuses` | List a project's statuses, categories and defaults. |
-| `list_tags` | List a project's tags with IDs and paths. |
+| `list_projects` | Find projects, their current keys, appearance, priority names and rail positions. |
+| `list_statuses` | List a project's statuses, categories, positions and defaults. |
+| `list_tags` | List a project's tags with IDs, parents, appearance, sibling positions and paths. |
+| `create_project` | Create a project in the token's workspace with starter statuses and an optional proposed key and appearance. |
+| `update_project` | Edit name, key, appearance or priority names. |
+| `move_project` | Place a project before or after a neighbor in the workspace rail. |
+| `create_status` | Add a status to a fixed category in a project. |
+| `update_status` | Rename a status or make it its category's default. |
+| `move_status` | Place a status before or after a neighbor in the same project and category. |
+| `create_tag` | Create a root or nested tag. Roots may have a color and icon. |
+| `update_tag` | Rename a tag, edit its appearance or change its parent. |
+| `move_tag` | Place a tag before or after a sibling under the same parent. |
 | `list_tasks` | List tasks or search their titles, descriptions and current keys. Filter by project, status or category, priority, tag, parent and trash state. Exclude effectively trashed tasks by default. |
 | `get_task` | Read a task and its subtasks, comments and history, with cursors for those sections. |
 | `create_task` | Create a task in a project or create a subtask by supplying its parent. |
@@ -91,9 +100,11 @@ project key changes. Key resolution follows [ADR 0007](0007-task-identifiers.md)
 | `add_comment` | Post a comment on a task. |
 | `set_task_tags` | Set or clear the primary tag and add or remove individual secondary tags. |
 
-Users configure projects, statuses and tags in Throw. The tools can assign existing
-statuses and tags. Permanent removal and task relations such as `blocks` and `depends on`
-are outside this tool surface.
+Users can configure projects, statuses and tags in Throw or through MCP. Structure writes
+cover active projects and their statuses and tags. Trashing, restoring or deleting board
+structure is outside the tool surface, as are permanent removal and task relations such
+as `blocks` and `depends on`. Primary and secondary are task assignment roles. A tag may
+hold either or both roles.
 
 ## Shared writes and conflicts
 
@@ -122,6 +133,25 @@ credential. A JSON-RPC request ID is independent of write replay. The committed 
 the resulting task or comment reference and the write outcome. REST clients keep the
 transaction responses their outbox uses for handover.
 
+Project, status and tag tools use the same server write functions as the app. An MCP
+structure edit compares every supplied before value under the relevant lock. If any value
+is stale, the entire edit is refused and the reply gives the current row and conflicting
+fields. To change the category default, the before value is the current default's UUID
+and the after value is the target status's UUID. Changing a default keeps exactly one
+default in that category. Moves take the last-read position (and parent for tags) and a
+neighbor UUID. The server computes the fractional position in the same transaction.
+
+Tags with manual positions sort first in each sibling group. Tags without a position
+keep their alphabetical order, and moving a tag to a new parent clears its old position.
+A move may assign positions to other siblings to preserve exact placement when positions
+are missing or collide. The synced tag position is nullable and the tags collection
+bumps its schema version. Older servers may omit the field.
+
+Each structure write requires a UUIDv7 operation ID. Successful and stale outcomes are
+stored atomically with the write and returned on an exact retry, even if the row has
+changed since. Reusing an ID for a different structure request is refused. Replay records
+are scoped to the credential, deleted with its revocation and excluded from backups.
+
 ## Text content
 
 Accept and return Markdown for descriptions and comments. A lightweight server-side
@@ -149,6 +179,11 @@ Add attribution to the existing shape allowlists and bump both collections' `sch
 `TaskDetails/TaskTimeline.tsx` shows “via <token name>” in History and on agent comments.
 Historical and ordinary app rows can have no attribution. The two existing tabs and the
 offline timeline continue to use the same activity and comment shapes.
+
+Project, status and tag creates, edits and reorders have no activity entries in Throw.
+Their MCP equivalents have no user-facing attribution yet. Changing a project key or
+a tag's appearance can change how a task is displayed without changing the task itself.
+Replay records serve retries and do not appear in task history.
 
 ## Security and operation
 
