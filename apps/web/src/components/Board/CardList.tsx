@@ -14,7 +14,7 @@ import {
   type ListId,
   listStatusId,
   listTasks,
-  sortedBySize,
+  sortedByField,
   useBoardSettings,
   visibleIds,
 } from './state';
@@ -67,13 +67,13 @@ export function CardList({
   const dragging = held?.phase === 'dragging';
   const moving = makingWay(held);
   const target = dragging ? held.target : null;
-  // Sorted by size, a column keeps no manual order: a card is sent to it, not placed in it,
+  // Sorted by a field, a column keeps no manual order: a card is sent to it, not placed in it,
   // and nothing in it moves while one is held (ADR 0008).
-  const bySize = sortedBySize(state);
+  const resorted = sortedByField(state);
   const over =
     moving &&
     (target?.kind === 'status'
-      ? bySize && target.statusId === listStatusId(listId)
+      ? resorted && target.statusId === listStatusId(listId)
       : target?.listId === listId);
   const place = target?.kind === 'place' && target.listId === listId ? target : null;
   const stretch = moving && place !== null && settings.heldColumn === 'compact';
@@ -83,7 +83,7 @@ export function CardList({
   // it began on, and stops if that element is removed.
   const lifted = (taskId: string) => dragging && held.ids.includes(taskId);
   const tasks = listTasks(state, listId);
-  const groups: { priority: Priority | null; tasks: typeof tasks }[] = bySize
+  const groups: { priority: Priority | null; tasks: typeof tasks }[] = resorted
     ? [{ priority: null, tasks }]
     : groupByPriority(tasks);
   const open = held?.priority;
@@ -109,7 +109,7 @@ export function CardList({
           : project.statuses.find((status) => status.id === listId.slice(7))?.name
       }
       data-drop-list={listId}
-      data-drop-send={bySize ? '' : undefined}
+      data-drop-send={resorted ? '' : undefined}
       data-over={over ? '' : undefined}
       data-surface={surface && settings.surfaces ? '' : undefined}
       className={cn('board-column relative flex min-h-0 min-w-0 flex-col rounded-3xl', className)}

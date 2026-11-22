@@ -2,6 +2,7 @@ import { Plus, Search, SlidersHorizontal, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
   type KeyboardEvent,
+  type RefObject,
   useContext,
   useEffect,
   useLayoutEffect,
@@ -34,6 +35,33 @@ import { ActiveFilters, BoardFilters, hasChips } from './BoardFilters';
 export const SEARCH_SPACE = 'var(--board-search-space, 0.25rem)';
 
 /**
+ * The board's width (the window less the navigation rail) from which search docks as a sidebar
+ * beside the backlog instead of floating over the columns: room for the sidebar, the backlog
+ * and a few columns, with the filters open for good.
+ */
+export const SEARCH_SIDEBAR_MIN = 1320;
+const SIDEBAR_WIDTH = 368;
+
+/**
+ * Whatever had focus when search opened gets it back when it closes, or the board does.
+ * Returns the dismissal, which closes search and clears what it chose.
+ */
+function useDismiss(root: RefObject<HTMLElement | null>, searching: boolean) {
+  const opener = useRef<Element | null>(null);
+  useLayoutEffect(() => {
+    if (!searching) return;
+    const active = document.activeElement;
+    opener.current = active && !root.current?.contains(active) ? active : null;
+  }, [searching, root]);
+  return function dismiss() {
+    closeSearch();
+    const back = opener.current;
+    if (back instanceof HTMLElement && back.isConnected) back.focus({ preventScroll: true });
+    else document.querySelector<HTMLElement>('#main-content')?.focus({ preventScroll: true });
+  };
+}
+
+/**
  * Catch's search, over a live board: a glass field and filter button floating at the foot of
  * the board, beside (never over) an open task. It is not a dialog. What is typed and chosen
  * narrows the board in place, so a card that matches can be opened, dragged or carried while
@@ -44,17 +72,11 @@ export function BoardSearch() {
   const state = board.use();
   const reduced = useReducedMotion();
   const root = useRef<HTMLElement>(null);
-  const opener = useRef<Element | null>(null);
   const searching = state.searching;
   const [panel, setPanel] = useState(false);
   const capture = useCapture();
+  const dismiss = useDismiss(root, searching);
 
-  // Whatever had focus when the bar opened gets it back when it closes.
-  useLayoutEffect(() => {
-    if (!searching) return;
-    const active = document.activeElement;
-    opener.current = active && !root.current?.contains(active) ? active : null;
-  }, [searching]);
   useEffect(() => {
     if (!searching) setPanel(false);
   }, [searching]);
@@ -84,13 +106,6 @@ export function BoardSearch() {
       host.style.removeProperty('--board-search-space');
     };
   }, [searching]);
-
-  function dismiss() {
-    closeSearch();
-    const back = opener.current;
-    if (back instanceof HTMLElement && back.isConnected) back.focus({ preventScroll: true });
-    else document.querySelector<HTMLElement>('#main-content')?.focus({ preventScroll: true });
-  }
 
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.key !== 'Escape' || event.nativeEvent.isComposing) return;
@@ -135,6 +150,74 @@ export function BoardSearch() {
               <FilterButton open={panel} onToggle={() => setPanel(!panel)} />
               <CreateButton onCapture={capture.create} />
             </div>
+          </search>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+/**
+ * Search on a wide board: a column between the navigation rail and the backlog, with the field
+ * at its head and the filters open beneath it, so nothing floats over the cards. It narrows the
+ * board as the bar does. Escape clears what it chose, then closes it.
+ */
+export function BoardSearchSidebar() {
+  const state = board.use();
+  const reduced = useReducedMotion();
+  const root = useRef<HTMLElement>(null);
+  const searching = state.searching;
+  const capture = useCapture();
+  const dismiss = useDismiss(root, searching);
+
+  function onKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (event.key !== 'Escape' || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (narrowed(board.get())) clearFilters();
+    else dismiss();
+  }
+
+  return (
+    <AnimatePresence initial={false}>
+      {searching && (
+        <motion.div
+          key="sidebar"
+          className="shrink-0 overflow-hidden"
+          initial={{ width: 0, opacity: 0 }}
+          animate={{ width: SIDEBAR_WIDTH, opacity: 1 }}
+          exit={{ width: 0, opacity: 0 }}
+          transition={reduced ? { duration: 0 } : springs.smooth}
+        >
+          <search
+            ref={root}
+            aria-label="Search the board"
+            data-docked=""
+            onKeyDown={onKeyDown}
+            style={{ width: SIDEBAR_WIDTH }}
+            className="flex h-full flex-col pt-[calc(var(--safe-top)+1.25rem)] pb-[max(1.5rem,calc(var(--safe-bottom)+0.75rem))] pl-5"
+          >
+            <div className="flex items-end gap-2">
+              <SearchField onClose={dismiss} onCapture={capture.create} placeholder="Search" />
+              <CreateButton onCapture={capture.create} />
+            </div>
+            {capture.error && (
+              <p
+                role="alert"
+                className="glass mt-3 rounded-[1.25rem] px-4 py-2.5 text-destructive text-sm"
+              >
+                {capture.error}
+              </p>
+            )}
+            <div className="mt-3">
+              <Chips />
+            </div>
+            <section
+              aria-label="Filters and sort"
+              className="glass-thick min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-[var(--dock-radius)] p-3"
+            >
+              <BoardFilters />
+            </section>
           </search>
         </motion.div>
       )}
@@ -194,7 +277,15 @@ function Chips() {
   );
 }
 
-function SearchField({ onClose, onCapture }: { onClose: () => void; onCapture: () => void }) {
+function SearchField({
+  onClose,
+  onCapture,
+  placeholder = 'Search this board',
+}: {
+  onClose: () => void;
+  onCapture: () => void;
+  placeholder?: string;
+}) {
   const state = board.use();
   const data = current(state);
   const { filter } = state;
@@ -240,7 +331,7 @@ function SearchField({ onClose, onCapture }: { onClose: () => void; onCapture: (
         aria-label="Search tasks"
         aria-describedby="board-search-summary"
         aria-keyshortcuts="Enter Control+Enter Meta+Enter Escape"
-        placeholder="Search this board"
+        placeholder={placeholder}
         autoComplete="off"
         autoCapitalize="off"
         spellCheck={false}

@@ -6,7 +6,7 @@ import { useShell } from '@/components/AppShell/shell';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { type TaskPanel, taskDrawerContent } from '@/components/TaskDetails/TaskControls';
 import { TaskDetails } from '@/components/TaskDetails/TaskDetails';
-import { useProjectTaskTags, useStatuses, useTags, useTasks } from '@/lib/collections';
+import { useActivity, useProjectTaskTags, useStatuses, useTags, useTasks } from '@/lib/collections';
 import { useDesktop } from '@/lib/media';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { createTask } from '@/lib/tasks';
@@ -15,7 +15,7 @@ import { taskScreens, taskWrites, useBoardBoundary } from './boundary';
 import { DesktopBoard } from './DesktopBoard';
 import { DragOverlay } from './DragOverlay';
 import { PhoneBoard } from './PhoneBoard';
-import { projectBoardData, secondaryTagsByTask } from './selection';
+import { projectBoardData, secondaryTagsByTask, updatedAtByTask } from './selection';
 import { board } from './state';
 import { TaskScreen } from './TaskView';
 import { TaskContentContext } from './taskContent';
@@ -36,11 +36,13 @@ export function ProjectBoard({
   const { tags } = useTags(project.id);
   const taskTags = useProjectTaskTags(project.id);
   const secondaryTags = useMemo(() => secondaryTagsByTask(taskTags), [taskTags]);
+  const activity = useActivity();
+  const updates = useMemo(() => updatedAtByTask(activity), [activity]);
   const phone = !useDesktop();
   const state = board.use();
   const data = useMemo(
-    () => projectBoardData(project, statuses, tasks, tags, secondaryTags),
-    [project, statuses, tasks, tags, secondaryTags],
+    () => projectBoardData(project, statuses, tasks, tags, secondaryTags, updates),
+    [project, statuses, tasks, tags, secondaryTags, updates],
   );
   const awaiting = useAwaitingSync(loadingStatuses, data.project.statuses.length);
   const awaitingTasks = useAwaitingSync(loadingTasks, data.tasks.length);

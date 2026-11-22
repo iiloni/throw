@@ -6,11 +6,11 @@ import { createStore } from '@/lib/store';
 import {
   type BoardFilter,
   type BoardSort,
-  compareBySize,
+  compareByField,
   EMPTY_FILTER,
   isFiltering,
   matchingIds,
-  sortDirection,
+  sortOrder,
 } from './filter';
 import type { BoardData } from './model';
 import {
@@ -466,20 +466,23 @@ export function visibleIds(state: BoardState) {
   return matchingIds(current(state), state.filter, state.subtasksAsCards);
 }
 
-/** The board is sorted by size: within a column, cards keep no manual order (ADR 0008). */
-export function sortedBySize(state: BoardState) {
+/**
+ * The board is sorted by size or time: within a column, cards keep no manual order, so they
+ * are sent rather than placed (ADR 0008).
+ */
+export function sortedByField(state: BoardState) {
   return state.sort !== 'priority';
 }
 
 /**
  * A list's cards in the bands a column draws: one per priority with cards in it, or a single
- * unlabelled run (`priority: null`) while the board is sorted by size.
+ * unlabelled run (`priority: null`) while the board is sorted by a field.
  */
 export function bandsOf(
   state: BoardState,
   tasks: Task[],
 ): { priority: Priority | null; tasks: Task[] }[] {
-  if (sortedBySize(state)) return tasks.length > 0 ? [{ priority: null, tasks }] : [];
+  if (sortedByField(state)) return tasks.length > 0 ? [{ priority: null, tasks }] : [];
   return groupByPriority(tasks).filter((band) => band.tasks.length > 0);
 }
 
@@ -496,15 +499,19 @@ export function listTasks(state: BoardState, listId: ListId): Task[] {
           ? statusIdsIn(project, [category], null)
           : [listStatusId(listId)];
   const visible = visibleIds(state);
-  const direction = sortDirection(state.sort);
+  const order = sortOrder(state.sort);
   const banded = category !== null && isClosed(category);
   // The closed zone reads by when work was closed, whatever the columns are sorted by.
   const compare =
     listId === 'closed'
       ? compareClosed
-      : direction
+      : order
         ? (a: Task, b: Task) =>
-            compareBySize(direction)(a, b, banded ? compareBanded : compareTasks)
+            compareByField(order.field, order.direction)(
+              a,
+              b,
+              banded ? compareBanded : compareTasks,
+            )
         : banded
           ? compareBanded
           : compareTasks;
@@ -542,7 +549,7 @@ export function clearFilters() {
   update({ filter: EMPTY_FILTER, sort: 'priority' });
 }
 
-/** Search or a filter narrows the board, or the size sort reorders it. */
+/** Search or a filter narrows the board, or a sort reorders it. */
 export function narrowed(state: BoardState) {
   return isFiltering(state.filter) || state.sort !== 'priority';
 }
@@ -561,7 +568,7 @@ export function focusSearch() {
   });
 }
 
-/** Closes the bar, and with it the search, its filters and the size sort. */
+/** Closes the bar, and with it the search, its filters and the sort. */
 export function closeSearch() {
   update({ searching: false, filter: EMPTY_FILTER, sort: 'priority' });
 }
@@ -577,9 +584,9 @@ export function placeInList(
   index: number,
 ): Place | null {
   const state = board.get();
-  // Sorted by size, the cards beside a place are not its neighbours in manual order, and a
+  // Sorted by a field, the cards beside a place are not its neighbours in manual order, and a
   // position between them could fall anywhere, or be no position at all (ADR 0008).
-  if (sortedBySize(state)) return null;
+  if (sortedByField(state)) return null;
   // A carried card is placed as it was picked up, so carrying it back to where it started
   // finds its own position again rather than a new one beside it.
   const task =

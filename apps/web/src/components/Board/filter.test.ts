@@ -4,6 +4,7 @@ import { carryAcross, carryVertically, pickUp, setDown } from './carry';
 import {
   type BoardFilter,
   bestMatch,
+  compareByField,
   compareBySize,
   EMPTY_FILTER,
   facetCounts,
@@ -11,7 +12,7 @@ import {
   matchesTags,
   matchingIds,
 } from './filter';
-import { projectBoardData, secondaryTagsByTask } from './selection';
+import { projectBoardData, secondaryTagsByTask, updatedAtByTask } from './selection';
 import {
   type BoardActions,
   board,
@@ -222,6 +223,54 @@ describe('size sort', () => {
       [...cards].sort((a, b) => compareBySize(direction)(a, b)).map((item) => item.id);
     expect(ids('asc')).toEqual(['s', 'm-high', 'm-high-later', 'm-low', 'xl', 'none']);
     expect(ids('desc')).toEqual(['xl', 'm-high', 'm-high-later', 'm-low', 's', 'none']);
+  });
+});
+
+describe('time sorts', () => {
+  const at = (minute: number) => `2026-10-14T12:${String(minute).padStart(2, '0')}:00.000Z`;
+  const card = (id: string, createdAt: string | undefined, updatedAt?: string) => ({
+    ...current(initialBoard([data([task(id)])])).tasks[0]!,
+    createdAt,
+    updatedAt,
+  });
+  const cards = [
+    card('first', at(1), at(9)),
+    card('second', at(2), at(3)),
+    card('third', at(3)),
+    card('unstamped', undefined),
+  ];
+  const ids = (field: 'created' | 'updated', direction: 'asc' | 'desc') =>
+    [...cards].sort((a, b) => compareByField(field, direction)(a, b)).map((item) => item.id);
+
+  it('orders by when a task was added, with no date last', () => {
+    expect(ids('created', 'desc')).toEqual(['third', 'second', 'first', 'unstamped']);
+    expect(ids('created', 'asc')).toEqual(['first', 'second', 'third', 'unstamped']);
+  });
+
+  it('orders by its last change, or by when it was added before any', () => {
+    expect(ids('updated', 'desc')).toEqual(['first', 'second', 'third', 'unstamped']);
+  });
+
+  it('finds each task’s last change in its log, leaving out refused writes', () => {
+    const entry = (taskId: string, minute: number, applied: boolean, kind = 'updated') => ({
+      id: `${taskId}-${minute}`,
+      workspaceId: 'workspace',
+      projectId: project.id,
+      taskId,
+      userId: null,
+      kind: kind as 'created' | 'updated',
+      changes: [{ field: 'title' as const, previous: 'a', requested: 'b', applied }],
+      createdAt: at(minute),
+    });
+    const latest = updatedAtByTask([
+      entry('a', 1, false, 'created'),
+      entry('a', 5, true),
+      entry('a', 7, false),
+      entry('b', 2, false, 'created'),
+    ]);
+    expect(latest.get('a')).toBe(at(5));
+    expect(latest.get('b')).toBe(at(2));
+    expect(latest.has('c')).toBe(false);
   });
 });
 

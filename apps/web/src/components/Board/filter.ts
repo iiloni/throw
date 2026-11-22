@@ -19,11 +19,15 @@ import {
 
 export type TagMatch = 'any' | 'all';
 
+export type SortField = 'size' | 'created' | 'updated';
+export type SortDirection = 'asc' | 'desc';
+
 /**
- * `priority` is the board's own order (ADR 0008). The size orders put unsized tasks last
- * either way and fall back to the priority order for ties.
+ * `priority` is the board's own order (ADR 0008). The others order by a task's size, when it
+ * was added or when it last changed, put tasks without the value last either way and fall
+ * back to the priority order for ties.
  */
-export type BoardSort = 'priority' | 'size-asc' | 'size-desc';
+export type BoardSort = 'priority' | `${SortField}-${SortDirection}`;
 
 export type BoardFilter = {
   query: string;
@@ -229,22 +233,48 @@ export function facetCounts(
   return { tags, untagged, sizes };
 }
 
+function time(at: string | undefined) {
+  const value = at === undefined ? Number.NaN : Date.parse(at);
+  return Number.isNaN(value) ? null : value;
+}
+
+function sortValue(task: Task, field: SortField): number | null {
+  if (field === 'size') return task.size;
+  return time(field === 'created' ? task.createdAt : (task.updatedAt ?? task.createdAt));
+}
+
 /**
- * The size sort: smallest or largest first, unsized last either way, and the board's own order
- * (priority, then manual order) between tasks of one size.
+ * A sort by one field: ascending or descending, tasks without the value (unsized, or not yet
+ * stamped) last either way, and the board's own order (priority, then manual order) between
+ * tasks that tie.
  */
-export function compareBySize(direction: 'asc' | 'desc') {
+export function compareByField(field: SortField, direction: SortDirection) {
   const sign = direction === 'asc' ? 1 : -1;
   return (a: Task, b: Task, tie: (a: Task, b: Task) => number = compareTasks) => {
-    if (a.size !== b.size) {
-      if (a.size === null) return 1;
-      if (b.size === null) return -1;
-      return (a.size - b.size) * sign;
+    const [first, second] = [sortValue(a, field), sortValue(b, field)];
+    if (first !== second) {
+      if (first === null) return 1;
+      if (second === null) return -1;
+      return (first - second) * sign;
     }
     return tie(a, b);
   };
 }
 
-export function sortDirection(sort: BoardSort) {
-  return sort === 'size-asc' ? 'asc' : sort === 'size-desc' ? 'desc' : null;
+export function compareBySize(direction: SortDirection) {
+  return compareByField('size', direction);
+}
+
+/** A sort's field as a sentence names it: "Sorted by size". */
+export const SORT_FIELD_NAMES: Record<SortField, string> = {
+  size: 'size',
+  created: 'date added',
+  updated: 'last update',
+};
+
+/** The field and direction of a sort, or null for the board's own order. */
+export function sortOrder(sort: BoardSort) {
+  if (sort === 'priority') return null;
+  const [field, direction] = sort.split('-') as [SortField, SortDirection];
+  return { field, direction };
 }

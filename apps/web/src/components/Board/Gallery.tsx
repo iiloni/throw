@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { drag, makingWay } from './drag';
 import { PriorityIcon } from './glyphs';
 import { groupByPriority, type Priority, priorityName } from './model';
-import { board, current, listTasks, sortedBySize } from './state';
+import { board, current, listTasks, sortedByField } from './state';
 import { TaskCard } from './TaskCard';
 
 /**
@@ -28,10 +28,10 @@ export function BacklogGallery({ showStatus }: { showStatus: boolean }) {
     placing && held.target?.kind === 'place' && held.target.listId === 'backlog'
       ? held.target
       : null;
-  // Sorted by size, the gallery is one run of cards with no manual order to place a card in.
-  const bySize = sortedBySize(state);
+  // Sorted by a field, the gallery is one run of cards with no manual order to place a card in.
+  const resorted = sortedByField(state);
   // While a card is placed here every priority shows, so an empty one can take it.
-  const bands: { priority: Priority | null; tasks: typeof tasks }[] = bySize
+  const bands: { priority: Priority | null; tasks: typeof tasks }[] = resorted
     ? [{ priority: null, tasks }]
     : groupByPriority(tasks).filter((group) => group.tasks.length > 0 || placing);
   return (
@@ -40,7 +40,7 @@ export function BacklogGallery({ showStatus }: { showStatus: boolean }) {
         <section
           ref={columns.ref}
           data-drop-list="backlog"
-          data-drop-send={bySize ? '' : undefined}
+          data-drop-send={resorted ? '' : undefined}
           data-layout="grid"
           aria-label="Backlog tasks"
           className="px-5 pt-1 pb-5"

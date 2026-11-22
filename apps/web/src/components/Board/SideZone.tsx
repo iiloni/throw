@@ -24,7 +24,7 @@ import {
   createTask,
   current,
   listTasks,
-  sortedBySize,
+  sortedByField,
   update,
   type ZoneState,
 } from './state';
@@ -289,7 +289,7 @@ function Gallery({ zone }: { zone: Zone }) {
   const tasks = listTasks(state, zone);
   const filter = zone === 'backlog' ? state.backlogFilter : state.closedFilter;
   const bands =
-    zone === 'backlog' && !sortedBySize(state)
+    zone === 'backlog' && !sortedByField(state)
       ? groupByPriority(tasks).filter((group) => group.tasks.length > 0)
       : [{ priority: null, tasks }];
   return (

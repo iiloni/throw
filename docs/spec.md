@@ -61,7 +61,7 @@ integrations.
 - Custom statuses mapped to categories, five priority ranks, optional task sizes and nested tags.
 - The project board, the cross-project board and the task view.
 - Comments and a full activity log.
-- Search, filters and a temporary size sort on the boards, and a command palette elsewhere.
+- Search, filters and a temporary sort on the boards, and a command palette elsewhere.
 - Trash with restore.
 - Offline-first web app and Android app.
 - An MCP server for reading workspace data, managing tasks, and creating, editing and
@@ -409,23 +409,31 @@ board is left or reloaded.
   many cards it would leave, given the rest of the filter. The cross-project board has no tag
   filter, since tags are per project; it scopes to one project instead.
 - **Sizes**, on both boards. Any of the chosen sizes (OR), and Unsized for tasks without one.
-- **Sort.** Priority, the board's own order, is the default. Smallest first or Largest first
-  orders each column by size, unsized tasks last either way, and ties fall back to priority
-  and then manual order. The closed zone keeps its order by closing time.
+- **Sort.** Priority, the board's own order, is the default. The others order each column by
+  one field, either way round:
+  - **Size**, smallest or largest first.
+  - **Added**, newest or oldest first, by when the task was created.
+  - **Updated**, most or least recent first, by the newest entry in the task's
+    [activity log](#comments-and-activity) that changed something. Reordering a card within
+    its column leaves the log alone, so it does not count; a write the server refused changed
+    nothing and does not count either. A task with no entry yet counts from when it was added.
+
+  Tasks without the value (unsized) go last either way, and ties fall back to priority and
+  then manual order. The closed zone keeps its order by closing time.
 
 Everything chosen applies together. Cards that do not match leave the columns, the backlog
 and the closed zone; while subtasks stay with their parent, a parent card stays when one of
 its subtasks matches, since the card stands for them. Column counts, including a folded
 column's strip, count what is left. A column with nothing left says so.
 
-While the board is sorted by size, columns are not in their manual order, so a card cannot be
+While the board is sorted by anything but priority, columns are not in their manual order, so a card cannot be
 placed within one: a card dragged, carried from the keyboard or moved by selection goes to
 another status, keeping its priority, and lands where that status puts it. Dropping it back in
 its own column writes nothing, and the keyboard's up and down announce the sort instead of
 moving the card. Filtering alone keeps placement: a card dropped between the cards still
 showing takes a position between them.
 
-What applies always shows. On desktop it is chips on the search bar; on a phone it is a chip
+What applies always shows. On desktop it is chips in the search; on a phone it is a chip
 bar under the board's title, and the dock's Search is marked. Each chip removes its choice, and
 Clear all removes every one, with the sort back to priority.
 
@@ -611,6 +619,12 @@ applies sit between them. Enter opens the best match, ranked as below, and Ctrl/
 empty, focused bar closes it. Escape first closes the panel, then clears the words, filters
 and sort, then closes the bar and returns focus. Project jumps are not offered there; the rail
 lists the projects.
+
+When the board is at least 1320 CSS pixels wide (the window less the rail), search docks as a
+sidebar between the rail and the backlog instead of floating (2026-11-22): the field and create
+button at its head, the chips under them, and the filters and sort open beneath for as long as
+it is open, so nothing sits over the cards. It opens and closes the same way; Escape clears,
+then closes.
 
 Away from the boards (settings, trash, an empty workspace) search is a command palette. There
 is no search page. The palette also captures tasks. It takes Catch's search and quick note as

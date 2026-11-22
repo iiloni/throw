@@ -1,5 +1,10 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { BoardSearch, SEARCH_SPACE } from '@/components/BoardSearch/BoardSearch';
+import {
+  BoardSearch,
+  BoardSearchSidebar,
+  SEARCH_SIDEBAR_MIN,
+  SEARCH_SPACE,
+} from '@/components/BoardSearch/BoardSearch';
 import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { BoardColumn, ColumnHeader } from './BoardColumn';
@@ -46,9 +51,11 @@ export function WorkspaceDesktopBoard() {
   const [frame, frameWidth] = useWidth();
   const { isCollapsed, setCollapsed } = useCollapsedColumns(project);
   const selected = tasks.filter((task) => state.selection.includes(task.id));
+  const docked = frameWidth >= SEARCH_SIDEBAR_MIN;
   return (
     <div className="flex h-full overflow-hidden">
       <div ref={frame} className="flex min-w-0 flex-1">
+        {docked && <BoardSearchSidebar />}
         <div className="relative flex min-w-0 flex-1">
           <ScrollArea className="min-w-0 flex-1">
             <ScrollAreaViewport
@@ -81,7 +88,7 @@ export function WorkspaceDesktopBoard() {
             </ScrollAreaViewport>
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
-          <BoardSearch />
+          {!docked && <BoardSearch />}
         </div>
         <OpenTaskPane frameWidth={frameWidth} />
       </div>

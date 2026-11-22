@@ -96,9 +96,9 @@ column too, so the card is there to show the open task and to take focus back.
 **Several held cards are sent, not placed.** Each keeps its own priority, so a column takes
 the group as a whole and shows no gap.
 
-**A column sorted by size takes sends only (2026-11-22).** The temporary size sort (spec,
-"Search, filters and sorting") shows a column out of its manual order, so no slot in it means
-a position: a neighbour above may sit lower in the stored order. A list sorted by size is
+**A sorted column takes sends only (2026-11-22).** A temporary sort by size, date added or
+last update (spec, "Search, filters and sorting") shows a column out of its manual order, so no
+slot in it means a position: a neighbour above may sit lower in the stored order. A sorted list is
 marked `data-drop-send`, and the engine answers it with its status, so a drop there sends the
 card, keeping its priority, and a drop in the card's own column writes nothing. The column
 shows no gap, the lifted card stays faded where it was, and the keyboard's up and down

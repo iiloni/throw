@@ -213,6 +213,7 @@ test.describe('desktop', () => {
     const board = await sizedBoard(page);
     await openBar(page);
     await openFilters(page);
+    await filters(page).getByRole('button', { name: 'Size', exact: true }).click();
     await filters(page).getByRole('button', { name: 'Largest', exact: true }).click();
     await expect
       .poll(() => cardIds(page, 'Build'))
@@ -273,6 +274,68 @@ test.describe('desktop', () => {
       ]);
   });
 
+  test('a wide window docks search beside the backlog, its filters open and nothing over the cards', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    const board = await sizedBoard(page);
+    await openBar(page);
+    const docked = bar(page);
+    await expect(docked).toHaveAttribute('data-docked', '');
+    // The filters need no button, and the search sits left of the backlog, not over a column.
+    await expect(filters(page)).toBeVisible();
+    await expect(docked.getByRole('button', { name: 'Filter and sort' })).toHaveCount(0);
+    const [search, backlog] = await Promise.all([
+      docked.boundingBox(),
+      page.getByRole('complementary', { name: 'Backlog' }).boundingBox(),
+    ]);
+    expect(search!.x + search!.width).toBeLessThanOrEqual(backlog!.x);
+    await field(page).fill('position');
+    await filters(page)
+      .getByRole('button', { name: /^Size L,/ })
+      .click();
+    await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Later position']]);
+    // Escape clears, then closes.
+    await page.keyboard.press('Escape');
+    await expect(field(page)).toHaveValue('');
+    await expect(
+      page.getByRole('region', { name: 'Build', exact: true }).getByRole('article'),
+    ).toHaveCount(4);
+    await page.keyboard.press('Escape');
+    await expect(bar(page)).toHaveCount(0);
+  });
+
+  test('sorts by when tasks were added and last updated, newest or oldest first', async ({
+    page,
+  }) => {
+    const board = await sizedBoard(page);
+    await openBar(page);
+    await openFilters(page);
+    // The fixture adds Build's tasks in board order.
+    await filters(page).getByRole('button', { name: 'Added', exact: true }).click();
+    const added = [
+      board.ids['Low priority'],
+      board.ids['Later position'],
+      board.ids['Earlier position'],
+      board.ids['Board parent'],
+    ];
+    await expect.poll(() => cardIds(page, 'Build')).toEqual(added);
+    await filters(page).getByRole('button', { name: 'Oldest', exact: true }).click();
+    await expect.poll(() => cardIds(page, 'Build')).toEqual([...added].reverse());
+    // A change in the task's log makes it the most recently updated.
+    await filters(page).getByRole('button', { name: 'Updated', exact: true }).click();
+    await expect.poll(() => cardIds(page, 'Build')).toEqual(added);
+    await page.evaluate(
+      async (id) => (await import('/src/lib/tasks.ts')).updateTask(id, { size: 1 }),
+      board.ids['Board parent']!,
+    );
+    await expect
+      .poll(() => cardIds(page, 'Build'), { timeout: 15_000 })
+      .toEqual([board.ids['Board parent'], ...added.slice(0, 3)]);
+    await page.keyboard.press('Escape');
+    await expect(chips(page)).toContainText('Recently updated first');
+  });
+
   test('the workspace board scopes to a project and sizes, and captures through the capture window', async ({
     page,
   }) => {
@@ -318,6 +381,7 @@ test.describe('phone', () => {
     await page.getByRole('button', { name: 'Filter and sort', exact: true }).click();
     await page.getByRole('button', { name: /^Size L,/ }).click();
     await page.getByRole('button', { name: /^Size XL,/ }).click();
+    await page.getByRole('button', { name: 'Size', exact: true }).click();
     await page.getByRole('button', { name: 'Largest', exact: true }).click();
     // The results narrow with the board.
     await page.getByRole('combobox', { name: /^Search tasks/ }).fill('position');

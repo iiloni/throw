@@ -2,7 +2,15 @@ import { SIZES, type Size, sizeLabel, type Tag as TagRow } from '@throw/shared';
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, Ruler, Tags, X } from 'lucide-react';
 import { AnimatePresence, LayoutGroup, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { forwardRef, type ReactNode, useId, useMemo } from 'react';
-import { type BoardSort, facetCounts, isFiltering, type TagMatch } from '@/components/Board/filter';
+import {
+  type BoardSort,
+  facetCounts,
+  isFiltering,
+  type SortDirection,
+  type SortField,
+  sortOrder,
+  type TagMatch,
+} from '@/components/Board/filter';
 import type { Project } from '@/components/Board/model';
 import {
   type BoardState,
@@ -21,15 +29,37 @@ import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
-const SORTS: { value: BoardSort; label: string }[] = [
+type SortChoice = 'priority' | SortField;
+const SORT_FIELDS: { value: SortChoice; label: string }[] = [
   { value: 'priority', label: 'Priority' },
-  { value: 'size-asc', label: 'Smallest' },
-  { value: 'size-desc', label: 'Largest' },
+  { value: 'size', label: 'Size' },
+  { value: 'created', label: 'Added' },
+  { value: 'updated', label: 'Updated' },
 ];
+
+/** Each field's directions, the one a field starts with first. */
+const DIRECTIONS: Record<SortField, { value: SortDirection; label: string }[]> = {
+  size: [
+    { value: 'asc', label: 'Smallest' },
+    { value: 'desc', label: 'Largest' },
+  ],
+  created: [
+    { value: 'desc', label: 'Newest' },
+    { value: 'asc', label: 'Oldest' },
+  ],
+  updated: [
+    { value: 'desc', label: 'Most recent' },
+    { value: 'asc', label: 'Least recent' },
+  ],
+};
 
 export const SORT_NAMES: Record<Exclude<BoardSort, 'priority'>, string> = {
   'size-asc': 'Smallest first',
   'size-desc': 'Largest first',
+  'created-desc': 'Newest first',
+  'created-asc': 'Oldest first',
+  'updated-desc': 'Recently updated first',
+  'updated-asc': 'Least recently updated first',
 };
 
 const heading = 'flex min-h-9 items-center gap-2 px-1 font-medium text-sm';
@@ -79,6 +109,7 @@ export function BoardFilters({ className }: { className?: string }) {
   );
   const tags = useMemo(() => treeTags(project), [project]);
   const selected = new Set(filter.tagIds);
+  const order = sortOrder(state.sort);
   function toggleSize(size: Size) {
     haptics.selection();
     setFilter({
@@ -105,13 +136,25 @@ export function BoardFilters({ className }: { className?: string }) {
         </h3>
         <Choice
           label="Sort cards by"
-          value={state.sort}
-          options={SORTS}
-          onChange={(sort) => {
+          value={order?.field ?? 'priority'}
+          options={SORT_FIELDS}
+          onChange={(field) => {
             haptics.selection();
-            setSort(sort);
+            setSort(field === 'priority' ? 'priority' : `${field}-${DIRECTIONS[field][0]!.value}`);
           }}
         />
+        {order && (
+          <Choice
+            key={order.field}
+            label="Order"
+            value={order.direction}
+            options={DIRECTIONS[order.field]}
+            onChange={(direction) => {
+              haptics.selection();
+              setSort(`${order.field}-${direction}`);
+            }}
+          />
+        )}
       </section>
       <section aria-labelledby="board-size-heading" className="flex flex-col gap-1.5">
         <h3 id="board-size-heading" className={heading}>
@@ -396,7 +439,7 @@ export function ActiveFilters({
               onClick={() => setSort('priority')}
               className={cn(badge, 'border-brand/40 text-brand-link')}
             >
-              {sort === 'size-asc' ? (
+              {sort.endsWith('-asc') ? (
                 <ArrowUpNarrowWide className="size-3.5" aria-hidden />
               ) : (
                 <ArrowDownWideNarrow className="size-3.5" aria-hidden />

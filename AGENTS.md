@@ -42,10 +42,11 @@ The task pane shows comments and server history under separate tabs (`SegmentedT
 Touch screens swipe between them with `useTabSwipe`. Refused changes have a quiet task-only
 notice and description recovery links. Desktop columns on both boards fold to a strip, as Catch's deck does
 (`Board/BoardColumn.tsx`, remembered per project by `useCollapsedColumns` in `Board/state.ts`).
-Both boards narrow in place: the board store holds a filter and a temporary size sort
+Both boards narrow in place: the board store holds a filter and a temporary sort
 (`Board/filter.ts`, applied by `listTasks` and `countIn`), set from the desktop boards'
-floating search bar (`components/BoardSearch`) or the phone drawer's search; Ctrl/⌘K opens
-the palette only away from boards. A list sorted by size is `data-drop-send`: drops there send.
+search bar (`components/BoardSearch`, docked as a sidebar on wide boards) or the phone drawer's
+search; Ctrl/⌘K opens the palette only away from boards. A sorted list is `data-drop-send`:
+drops there send. The Updated sort reads each task's activity log (`updatedAtByTask`).
 Cards move on both boards by drag, keyboard,
 phone long press, the move drawer and a rightward swipe to close (ADR 0008).
 Settings (`/settings/*`) and project settings (`/w/:workspaceId/p/:projectId/settings`,

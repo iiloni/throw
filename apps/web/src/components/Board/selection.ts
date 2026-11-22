@@ -1,4 +1,5 @@
 import {
+  type ActivityEntry,
   compareStatuses,
   isTaskTrashed,
   type Project as ProjectRow,
@@ -35,6 +36,25 @@ export function secondaryTagsByTask(assignments: readonly TaskTag[]) {
 
 const noSecondaryTags: ReadonlyMap<string, string[]> = new Map();
 
+/**
+ * When each task last changed: its newest log entry that applied something. The log leaves out
+ * plain reorders, so dragging a card within its column does not make it recently updated; an
+ * entry whose every change was refused changed nothing. A task with no entry yet (created
+ * offline, or before its log synced) reads as updated when it was created.
+ */
+export function updatedAtByTask(entries: readonly ActivityEntry[]) {
+  const latest = new Map<string, string>();
+  for (const entry of entries) {
+    if (entry.kind !== 'created' && !entry.changes.some((change) => change.applied)) continue;
+    const known = latest.get(entry.taskId);
+    if (!known || Date.parse(entry.createdAt) > Date.parse(known))
+      latest.set(entry.taskId, entry.createdAt);
+  }
+  return latest;
+}
+
+const noUpdates: ReadonlyMap<string, string> = new Map();
+
 /** Select before presenting: a trashed parent hides its children in every board view. */
 export function projectBoardData(
   project: ProjectRow,
@@ -42,6 +62,7 @@ export function projectBoardData(
   tasks: TaskRow[],
   tags: Tag[] = [],
   secondaryTags: ReadonlyMap<string, string[]> = noSecondaryTags,
+  updates: ReadonlyMap<string, string> = noUpdates,
 ): BoardData {
   const parents = new Map(tasks.map((task) => [task.id, task]));
   const projectTags = tags.filter((tag) => tag.projectId === project.id);
@@ -57,6 +78,7 @@ export function projectBoardData(
     ),
     description: undefined,
     searchText: searchText(task),
+    updatedAt: updates.get(task.id) ?? task.createdAt,
   });
   return {
     project: {
@@ -100,6 +122,7 @@ export function workspaceBoardData(
   tasks: TaskRow[],
   tags: Tag[] = [],
   secondaryTags: ReadonlyMap<string, string[]> = noSecondaryTags,
+  updates: ReadonlyMap<string, string> = noUpdates,
 ): BoardData {
   // Each project adapts only its own rows, so a sync change costs one pass over the tasks.
   const byProject = <T extends { projectId: string }>(rows: T[]) => {
@@ -119,6 +142,7 @@ export function workspaceBoardData(
       tasksOf.get(project.id) ?? [],
       tagsOf.get(project.id) ?? [],
       secondaryTags,
+      updates,
     );
     const own = (task: BoardTask) => ({
       ...task,

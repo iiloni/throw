@@ -61,6 +61,10 @@ export type Task = {
   searchText?: string;
   /** Set on the workspace board, which gathers several projects' tasks. */
   projectId?: string;
+  /** When the task was created; the Added sort reads it. */
+  createdAt?: string;
+  /** When the task last changed, from its activity log; the Updated sort reads it. */
+  updatedAt?: string;
 };
 
 export type Project = {

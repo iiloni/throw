@@ -96,6 +96,7 @@ describe('the board’s search bar', () => {
     fireEvent.click(trigger);
     expect(screen.getByRole('region', { name: 'Filters and sort' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /^Size S,/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Size' }));
     fireEvent.click(screen.getByRole('button', { name: 'Largest' }));
     expect(board.get()).toMatchObject({ filter: { sizes: [2] }, sort: 'size-desc' });
     expect(screen.getByRole('group', { name: 'Active filters' })).toHaveTextContent(
