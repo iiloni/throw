@@ -255,7 +255,7 @@ function FilterPanel({ open }: { open: boolean }) {
           <section
             id="board-filter-panel"
             aria-label="Filters and sort"
-            className="glass-thick mb-3 max-h-[min(34rem,calc(100dvh-var(--dock-height)-9rem))] overflow-y-auto overscroll-contain rounded-[var(--dock-radius)] p-3 shadow-[0_10px_30px_-10px_var(--glass-shadow)]"
+            className="glass-thick mb-3 rounded-[var(--dock-radius)] p-3 shadow-[0_10px_30px_-10px_var(--glass-shadow)] [--board-filter-view-max:min(26rem,calc(100dvh-var(--dock-height)-15rem))]"
           >
             <BoardFilters />
           </section>

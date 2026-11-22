@@ -21,8 +21,8 @@ type Tab<TValue extends string> = {
 const AWAY_SCALE = 0.9;
 
 /**
- * Two tabs over their panels. With `collapsible`, choosing the selected tab again hides both
- * panels (`value` is then null) and choosing either tab brings its panel back. `drag` moves
+ * Two or more tabs over their panels. With `collapsible`, choosing the selected tab again hides
+ * every panel (`value` is then null) and choosing any tab brings its panel back. `drag` moves
  * the indicator by a share of a tab while a swipe is turning panels (`useTabSwipe`).
  */
 export function SegmentedTabs<TValue extends string>({
@@ -37,7 +37,7 @@ export function SegmentedTabs<TValue extends string>({
   label: string;
   value: TValue | null;
   onValueChange: (value: TValue | null) => void;
-  options: readonly [Tab<TValue>, Tab<TValue>];
+  options: readonly [Tab<TValue>, Tab<TValue>, ...Tab<TValue>[]];
   collapsible?: boolean;
   disabled?: boolean;
   drag?: MotionValue<number>;
@@ -54,7 +54,7 @@ export function SegmentedTabs<TValue extends string>({
   const tabStop = value ?? anchor;
   const index = options.findIndex((option) => option.value === value);
 
-  // Which tab the indicator is over, 0 or 1, and in between as it moves.
+  // Which tab the indicator is over, by index, and in between as it moves.
   const position = useMotionValue(Math.max(0, index));
   const still = useMotionValue(0);
   const dragged = drag ?? still;
@@ -91,27 +91,32 @@ export function SegmentedTabs<TValue extends string>({
     };
   }, [index, reducedMotion, opacity, scale, position, dragged]);
 
+  const count = options.length;
   return (
     <div
       role="tablist"
       aria-label={label}
-      className="relative grid shrink-0 grid-cols-2 gap-1 rounded-xl bg-foreground/5 p-1"
+      style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}
+      className="relative grid shrink-0 gap-1 rounded-xl bg-foreground/5 p-1"
       onKeyDown={(event) => {
         if (disabled) return;
         const from =
           options.find((option) => option.id === (event.target as HTMLElement).id) ??
           options.find((option) => option.value === tabStop)!;
+        const at = options.indexOf(from);
         const next =
           event.key === 'Home'
             ? options[0]
             : event.key === 'End'
-              ? options[1]
-              : event.key === 'ArrowLeft' || event.key === 'ArrowRight'
-                ? options.find((option) => option !== from)
-                : null;
+              ? options[count - 1]
+              : event.key === 'ArrowRight'
+                ? options[(at + 1) % count]
+                : event.key === 'ArrowLeft'
+                  ? options[(at - 1 + count) % count]
+                  : null;
         if (!next) return;
         event.preventDefault();
-        // Arrows follow the open panel, and only move focus while both are hidden.
+        // Arrows follow the open panel, and only move focus while every panel is hidden.
         if (value === null) setAnchor(next.value);
         else if (next.value !== value) onValueChange(next.value);
         document.getElementById(next.id)?.focus();
@@ -121,8 +126,14 @@ export function SegmentedTabs<TValue extends string>({
       <motion.span
         aria-hidden
         data-tab-indicator=""
-        className="pointer-events-none absolute inset-y-1 left-1 w-[calc((100%-0.75rem)/2)] rounded-lg bg-foreground/8 shadow-[inset_0_1px_0_var(--glass-highlight)]"
-        style={{ x, opacity, scale }}
+        className="pointer-events-none absolute inset-y-1 left-1 rounded-lg bg-foreground/8 shadow-[inset_0_1px_0_var(--glass-highlight)]"
+        // One tab's share of the strip, less its padding and the gaps between tabs.
+        style={{
+          x,
+          opacity,
+          scale,
+          width: `calc((100% - ${0.5 + (count - 1) * 0.25}rem) / ${count})`,
+        }}
       />
       {options.map((option) => {
         const selected = value === option.value;

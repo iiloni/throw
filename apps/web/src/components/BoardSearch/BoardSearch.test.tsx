@@ -94,7 +94,9 @@ describe('the board’s search bar', () => {
     const trigger = screen.getByRole('button', { name: 'Filter and sort' });
     fireEvent.click(trigger);
     expect(screen.getByRole('region', { name: 'Filters and sort' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Size' }));
     fireEvent.click(screen.getByRole('button', { name: /^Size S,/ }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Sort' }));
     fireEvent.click(screen.getByRole('button', { name: 'Size' }));
     fireEvent.click(screen.getByRole('button', { name: 'Largest' }));
     expect(board.get()).toMatchObject({ filter: { sizes: [2] }, sort: 'size-desc' });

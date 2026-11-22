@@ -403,7 +403,10 @@ selection to a status.
 
 Both boards can be narrowed down in place (2026-11-22). Search, filters and the sort are view
 state on the device: they apply to the board on screen, are not saved, and are gone when the
-board is left or reloaded.
+board is left or reloaded. The filter card shows one section at a time, chosen from tabs at
+its foot as in Catch's filter card: Tags (Projects on the cross-project board), Size and Sort.
+A dot marks a tab whose section narrows or orders the board, and the device remembers the last
+section opened.
 
 - **Words.** The search's literal words, matched as [search](#desktop) matches them: title,
   identifier, description text and tag names with their ancestors.

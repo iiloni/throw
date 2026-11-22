@@ -15,6 +15,12 @@ import { newTag, taggedTask } from './tag-helpers';
 const bar = (page: Page) => page.getByRole('search', { name: 'Search the board', exact: true });
 const field = (page: Page) => page.getByRole('searchbox', { name: 'Search tasks', exact: true });
 const filters = (page: Page) => page.getByRole('region', { name: 'Filters and sort' });
+/** The filter card shows one section at a time, chosen from the tabs at its foot. */
+const section = (page: Page, name: 'Tags' | 'Projects' | 'Size' | 'Sort') =>
+  page
+    .getByRole('tablist', { name: 'Filter type' })
+    .getByRole('tab', { name, exact: true })
+    .click();
 // The bar's chips on a desktop, the board header's on a phone; not the search page's.
 const chips = (page: Page) =>
   page
@@ -159,6 +165,7 @@ test.describe('desktop', () => {
       .poll(() => cardIds(page, 'Build'))
       .toEqual([board.ids['Earlier position'], board.ids['Later position']]);
     // Sizes: any of those chosen, alongside the tags.
+    await section(page, 'Size');
     await filters(page)
       .getByRole('button', { name: /^Size S,/ })
       .click();
@@ -183,6 +190,7 @@ test.describe('desktop', () => {
         board.ids['Low priority'],
       ]);
     // A folded column counts what the filter leaves.
+    await section(page, 'Tags');
     await filters(page)
       .getByRole('checkbox', { name: /^Untagged/ })
       .check();
@@ -213,6 +221,7 @@ test.describe('desktop', () => {
     const board = await sizedBoard(page);
     await openBar(page);
     await openFilters(page);
+    await section(page, 'Sort');
     await filters(page).getByRole('button', { name: 'Size', exact: true }).click();
     await filters(page).getByRole('button', { name: 'Largest', exact: true }).click();
     await expect
@@ -320,6 +329,7 @@ test.describe('desktop', () => {
         return card!.y + card!.height <= foot!.y;
       })
       .toBe(true);
+    await section(page, 'Size');
     await filters(page)
       .getByRole('button', { name: /^Size L,/ })
       .click();
@@ -344,6 +354,7 @@ test.describe('desktop', () => {
     await openBar(page);
     await openFilters(page);
     // The fixture adds Build's tasks in board order.
+    await section(page, 'Sort');
     await filters(page).getByRole('button', { name: 'Added', exact: true }).click();
     const added = [
       board.ids['Low priority'],
@@ -375,12 +386,14 @@ test.describe('desktop', () => {
     await openBar(page);
     await openFilters(page);
     // Tags are per project, so the workspace board offers its projects instead.
-    await expect(filters(page).getByRole('heading', { name: 'Tags' })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: 'Tags', exact: true })).toHaveCount(0);
+    await section(page, 'Projects');
     await filters(page).getByRole('button', { name: 'Garden', exact: true }).click();
     await expect
       .poll(() => cardIds(page, 'Active'))
       .toEqual([board.ids['Water tomatoes'], board.ids['Prune roses']]);
     await expect(chips(page).getByRole('button', { name: 'Remove Garden filter' })).toBeVisible();
+    await section(page, 'Size');
     await filters(page)
       .getByRole('button', { name: /^Unsized,/ })
       .click();
@@ -411,8 +424,10 @@ test.describe('phone', () => {
     const board = await sizedBoard(page);
     await page.getByRole('button', { name: 'Search', exact: true }).click();
     await page.getByRole('button', { name: 'Filter and sort', exact: true }).click();
+    await section(page, 'Size');
     await page.getByRole('button', { name: /^Size L,/ }).click();
     await page.getByRole('button', { name: /^Size XL,/ }).click();
+    await section(page, 'Sort');
     await page.getByRole('button', { name: 'Size', exact: true }).click();
     await page.getByRole('button', { name: 'Largest', exact: true }).click();
     // The results narrow with the board.

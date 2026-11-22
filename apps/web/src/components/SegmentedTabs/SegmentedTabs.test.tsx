@@ -76,3 +76,21 @@ it('moves focus without opening a panel while both are hidden', () => {
   expect(first).toHaveFocus();
   expect(first).toHaveAttribute('aria-selected', 'true');
 });
+
+it('steps through more than two tabs with the arrows, wrapping at the ends', () => {
+  const onValueChange = vi.fn();
+  const three = [
+    ...options,
+    { value: 'c', id: 'tab-c', controls: 'panel-c', label: 'Third', icon: null },
+  ] as const;
+  render(<SegmentedTabs label="Views" value="b" onValueChange={onValueChange} options={three} />);
+  const second = screen.getByRole('tab', { name: 'Second' });
+  fireEvent.keyDown(second, { key: 'ArrowRight' });
+  expect(onValueChange).toHaveBeenLastCalledWith('c');
+  fireEvent.keyDown(second, { key: 'ArrowLeft' });
+  expect(onValueChange).toHaveBeenLastCalledWith('a');
+  fireEvent.keyDown(screen.getByRole('tab', { name: 'Third' }), { key: 'ArrowRight' });
+  expect(onValueChange).toHaveBeenLastCalledWith('a');
+  fireEvent.keyDown(second, { key: 'End' });
+  expect(onValueChange).toHaveBeenLastCalledWith('c');
+});

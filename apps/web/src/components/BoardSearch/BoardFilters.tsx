@@ -1,7 +1,31 @@
 import { SIZES, type Size, sizeLabel, type Tag as TagRow } from '@throw/shared';
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Ruler, Tags, X } from 'lucide-react';
-import { AnimatePresence, LayoutGroup, motion, useIsPresent, useReducedMotion } from 'motion/react';
-import { forwardRef, type ReactNode, useId, useMemo } from 'react';
+import {
+  ArrowDownWideNarrow,
+  ArrowUpNarrowWide,
+  Folder,
+  type LucideIcon,
+  Ruler,
+  Tags,
+  X,
+} from 'lucide-react';
+import {
+  AnimatePresence,
+  animate,
+  LayoutGroup,
+  motion,
+  useIsPresent,
+  useReducedMotion,
+} from 'motion/react';
+import {
+  forwardRef,
+  type ReactNode,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { z } from 'zod';
 import {
   type BoardSort,
   facetCounts,
@@ -22,11 +46,13 @@ import {
   setSort,
 } from '@/components/Board/state';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
+import { SegmentedTabs } from '@/components/SegmentedTabs/SegmentedTabs';
 import { TagBadge } from '@/components/TagBadge/TagBadge';
 import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { TagTree } from '@/components/TagTree/TagTree';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
+import { usePersistentState } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 
 type SortChoice = 'priority' | SortField;
@@ -62,7 +88,6 @@ export const SORT_NAMES: Record<Exclude<BoardSort, 'priority'>, string> = {
   'updated-asc': 'Least recently updated first',
 };
 
-const heading = 'flex min-h-9 items-center gap-2 px-1 font-medium text-sm';
 const chipBase =
   'flex h-9 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring';
 /** A toggle chip, filled while it is chosen. */
@@ -92,10 +117,28 @@ function treeTags(project: Project): TagRow[] {
   }));
 }
 
+const filterTabSchema = z.enum(['group', 'size', 'sort']);
+/** The card's sections: `group` is a project board's tags, or the workspace board's projects. */
+type FilterTab = z.infer<typeof filterTabSchema>;
+const TAB_ORDER: FilterTab[] = ['group', 'size', 'sort'];
+
+/** A tab's icon, with a dot while what it holds narrows or orders the board. */
+function TabIcon({ icon: Icon, active }: { icon: LucideIcon; active: boolean }) {
+  return (
+    <span className="relative">
+      <Icon className="size-4" aria-hidden />
+      {active && (
+        <span aria-hidden className="absolute -top-0.5 -right-1 size-1.5 rounded-full bg-brand" />
+      )}
+    </span>
+  );
+}
+
 /**
- * What narrows and orders the board: the sort, sizes, and a project board's tags or the
- * workspace board's project. Each choice applies to the board at once. Drawn in the desktop
- * search bar's panel and in the phone's search page alike.
+ * What narrows and orders the board, one section at a time over Catch's tabs at the foot of
+ * the card: a project board's tags or the workspace board's projects, sizes, and the sort. Each
+ * choice applies to the board at once. Drawn in the desktop search's filter card and in the
+ * phone's search page alike; the open section is remembered on the device.
  */
 export function BoardFilters({ className }: { className?: string }) {
   const state = board.use();
@@ -110,6 +153,17 @@ export function BoardFilters({ className }: { className?: string }) {
   const tags = useMemo(() => treeTags(project), [project]);
   const selected = new Set(filter.tagIds);
   const order = sortOrder(state.sort);
+  const ids = useId();
+  const [tab, setTab] = usePersistentState('throw-board-filter-tab', filterTabSchema, 'group');
+  const [direction, setDirection] = useState(1);
+  function selectTab(next: FilterTab | null) {
+    if (!next || next === tab) return;
+    haptics.selection();
+    setDirection(TAB_ORDER.indexOf(next) > TAB_ORDER.indexOf(tab) ? 1 : -1);
+    setTab(next);
+  }
+  const tabId = (value: FilterTab) => `${ids}-${value}-tab`;
+  const viewId = (value: FilterTab) => `${ids}-${value}`;
   function toggleSize(size: Size) {
     haptics.selection();
     setFilter({
@@ -128,155 +182,289 @@ export function BoardFilters({ className }: { className?: string }) {
     });
   }
   return (
-    <div className={cn('flex flex-col gap-3', className)}>
-      <section aria-labelledby="board-sort-heading" className="flex flex-col gap-1.5">
-        <h3 id="board-sort-heading" className={heading}>
-          <ArrowUpNarrowWide className="size-4 text-muted-foreground" aria-hidden />
-          Sort
-        </h3>
-        <Choice
-          label="Sort cards by"
-          value={order?.field ?? 'priority'}
-          options={SORT_FIELDS}
-          onChange={(field) => {
-            haptics.selection();
-            setSort(field === 'priority' ? 'priority' : `${field}-${DIRECTIONS[field][0]!.value}`);
-          }}
-        />
-        {order && (
-          <Choice
-            key={order.field}
-            label="Order"
-            value={order.direction}
-            options={DIRECTIONS[order.field]}
-            onChange={(direction) => {
-              haptics.selection();
-              setSort(`${order.field}-${direction}`);
-            }}
-          />
-        )}
-      </section>
-      <section aria-labelledby="board-size-heading" className="flex flex-col gap-1.5">
-        <h3 id="board-size-heading" className={heading}>
-          <Ruler className="size-4 text-muted-foreground" aria-hidden />
-          Size
-        </h3>
-        <div className="flex flex-wrap gap-1.5">
-          {SIZES.map((size) => (
-            <button
-              key={size}
-              type="button"
-              aria-label={`Size ${sizeLabel(size)}, ${counts.sizes.get(size) ?? 0} tasks`}
-              aria-pressed={filter.sizes.includes(size)}
-              onClick={() => toggleSize(size)}
-              className={chip(filter.sizes.includes(size))}
-            >
-              {sizeLabel(size)}
-              <span className="text-xs tabular-nums opacity-60">{counts.sizes.get(size) ?? 0}</span>
-            </button>
-          ))}
-          <button
-            type="button"
-            aria-label={`Unsized, ${counts.sizes.get(null) ?? 0} tasks`}
-            aria-pressed={filter.unsized}
-            onClick={() => {
-              haptics.selection();
-              setFilter({ unsized: !filter.unsized });
-            }}
-            className={chip(filter.unsized)}
-          >
-            Unsized
-            <span className="text-xs tabular-nums opacity-60">{counts.sizes.get(null) ?? 0}</span>
-          </button>
-        </div>
-      </section>
-      {workspace ? (
-        <section aria-labelledby="board-project-heading" className="flex flex-col gap-1.5">
-          <h3 id="board-project-heading" className={heading}>
-            Project
-          </h3>
-          <div className="flex flex-wrap gap-1.5">
-            {(project.members ?? []).map((member) => (
-              <button
-                key={member.id}
-                type="button"
-                data-color={member.color}
-                aria-pressed={filter.projectId === member.id}
-                onClick={() => {
-                  haptics.selection();
-                  setFilter({ projectId: filter.projectId === member.id ? null : member.id });
-                }}
-                className={cn(chip(filter.projectId === member.id), 'max-w-full')}
-              >
-                <ProjectIcon name={member.icon} className="size-4 shrink-0 text-tint-accent" />
-                <span className="truncate">{member.name}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : (
-        <section aria-labelledby="board-tags-heading" className="flex flex-col">
-          <h3 id="board-tags-heading" className={heading}>
-            <Tags className="size-4 text-muted-foreground" aria-hidden />
-            Tags
-          </h3>
-          {tags.length > 0 ? (
-            <TagTree
-              tags={tags}
-              searchPosition="bottom"
-              searchAccessory={(focused) => (
-                <AnimatePresence initial={false}>
-                  {filter.tagIds.length > 1 && !focused && (
-                    <TagMatchControl
-                      match={filter.match}
-                      onChange={(match) => setFilter({ match })}
-                    />
-                  )}
-                </AnimatePresence>
-              )}
-              className="max-h-[min(16rem,28dvh)]"
-              renderTag={(tag, path) => (
-                <label className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-xl px-2 hover:bg-foreground/5">
-                  <span
-                    data-color={path[0]?.color ?? undefined}
-                    className={path[0]?.color ? 'text-tint-accent' : 'text-muted-foreground'}
+    <div className={cn('flex min-h-0 flex-col gap-2', className)}>
+      <FilterTabContents tab={tab}>
+        <AnimatePresence initial={false} custom={direction}>
+          <FilterTabView key={tab} id={viewId(tab)} labelledBy={tabId(tab)} direction={direction}>
+            {tab === 'sort' && (
+              <div className="flex flex-col gap-1.5">
+                <Choice
+                  label="Sort cards by"
+                  value={order?.field ?? 'priority'}
+                  options={SORT_FIELDS}
+                  onChange={(field) => {
+                    haptics.selection();
+                    setSort(
+                      field === 'priority' ? 'priority' : `${field}-${DIRECTIONS[field][0]!.value}`,
+                    );
+                  }}
+                />
+                {order && (
+                  <Choice
+                    key={order.field}
+                    label="Order"
+                    value={order.direction}
+                    options={DIRECTIONS[order.field]}
+                    onChange={(direction) => {
+                      haptics.selection();
+                      setSort(`${order.field}-${direction}`);
+                    }}
+                  />
+                )}
+              </div>
+            )}
+            {tab === 'size' && (
+              <div className="flex flex-wrap gap-1.5">
+                {SIZES.map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    aria-label={`Size ${sizeLabel(size)}, ${counts.sizes.get(size) ?? 0} tasks`}
+                    aria-pressed={filter.sizes.includes(size)}
+                    onClick={() => toggleSize(size)}
+                    className={chip(filter.sizes.includes(size))}
                   >
-                    <TagIcon name={path[0]?.icon} className="size-4" />
+                    {sizeLabel(size)}
+                    <span className="text-xs tabular-nums opacity-60">
+                      {counts.sizes.get(size) ?? 0}
+                    </span>
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  aria-label={`Unsized, ${counts.sizes.get(null) ?? 0} tasks`}
+                  aria-pressed={filter.unsized}
+                  onClick={() => {
+                    haptics.selection();
+                    setFilter({ unsized: !filter.unsized });
+                  }}
+                  className={chip(filter.unsized)}
+                >
+                  Unsized
+                  <span className="text-xs tabular-nums opacity-60">
+                    {counts.sizes.get(null) ?? 0}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-sm">{tag.name}</span>
+                </button>
+              </div>
+            )}
+            {tab === 'group' && workspace && (
+              <div className="flex flex-wrap gap-1.5">
+                {(project.members ?? []).map((member) => (
+                  <button
+                    key={member.id}
+                    type="button"
+                    data-color={member.color}
+                    aria-pressed={filter.projectId === member.id}
+                    onClick={() => {
+                      haptics.selection();
+                      setFilter({ projectId: filter.projectId === member.id ? null : member.id });
+                    }}
+                    className={cn(chip(filter.projectId === member.id), 'max-w-full')}
+                  >
+                    <ProjectIcon name={member.icon} className="size-4 shrink-0 text-tint-accent" />
+                    <span className="truncate">{member.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {tab === 'group' && !workspace && (
+              <div className="flex flex-col">
+                {tags.length > 0 ? (
+                  <TagTree
+                    tags={tags}
+                    searchPosition="bottom"
+                    searchAccessory={(focused) => (
+                      <AnimatePresence initial={false}>
+                        {filter.tagIds.length > 1 && !focused && (
+                          <TagMatchControl
+                            match={filter.match}
+                            onChange={(match) => setFilter({ match })}
+                          />
+                        )}
+                      </AnimatePresence>
+                    )}
+                    className="max-h-[min(20rem,36dvh)]"
+                    renderTag={(tag, path) => (
+                      <label className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-xl px-2 hover:bg-foreground/5">
+                        <span
+                          data-color={path[0]?.color ?? undefined}
+                          className={path[0]?.color ? 'text-tint-accent' : 'text-muted-foreground'}
+                        >
+                          <TagIcon name={path[0]?.icon} className="size-4" />
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-sm">{tag.name}</span>
+                        <span className="text-muted-foreground text-xs tabular-nums">
+                          {counts.tags.get(tag.id) ?? 0}
+                        </span>
+                        <input
+                          type="checkbox"
+                          aria-label={path.map((item) => item.name).join(' / ')}
+                          checked={selected.has(tag.id)}
+                          onChange={() => toggleTag(tag.id)}
+                          className="size-4 shrink-0 accent-brand"
+                        />
+                      </label>
+                    )}
+                  />
+                ) : (
+                  <p className="px-1 py-2 text-muted-foreground text-sm">
+                    This project has no tags yet.
+                  </p>
+                )}
+                <label className="mt-1 flex min-h-11 shrink-0 cursor-pointer items-center gap-2 rounded-xl px-2 text-sm hover:bg-foreground/5">
+                  <Tags className="size-4 text-muted-foreground" aria-hidden />
+                  <span className="flex-1">Untagged</span>
                   <span className="text-muted-foreground text-xs tabular-nums">
-                    {counts.tags.get(tag.id) ?? 0}
+                    {counts.untagged}
                   </span>
                   <input
                     type="checkbox"
-                    aria-label={path.map((item) => item.name).join(' / ')}
-                    checked={selected.has(tag.id)}
-                    onChange={() => toggleTag(tag.id)}
-                    className="size-4 shrink-0 accent-brand"
+                    checked={filter.untagged}
+                    onChange={() => {
+                      haptics.selection();
+                      setFilter({ tagIds: [], untagged: !filter.untagged });
+                    }}
+                    className="size-4 accent-brand"
                   />
                 </label>
-              )}
-            />
-          ) : (
-            <p className="px-1 py-2 text-muted-foreground text-sm">This project has no tags yet.</p>
-          )}
-          <label className="mt-1 flex min-h-11 shrink-0 cursor-pointer items-center gap-2 rounded-xl px-2 text-sm hover:bg-foreground/5">
-            <Tags className="size-4 text-muted-foreground" aria-hidden />
-            <span className="flex-1">Untagged</span>
-            <span className="text-muted-foreground text-xs tabular-nums">{counts.untagged}</span>
-            <input
-              type="checkbox"
-              checked={filter.untagged}
-              onChange={() => {
-                haptics.selection();
-                setFilter({ tagIds: [], untagged: !filter.untagged });
-              }}
-              className="size-4 accent-brand"
-            />
-          </label>
-        </section>
-      )}
+              </div>
+            )}
+          </FilterTabView>
+        </AnimatePresence>
+      </FilterTabContents>
+      <SegmentedTabs<FilterTab>
+        label="Filter type"
+        value={tab}
+        onValueChange={selectTab}
+        options={[
+          {
+            value: 'group',
+            id: tabId('group'),
+            controls: viewId('group'),
+            label: workspace ? 'Projects' : 'Tags',
+            icon: (
+              <TabIcon
+                icon={workspace ? Folder : Tags}
+                active={
+                  workspace
+                    ? filter.projectId !== null
+                    : filter.tagIds.length > 0 || filter.untagged
+                }
+              />
+            ),
+          },
+          {
+            value: 'size',
+            id: tabId('size'),
+            controls: viewId('size'),
+            label: 'Size',
+            icon: <TabIcon icon={Ruler} active={filter.sizes.length > 0 || filter.unsized} />,
+          },
+          {
+            value: 'sort',
+            id: tabId('sort'),
+            controls: viewId('sort'),
+            label: 'Sort',
+            icon: <TabIcon icon={ArrowUpNarrowWide} active={state.sort !== 'priority'} />,
+          },
+        ]}
+      />
     </div>
+  );
+}
+
+/**
+ * Catch's filter tab surface: it springs between the sections' heights as the tab changes,
+ * and otherwise follows its content (a tag tree opening a branch) without animating.
+ */
+function FilterTabContents({ children, tab }: { children: ReactNode; tab: FilterTab }) {
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const previousHeight = useRef(0);
+  const reducedMotion = useReducedMotion();
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    if (!content) return;
+    const measure = () => {
+      previousHeight.current = content.offsetHeight;
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a tab change is the resize trigger
+  useLayoutEffect(() => {
+    const surface = surfaceRef.current;
+    const content = contentRef.current;
+    if (!surface || !content) return;
+    const from = surface.style.height
+      ? surface.getBoundingClientRect().height
+      : previousHeight.current;
+    const to = content.offsetHeight;
+    previousHeight.current = to;
+    if (!from || from === to || reducedMotion) {
+      surface.style.removeProperty('height');
+      return;
+    }
+    let cancelled = false;
+    const animation = animate(surface, { height: [from, to] }, springs.smooth);
+    void animation.then(() => {
+      if (!cancelled) surface.style.removeProperty('height');
+    });
+    return () => {
+      cancelled = true;
+      animation.stop();
+    };
+  }, [tab, reducedMotion]);
+  return (
+    <div ref={surfaceRef} className="flex min-h-0 flex-col justify-end overflow-hidden">
+      <div ref={contentRef} className="relative shrink-0">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** One section, sliding in from the side of its tab while the last one slides out. */
+function FilterTabView({
+  children,
+  id,
+  labelledBy,
+  direction,
+}: {
+  children: ReactNode;
+  id: string;
+  labelledBy: string;
+  direction: number;
+}) {
+  const isPresent = useIsPresent();
+  const reducedMotion = useReducedMotion();
+  return (
+    <motion.section
+      id={id}
+      role="tabpanel"
+      aria-labelledby={labelledBy}
+      inert={!isPresent}
+      aria-hidden={!isPresent}
+      custom={direction}
+      variants={{
+        enter: (travel: number) => ({ x: reducedMotion ? 0 : travel * 40, opacity: 0 }),
+        shown: { x: 0, opacity: 1 },
+        leave: (travel: number) => ({ x: reducedMotion ? 0 : -travel * 40, opacity: 0 }),
+      }}
+      initial="enter"
+      animate="shown"
+      exit="leave"
+      transition={reducedMotion ? { duration: 0 } : springs.smooth}
+      className={cn(
+        'max-h-[var(--board-filter-view-max,min(24rem,50dvh))] overflow-x-hidden overflow-y-auto overscroll-contain',
+        !isPresent && 'absolute inset-x-0 bottom-0',
+      )}
+    >
+      {children}
+    </motion.section>
   );
 }
 

@@ -601,7 +601,8 @@ export function PhoneSearchContent({
             exit={{ height: 0, opacity: 0 }}
             transition={reduced ? { duration: 0 } : springs.smooth}
           >
-            <div className="glass mx-3 mb-3 max-h-[min(28rem,55dvh)] overflow-y-auto overscroll-contain rounded-[var(--dock-radius)] p-3">
+            {/* The board's filter sections scroll by themselves, above their tabs. */}
+            <div className="glass mx-3 mb-3 max-h-[min(28rem,55dvh)] overflow-y-auto overscroll-contain rounded-[var(--dock-radius)] p-3 [--board-filter-view-max:calc(min(28rem,55dvh)-5.5rem)]">
               <FilterOptions search={search} />
             </div>
           </motion.div>
