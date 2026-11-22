@@ -86,6 +86,7 @@ export default defineConfig(({ command }) => ({
       filename: 'sw.ts',
       manifest: iconManifest(channel),
       injectManifest: {
+        // This includes the lazy Shiki grammars, language icons and detector for offline editing.
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2,webmanifest}'],
       },
     }),
