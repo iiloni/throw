@@ -287,17 +287,30 @@ export function taskDrawerContent({
       title: panelTitle[page],
       fit: true,
       dock: true,
-      content: (
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[calc(var(--safe-bottom)+1rem)]">
-          <TaskPanelContent
-            panel={page}
-            task={task}
-            statuses={statuses}
-            project={project}
-            onDone={closePage}
-          />
-        </div>
-      ),
+      content:
+        page === 'relations' ? (
+          // Own scroller inside the picker so its bottom controls stay pinned above the safe
+          // area or keyboard and the sheet never clips off the top when the keyboard rises.
+          <div className="flex max-h-[calc(100dvh-var(--keyboard)-var(--safe-top)-var(--dock-height)-2rem)] min-h-0 flex-1 flex-col pb-[max(0rem,calc(var(--safe-bottom)+0.25rem-var(--keyboard)))]">
+            <TaskPanelContent
+              panel={page}
+              task={task}
+              statuses={statuses}
+              project={project}
+              onDone={closePage}
+            />
+          </div>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[calc(var(--safe-bottom)+1rem)]">
+            <TaskPanelContent
+              panel={page}
+              task={task}
+              statuses={statuses}
+              project={project}
+              onDone={closePage}
+            />
+          </div>
+        ),
     },
     closePage,
   };

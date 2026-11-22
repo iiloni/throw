@@ -224,16 +224,18 @@ one (2026-11-22). A link is one of three kinds, and each task sees it from its o
   so Back returns, or on its own project's board. On a phone the task grows out of its row
   and dissolves back into it, as a subtask does from its card. Each row has a remove
   button, always shown since a touch screen has no hover.
-- The dock's link control opens a picker. The kind comes first, as one segmented control
-  (Blocked by, Blocks, Duplicate of, Relates to) with a sentence below saying which way it
-  reads (“THR-21 waits until the task you pick is done.”). Below it, before anything is
-  typed, are a few open tasks of the task's own project that are not linked to it yet, work
-  in progress first; typing searches the workspace's tasks out of the trash by identifier
-  or title, in any project. One tap (or Enter, with the arrows to move) links a task and
-  closes the picker. “Blocked by” is stored as the other task blocking this one. A task
-  already linked shows how; one linked that way, or whose reverse is linked, cannot be
-  picked. With a keyboard at hand the search takes focus at once; a touch screen keeps its
-  keyboard down until the field is tapped, so the suggestions stay in view.
+- The dock's link control opens a picker. Its controls sit at the bottom for reachability
+  (directly above the desktop dock, and riding above the safe area or keyboard on a phone):
+  the relation kind as one segmented control (Blocked by, Blocks, Duplicate of, Relates to)
+  with a sentence below saying which way it reads (“THR-21 waits until the task you pick is
+  done.”), and the search field at the foot. Above them, before anything is typed, are a few
+  open tasks of the task's own project that are not linked to it yet, work in progress first;
+  typing searches the workspace's tasks out of the trash by identifier or title, in any
+  project. One tap (or Enter, with the arrows to move) links a task and closes the picker.
+  “Blocked by” is stored as the other task blocking this one. A task already linked shows
+  how; one linked that way, or whose reverse is linked, cannot be picked. With a keyboard at
+  hand the search takes focus at once; a touch screen keeps its keyboard down until the
+  field is tapped, so the suggestions stay in view.
 - A card whose blocker is still open (not closed, not in the trash, in any project) shows a
   small blocked mark beside its identifier, named “Blocked by APP-4” or “Blocked by 2
   tasks”. It goes once every blocker closes or is trashed. Closed cards do not show it.

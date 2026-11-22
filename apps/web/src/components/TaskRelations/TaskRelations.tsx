@@ -243,9 +243,10 @@ export function relationSuggestions(
 }
 
 /**
- * Links the task to another one in its workspace, in any project. The kind comes first, with a
- * sentence saying which way it reads; then a task, from suggestions in its own project or a
- * search of every project by key or title. Picking one links it and closes the picker. As the
+ * Links the task to another one in its workspace, in any project. Suggestions (open tasks of
+ * its own project) or search results sit above; the relation kind, its directional sentence
+ * and the search field sit at the bottom for thumb reachability (and directly above the
+ * desktop dock or phone keyboard). Picking a task links it and closes the picker. As the
  * palette's search, the field keeps focus while the arrows move through the tasks.
  */
 export function RelationPicker({ task, onPicked }: { task: Task; onPicked(): void }) {
@@ -324,117 +325,121 @@ export function RelationPicker({ task, onPicked }: { task: Task; onPicked(): voi
   }
 
   return (
-    <div className="flex flex-col gap-3 px-3 pt-2 pb-3">
-      <div className="flex flex-col gap-1.5">
-        <RelationKinds
-          value={role}
-          describedBy={`${ids}-explain`}
-          onChange={(next) => {
-            setRole(next);
-            setError(null);
-            haptics.selection();
-          }}
-        />
-        <p id={`${ids}-explain`} className="px-1 text-muted-foreground text-xs">
-          {PICKABLE.find((option) => option.role === role)!.explain(key)}
-        </p>
-      </div>
-      <div className="flex h-11 shrink-0 items-center gap-2 rounded-xl bg-foreground/[0.05] pr-1 pl-3 focus-within:ring-2 focus-within:ring-ring/60">
-        <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-        <input
-          ref={input}
-          type="text"
-          inputMode="search"
-          role="combobox"
-          aria-label="Find a task"
-          aria-expanded
-          aria-autocomplete="list"
-          aria-controls={`${ids}-tasks`}
-          aria-activedescendant={active ? optionId(active) : undefined}
-          placeholder="Search every project by title or key"
-          autoComplete="off"
-          autoCapitalize="off"
-          spellCheck={false}
-          enterKeyHint="go"
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setActiveKey(null);
-            setError(null);
-            if (list.current) list.current.scrollTop = 0;
-          }}
-          onKeyDown={(event) => {
-            if (event.nativeEvent.isComposing) return;
-            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-              event.preventDefault();
-              move(event.key === 'ArrowDown' ? 1 : -1);
-            } else if (event.key === 'Enter') {
-              event.preventDefault();
-              const chosen = options.find((option) => option.row.task.id === active);
-              if (chosen) pick(chosen.row.task);
-            }
-          }}
-          className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
-        />
-        {query && (
-          <IconButton
-            label="Clear search"
-            tooltip={false}
-            className="size-9 shrink-0 text-muted-foreground [&_svg]:size-4"
-            onPointerDown={(event) => event.preventDefault()}
-            onClick={() => {
-              setQuery('');
-              setActiveKey(null);
-              input.current?.focus({ preventScroll: true });
-            }}
-          >
-            <X />
-          </IconButton>
-        )}
-      </div>
-      {error && (
-        <p role="alert" className="px-1 text-destructive text-sm">
-          {error}
-        </p>
-      )}
-      <section className="flex flex-col gap-1">
+    <div className="flex min-h-0 flex-1 flex-col gap-2.5 px-3 pt-2 pb-2">
+      <section className="flex min-h-0 flex-1 flex-col gap-1">
         <h3
           id={`${ids}-heading`}
-          className="px-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]"
+          className="shrink-0 px-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]"
         >
           {searching ? 'Matching tasks' : project ? `Open in ${project.name}` : 'Open tasks'}
         </h3>
-        {/* Room for the suggestions whatever is found, so typing never resizes the panel. */}
         <div
           ref={list}
           id={`${ids}-tasks`}
           role="listbox"
           aria-label="Tasks to link"
-          className="flex min-h-[calc(5*3.25rem)] flex-col gap-0.5"
+          className="flex max-h-[min(15rem,35dvh)] min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain [scrollbar-width:thin]"
         >
-          {options.map(({ row, taken }) => (
-            <PickerOption
-              key={row.task.id}
-              id={optionId(row.task.id)}
-              row={row}
-              query={query}
-              linked={linked.get(row.task.id)}
-              otherProject={row.project.id !== task.projectId}
-              active={row.task.id === active}
-              taken={taken}
-              onHover={() => setActiveKey(row.task.id)}
-              onPick={() => pick(row.task)}
-            />
-          ))}
-          {options.length === 0 && (
-            <p role="status" className="px-1 py-3 text-muted-foreground text-sm">
-              {searching
-                ? `No tasks match “${query.trim()}”.`
-                : 'Search by title or key, such as THR-12, to link a task from any project.'}
-            </p>
-          )}
+          {/* Few suggestions or matches sit right above the controls; more scroll from the best down. */}
+          <div className="mt-auto flex flex-col gap-0.5">
+            {options.map(({ row, taken }) => (
+              <PickerOption
+                key={row.task.id}
+                id={optionId(row.task.id)}
+                row={row}
+                query={query}
+                linked={linked.get(row.task.id)}
+                otherProject={row.project.id !== task.projectId}
+                active={row.task.id === active}
+                taken={taken}
+                onHover={() => setActiveKey(row.task.id)}
+                onPick={() => pick(row.task)}
+              />
+            ))}
+            {options.length === 0 && (
+              <p role="status" className="px-1 py-3 text-muted-foreground text-sm">
+                {searching
+                  ? `No tasks match “${query.trim()}”.`
+                  : 'Search by title or key, such as THR-12, to link a task from any project.'}
+              </p>
+            )}
+          </div>
         </div>
       </section>
+      {error && (
+        <p role="alert" className="shrink-0 px-1 text-destructive text-sm">
+          {error}
+        </p>
+      )}
+      <div className="flex shrink-0 flex-col gap-2.5 border-foreground/[0.07] border-t pt-2.5">
+        <div className="flex flex-col gap-1">
+          <RelationKinds
+            value={role}
+            describedBy={`${ids}-explain`}
+            onChange={(next) => {
+              setRole(next);
+              setError(null);
+              haptics.selection();
+            }}
+          />
+          <p id={`${ids}-explain`} className="px-1 text-muted-foreground text-xs">
+            {PICKABLE.find((option) => option.role === role)!.explain(key)}
+          </p>
+        </div>
+        <div className="flex h-11 shrink-0 items-center gap-2 rounded-xl bg-foreground/[0.05] pr-1 pl-3 focus-within:ring-2 focus-within:ring-ring/60">
+          <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+          <input
+            ref={input}
+            type="text"
+            inputMode="search"
+            role="combobox"
+            aria-label="Find a task"
+            aria-expanded
+            aria-autocomplete="list"
+            aria-controls={`${ids}-tasks`}
+            aria-activedescendant={active ? optionId(active) : undefined}
+            placeholder="Search every project by title or key"
+            autoComplete="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            enterKeyHint="go"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setActiveKey(null);
+              setError(null);
+              if (list.current) list.current.scrollTop = 0;
+            }}
+            onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing) return;
+              if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                move(event.key === 'ArrowDown' ? 1 : -1);
+              } else if (event.key === 'Enter') {
+                event.preventDefault();
+                const chosen = options.find((option) => option.row.task.id === active);
+                if (chosen) pick(chosen.row.task);
+              }
+            }}
+            className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+          />
+          {query && (
+            <IconButton
+              label="Clear search"
+              tooltip={false}
+              className="size-9 shrink-0 text-muted-foreground [&_svg]:size-4"
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => {
+                setQuery('');
+                setActiveKey(null);
+                input.current?.focus({ preventScroll: true });
+              }}
+            >
+              <X />
+            </IconButton>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
