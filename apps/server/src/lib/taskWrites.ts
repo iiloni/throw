@@ -380,13 +380,17 @@ export function updateTask(actor: WriteActor, id: string, input: UpdateTask, mov
         ? 'updated'
         : 'reordered';
     if (positionItem) plan.items.push(positionItem);
-    else if (kind === 'reordered' && plan.set.position !== undefined)
-      plan.items.push({
-        field: 'position',
-        previous: task.position,
-        requested: plan.set.position,
-        applied: true,
-      });
+    // Device drops often change several fields at once. Keep their position delta in the
+    // feed without adding a reorder line to the device timeline or changing replay responses.
+    const feedPosition: ActivityChange | undefined =
+      !move && plan.set.position !== undefined
+        ? {
+            field: 'position',
+            previous: task.position,
+            requested: plan.set.position,
+            applied: true,
+          }
+        : undefined;
     await tx.insert(taskActivity).values({
       id: changeId,
       workspaceId: task.workspaceId,
@@ -396,6 +400,7 @@ export function updateTask(actor: WriteActor, id: string, input: UpdateTask, mov
       viaTokenName,
       viaTokenId: tokenId,
       kind,
+      feedPosition,
       changes: plan.items,
       createdAt: appliedAt,
     });

@@ -956,15 +956,29 @@ test('list_changes follows REST and MCP writes with stable pages and token attri
       task: task.id,
       changes: { title: { before: 'Review me', after: 'Ready for review' } },
     });
-    await call(other, 'move_task', {
-      task: task.id,
-      before: {
-        statusId: statuses.items.find(({ category }) => category === 'backlog')!.id,
-        parentId: null,
-        priority: 3,
-      },
-      statusId: active.id,
-    });
+    const beforeDrop = (await shapeRows(request, 'tasks', headers)).find(
+      ({ id }) => id === task.id,
+    )!;
+    const dropId = randomUUID();
+    expect(
+      (
+        await request.patch(`/api/tasks/${task.id}`, {
+          headers,
+          data: {
+            changeId: dropId,
+            changes: {
+              statusId: { before: beforeDrop.status_id, after: active.id },
+              priority: { before: 3, after: 2 },
+              position: { after: 'a5', statusId: active.id, priority: 2, parentId: null },
+            },
+          },
+        })
+      ).status(),
+    ).toBe(200);
+    const afterDrop = await call(other, 'get_task', { task: task.id });
+    expect(
+      afterDrop.history.items.find(({ id }) => id === dropId)?.changes.map(({ field }) => field),
+    ).toEqual(['statusId', 'priority']);
     for (const before of [false, true]) {
       await call(other, 'update_task', {
         task: task.id,
@@ -1024,6 +1038,14 @@ test('list_changes follows REST and MCP writes with stable pages and token attri
       actor: { userId: account.user.id, viaToken: 'Queue agent' },
       changes: [{ field: 'title', before: 'Review me', after: 'Ready for review' }],
     });
+    expect(all.changes.find(({ id }) => id === dropId)).toMatchObject({
+      kind: 'moved',
+      changes: [
+        { field: 'statusId', before: beforeDrop.status_id, after: active.id },
+        { field: 'priority', before: 3, after: 2 },
+        { field: 'position', before: beforeDrop.position, after: 'a5' },
+      ],
+    });
     expect(
       all.changes
         .filter(({ type }) => type === 'comment')
@@ -1061,12 +1083,20 @@ test('list_changes follows REST and MCP writes with stable pages and token attri
     expect(
       includesOwn.changes.find(({ entity }) => entity.taskTitle === 'Own write')?.actor.viaToken,
     ).toBe('Queue agent');
-    const catchUp = await call(client, 'list_changes', { since: { after }, limit: 3 });
+    const offsetAfter = new Date(Date.parse(after) + 17 * 60 * 60 * 1000)
+      .toISOString()
+      .replace('Z', '+17:00');
+    const catchUp = await call(client, 'list_changes', { since: { after: offsetAfter }, limit: 3 });
     expect(catchUp.hasMore).toBe(true);
     const rest = await call(client, 'list_changes', { since: catchUp.cursor, limit: 50 });
     expect([...catchUp.changes, ...rest.changes]).toEqual(all.changes);
     expect((await call(client, 'list_changes', { since: rest.cursor })).changes).toEqual([]);
 
+    const badTime = await client.callTool({
+      name: 'list_changes',
+      arguments: { since: { after: '0000-01-01T00:00:00Z' } },
+    });
+    expect(badTime.isError).toBe(true);
     const cursorPayload = JSON.parse(Buffer.from(start.cursor.slice(3), 'base64url').toString());
     const future = `v1.${Buffer.from(
       JSON.stringify({
@@ -1160,6 +1190,61 @@ test('list_changes catches an in-flight lower transaction after the current batc
     if (!writer.stdin.destroyed && !writer.stdin.writableEnded) writer.stdin.end('ROLLBACK;\n');
     await exited;
     await client.close();
+  }
+});
+
+test('purging a task can finish while its comment edit waits @api', async ({ request }) => {
+  const account = await createAccount(request);
+  const credential = await makeToken(request, account);
+  const client = await connect(credential.token);
+  const project = await makeProject(request, account, credential.metadata.workspaceId);
+  const { task } = await call(client, 'create_task', { projectId: project.id, title: 'Purge me' });
+  const { commentId } = await call(client, 'add_comment', { task: task.id, body: 'Before purge' });
+  await client.close();
+
+  const writer = spawn('./scripts/dev.sh', ['psql', '-XqAt', '-v', 'ON_ERROR_STOP=1']);
+  const lines = createInterface({ input: writer.stdout });
+  const exited = once(writer, 'close');
+  try {
+    const pidLine = once(lines, 'line');
+    writer.stdin.write(`
+      BEGIN;
+      SELECT pg_backend_pid() FROM tasks WHERE id = '${task.id}' FOR UPDATE;
+    `);
+    const [line] = await Promise.race([pidLine, exited]);
+    const pid = Number(line);
+    expect(pid).toBeGreaterThan(0);
+    const edit = request.patch(`/api/comments/${commentId}`, {
+      headers: account.headers,
+      data: { body: [{ type: 'paragraph', content: [{ type: 'text', text: 'Concurrent edit' }] }] },
+    });
+    try {
+      await expect
+        .poll(() =>
+          execFileSync(
+            './scripts/dev.sh',
+            [
+              'psql',
+              '-XqAt',
+              '-c',
+              `SELECT count(*) FROM pg_stat_activity WHERE ${pid} = ANY(pg_blocking_pids(pid))`,
+            ],
+            { encoding: 'utf8' },
+          ).trim(),
+        )
+        .toBe('1');
+      writer.stdin.end(`DELETE FROM tasks WHERE id = '${task.id}';
+COMMIT;
+`);
+      await expect(exited).resolves.toEqual([0, null]);
+      expect((await edit).status()).toBe(404);
+    } finally {
+      if (!writer.stdin.destroyed && !writer.stdin.writableEnded) writer.stdin.end('ROLLBACK;\n');
+      await edit;
+    }
+  } finally {
+    if (!writer.stdin.destroyed && !writer.stdin.writableEnded) writer.stdin.end('ROLLBACK;\n');
+    await exited;
   }
 });
 

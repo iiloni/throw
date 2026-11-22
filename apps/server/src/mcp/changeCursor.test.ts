@@ -16,7 +16,12 @@ const page: ChangeCursor = {
   excludeTokenId: randomUUID(),
   base: { type: 'snapshot', snapshot },
   through: '9007199254740995:9007199254741002:9007199254740995',
-  last: { id: randomUUID(), txid: '9007199254740998', source: 'structure' },
+  last: {
+    id: randomUUID(),
+    order: '9007199254740997',
+    txid: '9007199254740998',
+    source: 'structure',
+  },
 };
 
 describe('change feed cursors', () => {
@@ -51,6 +56,22 @@ describe('change feed cursors', () => {
     '10:18446744073709551616:',
   ])('refuses malformed snapshot %s before it reaches Postgres', (snapshot) => {
     expect(parseChangeCursor(encodeChangeCursor({ ...checkpoint, snapshot }))).toBeNull();
+  });
+
+  it('rejects out-of-range historical ranks and UTC years', () => {
+    expect(
+      parseChangeCursor(
+        encodeChangeCursor({
+          ...page,
+          last: { ...page.last, order: '9223372036854775808' },
+        }),
+      ),
+    ).toBeNull();
+    for (const after of ['0000-01-01T00:00:00Z', '9999-12-31T23:00:00-02:00']) {
+      expect(
+        parseChangeCursor(encodeChangeCursor({ ...page, base: { type: 'time', after } })),
+      ).toBeNull();
+    }
   });
 
   it('rejects future snapshots and page positions outside the batch', () => {

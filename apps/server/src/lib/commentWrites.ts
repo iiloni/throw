@@ -70,13 +70,28 @@ const appliedAt = sql`clock_timestamp()`;
 
 /** The comment, locked, if the user can reach it. */
 async function lockComment(tx: Transaction, actor: WriteActor, id: string) {
+  const workspace = memberWorkspaces(tx, actor.userId, actor.workspaceId);
+  // A purge locks the task and cascades to comments. Take the same order before inserting
+  // history, whose task foreign key also needs a lock on the task.
+  const [task] = await tx
+    .select({ id: tasks.id })
+    .from(comments)
+    .innerJoin(
+      tasks,
+      and(eq(tasks.id, comments.taskId), eq(tasks.workspaceId, comments.workspaceId)),
+    )
+    .where(and(eq(comments.id, id), inArray(comments.workspaceId, workspace)))
+    .for('key share', { of: tasks });
+  if (!task) return undefined;
+
   const [comment] = await tx
     .select()
     .from(comments)
     .where(
       and(
         eq(comments.id, id),
-        inArray(comments.workspaceId, memberWorkspaces(tx, actor.userId, actor.workspaceId)),
+        eq(comments.taskId, task.id),
+        inArray(comments.workspaceId, workspace),
       ),
     )
     .for('update', { of: comments });

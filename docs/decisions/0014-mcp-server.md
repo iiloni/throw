@@ -208,7 +208,8 @@ remain distinct. Pre-migration entries only have names and remain visible by def
 Rows store the full writing transaction ID (`xid8`). An opaque `v1.` cursor holds the
 previous Postgres snapshot, so a write still in flight at that snapshot can be read
 after it commits. While paging, the cursor also holds the fixed upper snapshot for the
-batch and the last transaction and event ID (with a source tie-breaker). Pass each returned
+batch and the last transaction and event ID, with tie-breakers for backfilled or restored
+rows and overlapping IDs from different sources. Pass each returned
 cursor forward until `hasMore` is false, keeping `includeOwn` consistent. The batch's upper
 snapshot then becomes the next checkpoint. Concurrent commits during paging are picked up
 by the next batch. No per-reader state is stored on the server. A malformed, foreign
@@ -217,14 +218,15 @@ cursor. Membership and token scope are checked on every call.
 
 The feed uses the existing task log and a server-only journal of comment versions copied
 from the comment write transaction. It records comment additions, edits and explicit
-deletions and renders the before and after bodies in Markdown. Existing comments are
+deletions and renders the before and after bodies in Markdown. Device drops record position deltas in the feed
+without adding position lines to task history. Existing comments are
 backfilled with the version present at migration. Task and comment history are kept for
 the lifetime of their task. A task purge removes that history, including rows a reader
 has yet to fetch. The journals add no shapes, collection versions or outbox formats.
 
 Backups keep the journals. Restore re-stamps restored rows with the live restore
-transaction and changes the feed generation, even when the Postgres transaction counter
-has advanced. A newly issued credential can bootstrap and read the board again or use
+transaction, preserves their relative order and changes the feed generation, even when the
+Postgres transaction counter has advanced. A newly issued credential can bootstrap and read the board again or use
 time-based catch-up to read restored history.
 
 ## Security and operation

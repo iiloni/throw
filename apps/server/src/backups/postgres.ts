@@ -271,14 +271,30 @@ export async function restoreDatabase(
     const resetFeedFile = join(workDir, 'reset-feed.sql');
     // Archived transaction IDs belong to the source cluster. Make the restored history
     // visible at the live restore transaction, and retire all pre-restore feed cursors.
+    // Rank the archived events before re-stamping so they keep their relative order.
     await writeFile(
       resetFeedFile,
       `INSERT INTO public.change_feed_generation (id, generation) VALUES (true, gen_random_uuid())
 ON CONFLICT (id) DO UPDATE SET generation = EXCLUDED.generation;
-UPDATE public.task_activity SET txid = pg_current_xact_id();
+WITH ordered AS (
+  SELECT id, source, row_number() OVER (ORDER BY txid, feed_order, id, source COLLATE "C") AS ordinal
+  FROM (
+    SELECT id, txid, feed_order, 'task'::text AS source FROM public.task_activity
+    UNION ALL
+    SELECT id, txid, feed_order, 'comment' FROM public.comment_activity
+    UNION ALL
+    SELECT id, txid, feed_order, 'structure' FROM public.structure_activity
+  ) AS events
+), tasks_restored AS (
+  UPDATE public.task_activity AS a SET txid = pg_current_xact_id(), feed_order = ordered.ordinal
+  FROM ordered WHERE ordered.source = 'task' AND a.id = ordered.id
+), comments_restored AS (
+  UPDATE public.comment_activity AS a SET txid = pg_current_xact_id(), feed_order = ordered.ordinal
+  FROM ordered WHERE ordered.source = 'comment' AND a.id = ordered.id
+)
+UPDATE public.structure_activity AS a SET txid = pg_current_xact_id(), feed_order = ordered.ordinal
+FROM ordered WHERE ordered.source = 'structure' AND a.id = ordered.id;
 UPDATE public.comments SET txid = pg_current_xact_id();
-UPDATE public.comment_activity SET txid = pg_current_xact_id();
-UPDATE public.structure_activity SET txid = pg_current_xact_id();
 `,
     );
     await run(

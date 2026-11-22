@@ -30,6 +30,7 @@ type FeedRow = {
   id: string;
   source: FeedSource;
   txid: string;
+  feed_order: string;
   project_id: string | null;
   project_key: string | null;
   task_id: string | null;
@@ -60,7 +61,9 @@ function taskChange(
 ): Pick<Change, 'kind' | 'changes'> {
   const changed = fields.filter((field) => field.applied && field.previous !== field.requested);
   const trash = changed.find((field) => field.field === 'trashed');
-  const moved = changed.some((field) => ['statusId', 'position', 'parentId'].includes(field.field));
+  const moved = changed.some((field) =>
+    ['statusId', 'position', 'parentId', 'priority'].includes(field.field),
+  );
   return {
     kind:
       kind === 'created'
@@ -135,7 +138,7 @@ function readBatch(
     base.type === 'snapshot'
       ? sql`a.txid >= ${snapshotBounds(base.snapshot).xmin}::xid8
           AND NOT pg_visible_in_snapshot(a.txid, ${base.snapshot}::pg_snapshot)`
-      : sql`a.created_at >= ${base.after}::timestamptz`;
+      : sql`a.created_at >= ${new Date(base.after).toISOString()}::timestamptz`;
 
   function page(
     source: FeedSource,
@@ -147,11 +150,11 @@ function readBatch(
     // Index each source by workspace and transaction before merging the small pages.
     // Source breaks ties if two independently assigned IDs happen to coincide.
     const after = last
-      ? sql`AND (a.txid, a.id) ${source > last.source ? sql`>=` : sql`>`}
-               (${last.txid}::xid8, ${last.id}::uuid)`
+      ? sql`AND (a.txid, a.feed_order, a.id) ${source > last.source ? sql`>=` : sql`>`}
+               (${last.txid}::xid8, ${last.order}::bigint, ${last.id}::uuid)`
       : sql``;
     return sql`(
-      SELECT a.id, ${source}::text AS source, a.txid, a.project_id, a.user_id,
+      SELECT a.id, ${source}::text AS source, a.txid, a.feed_order, a.project_id, a.user_id,
              a.via_token_name, a.created_at, a.kind, ${projection}
       FROM ${table} a ${joins}
       WHERE a.workspace_id = ${actor.workspaceId}::uuid
@@ -160,7 +163,7 @@ function readBatch(
         AND pg_visible_in_snapshot(a.txid, ${through}::pg_snapshot)
         AND ${lower} ${after} ${extra}
         ${excludeTokenId ? sql`AND a.via_token_id IS DISTINCT FROM ${excludeTokenId}::uuid` : sql``}
-      ORDER BY a.txid, a.id LIMIT ${limit}
+      ORDER BY a.txid, a.feed_order, a.id LIMIT ${limit}
     )`;
   }
 
@@ -169,15 +172,16 @@ function readBatch(
     JOIN projects p ON p.id = a.project_id AND p.workspace_id = a.workspace_id
   `;
   const taskMetadata = sql`a.task_id, p.key AS project_key, t.title AS task_title, t.number AS task_number`;
+  const taskFields = sql`a.changes || CASE WHEN a.feed_position IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(a.feed_position) END`;
   const task = page(
     'task',
     sql`task_activity`,
     sql`
-    a.task_id AS entity_id, 'task'::text AS entity_type, a.changes AS fields, ${taskMetadata}
+    a.task_id AS entity_id, 'task'::text AS entity_type, ${taskFields} AS fields, ${taskMetadata}
   `,
     taskJoins,
     sql`AND EXISTS (
-      SELECT 1 FROM jsonb_array_elements(a.changes) AS field
+      SELECT 1 FROM jsonb_array_elements(${taskFields}) AS field
       WHERE field->>'applied' = 'false' OR field->'previous' IS DISTINCT FROM field->'requested'
     )`,
   );
@@ -200,7 +204,7 @@ function readBatch(
   );
   return tx.execute<FeedRow>(sql`
     SELECT * FROM (${task} UNION ALL ${comment} UNION ALL ${structure}) AS batch
-    ORDER BY batch.txid, batch.id, batch.source COLLATE "C" LIMIT ${limit}
+    ORDER BY batch.txid, batch.feed_order, batch.id, batch.source COLLATE "C" LIMIT ${limit}
   `);
 }
 
@@ -255,7 +259,7 @@ export function listChanges(actor: McpActor, input: McpInput<'list_changes'>): P
       if (rows.length <= input.limit)
         return { changes, cursor: checkpoint(through), hasMore: false };
 
-      const { txid, id, source } = rows[input.limit - 1]!;
+      const { txid, feed_order, id, source } = rows[input.limit - 1]!;
       return {
         changes,
         cursor: encodeChangeCursor({
@@ -264,7 +268,7 @@ export function listChanges(actor: McpActor, input: McpInput<'list_changes'>): P
           excludeTokenId,
           base,
           through,
-          last: { txid, id, source },
+          last: { txid, order: feed_order, id, source },
         }),
         hasMore: true,
       };

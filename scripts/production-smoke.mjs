@@ -151,11 +151,14 @@ try {
   assert.equal(sql('SELECT count(*) FROM mcp_tokens;'), '1');
   const id = randomUUID();
   sql(`INSERT INTO workspaces (id, name, position) VALUES ('${id}', 'before backup', 'a1');`);
+  const entityId = randomUUID();
   sql(`
     INSERT INTO structure_activity
       (id, workspace_id, entity_id, entity_type, kind, changes, txid)
-    VALUES ('${randomUUID()}', '${id}', '${randomUUID()}', 'project', 'deleted', '[]',
-            '9223372036854775807');
+    VALUES ('f0000000-0000-4000-8000-000000000000', '${id}', '${entityId}', 'project',
+            'created', '[]', '9223372036854775806'),
+           ('10000000-0000-4000-8000-000000000000', '${id}', '${entityId}', 'project',
+            'updated', '[]', '9223372036854775807');
   `);
   const cursorGeneration = sql('SELECT generation FROM change_feed_generation;');
   sql(
@@ -179,9 +182,10 @@ try {
   assert.notEqual(sql('SELECT generation FROM change_feed_generation;'), cursorGeneration);
   assert.equal(
     sql(
-      'SELECT count(*) FROM structure_activity WHERE pg_visible_in_snapshot(txid, pg_current_snapshot());',
+      `SELECT string_agg(kind, ',' ORDER BY txid, feed_order, id) FROM structure_activity
+       WHERE entity_id = '${entityId}' AND pg_visible_in_snapshot(txid, pg_current_snapshot());`,
     ),
-    '1',
+    'created,updated',
   );
   assert.equal(sql('SELECT count(*) FROM session;'), '0');
   assert.equal(sql('SELECT count(*) FROM mcp_tokens;'), '0');

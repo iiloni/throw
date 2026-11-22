@@ -177,12 +177,16 @@ export const changeCursorErrorSchema = z.object({
   cursor: feedCursor,
 });
 
+/** Normalize offsets before the SQL cast and keep the UTC instant in the supported year range. */
+export const changeFeedAfterSchema = z.iso.datetime({ offset: true }).refine((value) => {
+  const year = new Date(value).getUTCFullYear();
+  return !value.startsWith('0000-') && year >= 1 && year <= 9999;
+}, 'Use a timestamp between years 0001 and 9999.');
+
 export const mcpTools = {
   list_changes: {
     input: z.strictObject({
-      since: z
-        .union([feedCursor, z.strictObject({ after: z.iso.datetime({ offset: true }) })])
-        .optional(),
+      since: z.union([feedCursor, z.strictObject({ after: changeFeedAfterSchema })]).optional(),
       includeOwn: z.boolean().default(false),
       limit: z.int().min(1).max(50).default(20),
     }),

@@ -1,3 +1,4 @@
+import { changeFeedAfterSchema } from '@throw/shared';
 import { z } from 'zod';
 
 // xid8 is unsigned and can outgrow Number's exact range.
@@ -5,6 +6,12 @@ const xid = z
   .string()
   .refine(
     (value) => /^(0|[1-9][0-9]{0,19})$/.test(value) && BigInt(value) <= 0xffff_ffff_ffff_ffffn,
+  );
+
+const feedOrder = z
+  .string()
+  .refine(
+    (value) => /^(0|[1-9][0-9]{0,18})$/.test(value) && BigInt(value) <= 0x7fff_ffff_ffff_ffffn,
   );
 
 const snapshot = z.string().refine((value) => {
@@ -28,7 +35,7 @@ const snapshot = z.string().refine((value) => {
 const feedSources = z.enum(['task', 'comment', 'structure']);
 const boundary = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('snapshot'), snapshot }),
-  z.strictObject({ type: z.literal('time'), after: z.iso.datetime({ offset: true }) }),
+  z.strictObject({ type: z.literal('time'), after: changeFeedAfterSchema }),
 ]);
 
 const scope = {
@@ -43,7 +50,7 @@ const cursorSchema = z.discriminatedUnion('type', [
     excludeTokenId: z.uuid().nullable(),
     base: boundary,
     through: snapshot,
-    last: z.strictObject({ txid: xid, id: z.uuid(), source: feedSources }),
+    last: z.strictObject({ txid: xid, order: feedOrder, id: z.uuid(), source: feedSources }),
   }),
 ]);
 
