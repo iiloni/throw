@@ -3,6 +3,8 @@ import {
   type ActivityEntry,
   priorityName,
   prioritySchema,
+  sizeLabel,
+  sizeSchema,
 } from '@throw/shared';
 
 export type HistoryContext = {
@@ -27,6 +29,10 @@ function value(change: ActivityChange, requested: boolean, context: HistoryConte
         ? quote(priorityName(context.priorityNames, rank.data))
         : 'an unknown priority';
     }
+    case 'size': {
+      const size = sizeSchema.safeParse(raw);
+      return size.success ? sizeLabel(size.data) : raw === null ? 'no size' : 'an unknown size';
+    }
     case 'parentId':
       return raw === null
         ? 'no parent'
@@ -49,6 +55,7 @@ const labels: Record<string, string> = {
   title: 'Title',
   statusId: 'Status',
   priority: 'Priority',
+  size: 'Size',
   parentId: 'Parent',
   primaryTagId: 'Primary tag',
   secondaryTags: 'Tag',
@@ -64,6 +71,8 @@ export function changeSentence(change: ActivityChange, context: HistoryContext):
   if (change.reason === 'replaced') return `The requested status was unavailable. Used ${wanted}.`;
   if (change.applied && change.previous === change.requested) {
     if (change.field === 'description') return 'The description was already up to date.';
+    if (change.field === 'size' && change.requested === null)
+      return 'The task already had no size.';
     if (change.field === 'trashed') return `The task was already ${wanted}.`;
     if (change.field === 'parentId')
       return change.requested === null
@@ -82,6 +91,10 @@ export function changeSentence(change: ActivityChange, context: HistoryContext):
       change.reason === 'stale'
         ? 'it changed before this update synced'
         : 'the requested value was no longer valid';
+    if (change.field === 'size') {
+      const attempt = change.requested === null ? 'clear size' : `set size to ${wanted}`;
+      return `Could not ${attempt} because ${reason}. Kept ${stood}.`;
+    }
     if (change.field === 'description')
       return `Description not applied: wanted your description; kept the existing description because ${reason}.`;
     return `${labels[change.field] ?? 'Change'} not applied: wanted ${wanted}; kept ${stood} because ${reason}.`;
@@ -93,6 +106,11 @@ export function changeSentence(change: ActivityChange, context: HistoryContext):
       return `Changed status from ${stood} to ${wanted}.`;
     case 'priority':
       return `Changed priority from ${stood} to ${wanted}.`;
+    case 'size':
+      if (change.requested === null) return 'Cleared size.';
+      return change.previous === null
+        ? `Set size to ${wanted}.`
+        : `Changed size from ${stood} to ${wanted}.`;
     case 'parentId':
       return change.requested === null ? `Removed parent ${stood}.` : `Moved under ${wanted}.`;
     case 'primaryTagId':

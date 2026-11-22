@@ -36,6 +36,7 @@ export function projectBoardData(
   const tagIds = new Set(projectTags.map((tag) => tag.id));
   const present = (task: TaskRow) => ({
     ...task,
+    size: task.size ?? null,
     closedAt: task.closedAt === null ? null : Date.parse(task.closedAt),
     primaryTagColor: taskTagColor(task, projectTags),
     // An assignment whose tag has not synced, or was deleted, is not counted on the card.

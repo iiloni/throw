@@ -35,6 +35,13 @@ describe('history sentences', () => {
       'Changed status from “Testing” to “Done”.',
     ],
     [change('priority', 3, 1), 'Changed priority from “Default” to “Urgent”.'],
+    [change('size', null, 3), 'Set size to M.'],
+    [change('size', 2, 4), 'Changed size from S to L.'],
+    [change('size', 3, null), 'Cleared size.'],
+    [
+      change('size', 3, null, { applied: false, reason: 'stale' }),
+      'Could not clear size because it changed before this update synced. Kept M.',
+    ],
     [change('parentId', null, 'parent'), 'Moved under TASK-2.'],
     [change('parentId', 'parent', null), 'Removed parent TASK-2.'],
     [change('parentId', null, 'gone'), 'Moved under an unavailable parent.'],

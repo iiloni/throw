@@ -9,6 +9,7 @@ export * from './priorities';
 export * from './projects';
 export * from './protocol';
 export * from './releases';
+export * from './sizes';
 export * from './statuses';
 export * from './sync';
 export * from './tags';

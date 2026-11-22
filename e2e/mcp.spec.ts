@@ -1288,3 +1288,59 @@ test('an offline task write reaches an existing list_changes cursor on replay', 
     await client.close();
   }
 });
+
+test('MCP task size supports exact and unset filters, replay, conflicts and the feed @api', async ({
+  request,
+}) => {
+  const account = await createAccount(request);
+  const token = await makeToken(request, account);
+  const project = await makeProject(request, account, token.metadata.workspaceId);
+  const client = await connect(token.token);
+  try {
+    const start = await call(client, 'list_changes');
+    const created = await call(client, 'create_task', {
+      projectId: project.id,
+      title: 'Sized',
+      size: 1,
+    });
+    const unsized = await call(client, 'create_task', { projectId: project.id, title: 'Unsized' });
+    const task = created.task.id;
+    const read = () => call(client, 'get_task', { task });
+    const bySize = async (size: number | null) =>
+      (await call(client, 'list_tasks', { projectId: project.id, size })).items.map(({ id }) => id);
+
+    expect((await read()).task.size).toBe(1);
+    expect(await bySize(1)).toEqual([task]);
+    expect(await bySize(null)).toEqual([unsized.task.id]);
+    expect(await bySize(5)).toEqual([]);
+    const changes = { size: { before: 1, after: 5 } };
+    const updated = await call(client, 'update_task', { task, changes });
+    expect(
+      await call(client, 'update_task', { task, changes, operationId: updated.operationId }),
+    ).toEqual(updated);
+    const stale = await call(client, 'update_task', {
+      task,
+      changes: { size: { before: 1, after: null } },
+    });
+    expect(stale.changes).toEqual([
+      { field: 'size', previous: 5, requested: null, applied: false, reason: 'stale' },
+    ]);
+    expect(await bySize(5)).toEqual([task]);
+
+    await call(client, 'update_task', { task, changes: { size: { before: 5, after: null } } });
+    expect((await read()).task.size).toBeNull();
+    expect(await bySize(null)).toEqual([task, unsized.task.id]);
+    const feed = await call(client, 'list_changes', { since: start.cursor, includeOwn: true });
+    const sizeChanges = feed.changes.flatMap((entry) =>
+      entry.type === 'task' ? entry.changes.filter(({ field }) => field === 'size') : [],
+    );
+    expect(sizeChanges).toEqual([
+      expect.objectContaining({ before: null, after: 1, applied: true }),
+      expect.objectContaining({ before: 1, after: 5, applied: true }),
+      expect.objectContaining({ before: 5, after: 5, requested: null, applied: false }),
+      expect.objectContaining({ before: 5, after: null, applied: true }),
+    ]);
+  } finally {
+    await client.close();
+  }
+});

@@ -9,7 +9,9 @@ import {
   type Priority,
   positionBetween,
   prioritySchema,
+  type Size,
   type Status,
+  sizeSchema,
   type Task,
   taskSchema,
   taskTitleSchema,
@@ -92,6 +94,7 @@ export interface NewTask {
   /** The backlog's default status when left out. */
   statusId?: string;
   priority?: Priority;
+  size?: Size | null;
   parentId?: string | null;
   /** At the top of its priority, or after its parent's subtasks, when left out. */
   position?: string;
@@ -132,6 +135,7 @@ export function createTask(projectId: string, fields: NewTask = {}) {
     descriptionVersion: description === null ? null : uuidv7(),
     statusId: status.id,
     priority,
+    size: sizeSchema.nullable().parse(fields.size ?? null),
     position:
       fields.position ??
       (parentId === null
@@ -154,6 +158,7 @@ export interface TaskEdit {
   primaryTagId?: string | null;
   title?: string;
   priority?: Priority;
+  size?: Size | null;
   statusId?: string;
   /** Null makes a subtask a top-level task. */
   parentId?: string | null;
@@ -176,6 +181,7 @@ export function taskEditChanges(
   if (edit.primaryTagId !== undefined) changes.primaryTagId = edit.primaryTagId;
   if (edit.title !== undefined) changes.title = taskTitleSchema.parse(edit.title);
   if (edit.priority !== undefined) changes.priority = prioritySchema.parse(edit.priority);
+  if (edit.size !== undefined) changes.size = sizeSchema.nullable().parse(edit.size);
   if (edit.statusId !== undefined && edit.statusId !== task.statusId) {
     const from = statuses.get(task.statusId);
     const to = statuses.get(edit.statusId);
@@ -306,6 +312,7 @@ export function discardUntouchedTask(id: string) {
     (task.description !== null && descriptionText(task.description).trim() !== '') ||
     task.primaryTagId !== null ||
     task.priority !== DEFAULT_PRIORITY ||
+    task.size != null ||
     task.statusId !== defaultStatus([...statusesCollection.values()], task.projectId)?.id
   )
     return false;

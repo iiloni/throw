@@ -15,6 +15,7 @@ type TaskSeed = {
   title: string;
   status: string;
   priority?: Priority;
+  size?: Task['size'];
   tag?: string;
   also?: string[];
   /** Days since it was closed. */
@@ -58,6 +59,7 @@ function build(
       title: seed.title,
       statusId: slug(seed.status),
       priority: seed.priority ?? 3,
+      size: seed.size ?? null,
       position: positions[tasks.length]!,
       primaryTagId: seed.tag ? slug(seed.tag) : null,
       secondaryTagIds: (seed.also ?? []).map(slug),
@@ -73,6 +75,7 @@ function build(
         title,
         statusId: slug(status),
         priority: seed.priority ?? 3,
+        size: seed.size ?? null,
         position: positions[tasks.length]!,
         primaryTagId: seed.tag ? slug(seed.tag) : null,
         secondaryTagIds: [],
@@ -180,7 +183,7 @@ const throwApp = () =>
         priority: 4,
         tag: 'Motion',
       },
-      { title: 'Empty column state', status: 'Building', priority: 4, tag: 'Design' },
+      { title: 'Empty column state', status: 'Building', priority: 4, size: 2, tag: 'Design' },
       {
         title: 'Move a card between columns from the keyboard',
         status: 'Building',

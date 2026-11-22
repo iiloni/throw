@@ -51,6 +51,7 @@ const task = (id: string, edit: Partial<Task> = {}): Task => ({
   descriptionVersion: null,
   statusId: 'build',
   priority: 3,
+  size: null,
   position: 'a0',
   parentId: null,
   primaryTagId: null,
@@ -364,4 +365,23 @@ describe('workspace board selection', () => {
     ]);
     expect(data.project.members?.map((member) => member.statuses.length)).toEqual([6, 6]);
   });
+});
+
+it('keeps sizes on both boards and treats a legacy row as unsized', () => {
+  const sized = task('sized', { size: 4 });
+  const { size: _size, ...legacy } = task('legacy');
+  const rows = [sized, legacy as Task];
+  const expected = [
+    ['sized', 4],
+    ['legacy', null],
+  ];
+  expect(projectBoardData(project, statuses, rows).tasks.map(({ id, size }) => [id, size])).toEqual(
+    expected,
+  );
+  expect(
+    workspaceBoardData(project.workspaceId, [project], statuses, rows).tasks.map(({ id, size }) => [
+      id,
+      size,
+    ]),
+  ).toEqual(expected);
 });

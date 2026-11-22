@@ -21,6 +21,7 @@ const current: TaskState = {
   descriptionVersion: id(20),
   statusId: BACKLOG,
   priority: 3,
+  size: null,
   parentId: null,
   position: 'a0',
   trashed: false,
@@ -230,4 +231,27 @@ it('primary tags compare before values, snapshot names, and refuse missing tags 
     planTaskUpdate(state, { primaryTagId: { before: id(30), after: null } }, { ...context, tags })
       .set,
   ).toEqual({ primaryTagId: null });
+});
+
+it('applies, clears, and refuses a size independently of other fields', () => {
+  const set = planTaskUpdate(current, { size: { before: null, after: 3 } }, context);
+  expect(set.set).toEqual({ size: 3 });
+  expect(set.items).toEqual([{ field: 'size', previous: null, requested: 3, applied: true }]);
+
+  const sized = { ...current, size: 3 as const };
+  const clear = planTaskUpdate(sized, { size: { before: 3, after: null } }, context);
+  expect(clear.set).toEqual({ size: null });
+
+  const same = planTaskUpdate(sized, { size: { before: null, after: 3 } }, context);
+  expect(same.set).toEqual({});
+  expect(same.refused).toEqual([]);
+  expect(same.items).toEqual([{ field: 'size', previous: 3, requested: 3, applied: true }]);
+
+  const stale = planTaskUpdate(
+    sized,
+    { size: { before: null, after: 5 }, title: { before: current.title, after: 'New title' } },
+    context,
+  );
+  expect(stale.set).toEqual({ title: 'New title' });
+  expect(stale.refused).toEqual([{ field: 'size', reason: 'stale' }]);
 });

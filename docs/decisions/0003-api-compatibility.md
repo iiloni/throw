@@ -26,9 +26,13 @@ a write, and local data is never cleared to recover.
 **The version changes only for incompatible contracts.** UI changes, compatible fixes and
 additions with a fallback leave it alone.
 
-**Until the first release the protocol is 1.** Nothing is deployed, so contracts may change
-without a bump. From the first release on, an incompatible change raises the client version
+**The deployed previews use protocol 1.** Preview clients can already be installed.
+An incompatible change raises the client version
 and the server's maximum, with tests at the boundaries and a documented upgrade order.
+
+Some compatible additions advertise a capability in `/api/compatibility`. The task size
+field uses `taskSize: true` so a new app can keep using an older server and send size
+changes once the server supports them.
 
 ## Consequences
 

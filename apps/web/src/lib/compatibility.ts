@@ -2,18 +2,42 @@ import {
   API_PROTOCOL_HEADER,
   API_PROTOCOL_VERSION,
   type CompatibilityIssue,
+  compatibilitySchema,
   protocolCompatibility,
   protocolErrorSchema,
-  protocolRangeSchema,
 } from '@throw/shared';
+import { useSyncExternalStore } from 'react';
+import { z } from 'zod';
 import { getAuthToken } from './auth';
 import { getServerUrl } from './serverUrl';
+import { readPreference, watchPreferences, writePreference } from './storage';
 import { getSyncStatus, subscribeToSyncStatus, updateSyncStatus } from './syncStatus';
 
 export class CompatibilityError extends Error {
   constructor(readonly issue: CompatibilityIssue) {
     super(issue === 'client-too-old' ? 'Waiting for an app update' : 'Waiting for a server update');
   }
+}
+
+const taskSizeKey = (server: string) => `throw-task-size-support:${server}`;
+const storedTaskSize = z.boolean();
+
+function taskSizeSupported() {
+  return readPreference(taskSizeKey(getServerUrl()), storedTaskSize, false);
+}
+
+export function useTaskSizeSupport() {
+  return useSyncExternalStore(watchPreferences, taskSizeSupported);
+}
+
+function rememberTaskSizeSupport(server: string, supported: boolean) {
+  if (readPreference(taskSizeKey(server), storedTaskSize, false) !== supported)
+    writePreference(taskSizeKey(server), supported);
+}
+
+export async function ensureTaskSizeSupport(force = false) {
+  await checkCompatibility(force);
+  if (!taskSizeSupported()) throw new CompatibilityError('server-too-old');
 }
 
 let checkedUntil = 0;
@@ -23,18 +47,21 @@ let checking: Promise<void> | null = null;
 export function checkCompatibility(force = false): Promise<void> {
   if (!force && Date.now() < checkedUntil) return Promise.resolve();
   checking ??= (async () => {
-    const response = await fetch(`${getServerUrl()}/api/compatibility`, {
+    const server = getServerUrl();
+    const response = await fetch(`${server}/api/compatibility`, {
       cache: 'no-store',
       signal: AbortSignal.timeout(10_000),
     });
     // Not a Throw server, or one behind a proxy that hides the route. Never send it writes.
     if (response.status === 404) {
+      rememberTaskSizeSupport(server, false);
       updateSyncStatus({ incompatibility: 'server-too-old' });
     } else {
       if (!response.ok) throw new Error('Could not check API compatibility');
-      const range = protocolRangeSchema.safeParse(await response.json());
+      const range = compatibilitySchema.safeParse(await response.json());
       // A malformed bootstrap response is retryable, never a Zod write-validation failure.
       if (!range.success) throw new Error('Could not verify API compatibility');
+      rememberTaskSizeSupport(server, range.data.taskSize);
       updateSyncStatus({
         incompatibility: protocolCompatibility(API_PROTOCOL_VERSION, range.data),
       });

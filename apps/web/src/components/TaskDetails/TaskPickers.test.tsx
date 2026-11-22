@@ -3,7 +3,13 @@ import type { Status, Tag, Task } from '@throw/shared';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { Project } from '@/components/Board/model';
 import { closeNewTag, newTagHosted, newTagRequest } from '@/components/NewTag/NewTag';
-import { ColorTagsPicker, PriorityPicker, StatusPicker, TagsPicker } from './TaskPickers';
+import {
+  ColorTagsPicker,
+  PriorityPicker,
+  SizePicker,
+  StatusPicker,
+  TagsPicker,
+} from './TaskPickers';
 
 const fake = vi.hoisted(() => ({
   send: vi.fn(),
@@ -31,6 +37,7 @@ const task: Task = {
   descriptionVersion: null,
   statusId: 'todo',
   priority: 3,
+  size: null,
   position: 'a0',
   parentId: null,
   primaryTagId: null,
@@ -164,4 +171,21 @@ it('closes on picking the current status or priority again, without writing', ()
   expect(onPicked).toHaveBeenCalledTimes(2);
   expect(fake.send).not.toHaveBeenCalled();
   expect(fake.update).not.toHaveBeenCalled();
+});
+
+it('sets a size, or clears it through the selected size or None', () => {
+  const onPicked = vi.fn();
+  const { rerender } = render(<SizePicker task={task} onPicked={onPicked} />);
+  expect(screen.getByRole('radio', { name: 'None' })).toBeChecked();
+  fireEvent.click(screen.getByRole('radio', { name: 'M' }));
+  expect(fake.update).toHaveBeenLastCalledWith('task', { size: 3 });
+
+  rerender(<SizePicker task={{ ...task, size: 3 }} onPicked={onPicked} />);
+  expect(screen.getByRole('radio', { name: 'M' })).toBeChecked();
+  fireEvent.click(screen.getByRole('radio', { name: 'M' }));
+  expect(fake.update).toHaveBeenLastCalledWith('task', { size: null });
+  fireEvent.click(screen.getByRole('radio', { name: 'None' }));
+  expect(fake.update).toHaveBeenLastCalledWith('task', { size: null });
+  expect(fake.update).toHaveBeenCalledTimes(3);
+  expect(onPicked).toHaveBeenCalledTimes(3);
 });

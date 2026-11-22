@@ -120,7 +120,7 @@ export function taskCreateFromWrite(
 }
 
 export function taskCreateRequest(task: Task, secondaryTagIds: string[] = []): CreateTask {
-  return createTaskSchema.parse({
+  const { size, ...body } = createTaskSchema.parse({
     id: task.id,
     projectId: task.projectId,
     title: task.title,
@@ -128,11 +128,14 @@ export function taskCreateRequest(task: Task, secondaryTagIds: string[] = []): C
     descriptionVersion: task.descriptionVersion,
     statusId: task.statusId,
     priority: task.priority,
+    size: task.size,
     position: task.position,
     parentId: task.parentId,
     primaryTagId: task.primaryTagId ?? null,
     secondaryTagIds,
   });
+  // Omission keeps unsized creates compatible with older servers.
+  return size === null ? body : { ...body, size };
 }
 
 /**
@@ -151,6 +154,10 @@ export function taskUpdateRequest(
     field in changes && original[field] !== modified[field];
   if (changed('title')) wire.title = { before: original.title, after: modified.title };
   if (changed('priority')) wire.priority = { before: original.priority, after: modified.priority };
+  const beforeSize = original.size ?? null;
+  const afterSize = modified.size ?? null;
+  if ('size' in changes && beforeSize !== afterSize)
+    wire.size = { before: beforeSize, after: afterSize };
   if (changed('statusId')) wire.statusId = { before: original.statusId, after: modified.statusId };
   if (changed('primaryTagId'))
     wire.primaryTagId = { before: original.primaryTagId ?? null, after: modified.primaryTagId };

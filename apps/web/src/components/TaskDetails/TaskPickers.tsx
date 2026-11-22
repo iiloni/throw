@@ -1,4 +1,13 @@
-import { compareStatuses, PRIORITIES, type Priority, type Status, type Task } from '@throw/shared';
+import {
+  compareStatuses,
+  PRIORITIES,
+  type Priority,
+  SIZES,
+  type Size,
+  type Status,
+  sizeLabel,
+  type Task,
+} from '@throw/shared';
 import { Check } from 'lucide-react';
 import { useEffect, useId, useRef } from 'react';
 import { PriorityGlyph, StatusGlyph } from '@/components/Board/glyphs';
@@ -156,6 +165,36 @@ export function PriorityOptions({
           </span>
           <span className="flex-1">{priorityName(project, priority)}</span>
           <Picked checked={value === priority} />
+        </label>
+      ))}
+    </div>
+  );
+}
+
+export function SizePicker({ task, onPicked }: { task: Task; onPicked(): void }) {
+  const name = useId();
+  const current = task.size ?? null;
+  const pick = (size: Size | null) => {
+    if (size !== current) {
+      haptics.selection();
+      updateTask(task.id, { size });
+    }
+    onPicked();
+  };
+  return (
+    <div role="radiogroup" aria-label="Size" className="grid grid-cols-3 gap-2 p-2">
+      {([...SIZES, null] as const).map((size) => (
+        <label key={size ?? 'none'} className={cn(target, 'h-12 justify-center px-2')}>
+          <input
+            className={radio}
+            type="radio"
+            name={name}
+            checked={current === size}
+            onChange={() => pick(size)}
+            onClick={() => current === size && pick(null)}
+          />
+          {size === null ? 'None' : sizeLabel(size)}
+          <Picked checked={current === size} />
         </label>
       ))}
     </div>

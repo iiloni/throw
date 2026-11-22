@@ -9,6 +9,10 @@ export const protocolRangeSchema = z
   .refine(({ min, max }) => min <= max, 'Invalid protocol range');
 export type ProtocolRange = z.infer<typeof protocolRangeSchema>;
 
+export const compatibilitySchema = protocolRangeSchema.safeExtend({
+  taskSize: z.boolean().default(false),
+});
+
 export const SUPPORTED_API_PROTOCOLS: ProtocolRange = { min: 1, max: API_PROTOCOL_VERSION };
 
 export type CompatibilityIssue = 'client-too-old' | 'server-too-old';

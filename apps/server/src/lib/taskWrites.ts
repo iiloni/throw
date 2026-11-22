@@ -153,6 +153,8 @@ export function createTask(actor: WriteActor, input: z.output<typeof createTaskS
       },
       { field: 'priority', previous: null, requested: body.priority, applied: true },
     ];
+    if (body.size !== null)
+      changes.push({ field: 'size', previous: null, requested: body.size, applied: true });
     if (body.descriptionVersion !== null)
       changes.push({
         field: 'description',
@@ -282,6 +284,7 @@ export function updateTask(actor: WriteActor, id: string, input: UpdateTask, mov
         descriptionVersion: task.descriptionVersion,
         statusId: task.statusId,
         priority: task.priority,
+        size: task.size,
         parentId: task.parentId,
         position: task.position,
         trashed: task.deletedAt !== null,

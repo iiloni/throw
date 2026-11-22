@@ -221,6 +221,13 @@ export function BoardSettingsControls({
           onChange={(value) => set('cardPriority', value)}
         />
       </Row>
+      <Row label="Size on cards" hint="Show the size on cards that have one.">
+        <Switch
+          label="Size on cards"
+          checked={settings.cardSize}
+          onChange={(value) => set('cardSize', value)}
+        />
+      </Row>
       {!phone && (
         <Row label="Column backgrounds">
           <Switch

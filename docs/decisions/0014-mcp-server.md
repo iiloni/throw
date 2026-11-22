@@ -93,13 +93,18 @@ project key changes. Key resolution follows [ADR 0007](0007-task-identifiers.md)
 | `create_tag` | Create a root or nested tag. Roots may have a color and icon. |
 | `update_tag` | Rename a tag, edit its appearance or change its parent. |
 | `move_tag` | Place a tag before or after a sibling under the same parent. |
-| `list_tasks` | List tasks or search their titles, descriptions and current keys. Filter by project, status or category, priority, tag, parent and trash state. Exclude effectively trashed tasks by default. |
+| `list_tasks` | List tasks or search their titles, descriptions and current keys. Filter by project, status or category, priority, size, tag, parent and trash state. Exclude effectively trashed tasks by default. |
 | `get_task` | Read a task and its subtasks, comments and history, with cursors for those sections. |
 | `create_task` | Create a task in a project or create a subtask by supplying its parent. |
-| `update_task` | Edit the title, description or priority, or trash or restore the task. |
+| `update_task` | Edit the title, description, priority or size, or trash or restore the task. |
 | `move_task` | Change status or place a task relative to an existing neighbor in the destination lane. The server computes the position with the existing fractional ordering. |
 | `add_comment` | Post a comment on a task. |
 | `set_task_tags` | Set or clear the primary tag and add or remove individual secondary tags. |
+
+Task reads include nullable `size`. The fixed values 1–5 mean XS, S, M, L and XL.
+Omit size on create to leave it unset. Updates supply `{ before, after }` and use null
+to clear it. `list_tasks` accepts a size to match, null for unsized tasks, or omission
+to include all sizes. Size changes and refusals use the same task history and change feed.
 
 Users can configure projects, statuses and tags in Throw or through MCP. Structure writes
 cover active projects and their statuses and tags. Trashing, restoring or deleting board

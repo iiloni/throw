@@ -12,6 +12,7 @@ beforeEach(() => {
   vi.resetModules();
   fetcher.mockReset();
   auth.token = null;
+  localStorage.clear();
   vi.stubGlobal('fetch', fetcher);
 });
 afterEach(() => {
@@ -172,4 +173,30 @@ describe('client compatibility transport', () => {
       await expect(ensureCompatible()).resolves.toBeUndefined();
     },
   );
+});
+
+it('keeps ordinary task writes compatible and retries sized writes after a server upgrade', async () => {
+  const { api } = await import('./api');
+  const { CompatibilityError, checkCompatibility } = await import('./compatibility');
+  const { getSyncStatus } = await import('./syncStatus');
+  const size = { changeId: 'queued', changes: { size: { before: null, after: 3 } } } as const;
+  fetcher.mockResolvedValueOnce(json(compatible));
+  await expect(api.updateTask('task', size)).rejects.toBeInstanceOf(CompatibilityError);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+
+  fetcher.mockResolvedValueOnce(json({ txid: null, refused: [] }));
+  await api.updateTask('task', {
+    changeId: 'ordinary',
+    changes: { title: { before: 'Old', after: 'New' } },
+  });
+  expect(getSyncStatus().incompatibility).toBeNull();
+
+  fetcher.mockResolvedValueOnce(json({ ...compatible, taskSize: true }));
+  await checkCompatibility(true);
+  fetcher.mockResolvedValueOnce(json({ txid: 42, refused: [] }));
+  await expect(api.updateTask('task', size)).resolves.toMatchObject({ txid: 42 });
+  expect(JSON.parse(fetcher.mock.lastCall?.[1].body)).toEqual(size);
+
+  fetcher.mockResolvedValueOnce(json({}, 400)).mockResolvedValueOnce(json(compatible));
+  await expect(api.updateTask('task', size)).rejects.toBeInstanceOf(CompatibilityError);
 });

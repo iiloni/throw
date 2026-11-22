@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { comparePositions, positionSchema } from './position';
 import { DEFAULT_PRIORITY, prioritySchema } from './priorities';
+import { sizeSchema } from './sizes';
 import { isClosedCategory, type StatusCategory } from './statuses';
 import { timestampSchema, txidResponseSchema } from './sync';
 import { secondaryTagChangesSchema } from './tags';
@@ -26,6 +27,7 @@ export const taskSchema = z.object({
   descriptionVersion: z.uuid().nullable(),
   statusId: z.uuid(),
   priority: prioritySchema,
+  size: sizeSchema.nullable(),
   /** Within its status and priority, or for a subtask within its parent. */
   position: positionSchema,
   primaryTagId: z.uuid().nullable(),
@@ -55,6 +57,7 @@ export const createTaskSchema = taskSchema
   .extend({
     statusId: z.uuid().nullable().default(null),
     priority: prioritySchema.default(DEFAULT_PRIORITY),
+    size: sizeSchema.nullable().default(null),
     primaryTagId: z.uuid().nullable().default(null),
     secondaryTagIds: z
       .array(z.uuid())
@@ -70,6 +73,7 @@ export const TASK_FIELDS = [
   'description',
   'statusId',
   'priority',
+  'size',
   'parentId',
   'primaryTagId',
   'secondaryTags',
@@ -92,6 +96,7 @@ export const taskChangesSchema = z
   .object({
     title: change(taskTitleSchema),
     priority: change(prioritySchema),
+    size: change(sizeSchema.nullable()),
     statusId: change(z.uuid()),
     parentId: change(z.uuid().nullable()),
     primaryTagId: change(z.uuid().nullable()),

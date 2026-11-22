@@ -201,7 +201,7 @@ export function throwMcpServer(actor: McpActor) {
   register(
     'list_tasks',
     mcpTools.list_tasks,
-    'Search task titles, descriptions, and keys or list tasks with filters. Results include subtasks and closed tasks. Trash is excluded by default.',
+    'Search task titles, descriptions, and keys or list tasks with filters, including size (1–5, or null for unsized tasks). Results include subtasks and closed tasks. Trash is excluded by default.',
     listTasks,
     true,
   );
@@ -221,7 +221,7 @@ export function throwMcpServer(actor: McpActor) {
   register(
     'update_task',
     mcpTools.update_task,
-    'Edit a task’s title, Markdown description, priority, or own trash state. Supply the before values you read. Inspect changes for refusals and read the task again before retrying a stale edit.',
+    'Edit a task’s title, Markdown description, priority, size (1–5, or null to clear), or own trash state. Supply the before values you read. Inspect changes for refusals and read the task again before retrying a stale edit.',
     updateTaskTool,
   );
   register(

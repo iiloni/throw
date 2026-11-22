@@ -45,6 +45,7 @@ const row: Task = {
   descriptionVersion: 'base',
   statusId: 'status',
   priority: 3,
+  size: null,
   position: 'a0',
   parentId: null,
   primaryTagId: null,

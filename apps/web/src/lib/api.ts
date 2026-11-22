@@ -20,7 +20,7 @@ import type {
 } from '@throw/shared';
 import { createMcpTokenResponseSchema, mcpTokensResponseSchema } from '@throw/shared';
 import { getAuthToken } from './auth';
-import { compatibleFetch } from './compatibility';
+import { compatibleFetch, ensureTaskSizeSupport } from './compatibility';
 import { getServerUrl } from './serverUrl';
 
 export class ApiError extends Error {
@@ -54,6 +54,23 @@ async function apiResponse(path: string, init: RequestInit) {
 async function request<T>(path: string, init: RequestInit): Promise<T> {
   const response = await apiResponse(path, init);
   return response.json() as Promise<T>;
+}
+
+async function writeTask<T>(
+  path: string,
+  method: string,
+  body: CreateTask | UpdateTask,
+  sized: boolean,
+) {
+  if (sized) await ensureTaskSizeSupport();
+  try {
+    return await request<T>(path, { method, body: JSON.stringify(body) });
+  } catch (error) {
+    // A server downgraded since bootstrap can reject the new field with a validation error.
+    if (sized && error instanceof ApiError && error.status === 400)
+      await ensureTaskSizeSupport(true);
+    throw error;
+  }
 }
 
 // Version discovery remains available while the protocol gate pauses data requests.
@@ -105,9 +122,9 @@ export const api = {
     request<TagWriteResponse>(`/tags/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteTag: (id: string) => request<TagWriteResponse>(`/tags/${id}`, { method: 'DELETE' }),
   createTask: (body: CreateTask) =>
-    request<TagWriteResponse>('/tasks', { method: 'POST', body: JSON.stringify(body) }),
+    writeTask<TagWriteResponse>('/tasks', 'POST', body, body.size !== undefined),
   updateTask: (id: string, body: UpdateTask) =>
-    request<UpdateTaskResponse>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    writeTask<UpdateTaskResponse>(`/tasks/${id}`, 'PATCH', body, body.changes.size !== undefined),
   purgeTask: (id: string) => request<TxidResponse>(`/tasks/${id}`, { method: 'DELETE' }),
   createComment: (body: CreateComment) =>
     request<TxidResponse>('/comments', { method: 'POST', body: JSON.stringify(body) }),

@@ -36,6 +36,7 @@ export async function createTaskTool(
       descriptionVersion: document?.length ? writeId(actor, operationId, 'description') : null,
       statusId: input.statusId,
       priority: input.priority,
+      size: input.size,
       primaryTagId: input.primaryTagId,
       secondaryTagIds: input.secondaryTagIds,
     }),

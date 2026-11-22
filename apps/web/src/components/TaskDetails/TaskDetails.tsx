@@ -39,6 +39,7 @@ import { TaskRefusalNotice, TaskTimeline } from './TaskTimeline';
 function boardTask(task: Task, tags: readonly Tag[]): BoardTask {
   return {
     ...task,
+    size: task.size ?? null,
     closedAt: task.closedAt === null ? null : Date.parse(task.closedAt),
     primaryTagColor: taskTagColor(task, tags),
     secondaryTagIds: [],

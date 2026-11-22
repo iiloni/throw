@@ -58,7 +58,7 @@ integrations.
 ### In scope
 
 - Workspaces, projects, tasks and one level of subtasks.
-- Custom statuses mapped to categories; five priority ranks; nested tags.
+- Custom statuses mapped to categories, five priority ranks, optional task sizes and nested tags.
 - The project board, the cross-project board and the task view.
 - Comments and a full activity log.
 - Search through a command palette or an integrated input.
@@ -168,6 +168,7 @@ for that rank.
 | Description | BlockNote JSON, as in Catch. Text only in the first version. |
 | Status | One of the project's statuses. |
 | Priority | One of the five ranks. |
+| Size | Optional XS, S, M, L or XL. The names are the same across projects. Pick a size from the task dock, or select the current size or None to clear it. |
 | Position | Manual order within its status and priority, or for a subtask within its parent; a fractional index as in Catch. |
 | Primary tag, secondary tags | See [Tags](#tags). |
 | Parent | Set on a subtask. |
@@ -182,7 +183,7 @@ A task stays in the project it was created in.
 
 ### Subtask
 
-A subtask is a full task: it has its own status, identifier, priority, tags, comments and
+A subtask is a full task: it has its own status, identifier, priority, size, tags, comments and
 history. Subtasks are one level deep, and always in their parent's project.
 
 A parent and its subtasks are independent. The parent does not complete when its subtasks
@@ -203,7 +204,7 @@ Every task has an append-only activity log, shown as the task's history. Comment
 beside it on the task, each under its own tab.
 
 - The server writes the log from the changes it applies; no device writes to it (ADR 0006).
-- It records creation and changes to the title, description, status, priority, parent,
+- It records creation and changes to the title, description, status, priority, size, parent,
   tags and trash state. History also records agent reorders and names the token used for
   agent writes. Agent comments show the same attribution in Comments. A description
   entry says the description changed and holds no text.
@@ -296,6 +297,7 @@ rails' placement shape desktop columns, so a phone does not show them.
 | --- | --- | --- |
 | Priority labels | Off | Names each priority zone in a column at rest. |
 | Priority on cards | Off | Marks a card's priority on the card. A card of the default priority is never marked. |
+| Size on cards | Off | Adds a small size badge to sized cards on the project and cross-project boards. |
 | Column backgrounds | On | Gives each active column a faint surface. |
 | Backlog rail, Closed rail | Sticky | One setting for each. Sticky keeps the rail at the window's edge with the columns scrolling beneath it. With board puts it at its end of the columns, and it scrolls away with them. |
 | Subtasks as cards | Off | Shows subtasks as top-level cards; see [Subtasks on the board](#subtasks-on-the-board). |

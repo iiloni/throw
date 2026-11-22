@@ -62,6 +62,7 @@ const SHAPES: Record<string, { table: string; columns: string[]; where: string }
       'description_version',
       'status_id',
       'priority',
+      'size',
       'position',
       'parent_id',
       'primary_tag_id',

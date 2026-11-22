@@ -58,7 +58,7 @@ describe('protocol gate', () => {
   it('advertises the supported range without a protocol header', async () => {
     const res = await app.request('/api/compatibility');
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(SUPPORTED_API_PROTOCOLS);
+    expect(await res.json()).toEqual({ ...SUPPORTED_API_PROTOCOLS, taskSize: true });
   });
 
   it('answers health checks without a protocol header', async () => {
