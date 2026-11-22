@@ -28,10 +28,122 @@
   height: 1.25rem;
   accent-color: var(--brand);
 }
+/* Long lines wrap so they remain readable in the split pane and on phones. */
 .bn-container.task-editor .bn-block-content[data-content-type="codeBlock"] {
+  position: relative;
+  display: block;
+  container-type: inline-size;
+  margin-block: 3px;
+  border-radius: var(--radius);
+  background: var(--code-background);
+  color: var(--code-foreground);
+  direction: ltr;
+  --code-pill-button: 1.75rem;
+  --code-pill-inset: 2px;
+  --code-pill-radius: 0.75rem;
+}
+.bn-container.task-editor .bn-block-content[data-content-type="codeBlock"] > pre {
+  width: 100%;
+  min-height: calc(var(--code-pill-button) + 1rem);
+  margin: 0;
+  padding: 0.875rem calc(var(--code-pill-button) + 1.25rem) 0.875rem 1rem;
+  font: 0.875rem / 1.55 var(--font-mono);
+  tab-size: 2;
+}
+.bn-container.task-editor .bn-block-content[data-content-type="codeBlock"] > pre > code {
+  display: block;
+  min-height: 1.55em;
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.description-code-toolbar {
+  position: absolute;
+  inset: 0.375rem 0.375rem auto auto;
+  z-index: 1;
+  box-sizing: border-box;
+  display: flex;
+  width: max-content;
+  max-width: calc(var(--code-pill-button) + 2 * var(--code-pill-inset) + 2px);
+  flex-direction: row-reverse;
+  align-items: center;
+  padding: var(--code-pill-inset);
+  overflow: clip;
+  border-radius: var(--code-pill-radius);
+  color: var(--muted-foreground);
+  font: 500 0.75rem / 1.25 var(--font-sans);
+}
+.bn-container.task-editor .description-code-toolbar button {
+  display: flex;
+  flex: none;
+  height: var(--code-pill-button);
+  min-width: var(--code-pill-button);
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: calc(var(--code-pill-radius) - var(--code-pill-inset) - 1px);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.description-code-language {
+  flex-direction: row-reverse;
+  gap: 0.375rem;
+  padding-inline: calc((var(--code-pill-button) - 1rem) / 2);
+}
+.description-code-label {
+  max-width: max(0px, min(8rem, calc(100cqw - 3 * var(--code-pill-button) - 3rem)));
+}
+.description-code-label,
+.description-code-chevron,
+.description-code-action {
+  visibility: hidden;
+  opacity: 0;
+}
+.description-code-chevron {
+  width: 0.375rem;
+  height: 0.375rem;
+  flex: none;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: translateY(-25%) rotate(45deg);
+}
+.description-code-action > svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.description-code-icon {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  background: var(--code-language-icon) center / contain no-repeat;
+}
+.description-code-icon[data-tinted] {
+  background: currentColor;
+  mask: var(--code-language-icon) center / contain no-repeat;
+}
+.bn-container.task-editor .description-code-toolbar button:focus-visible {
+  outline: none;
   color: var(--foreground);
-  background: color-mix(in srgb, var(--foreground) 6%, transparent);
-  border-radius: 0.75rem;
+  box-shadow: inset 0 0 0 2px var(--ring);
+}
+@media (hover: hover) {
+  .bn-container.task-editor .description-code-toolbar button:enabled:hover {
+    background: var(--code-background);
+    color: var(--foreground);
+  }
+}
+@media (pointer: coarse) {
+  .bn-container.task-editor .bn-block-content[data-content-type="codeBlock"] {
+    --code-pill-button: 2.75rem;
+    --code-pill-radius: 1rem;
+  }
 }
 .bn-container.task-editor a {
   color: var(--brand-link);
@@ -74,6 +186,19 @@
   --brand: #20ae96;
   --brand-foreground: var(--brand-charcoal);
   --brand-link: light-dark(#0b7765, #70ddc6);
+
+  /* Shiki assigns these tokens, which follow the current theme and task tint. */
+  --code-background: color-mix(in oklab, var(--foreground) 7%, transparent);
+  --code-foreground: var(--foreground);
+  --code-token-keyword: light-dark(oklch(0.48 0.14 45), oklch(0.82 0.11 70));
+  --code-token-string: light-dark(oklch(0.48 0.14 150), oklch(0.82 0.11 150));
+  --code-token-string-expression: light-dark(oklch(0.48 0.14 195), oklch(0.82 0.11 195));
+  --code-token-function: light-dark(oklch(0.48 0.14 250), oklch(0.82 0.11 245));
+  --code-token-constant: light-dark(oklch(0.48 0.14 300), oklch(0.82 0.11 300));
+  --code-token-parameter: var(--foreground);
+  --code-token-punctuation: color-mix(in oklab, var(--foreground) 75%, transparent);
+  --code-token-comment: var(--muted-foreground);
+  --code-token-link: var(--brand-link);
 
   /* Frosted material for the dock, the navigation rail and sheets. */
   --glass: light-dark(oklch(0.99 0.005 85 / 0.66), oklch(0.29 0.012 70 / 0.6));

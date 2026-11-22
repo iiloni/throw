@@ -1203,3 +1203,74 @@ test('task size stays unavailable on older servers while other task edits sync',
     .poll(async () => (await taskRow(page, account))?.title)
     .toBe('Edited on the preview server');
 });
+
+test('description code blocks dedent pasted code, highlight it and export the source', async ({
+  page,
+  isMobile,
+  browser,
+  browserName,
+}, testInfo) => {
+  testInfo.annotations.push({ type: 'browser version', description: browser.version() });
+  if (browserName === 'chromium') {
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  }
+  const { pane } = await fixture(page);
+  const editor = pane
+    .getByRole('region', { name: 'Description', exact: true })
+    .locator('.bn-editor');
+  await editor.click();
+  await page.keyboard.type('``` ');
+  const block = editor.locator('[data-content-type="codeBlock"]');
+  const code = block.locator('pre > code');
+  await expect(block.getByRole('button', { name: 'Code language: Plain text' })).toBeVisible();
+
+  // The dev server has no service worker. Allow locally bundled modules while the API is offline.
+  await page.route('**/api/**', (route) => route.abort());
+  const source = 'def greet(name):\n    print("Hello", name)';
+  await code.dispatchEvent('paste', {
+    clipboardData: await page.evaluateHandle((value) => {
+      const data = new DataTransfer();
+      data.setData('text/plain', value);
+      return data;
+    }, '    def greet(name):\r\n        print("Hello", name)'),
+  });
+  await expect(code).toHaveJSProperty('textContent', source);
+  const python = block.getByRole('button', { name: 'Code language: Python', exact: true });
+  await expect(python).toBeVisible();
+  const keyword = code.locator('span[style*="--code-token-keyword"]').filter({ hasText: 'def' });
+  await expect(keyword).toBeVisible();
+  const light = await keyword.evaluate((node) => getComputedStyle(node).color);
+  await page.evaluate(() => {
+    document.documentElement.style.colorScheme = 'dark';
+  });
+  await expect.poll(() => keyword.evaluate((node) => getComputedStyle(node).color)).not.toBe(light);
+
+  if (isMobile) {
+    await python.locator('.description-code-icon').tap();
+  } else {
+    await python.focus();
+  }
+  const copy = block.getByRole('button', { name: 'Copy snippet', exact: true });
+  if (isMobile) await copy.tap();
+  else await copy.press('Enter');
+  await expect(page.getByText('Snippet copied', { exact: true })).toBeVisible();
+  if (browserName === 'chromium') {
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(source);
+  }
+  const download = page.waitForEvent('download');
+  await block.getByRole('button', { name: 'Download snippet', exact: true }).click();
+  const snippet = await download;
+  expect(snippet.suggestedFilename()).toBe('snippet.py');
+  const chunks: Buffer[] = [];
+  for await (const chunk of await snippet.createReadStream()) chunks.push(chunk);
+  expect(Buffer.concat(chunks).toString('utf8')).toBe(source);
+
+  if (isMobile) await python.locator('.description-code-icon').tap();
+  else await python.press('Enter');
+  await page.getByRole('searchbox', { name: 'Search languages' }).fill('ts');
+  await page.getByRole('button', { name: 'TypeScript', exact: true }).click();
+  await expect(
+    block.getByRole('button', { name: 'Code language: TypeScript', exact: true }),
+  ).toBeVisible();
+  await expect(code).toHaveJSProperty('textContent', source);
+});

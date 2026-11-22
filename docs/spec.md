@@ -527,6 +527,10 @@ view), comments and activity.
   and a finger from Catch's formatting bar, which takes the dock's place while the
   description or a comment has focus on a touch screen. Its tools never take focus, so the
   keyboard stays up; leaving the editor brings the task's controls back.
+  Code blocks highlight in both themes, even offline. Their glass pill opens on hover,
+  keyboard focus or tap and offers language selection, copy and download. Pasting code
+  removes its common indentation. The editor tries to detect the language locally for
+  unlabelled pasted blocks and when pasting into an empty, unlabelled block.
 - Unfinished comments and comment edits can be resumed on the same device after closing the
   task or reloading. Cancel discards the draft, and Ctrl/Cmd+Enter posts or saves it.
 - The top toolbars follow Catch: back and the parent/task identifier breadcrumb on the
