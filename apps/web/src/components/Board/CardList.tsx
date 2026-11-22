@@ -24,6 +24,8 @@ type Props = {
   surface?: boolean;
   /** Take the side padding from the phone pager, which narrows it while a card is held. */
   tight?: boolean;
+  /** Shown by opening a folded column: it fades in whole, so its cards skip their entry. */
+  revealed?: boolean;
   className?: string;
 };
 
@@ -44,6 +46,7 @@ export function CardList({
   endSpace,
   surface,
   tight,
+  revealed = false,
   className,
 }: Props) {
   const state = board.use();
@@ -92,7 +95,7 @@ export function CardList({
       className={cn('board-column relative flex min-h-0 min-w-0 flex-col rounded-3xl', className)}
     >
       {header && (
-        <EnteringHeader listId={listId} delay={entryDelay(column)}>
+        <EnteringHeader listId={listId} delay={entryDelay(column)} skip={revealed}>
           {header}
         </EnteringHeader>
       )}
@@ -189,7 +192,7 @@ export function CardList({
                             <EnteringCard
                               taskId={task.id}
                               delay={entryDelay(column + (rows.get(task.id) ?? 0))}
-                              held={!!held}
+                              skip={!!held || revealed}
                             >
                               <SwipeReveal taskId={task.id} />
                               <TaskCard task={task} showStatus={showStatus} />
@@ -249,21 +252,21 @@ function Gap({ active, height }: { active: boolean; height: number }) {
 /**
  * A card's first arrival in the document (lib/entryMotion.ts): never again when it moves
  * column or sync updates it. A held card, or one a task is opening from or landing in, is
- * measured where it rests, so it shows at once.
+ * measured where it rests, so it shows at once, as is one a folded column opened to reveal.
  */
 function EnteringCard({
   taskId,
   delay,
-  held,
+  skip,
   children,
 }: {
   taskId: string;
   delay: number;
-  held: boolean;
+  skip: boolean;
   children: ReactNode;
 }) {
   const hidden = useTaskCardHidden(taskId);
-  const entry = useEntryMotion(`card:${taskId}`, true, delay, held || hidden);
+  const entry = useEntryMotion(`card:${taskId}`, true, delay, skip || hidden);
   return (
     <motion.div className="relative pb-3" style={entry}>
       {children}
@@ -274,13 +277,17 @@ function EnteringCard({
 function EnteringHeader({
   listId,
   delay,
+  skip,
   children,
 }: {
   listId: ListId;
   delay: number;
+  skip: boolean;
   children: ReactNode;
 }) {
   return (
-    <motion.div style={useEntryMotion(`column:${listId}`, true, delay)}>{children}</motion.div>
+    <motion.div style={useEntryMotion(`column:${listId}`, true, delay, skip)}>
+      {children}
+    </motion.div>
   );
 }

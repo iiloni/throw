@@ -269,6 +269,15 @@ motion.
   a caret in the gutter between cards, and nothing moves until it is dropped. Every priority
   shows a band while a card is placed, so an empty one can take it. Cards from elsewhere are
   sent to a backlog status through its filters, never placed in the mixed gallery.
+- On a desktop, an active column folds to a narrow strip and opens again, as a column of
+  Catch's deck does: the strip shows the status's name turned on its side, its glyph and its
+  count, and the whole strip opens it. An open column folds from its header, which is the
+  control, as on Catch's deck. The width springs between
+  the two, and the column's content fades in once it has mostly resized. Folded columns are
+  remembered per project on the device. A card dropped on a strip is sent to its status
+  without the column opening ([ADR 0008](decisions/0008-board-drag-model.md)); carrying a card
+  into one from the keyboard, or opening one of its tasks, opens it. A phone shows one column
+  at a time, so it does not fold them, and a column folded on a desktop shows in full there.
 - The board has no title row. The project's name is in the expanded navigation rail, and in
   a tooltip on the project's icon when the rail is collapsed.
 - A list of cards fades out over its last few pixels at the top or bottom while
@@ -445,8 +454,9 @@ view, so it reads and moves the same way.
 
 - One column per category instead of per status, since categories are all that projects
   share. Done is shown open by default, with every closed task (no time window). Cancelled
-  is the last column and is collapsed by default. Folding or opening Done or Cancelled is
-  remembered on the device.
+  is the last column and is collapsed by default. On a desktop any column folds and opens as
+  a project board's does (2026-11-22), and the choice is remembered on the device for the
+  workspace board. A phone shares only Done and Cancelled with it, the pages it can fold.
 - Cards are colored by project, because tag colors mean different things in each project.
   For the same reason their tag badges are neutral (2026-11-19).
   Each card names its own project's status and identifier.
@@ -458,7 +468,7 @@ view, so it reads and moves the same way.
 - While a single card is dragged, the target column shows that card's project statuses as
   dropzones. Dropping on the column itself, or moving a selection that spans projects, uses
   each project's default status for the category; a card already in that category stays
-  where it is.
+  where it is. A folded column stays a strip under a held card and takes it the same way.
 - Moving a card here changes its status only. Priority and order belong to the project
   board, where cards can be placed between others; keyboard carry still moves a card between
   priority bands, as on the project board **(decision, 2026-11-18)**.

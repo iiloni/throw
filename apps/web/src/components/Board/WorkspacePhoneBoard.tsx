@@ -23,12 +23,20 @@ import {
 } from './PhoneBoard';
 import { CATEGORY_NAMES } from './StatusMenu';
 import { SwipeReveal } from './SwipeReveal';
-import { board, countIn, current, listTasks, update, useBoardSettings } from './state';
+import {
+  board,
+  countIn,
+  current,
+  listTasks,
+  update,
+  useBoardSettings,
+  useFoldedColumns,
+} from './state';
 import { TaskCard } from './TaskCard';
 import { TaskContentContext } from './taskContent';
 import { useTaskSurfaceShown } from './taskTransition';
 import { usePagerPage } from './usePagerPage';
-import { foldableCategory, useFoldedColumns } from './WorkspaceDesktopBoard';
+import { foldableCategory } from './WorkspaceDesktopBoard';
 
 const COLUMNS = CATEGORIES.map((category) => ({
   id: categoryTarget(category),
@@ -203,7 +211,8 @@ function CategoryPage({ category }: { category: Category }) {
   const aimed = over && held.target?.kind === 'status' && held.target.statusId === target;
   const foldable = foldableCategory(category);
   const dragging = makingWay(held);
-  // A folded page opens under a held card, as a folded desktop column does.
+  // A folded page opens under a held card. A phone shows one page at a time, so nothing beside
+  // it moves, as a folded desktop column, which stays a strip, would make its neighbours do.
   const hidden = foldable !== null && folded[foldable] && !dragging;
   const open = category === 'backlog' || category === 'active';
   return (

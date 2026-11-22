@@ -1,7 +1,8 @@
 # 0008: The board's drag model
 
 Status: accepted (2026-10-13); amended 2026-10-19 when the project board was wired to task
-actions, and 2026-11-19 when the board learned to wait for a lifted card to move
+actions, 2026-11-19 when the board learned to wait for a lifted card to move, and 2026-11-22
+when desktop columns learned to fold
 
 ## Context
 
@@ -76,6 +77,21 @@ dropped on a status (a dropzone in the backlog or closed rail, the phone's move 
 done pocket) is sent: it keeps its priority and lands at the top of that priority. Sending
 is how a card reaches a status that shows no cards, and the held card shrinks to a token
 over such a target to say so.
+
+**A folded column is a dropzone for its status, and stays folded.** A desktop column folds to
+a strip, as Catch's deck does, and shows no cards, so a card dropped on it is sent: it keeps
+its priority and lands at the top of that priority, as from a rail's dropzone, and the copy
+shrinks into the strip. On the workspace board the strip is the category's, so each card goes
+to its own project's default status there. Opening the strip when a card dwelt over it was
+considered and rejected: the column would widen under the pointer and push the columns beside
+it along while a card is held, which is what the board avoids everywhere else (a card keeps
+its place while the board makes way, and the rails turn into dropzones in place). A strip
+never changes width or opens during a drag; to place a card among a folded column's cards,
+open the column first. A keyboard carry is different: it moves one status at a time and has
+no pointer to keep steady, so carrying a card into a folded column opens it, as Catch's deck
+opens a column a keyboard selection lands in, and the card is placed there as in any column.
+Opening a task whose card is in a folded column (from search, a link or `?task=`) opens the
+column too, so the card is there to show the open task and to take focus back.
 
 **Several held cards are sent, not placed.** Each keeps its own priority, so a column takes
 the group as a whole and shows no gap.
