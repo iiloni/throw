@@ -1,4 +1,5 @@
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
+import { centre, finger } from './board-helpers';
 import { APP_LOAD_TIMEOUT, shapeRows, signUp, waitForDeviceSync, waitForShapeRow } from './helpers';
 
 // Outbox writes settle in order and can wait for the stream before the next request.
@@ -70,6 +71,33 @@ async function addStatus(page: Page, name: string, category = 'Active') {
   await expect(page.getByRole('dialog')).toHaveCount(0);
 }
 const statusRow = (page: Page, name: string) => page.getByRole('listitem', { name, exact: true });
+const activeOrder = (page: Page) =>
+  page
+    .getByRole('region', { name: 'Active', exact: true })
+    .getByRole('listitem')
+    .evaluateAll((rows) => rows.map((row) => row.getAttribute('aria-label')));
+/** Picks one of a status row's actions from its menu. */
+async function statusAction(page: Page, name: string, action: string) {
+  // A menu still animating closed dismisses one reopened from its trigger, as a click
+  // outside it.
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await statusRow(page, name)
+    .getByRole('button', { name: `Manage ${name}`, exact: true })
+    .click();
+  await page.getByRole('menuitem', { name: action, exact: true }).click();
+}
+/** Asks to delete a status that cannot go, and returns the explanation shown instead. */
+async function blockedDeletion(page: Page, name: string) {
+  await statusAction(page, name, 'Delete');
+  const dialog = page.getByRole('dialog', { name: `Can’t delete ${name}`, exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Delete status', exact: true })).toHaveCount(0);
+  return dialog;
+}
+async function dismiss(page: Page, dialog: Locator) {
+  await dialog.getByRole('button', { name: 'OK', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+}
 
 test('project appearance and status rules, ordering, defaults, rename and deletion', async ({
   page,
@@ -81,30 +109,31 @@ test('project appearance and status rules, ordering, defaults, rename and deleti
   await page.getByRole('button', { name: 'Home icon', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Studio');
   await section(page, 'Statuses');
-  await expect(page.getByText('Categories are fixed', { exact: false })).toBeVisible();
   for (const name of ['Backlog', 'In progress', 'Done', 'Cancelled']) {
-    await expect(statusRow(page, name)).toContainText('Every category keeps at least one status.');
-    await expect(
-      statusRow(page, name).getByRole('button', { name: `Delete ${name}`, exact: true }),
-    ).toBeDisabled();
+    await expect(statusRow(page, name)).toContainText('Default');
+    await expect(statusRow(page, name)).not.toContainText('Every category keeps');
   }
+  // The rule is explained when it stops a deletion, not printed on every row.
+  const lone = await blockedDeletion(page, 'Cancelled');
+  await expect(lone).toContainText('Every category keeps at least one status.');
+  await dismiss(page, lone);
   await addStatus(page, 'Review');
   await addStatus(page, 'Testing');
-  await page.getByRole('button', { name: 'Move Testing up', exact: true }).click();
-  await synced
-    .poll(() =>
-      page
-        .getByRole('region', { name: 'Active statuses' })
-        .getByRole('listitem')
-        .evaluateAll((rows) => rows.map((row) => row.getAttribute('aria-label'))),
-    )
-    .toEqual(['In progress', 'Testing', 'Review']);
-  await page.getByRole('button', { name: 'Move Testing down', exact: true }).click();
-  await statusRow(page, 'Review')
-    .getByRole('button', { name: 'Make default', exact: true })
-    .click();
-  await expect(statusRow(page, 'Review')).toContainText('Choose another default');
-  await page.getByRole('button', { name: 'Rename Review', exact: true }).click();
+  await statusAction(page, 'Testing', 'Move up');
+  await synced.poll(() => activeOrder(page)).toEqual(['In progress', 'Testing', 'Review']);
+  // The drag handle also moves its status with the arrow keys. A closing menu returns focus
+  // to its button, so it has to be gone first.
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Reorder Testing', exact: true }).focus();
+  await page.keyboard.press('ArrowDown');
+  await synced.poll(() => activeOrder(page)).toEqual(['In progress', 'Review', 'Testing']);
+  await statusAction(page, 'Review', 'Make default');
+  await expect(statusRow(page, 'Review')).toContainText('Default');
+  await expect(statusRow(page, 'In progress')).not.toContainText('Default');
+  const defaultRule = await blockedDeletion(page, 'Review');
+  await expect(defaultRule).toContainText('Choose another default');
+  await dismiss(page, defaultRule);
+  await statusAction(page, 'Review', 'Rename');
   await page.getByLabel('Status name').fill('In review');
   await page.getByRole('button', { name: 'Save status', exact: true }).click();
   await page.evaluate(async ({ projectId }) => {
@@ -117,11 +146,39 @@ test('project appearance and status rules, ordering, defaults, rename and deleti
     trashTask(createTask(projectId, { title: 'Trashed work', statusId: status.id }));
   }, fixture);
   await expect(statusRow(page, 'In progress')).toContainText('2 tasks');
-  await expect(statusRow(page, 'In progress')).toContainText('including those in the trash');
-  await expect(
-    page.getByRole('button', { name: 'Delete In progress', exact: true }),
-  ).toBeDisabled();
-  await page.getByRole('button', { name: 'Delete Testing', exact: true }).click();
+  const inUse = await blockedDeletion(page, 'In progress');
+  await expect(inUse).toContainText('including those in the trash');
+  await dismiss(page, inUse);
+  // Dragging a handle puts the status where it is dropped.
+  // A phone drags with a finger: the handle must take the touch rather than scroll the page.
+  const handle = page.getByRole('button', { name: 'Reorder Testing', exact: true });
+  // Until the last dialog's drawer has gone, a touch lands on it rather than the handle.
+  await handle.click({ trial: true });
+  const from = await centre(handle);
+  const top = await statusRow(page, 'In progress').boundingBox();
+  if (!top) throw new Error('No status row to drag above');
+  const to = { x: from.x, y: top.y + 4 };
+  if (isMobile) {
+    const touch = await finger(page);
+    await touch.press(handle, 80);
+    await touch.move(to);
+    await touch.lift();
+  } else {
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(to.x, to.y, { steps: 12 });
+    await page.mouse.up();
+  }
+  await synced.poll(() => activeOrder(page)).toEqual(['Testing', 'In progress', 'In review']);
+  await synced
+    .poll(async () =>
+      (await shapeRows(page.request, 'statuses', fixture.headers))
+        .filter((row) => row.project_id === fixture.projectId && row.category === 'active')
+        .sort((a, b) => (String(a.position) < String(b.position) ? -1 : 1))
+        .map((row) => row.name),
+    )
+    .toEqual(['Testing', 'In progress', 'In review']);
+  await statusAction(page, 'Testing', 'Delete');
   await page.getByRole('button', { name: 'Delete status', exact: true }).click();
   await expect(statusRow(page, 'Testing')).toHaveCount(0);
   await synced
@@ -320,7 +377,7 @@ test('offline settings edits persist and replay; refused renames, keys and delet
     )
     .toBe(true);
   await page.route('**/api/**', (route) => route.abort('connectionfailed'));
-  await page.getByRole('button', { name: 'Rename Review', exact: true }).click();
+  await statusAction(page, 'Review', 'Rename');
   await page.getByLabel('Status name').fill('Offline review');
   await page.getByRole('button', { name: 'Save status', exact: true }).click();
   await expect(statusRow(page, 'Offline review')).toBeVisible();
@@ -348,12 +405,12 @@ test('offline settings edits persist and replay; refused renames, keys and delet
       await route.fulfill({ status: 409, json: { error: 'Tasks use this status' } });
     else await route.continue();
   });
-  await page.getByRole('button', { name: 'Rename Offline review', exact: true }).click();
+  await statusAction(page, 'Offline review', 'Rename');
   await page.getByLabel('Status name').fill('Refused name');
   await page.getByRole('button', { name: 'Save status', exact: true }).click();
   await expect(statusRow(page, 'Offline review')).toBeVisible();
   await expect(statusRow(page, 'Refused name')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Delete Offline review', exact: true }).click();
+  await statusAction(page, 'Offline review', 'Delete');
   await page.getByRole('button', { name: 'Delete status', exact: true }).click();
   await expect(statusRow(page, 'Offline review')).toBeVisible();
   await section(page, 'General');
@@ -380,8 +437,10 @@ test('settings forms preserve focus, scroll and a single modal with reduced moti
   if (browserName === 'firefox') await page.setViewportSize({ width: 412, height: 915 });
   await setup(page, isMobile || browserName === 'firefox');
   await section(page, 'Statuses');
-  const opener = page.getByRole('button', { name: 'Rename Backlog', exact: true });
+  const opener = page.getByRole('button', { name: 'Manage Backlog', exact: true });
   await opener.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitem', { name: 'Rename', exact: true })).toBeFocused();
   await page.keyboard.press('Enter');
   const dialog = page.getByRole('dialog', { name: 'Rename status', exact: true });
   await expect(dialog).toBeVisible();
