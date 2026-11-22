@@ -6,6 +6,7 @@ import type {
   Description,
   Priority,
   PriorityNames,
+  Size,
   StatusCategory,
   TagIconName,
   WorkspaceRole,
@@ -15,6 +16,7 @@ import {
   type AnyPgColumn,
   bigint,
   boolean,
+  check,
   customType,
   index,
   integer,
@@ -268,6 +270,7 @@ export const tasks = pgTable(
       .notNull()
       .references(() => statuses.id),
     priority: smallint().$type<Priority>().notNull(),
+    size: smallint('size').$type<Size>(),
     position: text().notNull(),
     parentId: uuid().references((): AnyPgColumn => tasks.id, { onDelete: 'cascade' }),
     primaryTagId: uuid().references(() => tags.id, { onDelete: 'set null' }),
@@ -282,6 +285,7 @@ export const tasks = pgTable(
     index().on(table.statusId),
     index().on(table.parentId),
     index().on(table.primaryTagId),
+    check('tasks_size_check', sql`${table.size} IS NULL OR ${table.size} BETWEEN 1 AND 5`),
   ],
 );
 

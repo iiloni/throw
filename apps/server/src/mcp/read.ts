@@ -190,6 +190,7 @@ const summary = {
   statusId: tasks.statusId,
   category: statuses.category,
   priority: tasks.priority,
+  size: tasks.size,
   parentId: tasks.parentId,
   primaryTagId: tasks.primaryTagId,
   trashed: sql<boolean>`${tasks.deletedAt} IS NOT NULL`,
@@ -258,6 +259,11 @@ export async function listTasks(
     input.statusId ? eq(tasks.statusId, input.statusId) : undefined,
     input.category ? eq(statuses.category, input.category) : undefined,
     input.priority ? eq(tasks.priority, input.priority) : undefined,
+    input.size === undefined
+      ? undefined
+      : input.size === null
+        ? isNull(tasks.size)
+        : eq(tasks.size, input.size),
     parentId === null
       ? isNull(tasks.parentId)
       : parentId

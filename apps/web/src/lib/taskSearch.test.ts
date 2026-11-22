@@ -38,6 +38,7 @@ const task = (id: string, changes: Partial<Task> = {}): Task => ({
   createdAt: '2026-10-15T00:00:00Z',
   statusId: 'backlog',
   priority: 3,
+  size: null,
   position: 'a0',
   primaryTagId: null,
   ...changes,

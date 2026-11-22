@@ -296,11 +296,10 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
 - Read [ADR 0003](docs/decisions/0003-api-compatibility.md) when changing API requests,
   responses, synced shapes or write/replay behavior. Review old client → new server **and**
   new client → old server; shared TypeScript types only check one build.
-- Nothing is released yet, so the protocol is 1 and may change freely until the first
-  release. After that, keep `API_PROTOCOL_VERSION` and `SUPPORTED_API_PROTOCOLS` in
-  `packages/shared/src/protocol.ts` unchanged for UI changes, compatible fixes and additions
-  with working fallbacks.
-- For an incompatible contract after the first release, increment the client protocol and
+- Deployed previews use protocol 1. Keep `API_PROTOCOL_VERSION` and `SUPPORTED_API_PROTOCOLS`
+  in `packages/shared/src/protocol.ts` unchanged for UI changes, compatible fixes and
+  additions with working fallbacks.
+- For an incompatible contract, increment the client protocol and
   server maximum. Raise the minimum when old clients cannot work. Add boundary tests, document
   the upgrade order and use a breaking Conventional Commit.
 - Shape column changes also require the collection's `schemaVersion` bump. Changes to queued

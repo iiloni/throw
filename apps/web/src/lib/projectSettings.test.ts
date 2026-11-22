@@ -50,6 +50,7 @@ const task = (n: number, fields: Partial<Task> = {}) =>
     description: null,
     descriptionVersion: null,
     priority: 3,
+    size: null,
     statusId: status.id,
     position: 'a0',
     parentId: null,

@@ -53,6 +53,7 @@ const task = (id: string, edit: Partial<Task> = {}): Task => ({
   descriptionVersion: null,
   statusId: 'build',
   priority: 3,
+  size: null,
   position: 'a0',
   parentId: null,
   primaryTagId: null,

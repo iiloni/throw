@@ -1,3 +1,4 @@
+import { act, renderHook } from '@testing-library/react';
 import { API_PROTOCOL_HEADER, API_PROTOCOL_VERSION } from '@throw/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,6 +13,7 @@ beforeEach(() => {
   vi.resetModules();
   fetcher.mockReset();
   auth.token = null;
+  localStorage.clear();
   vi.stubGlobal('fetch', fetcher);
 });
 afterEach(() => {
@@ -172,4 +174,70 @@ describe('client compatibility transport', () => {
       await expect(ensureCompatible()).resolves.toBeUndefined();
     },
   );
+});
+
+it('keeps ordinary task writes compatible and retries sized writes after a server upgrade', async () => {
+  const { api } = await import('./api');
+  const { CompatibilityError, checkCompatibility } = await import('./compatibility');
+  const { getSyncStatus } = await import('./syncStatus');
+  const size = { changeId: 'queued', changes: { size: { before: null, after: 3 } } } as const;
+  fetcher.mockResolvedValueOnce(json(compatible));
+  await expect(api.updateTask('task', size)).rejects.toBeInstanceOf(CompatibilityError);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+
+  fetcher.mockResolvedValueOnce(json({ txid: null, refused: [] }));
+  await api.updateTask('task', {
+    changeId: 'ordinary',
+    changes: { title: { before: 'Old', after: 'New' } },
+  });
+  expect(getSyncStatus().incompatibility).toBeNull();
+
+  fetcher.mockResolvedValueOnce(json({ ...compatible, taskSize: true }));
+  await checkCompatibility(true);
+  fetcher.mockResolvedValueOnce(json({ txid: 42, refused: [] }));
+  await expect(api.updateTask('task', size)).resolves.toMatchObject({ txid: 42 });
+  expect(JSON.parse(fetcher.mock.lastCall?.[1].body)).toEqual(size);
+
+  fetcher.mockResolvedValueOnce(json({}, 400)).mockResolvedValueOnce(json(compatible));
+  await expect(api.updateTask('task', size)).rejects.toBeInstanceOf(CompatibilityError);
+});
+
+it('uses the live size capability when local storage is full', async () => {
+  const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new DOMException('Storage quota exceeded', 'QuotaExceededError');
+  });
+  try {
+    fetcher.mockResolvedValueOnce(json({ ...compatible, taskSize: true }));
+    fetcher.mockResolvedValueOnce(json({ txid: 42, refused: [] }));
+    const { api } = await import('./api');
+    await expect(
+      api.updateTask('task', { changeId: 'queued', changes: { size: { before: null, after: 3 } } }),
+    ).resolves.toMatchObject({ txid: 42 });
+    expect(setItem).toHaveBeenCalledWith('throw-task-size-support:https://throw.example', 'true');
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  } finally {
+    setItem.mockRestore();
+  }
+});
+
+it('reflects size capability changes made by another tab', async () => {
+  fetcher.mockResolvedValueOnce(json(compatible));
+  const { checkCompatibility, ensureTaskSizeSupport, useTaskSizeSupport } = await import(
+    './compatibility'
+  );
+  await checkCompatibility();
+  const { result } = renderHook(useTaskSizeSupport);
+  expect(result.current).toBe(false);
+
+  const key = 'throw-task-size-support:https://throw.example';
+  for (const supported of [true, false]) {
+    act(() => {
+      localStorage.setItem(key, String(supported));
+      window.dispatchEvent(new StorageEvent('storage', { key, newValue: String(supported) }));
+    });
+    expect(result.current).toBe(supported);
+    if (supported) await expect(ensureTaskSizeSupport()).resolves.toBeUndefined();
+    else await expect(ensureTaskSizeSupport()).rejects.toThrow('Waiting for a server update');
+  }
+  expect(fetcher).toHaveBeenCalledTimes(1);
 });

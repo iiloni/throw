@@ -169,6 +169,7 @@ test('statuses and tasks are visible and writable only to members of their works
     description_version: null,
     status_id: project.statuses.backlog,
     priority: '3',
+    size: null,
     position: 'a0',
     parent_id: null,
     primary_tag_id: null,
@@ -614,4 +615,53 @@ test('deleting a workspace removes its projects, statuses and tasks @api', async
   expect((await removal.json()).txid).toEqual(expect.any(Number));
   await expect.poll(async () => await shapeRows(request, 'tasks', owner.headers)).toEqual([]);
   await expect.poll(async () => await shapeRows(request, 'statuses', owner.headers)).toEqual([]);
+});
+
+test('REST task size defaults, clears, and records replays and stale changes @api', async ({
+  request,
+}) => {
+  const account = await createAccount(request);
+  const project = await createProject(request, account);
+  const id = await newTask(request, account, { projectId: project.id, size: 2 });
+  const legacy = await newTask(request, account, { projectId: project.id });
+  await expect.poll(async () => (await taskRow(request, account, legacy))?.size).toBeNull();
+  await expect.poll(async () => (await taskRow(request, account, id))?.size).toBe('2');
+  expect((await createTask(request, account, { projectId: project.id, size: 6 })).status()).toBe(
+    400,
+  );
+  expect(
+    (await createTask(request, account, { id, projectId: project.id, size: 2 })).status(),
+  ).toBe(200);
+
+  const updateId = randomUUID();
+  const changes = { size: { before: 2, after: 4 } };
+  expect((await updateTask(request, account, id, changes, updateId)).refused).toEqual([]);
+  expect(await updateTask(request, account, id, changes, updateId)).toEqual({
+    txid: null,
+    refused: [],
+  });
+  expect(await updateTask(request, account, id, changes)).toEqual({ txid: null, refused: [] });
+  expect(
+    (await updateTask(request, account, id, { title: { before: 'Task', after: 'Renamed' } }))
+      .refused,
+  ).toEqual([]);
+  await expect.poll(async () => (await taskRow(request, account, id))?.size).toBe('4');
+
+  const staleId = randomUUID();
+  const clear = { size: { before: 2, after: null } };
+  const refused = { txid: null, refused: [{ field: 'size', reason: 'stale' }] };
+  expect(await updateTask(request, account, id, clear, staleId)).toEqual(refused);
+  expect(await updateTask(request, account, id, clear, staleId)).toEqual(refused);
+  await expect
+    .poll(async () => {
+      const history = await shapeRows(request, 'task_activity', account.headers);
+      const entry = history.find((row) => row.id === staleId);
+      return entry ? JSON.parse(String(entry.changes)) : undefined;
+    })
+    .toEqual([{ field: 'size', previous: 4, requested: null, applied: false, reason: 'stale' }]);
+
+  expect(
+    (await updateTask(request, account, id, { size: { before: 4, after: null } })).refused,
+  ).toEqual([]);
+  await expect.poll(async () => (await taskRow(request, account, id))?.size).toBeNull();
 });

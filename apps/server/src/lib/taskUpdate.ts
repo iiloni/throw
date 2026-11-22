@@ -4,6 +4,7 @@ import type {
   Priority,
   RefusalReason,
   RefusedField,
+  Size,
   StatusCategory,
   TaskChanges,
   TaskField,
@@ -15,6 +16,7 @@ export interface TaskState {
   descriptionVersion: string | null;
   statusId: string;
   priority: Priority;
+  size: Size | null;
   parentId: string | null;
   position: string;
   primaryTagId: string | null;
@@ -38,6 +40,7 @@ export interface TaskUpdatePlan {
     descriptionVersion?: string;
     statusId?: string;
     priority?: Priority;
+    size?: Size | null;
     parentId?: string | null;
     position?: string;
     primaryTagId?: string | null;
@@ -129,6 +132,13 @@ export function planTaskUpdate(
     const outcome = decide(current.priority, before, after, true);
     record('priority', outcome, { previous: current.priority, requested: after });
     if (outcome.applied && after !== current.priority) plan.set.priority = after;
+  }
+
+  if (changes.size) {
+    const { before, after } = changes.size;
+    const outcome = decide(current.size, before, after, true);
+    record('size', outcome, { previous: current.size, requested: after });
+    if (outcome.applied && after !== current.size) plan.set.size = after;
   }
 
   if (changes.parentId) {

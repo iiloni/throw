@@ -97,6 +97,7 @@ A subtask is a task with a parent. There is one table.
 | `descriptionVersion` | Client | A UUIDv7 made on the device for each description save. Used only to detect conflicts. |
 | `statusId` | Client | A status of the same project. |
 | `priority` | Client | A rank from 1 (Critical) to 5 (Very Low). New tasks get 3. |
+| `size` | Client | Nullable smallint. 1–5 mean XS, S, M, L and XL. Existing tasks and new tasks without a size have null. |
 | `position` | Client | Fractional index; see [Ordering](#ordering). |
 | `parentId` | Client | Empty for a top-level task. |
 | `primaryTagId` | Client | Optional. |
@@ -119,7 +120,7 @@ closed statuses.
 
 **Subtasks.** One level deep. A parent must be a top-level task in the same project, and a
 task that has subtasks cannot be given a parent. A parent and its subtasks are otherwise
-independent: each has its own status, number, priority, tags, comments and log.
+independent: each has its own status, number, priority, size, tags, comments and log.
 
 **Trash.** Deleting a task sets `deletedAt`; restoring clears it. A task counts as trashed
 when it, its parent or its project has `deletedAt` set. Trashing a parent writes nothing to
@@ -211,15 +212,28 @@ Task write responses keep `txid` for the tasks shape only, and add `secondaryTag
 when secondary rows changed. Tag-delete responses similarly add `tasksTxid` and
 `secondaryTagsTxid` only for affected shapes. This avoids waiting for a transaction on a
 shape that will never stream it. Tags and secondary rows always sync and persist, even
-without a tag screen open. Tasks' shape schemaVersion is 2; both new collections start at 1.
+without a tag screen open. Adding tags raised the tasks shape schemaVersion to 2; both tag collections started at 1.
 
 No plain-color adoption or note-color fallback is ported: Throw tasks have no stored color.
-Protocol remains 1 before the first release (ADR 0003). Old clients work with the new server;
-new tag routes/shapes need the new server, with no old-server fallback. Existing queued task
+The tag rollout kept protocol 1 (ADR 0003). Old clients work with the new server;
+new tag routes and shapes require the new server. Existing queued task
 writes keep their format and receive null/empty tag defaults; device rows are resynced after
 the task shape version bump, and no outbox is cleared.
 
 ## Task writes
+
+### Size compatibility
+
+The tasks shape includes nullable `size` and the tasks collection uses schemaVersion 3.
+Electric decodes the smallint. Rows from older servers without the column appear unsized.
+Queued creates without `size` default to null on the server, and updates without a size
+change preserve the stored value. The collection refresh requires no outbox migration.
+
+Protocol 1 still accepts the requests sent by `v0.1.1-preview`. That client can read the
+expanded shape and falls back to generic wording for unfamiliar history fields. The new
+client omits size on unsized creates and learns whether it can edit sizes from
+`taskSize` on `/api/compatibility`. It remembers the flag for offline use on that server.
+On a server without the flag, size edits wait in the outbox for server support.
 
 ### Create
 
@@ -249,7 +263,7 @@ For each field the server compares the "before" value with the task's current on
 
 | Field | Compared on | Applied when |
 | --- | --- | --- |
-| `title`, `priority`, `statusId`, `parentId`, `primaryTagId` | The value | The current value equals the "before" value and the new value is valid. |
+| `title`, `priority`, `size`, `statusId`, `parentId`, `primaryTagId` | The value | The current value equals the "before" value and the new value is valid. |
 | `description` | `descriptionVersion` | The current version equals the "before" version. The new document and version are stored together. |
 | Trash state | In the trash or not | The task's own state equals the "before" state. The server sets or clears `deletedAt` with its clock. |
 | `position` | The status, priority and parent it was computed for, sent with it | After the rest of this write is applied, the task has that status, priority and parent. |
@@ -365,7 +379,7 @@ The owner has not reviewed these yet.
   entry, with every field it touched, applied or not. An update that only moves a position
   writes an entry with no changes, kept on the server only (see
   [The log and comments](#the-log-and-comments)).
-- **A `created` entry** lists the title, status, priority and, when set, the description
+- **A `created` entry** lists the title, status, priority and, when set, the size, description
   version and parent, each with no previous value. When the status the device asked for no
   longer existed, the status item names the status the task took and carries the reason
   `replaced`.

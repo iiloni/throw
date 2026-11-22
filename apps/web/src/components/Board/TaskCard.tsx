@@ -1,3 +1,4 @@
+import { sizeLabel } from '@throw/shared';
 import { Check, CornerDownRight } from 'lucide-react';
 import { animate, motion, useMotionValue } from 'motion/react';
 import {
@@ -118,6 +119,12 @@ export function TaskCardFace({
           ))}
         {task.closedAt !== null && !state.actions && (
           <span className="shrink-0">{closedAgo(task.closedAt)}</span>
+        )}
+        {settings.cardSize && task.size !== null && (
+          <span className="shrink-0 rounded-md bg-foreground/[0.06] px-1.5 font-medium">
+            <span className="sr-only">Size </span>
+            {sizeLabel(task.size)}
+          </span>
         )}
         {settings.cardPriority && task.closedAt === null && (
           <PriorityGlyph

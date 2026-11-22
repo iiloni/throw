@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { type Browser, expect, type Locator, type Page, test } from '@playwright/test';
 import { APP_LOAD_TIMEOUT, shapeRows, signUp, waitForCachedProject } from './helpers';
+import { newTag } from './tag-helpers';
 
 async function fixture(page: Page) {
   const account = await signUp(page);
@@ -1115,4 +1116,90 @@ test('a wide desktop pane keeps tags and subtasks in a column that opens and shu
   await expect(card.getByRole('article', { name: /Draft the announcement$/ })).toBeVisible();
   await expect(pane.getByRole('article')).toHaveCount(1);
   await expect(addSubtask).toHaveCount(1);
+});
+
+test('task size picker and optional card badge work on both boards', async ({ page, isMobile }) => {
+  const account = await fixture(page);
+  await newTag(page.request, account, account.projectId, { name: 'Design', color: 'teal' });
+  const dock = controls(page);
+  await expect(dock.getByRole('button', { name: 'Color: none. Change' })).toBeVisible();
+  const sizeButton = (size: string) => dock.getByRole('button', { name: `Size: ${size}. Change` });
+  const picker = page.getByRole('radiogroup', { name: 'Size', exact: true });
+  const sizeOption = (size: string) => picker.getByRole('radio', { name: size, exact: true });
+  if (isMobile) {
+    const target = await sizeButton('none').boundingBox();
+    expect(target?.width).toBeGreaterThanOrEqual(44);
+    expect(target?.height).toBeGreaterThanOrEqual(44);
+  }
+  await sizeButton('none').click();
+  await expect(sizeOption('None')).toBeChecked();
+  if (isMobile) {
+    const target = await sizeOption('M').boundingBox();
+    expect(target?.width).toBeGreaterThanOrEqual(44);
+    expect(target?.height).toBeGreaterThanOrEqual(44);
+  }
+  await sizeOption('M').click();
+  await expect.poll(async () => (await taskRow(page, account))?.size).toBe('3');
+
+  await sizeButton('M').click();
+  await expect(sizeOption('M')).toBeChecked();
+  await sizeOption('M').click();
+  await expect.poll(async () => (await taskRow(page, account))?.size).toBeNull();
+  await sizeButton('none').click();
+  await sizeOption('XL').click();
+  await expect.poll(async () => (await taskRow(page, account))?.size).toBe('5');
+
+  await closeTask(account.pane);
+  const card = page.locator(`[data-card-id="${account.taskId}"]`);
+  const badge = card.getByText('Size XL', { exact: true });
+  await expect(badge).toHaveCount(0);
+  const openSettings = () =>
+    page.getByRole('button', { name: 'Board settings', exact: true }).click();
+  const setting = page.getByRole('switch', { name: 'Size on cards', exact: true });
+  await openSettings();
+  await expect(setting).not.toBeChecked();
+  await setting.click();
+  await expect(setting).toBeChecked();
+  await page.keyboard.press('Escape');
+  await expect(badge).toBeVisible();
+
+  await page.goto(`/w/${account.workspaceId}/board`);
+  await expect(badge).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
+  await openSettings();
+  await setting.click();
+  await page.keyboard.press('Escape');
+  await expect(badge).toHaveCount(0);
+
+  await page.goto(`${account.path}&task=${account.taskId}`);
+  await sizeButton('XL').click();
+  await sizeOption('None').click();
+  await expect.poll(async () => (await taskRow(page, account))?.size).toBeNull();
+});
+
+test('task size stays unavailable on older servers while other task edits sync', async ({
+  page,
+}) => {
+  await page.route('**/api/compatibility', (route) => route.fulfill({ json: { min: 1, max: 1 } }));
+  await page.route('**/api/shapes/tasks?**', async (route) => {
+    const response = await route.fetch();
+    if (!response.ok()) return route.fulfill({ response });
+    const headers = response.headers();
+    if (headers['electric-schema']) {
+      const schema = JSON.parse(headers['electric-schema']);
+      delete schema.size;
+      headers['electric-schema'] = JSON.stringify(schema);
+    }
+    const changes = await response.json();
+    for (const change of changes) if (change.value) delete change.value.size;
+    await route.fulfill({ response, headers, json: changes });
+  });
+
+  const account = await fixture(page);
+  await expect(controls(page).getByRole('button', { name: /^Size:/ })).toHaveCount(0);
+  const title = account.pane.getByRole('textbox', { name: 'Task title' });
+  await title.fill('Edited on the preview server');
+  await title.press('Enter');
+  await expect
+    .poll(async () => (await taskRow(page, account))?.title)
+    .toBe('Edited on the preview server');
 });

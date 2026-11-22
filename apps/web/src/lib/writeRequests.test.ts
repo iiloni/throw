@@ -123,6 +123,7 @@ describe('task updates', () => {
     descriptionVersion: null,
     statusId: id(10),
     priority: 3,
+    size: null,
     position: 'a0',
     parentId: null,
     closedAt: null,
@@ -138,6 +139,24 @@ describe('task updates', () => {
       primaryTagId: null,
       secondaryTagIds: [],
     });
+  });
+
+  it('keeps legacy task writes compatible and sends explicit size edits', () => {
+    const { size: _size, ...row } = task;
+    const legacy = row as Task;
+    expect(taskCreateRequest(legacy)).not.toHaveProperty('size');
+    expect(taskCreateRequest({ ...task, size: 5 })).toHaveProperty('size', 5);
+    expect(
+      taskUpdateRequest(legacy, { ...legacy, title: 'New' }, { title: 'New' }, id(9)),
+    ).toHaveProperty('changes', { title: { before: 'Paint', after: 'New' } });
+    expect(taskUpdateRequest(legacy, { ...legacy, size: 5 }, { size: 5 }, id(9))).toHaveProperty(
+      'changes.size',
+      { before: null, after: 5 },
+    );
+    expect(taskUpdateRequest({ ...task, size: 5 }, task, { size: null }, id(9))).toHaveProperty(
+      'changes.size',
+      { before: 5, after: null },
+    );
   });
 
   it('sends nothing for server values and unchanged fields', () => {

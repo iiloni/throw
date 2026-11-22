@@ -3,6 +3,7 @@ import {
   comparePositions,
   compareTasks as compareTaskRows,
   positionBetween,
+  type Size,
   type TagIconName,
   taskIdentifier,
 } from '@throw/shared';
@@ -42,6 +43,7 @@ export type Task = {
   title: string;
   statusId: string;
   priority: Priority;
+  size: Size | null;
   position: string;
   primaryTagId: string | null;
   /** The synced adapter resolves this through the shared tag helper, including partial sync. */

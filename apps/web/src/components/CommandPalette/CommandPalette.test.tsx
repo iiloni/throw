@@ -178,6 +178,7 @@ it('holds an Enter pressed while tasks load, then opens the task it finds', () =
         createdAt: '2026-10-15T00:00:00Z',
         statusId: 'status',
         priority: 3,
+        size: null,
         position: 'a0',
         primaryTagId: null,
       },

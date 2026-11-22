@@ -34,6 +34,7 @@ export const boardSettingsSchema = z.object({
   zoneLabels: z.boolean().default(false),
   /** Mark a card's priority on the card itself. */
   cardPriority: z.boolean().default(false),
+  cardSize: z.boolean().default(false),
   /** Zones and columns sit on a faint surface of their own. */
   surfaces: z.boolean().default(true),
   /**
@@ -569,6 +570,7 @@ export function createTask(statusId?: string) {
     title: 'New task',
     statusId: status.id,
     priority: DEFAULT_PRIORITY,
+    size: null,
     position: positionBetween(null, peers[0]?.position ?? null),
     primaryTagId: null,
     secondaryTagIds: [],

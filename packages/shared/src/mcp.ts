@@ -3,6 +3,7 @@ import { activityChangeSchema } from './activity';
 import { positionSchema } from './position';
 import { prioritySchema } from './priorities';
 import { projectKeySchema, projectSchema, storedProjectKeySchema } from './projects';
+import { sizeSchema } from './sizes';
 import { statusCategorySchema, statusSchema } from './statuses';
 import { timestampSchema } from './sync';
 import { secondaryTagChangesSchema, tagSchema } from './tags';
@@ -45,6 +46,7 @@ const task = taskReference.extend({
   statusId: uuid,
   category: statusCategorySchema,
   priority: prioritySchema,
+  size: sizeSchema.nullable(),
   parentId: uuid.nullable(),
   primaryTagId: uuid.nullable(),
   trashed: z.boolean(),
@@ -99,6 +101,7 @@ const taskUpdateFields = z
   .strictObject({
     title: change(taskTitleSchema),
     priority: change(prioritySchema),
+    size: change(sizeSchema.nullable()),
     trashed: change(z.boolean()),
     description: z.strictObject({
       before: uuid.nullable().describe('The descriptionVersion returned with the task.'),
@@ -328,6 +331,10 @@ export const mcpTools = {
       statusId: uuid.optional(),
       category: statusCategorySchema.optional(),
       priority: prioritySchema.optional(),
+      size: sizeSchema
+        .nullable()
+        .optional()
+        .describe('Filter by size, or pass null for unsized tasks.'),
       tagId: uuid.optional(),
       parent: taskRef.nullable().optional().describe('Use null to return top-level tasks only.'),
       trash: z.enum(['active', 'trashed', 'all']).default('active'),
@@ -360,6 +367,10 @@ export const mcpTools = {
       description: markdown.optional(),
       statusId: uuid.optional(),
       priority: prioritySchema.optional(),
+      size: sizeSchema
+        .nullable()
+        .optional()
+        .describe('T-shirt size (1–5: XS, S, M, L, XL), or null.'),
       parent: taskRef.optional().describe('Supply a top-level parent to make this a subtask.'),
       primaryTagId: uuid.optional(),
       secondaryTagIds: z.array(uuid).max(100).optional(),

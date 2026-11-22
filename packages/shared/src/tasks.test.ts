@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Priority } from './priorities';
+import { SIZES, sizeLabel } from './sizes';
 import {
   closedAtAfter,
   compareClosedTasks,
@@ -87,7 +88,14 @@ describe('create schema', () => {
     parentId: null,
   };
   it('defaults the status to the backlog default and the priority to 3', () => {
-    expect(createTaskSchema.parse(create)).toMatchObject({ statusId: null, priority: 3 });
+    expect(createTaskSchema.parse(create)).toMatchObject({
+      statusId: null,
+      priority: 3,
+      size: null,
+    });
+  });
+  it('accepts each size on create', () => {
+    for (const size of SIZES) expect(createTaskSchema.parse({ ...create, size }).size).toBe(size);
   });
   it('takes no server values', () => {
     expect(createTaskSchema.safeParse({ ...create, number: 4 }).success).toBe(false);
@@ -133,4 +141,25 @@ describe('update schema', () => {
         .success,
     ).toBe(false);
   });
+});
+
+it('uses the fixed T-shirt scale for nullable size changes', () => {
+  expect(SIZES.map(sizeLabel)).toEqual(['XS', 'S', 'M', 'L', 'XL']);
+  for (const size of SIZES) {
+    for (const change of [
+      { before: null, after: size },
+      { before: size, after: null },
+    ]) {
+      const changes = { size: change };
+      expect(updateTaskSchema.parse({ changeId: id(9), changes }).changes).toEqual(changes);
+    }
+  }
+  for (const size of [0, 6, 2.5, '3']) {
+    expect(
+      updateTaskSchema.safeParse({
+        changeId: id(9),
+        changes: { size: { before: null, after: size } },
+      }).success,
+    ).toBe(false);
+  }
 });

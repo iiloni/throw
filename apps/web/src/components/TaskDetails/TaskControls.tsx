@@ -1,5 +1,12 @@
-import { type Priority, type Status, type Task, taskTagColor } from '@throw/shared';
-import { Flag, MoreHorizontal, Palette, Tag } from 'lucide-react';
+import {
+  type Priority,
+  type Size,
+  type Status,
+  sizeLabel,
+  type Task,
+  taskTagColor,
+} from '@throw/shared';
+import { Flag, MoreHorizontal, Palette, Scaling, Tag } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import type { ButtonHTMLAttributes, KeyboardEventHandler, ReactNode } from 'react';
 import { PriorityGlyph, StatusGlyph } from '@/components/Board/glyphs';
@@ -10,15 +17,23 @@ import { touchEditor } from '@/components/DescriptionEditor/editorControls';
 import { FormattingBar } from '@/components/FormattingBar/FormattingBar';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { useTags, useTaskTags } from '@/lib/collections';
+import { useTaskSizeSupport } from '@/lib/compatibility';
 import { springs } from '@/lib/motion';
 import { TaskActions } from './TaskActions';
-import { ColorTagsPicker, PriorityPicker, StatusPicker, TagsPicker } from './TaskPickers';
+import {
+  ColorTagsPicker,
+  PriorityPicker,
+  SizePicker,
+  StatusPicker,
+  TagsPicker,
+} from './TaskPickers';
 
-export type TaskPanel = 'status' | 'priority' | 'color' | 'tags' | 'more';
+export type TaskPanel = 'status' | 'priority' | 'size' | 'color' | 'tags' | 'more';
 
 export const panelTitle: Record<TaskPanel, string> = {
   status: 'Status',
   priority: 'Priority',
+  size: 'Size',
   color: 'Color',
   tags: 'Tags',
   more: 'More',
@@ -50,6 +65,7 @@ export function TaskControls({
   controlProps(panel: TaskPanel): ControlProps;
   tooltips?: boolean;
 }) {
+  const sizeSupported = useTaskSizeSupport();
   const { tags } = useTags(task.projectId);
   const { taskTags } = useTaskTags(task.id);
   const secondary = new Set(taskTags.map((row) => row.tagId));
@@ -57,6 +73,7 @@ export function TaskControls({
     <ControlButtons
       status={statuses.find((row) => row.id === task.statusId)}
       priority={task.priority}
+      size={sizeSupported ? (task.size ?? null) : undefined}
       project={project}
       tags={
         tags.length > 0
@@ -86,6 +103,7 @@ export function TaskControls({
 export function ControlButtons({
   status,
   priority,
+  size,
   project,
   tags,
   onOpen,
@@ -95,6 +113,7 @@ export function ControlButtons({
 }: {
   status: Status | undefined;
   priority: Priority;
+  size?: Size | null;
   project: Project;
   /** With no tags in the project there is nothing to pick; the tag manager makes the first. */
   tags: { primary: string | null; secondary: string[]; color: string | null } | null;
@@ -127,6 +146,21 @@ export function ControlButtons({
           <PriorityGlyph priority={priority} name={priorityName(project, priority)} />
         )}
       </IconButton>
+      {size !== undefined && (
+        <IconButton
+          label={`Size: ${size === null ? 'none' : sizeLabel(size)}. Change`}
+          className={control}
+          tooltip={tooltips}
+          {...controlProps('size')}
+          onClick={(event) => onOpen('size', event.currentTarget)}
+        >
+          {size === null ? (
+            <Scaling />
+          ) : (
+            <span className="font-semibold text-sm">{sizeLabel(size)}</span>
+          )}
+        </IconButton>
+      )}
       {tags && (
         <IconButton
           label={`Color: ${tags.primary ?? 'none'}. Change`}
@@ -183,6 +217,7 @@ export function TaskPanelContent({
   if (panel === 'status') return <StatusPicker task={task} statuses={statuses} onPicked={onDone} />;
   if (panel === 'priority')
     return <PriorityPicker task={task} project={project} onPicked={onDone} />;
+  if (panel === 'size') return <SizePicker task={task} onPicked={onDone} />;
   if (panel === 'color') return <ColorTagsPicker task={task} />;
   if (panel === 'tags') return <TagsPicker task={task} />;
   return <TaskActions task={task} statuses={statuses} onDone={onDone} />;

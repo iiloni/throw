@@ -181,11 +181,13 @@ export const tasksCollection = createCollection(
     electricCollectionOptions({
       ...alwaysSynced,
       id: 'tasks',
-      schema: taskSchema,
+      // Mutations validate the whole row, including rows synced from older servers.
+      schema: taskSchema.extend({ size: taskSchema.shape.size.default(null) }),
       getKey: (task) => task.id,
+      // Electric's int2 parser reads the nullable size column as a number.
       shapeOptions: shapeOptions('tasks'),
     }),
-    2,
+    3,
   ),
 );
 
