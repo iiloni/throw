@@ -6,6 +6,7 @@ import { createStore } from '@/lib/store';
 import type { BoardData } from './model';
 import {
   type Category,
+  categoryTarget,
   compareClosed,
   compareTasks,
   DEFAULT_PRIORITY,
@@ -19,6 +20,7 @@ import {
   placeOf,
   resolveSend,
   sendToStatus,
+  statusById,
   type Task,
   targetCategory,
 } from './model';
@@ -72,6 +74,85 @@ function storedBoardSettings() {
 export function setSubtasksAsCards(value: boolean) {
   writePreference(BOARD_SETTINGS_KEY, { ...storedBoardSettings(), subtasksAsCards: value });
   update({ subtasksAsCards: value });
+}
+
+/**
+ * Desktop columns folded to a strip, kept on the device as Catch keeps its deck's. A project
+ * board keeps the ids of its folded active statuses under its own key. The workspace board
+ * keeps one flag per category, which its phone pages share for Done and Cancelled only.
+ */
+const collapsedSchema = z.array(z.string());
+const foldedSchema = z.object({
+  backlog: z.boolean().default(false),
+  active: z.boolean().default(false),
+  done: z.boolean().default(false),
+  cancelled: z.boolean().default(true),
+});
+const FOLDED_KEY = 'throw-workspace-board-folded';
+const collapsedKey = (projectId: string) => `throw-board-collapsed:${projectId}`;
+const storedFolded = () => readPreference(FOLDED_KEY, foldedSchema, foldedSchema.parse({}));
+
+/** Done starts open and Cancelled folded; a choice to fold or open either stays on the device. */
+export function useFoldedColumns() {
+  return usePersistentState(FOLDED_KEY, foldedSchema, foldedSchema.parse({}));
+}
+
+/**
+ * Which columns of the board shown are folded. A column is an active status's id on a project
+ * board, or a category target (`category:done`) on the workspace board.
+ */
+export function useCollapsedColumns(project: Project) {
+  const [ids] = usePersistentState(collapsedKey(project.id), collapsedSchema, []);
+  const [folded] = useFoldedColumns();
+  const workspace = project.members !== undefined;
+  return {
+    isCollapsed: (columnId: string) => {
+      const category = targetCategory(columnId);
+      return workspace ? category !== null && folded[category] : ids.includes(columnId);
+    },
+    setCollapsed: (columnId: string, value: boolean) => setCollapsed(project, columnId, value),
+  };
+}
+
+function setCollapsed(project: Project, columnId: string, value: boolean) {
+  if (project.members !== undefined) {
+    const category = targetCategory(columnId);
+    const folded = storedFolded();
+    if (category && folded[category] !== value)
+      writePreference(FOLDED_KEY, { ...folded, [category]: value });
+    return;
+  }
+  const ids = readPreference(collapsedKey(project.id), collapsedSchema, []);
+  if (ids.includes(columnId) === value) return;
+  writePreference(
+    collapsedKey(project.id),
+    value ? [...ids, columnId] : ids.filter((id) => id !== columnId),
+  );
+}
+
+/**
+ * The desktop column a task's card shows in, when it is one that folds: an active status's
+ * column on a project board, the category's on the workspace board.
+ */
+export function foldingColumnOf(project: Project, task: Task) {
+  const status = statusById(project, task.statusId);
+  if (!status) return null;
+  if (project.members !== undefined) return categoryTarget(status.category);
+  return status.category === 'active' ? status.id : null;
+}
+
+/**
+ * Opens the folded column a card is in, so what takes the person to the card (a task opened
+ * from search or a link, a card carried from the keyboard) finds it there, as Catch's deck
+ * opens a column a keyboard selection lands in. Only a desktop draws the strips.
+ */
+function expandColumnOf(state: BoardState, taskId: string) {
+  if (!isDesktop()) return;
+  const { project, tasks } = current(state);
+  const task = tasks.find((item) => item.id === taskId);
+  if (!task || (task.parentId !== null && !state.subtasksAsCards)) return;
+  const column = foldingColumnOf(project, task);
+  if (column) setCollapsed(project, column, false);
 }
 
 /** A side zone is a strip, a single column, or a gallery across the whole board. */
@@ -144,6 +225,7 @@ export function update(change: Partial<BoardState> | ((state: BoardState) => Par
     rememberTaskOrigin(next.openTaskId);
   // Opening a task any other way starts a new trail.
   board.set({ ...state, ...(moving && !('taskTrail' in next) ? { taskTrail: [] } : {}), ...next });
+  if (moving && next.openTaskId) expandColumnOf(board.get(), next.openTaskId);
   // A new subtask left as it was made was never wanted: it goes rather than stay untitled.
   if (moving && fresh !== null && fresh === state.openTaskId) {
     fresh = null;
@@ -557,6 +639,8 @@ export function toggleExpanded(taskId: string) {
 export function revealStatus(statusId: string) {
   const status = current().project.statuses.find((item) => item.id === statusId);
   if (!status) return;
+  const carried = board.get().carrying?.taskId;
+  if (carried) expandColumnOf(board.get(), carried);
   if (status.category === 'backlog') {
     update((state) => ({
       backlog: state.backlog === 'strip' ? 'panel' : state.backlog,

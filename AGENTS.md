@@ -40,7 +40,9 @@ pane picks and lists tags, and its Color and Tags panels make new tags through t
 `NewTagHost` (`components/NewTag`); project settings mounts tag management.
 The task pane shows comments and server history under separate tabs (`SegmentedTabs`).
 Touch screens swipe between them with `useTabSwipe`. Refused changes have a quiet task-only
-notice and description recovery links. Cards move on both boards by drag, keyboard,
+notice and description recovery links. Desktop columns on both boards fold to a strip, as Catch's deck does
+(`Board/BoardColumn.tsx`, remembered per project by `useCollapsedColumns` in `Board/state.ts`).
+Cards move on both boards by drag, keyboard,
 phone long press, the move drawer and a rightward swipe to close (ADR 0008).
 Settings (`/settings/*`) and project settings (`/w/:workspaceId/p/:projectId/settings`,
 with project trash beside it at `/trash`) share Catch's `SettingsLayout`: pages listed
