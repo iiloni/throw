@@ -8,7 +8,19 @@ import {
   type TaskTag,
   taskTagColor,
 } from '@throw/shared';
+import { descriptionText, normalizeSearch } from '@/lib/taskSearch';
 import type { BoardData, Task as BoardTask } from './model';
+
+/** Each row's searchable text, worked out once per synced row rather than once per sync. */
+const searchTexts = new WeakMap<TaskRow, string>();
+function searchText(task: TaskRow) {
+  let text = searchTexts.get(task);
+  if (text === undefined) {
+    text = normalizeSearch(`${task.title} ${descriptionText(task.description)}`);
+    searchTexts.set(task, text);
+  }
+  return text;
+}
 
 /** Each task's secondary tag ids, from the synced assignments. */
 export function secondaryTagsByTask(assignments: readonly TaskTag[]) {
@@ -44,6 +56,7 @@ export function projectBoardData(
       (id) => id !== task.primaryTagId && tagIds.has(id),
     ),
     description: undefined,
+    searchText: searchText(task),
   });
   return {
     project: {

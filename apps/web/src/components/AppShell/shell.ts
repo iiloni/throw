@@ -20,6 +20,8 @@ export type ShellState = {
   remembered: z.infer<typeof navigationSchema>;
   view: ProjectView;
   crossBoard: boolean;
+  /** A project board or the cross-project board fills the page. */
+  board: boolean;
   settings: boolean;
   selectProject: (
     workspaceId: string,
@@ -33,7 +35,10 @@ export type ShellState = {
    */
   selectWorkspace: (id: string, leaving?: string) => void;
   openForm: (form: ShellForm) => void;
-  openPalette: (mode?: PaletteMode) => void;
+  /** The palette; `seed` starts capture with a title already written. */
+  openPalette: (mode?: PaletteMode, seed?: string) => void;
+  /** Search where it lives here: the bar over a desktop board, or the palette. */
+  search: () => void;
   /** Opens a task in its project's board, moving to that project first if needed. */
   openTask: (projectId: string, taskId: string, created?: boolean) => void;
   goBoard: () => void;

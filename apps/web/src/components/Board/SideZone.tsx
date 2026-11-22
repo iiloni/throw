@@ -18,7 +18,16 @@ import { BacklogGallery } from './Gallery';
 import { PriorityIcon } from './glyphs';
 import { type Category, groupByPriority, priorityName, type Status } from './model';
 import { StatusTile } from './StatusTile';
-import { board, countIn, createTask, current, listTasks, update, type ZoneState } from './state';
+import {
+  board,
+  countIn,
+  createTask,
+  current,
+  listTasks,
+  sortedBySize,
+  update,
+  type ZoneState,
+} from './state';
 import { TaskCard } from './TaskCard';
 
 export const ZONES = {
@@ -280,7 +289,7 @@ function Gallery({ zone }: { zone: Zone }) {
   const tasks = listTasks(state, zone);
   const filter = zone === 'backlog' ? state.backlogFilter : state.closedFilter;
   const bands =
-    zone === 'backlog'
+    zone === 'backlog' && !sortedBySize(state)
       ? groupByPriority(tasks).filter((group) => group.tasks.length > 0)
       : [{ priority: null, tasks }];
   return (

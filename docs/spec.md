@@ -61,7 +61,7 @@ integrations.
 - Custom statuses mapped to categories, five priority ranks, optional task sizes and nested tags.
 - The project board, the cross-project board and the task view.
 - Comments and a full activity log.
-- Search through a command palette or an integrated input.
+- Search, filters and a temporary size sort on the boards, and a command palette elsewhere.
 - Trash with restore.
 - Offline-first web app and Android app.
 - An MCP server for reading workspace data, managing tasks, and creating, editing and
@@ -395,6 +395,40 @@ where the server has it.
 On desktop, a click with Ctrl, Cmd or Shift selects cards, and a bar offers to move the
 selection to a status.
 
+### Search, filters and sorting
+
+Both boards can be narrowed down in place (2026-11-22). Search, filters and the sort are view
+state on the device: they apply to the board on screen, are not saved, and are gone when the
+board is left or reloaded.
+
+- **Words.** The search's literal words, matched as [search](#desktop) matches them: title,
+  identifier, description text and tag names with their ancestors.
+- **Tags**, on a project board. Any (OR, the default) or all (AND) of the chosen tags, or
+  Untagged alone. A tag matches the tag itself and every tag beneath it, primary or secondary,
+  so Home finds a task tagged Garden under Home, as Catch's tag filter does. Each tag shows how
+  many cards it would leave, given the rest of the filter. The cross-project board has no tag
+  filter, since tags are per project; it scopes to one project instead.
+- **Sizes**, on both boards. Any of the chosen sizes (OR), and Unsized for tasks without one.
+- **Sort.** Priority, the board's own order, is the default. Smallest first or Largest first
+  orders each column by size, unsized tasks last either way, and ties fall back to priority
+  and then manual order. The closed zone keeps its order by closing time.
+
+Everything chosen applies together. Cards that do not match leave the columns, the backlog
+and the closed zone; while subtasks stay with their parent, a parent card stays when one of
+its subtasks matches, since the card stands for them. Column counts, including a folded
+column's strip, count what is left. A column with nothing left says so.
+
+While the board is sorted by size, columns are not in their manual order, so a card cannot be
+placed within one: a card dragged, carried from the keyboard or moved by selection goes to
+another status, keeping its priority, and lands where that status puts it. Dropping it back in
+its own column writes nothing, and the keyboard's up and down announce the sort instead of
+moving the card. Filtering alone keeps placement: a card dropped between the cards still
+showing takes a position between them.
+
+What applies always shows. On desktop it is chips on the search bar; on a phone it is a chip
+bar under the board's title, and the dock's Search is marked. Each chip removes its choice, and
+Clear all removes every one, with the sort back to priority.
+
 ### Phone
 
 The backlog and the closed tasks are not columns on a phone. Each has its own shape and its
@@ -567,9 +601,21 @@ on the device and takes precedence over window width:
 - The cross-project board.
 - Settings at the bottom.
 
-Search is a command palette, opened from the rail or with Ctrl/⌘K. There is no search
-page. The palette also captures tasks. It takes Catch's search and quick note as they are: a
-dock-shaped glass search field with results as cards above it, highlighted where they match.
+On a board, search is a floating glass bar at the bottom of the board area, opened from the
+rail or with Ctrl/⌘K, which focuses it when it is already open (2026-11-22). It is not modal
+and has no results list: the board itself narrows as words are typed or
+[filters](#search-filters-and-sorting) chosen, and stays usable while the bar is open. The
+bar centres on the board beside an open task pane, and the columns leave room for it at their
+ends. A filter button opens the filters and sort in a panel above the field; the chips of what
+applies sit between them. Enter opens the best match, ranked as below, and Ctrl/⌘K on an
+empty, focused bar closes it. Escape first closes the panel, then clears the words, filters
+and sort, then closes the bar and returns focus. Project jumps are not offered there; the rail
+lists the projects.
+
+Away from the boards (settings, trash, an empty workspace) search is a command palette. There
+is no search page. The palette also captures tasks. It takes Catch's search and quick note as
+they are: a dock-shaped glass search field with results as cards above it, highlighted where
+they match.
 
 Search and capture belong to the board they are opened from (owner decision, 2026-10-17,
 replacing the scope settled on 2026-10-15). A project board searches and captures in that
@@ -587,14 +633,15 @@ Garden under Home is found by either, and a result found by a tag shows the tag 
 (2026-11-18). Exact identifiers rank first, then
 exact titles, title prefixes, all-title matches, and description/tag matches. Ties favor the
 current project, then project name, title and task UUID. A bare number prefers the current
-project when several projects have that number. Up to 30 tasks and eight project jumps are
+project when several projects have that number. In the palette, up to 30 tasks and eight project jumps are
 shown. Enter opens the selected result; arrows change the selection. An Enter pressed while
 tasks or projects are still loading waits and chooses the selected result once they appear,
 rather than choosing a jump or Create the list has not shown (2026-11-18).
 
-Typing a title also offers Create; Ctrl/⌘Enter captures it directly into the board's
-project, or on the cross-project board the project search is filtered to. With neither, the
-title moves to the capture window, which opens on its project list. The capture window on
+Typing a title also offers Create, as a button on the board's bar; Ctrl/⌘Enter captures it
+directly into the board's project, or on the cross-project board the project search is
+filtered to. With neither, the title moves to the capture window, which opens on its project
+list. The capture window on
 desktop is Catch's quick note: a card-colored window with the title, the board's project (a
 chip that opens a searchable project list in place on the cross-project board), the backlog
 status it lands in, and a create button. A new task appears optimistically with “Pending”
@@ -621,7 +668,11 @@ opens the palette's capture, where the project is chosen.
 
 On a phone's project board, search and capture live in the drawer (ADR 0009). The dock's
 Search button raises the drawer as a search page: results above, and Catch's glass search
-field at the bottom where the dock was, focused so the keyboard rises right under it. The
+field at the bottom where the dock was, focused so the keyboard rises right under it. Its
+filter button opens the board's [filters and sort](#search-filters-and-sorting) above the
+field, with their chips over the results. They apply to the board behind and stay after the
+search page closes, shown by the chip bar under the title; the words narrow only the results.
+The cross-project board's palette offers the same filters and sort, with its project scope. The
 create button opens Catch's quick note for a task: a card above the dock with the title,
 focused, and create. The task lands where a new card would, in the column on screen, or the
 backlog's default status while the backlog is open. While the card is up, the dock holds the
@@ -648,10 +699,11 @@ dock rather than opening as a page. Desktop has no drawer. The rules are in
 ### Shell routes and remembered selection
 
 - `/w/:workspaceId/p/:projectId?view=board` is a project. `view=backlog` opens its
-  phone board with the backlog half open. Legacy `view=search` links open the palette over
-  the board and replace the view with `board`. The palette has no route of its own.
+  phone board with the backlog half open. Legacy `view=search` links open the search over
+  the board (the bar on desktop, the drawer's search on a phone) and replace the view with
+  `board`. The palette has no route of its own.
 - `/w/:workspaceId/board` is the cross-project board for that workspace; `view=search`
-  opens the palette over it and replaces the view with `board`.
+  opens its search and replaces the view with `board`.
 - `/w/:workspaceId/p/:projectId/settings` manages a project in pages laid out as the app's
   settings are: General (name, color and icon, saved as they change; the key; deleting
   the project), Statuses, Priorities and Tags, with Trash beside them. The rail's project
@@ -696,8 +748,9 @@ picker. Tag management uses this host on phones and a
 centred dialog on desktop. On a phone board the board owns the drawer, so the
 shell's forms (new project, new or renamed workspace) open as a page of the board's drawer
 rather than a sheet of their own (2026-11-19). The cross-project board adapts every project's tasks at the same
-kind of boundary (`Board/WorkspaceBoard.tsx`); search and quick capture there use the
-command palette. Cards move on both boards by dragging, from the keyboard, by long press
+kind of boundary (`Board/WorkspaceBoard.tsx`). Both desktop boards search and filter through
+the board's bar (`components/BoardSearch`); a phone's cross-project board uses the command
+palette, with the same filters. Cards move on both boards by dragging, from the keyboard, by long press
 and the move drawer on a phone, and by swiping to close.
 
 ## Platform and architecture
@@ -736,7 +789,8 @@ little as possible; it is not the normal way to use the app (ADR 0005).
 
 1. **Search scope — settled (2026-10-17).** The board search is opened from: one project
    on a project board, every project on the cross-project board; see
-   [Navigation](#navigation).
+   [Navigation](#navigation). On desktop boards it narrows the board in place rather than
+   listing results (2026-11-22); see [Search, filters and sorting](#search-filters-and-sorting).
 2. **Membership.** Whether a future member joins a whole workspace, a single project, or
    either. Tasks and the rows under them carry both a workspace and a project, so either
    answer can filter them without a migration.

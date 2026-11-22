@@ -5,8 +5,8 @@ import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { drag, makingWay } from './drag';
 import { PriorityIcon } from './glyphs';
-import { groupByPriority, priorityName } from './model';
-import { board, current, listTasks } from './state';
+import { groupByPriority, type Priority, priorityName } from './model';
+import { board, current, listTasks, sortedBySize } from './state';
 import { TaskCard } from './TaskCard';
 
 /**
@@ -28,14 +28,19 @@ export function BacklogGallery({ showStatus }: { showStatus: boolean }) {
     placing && held.target?.kind === 'place' && held.target.listId === 'backlog'
       ? held.target
       : null;
+  // Sorted by size, the gallery is one run of cards with no manual order to place a card in.
+  const bySize = sortedBySize(state);
   // While a card is placed here every priority shows, so an empty one can take it.
-  const bands = groupByPriority(tasks).filter((group) => group.tasks.length > 0 || placing);
+  const bands: { priority: Priority | null; tasks: typeof tasks }[] = bySize
+    ? [{ priority: null, tasks }]
+    : groupByPriority(tasks).filter((group) => group.tasks.length > 0 || placing);
   return (
     <ScrollArea edges className="flex-1 [--scrollbar-inset:0.5rem]">
       <ScrollAreaViewport data-autoscroll="">
         <section
           ref={columns.ref}
           data-drop-list="backlog"
+          data-drop-send={bySize ? '' : undefined}
           data-layout="grid"
           aria-label="Backlog tasks"
           className="px-5 pt-1 pb-5"
@@ -50,18 +55,20 @@ export function BacklogGallery({ showStatus }: { showStatus: boolean }) {
             const peers = zone.filter((task) => !(placing && held.ids.includes(task.id)));
             const at = target?.priority === priority ? target.index : null;
             return (
-              <section key={priority}>
-                <h3
-                  className="zone-header"
-                  data-mode="label"
-                  data-zone-header={priority}
-                  data-current={at !== null ? '' : undefined}
-                >
-                  <span className="zone-header-face">
-                    <span className="truncate">{priorityName(project, priority)}</span>
-                    <PriorityIcon priority={priority} className="zone-chevron" />
-                  </span>
-                </h3>
+              <section key={priority ?? 'size'}>
+                {priority !== null && (
+                  <h3
+                    className="zone-header"
+                    data-mode="label"
+                    data-zone-header={priority}
+                    data-current={at !== null ? '' : undefined}
+                  >
+                    <span className="zone-header-face">
+                      <span className="truncate">{priorityName(project, priority)}</span>
+                      <PriorityIcon priority={priority} className="zone-chevron" />
+                    </span>
+                  </h3>
+                )}
                 <div
                   className="relative grid items-start gap-x-4 pb-3"
                   style={{ gridTemplateColumns: `repeat(${columns.count}, minmax(0, 1fr))` }}
@@ -75,7 +82,7 @@ export function BacklogGallery({ showStatus }: { showStatus: boolean }) {
                       <div
                         key={task.id}
                         data-slot={task.id}
-                        data-zone={priority}
+                        data-zone={task.priority}
                         className="relative mb-4"
                       >
                         {index >= 0 && at === index && <Caret side="start" />}

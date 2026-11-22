@@ -1,6 +1,7 @@
 import { ListTree, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { BoardSearch, SEARCH_SPACE } from '@/components/BoardSearch/BoardSearch';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { Button } from '@/components/ui/button';
@@ -282,6 +283,7 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
             {/* Keeps a sticky closed rail at the far edge when the backlog is not beside it. */}
             <span aria-hidden className="pointer-events-none flex-1" />
             {!closedBound && closedRail}
+            <BoardSearch />
           </div>
 
           <OpenTaskPane frameWidth={frameWidth} />
@@ -326,6 +328,7 @@ function StatusColumn({ status, index }: { status: Status; index: number }) {
         <CardList
           listId={`status:${status.id}`}
           revealed={revealed}
+          endSpace={SEARCH_SPACE}
           className="flex-1 pb-2"
           header={
             <ColumnHeader
@@ -387,7 +390,11 @@ export function SelectionBar({ children }: { children: ReactNode }) {
     <AnimatePresence>
       {state.selection.length > 0 && held?.phase !== 'dragging' && (
         <motion.div
-          className="glass-thick -translate-x-1/2 fixed bottom-5 left-1/2 z-30 flex h-12 items-center gap-1 rounded-2xl pr-1.5 pl-4"
+          className={cn(
+            'glass-thick -translate-x-1/2 fixed left-1/2 z-30 flex h-12 items-center gap-1 rounded-2xl pr-1.5 pl-4',
+            // Above the search bar while it is open, which holds the same place.
+            state.searching ? 'bottom-[calc(var(--board-search-space,0px)+1.25rem)]' : 'bottom-5',
+          )}
           initial={{ y: 24, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 24, opacity: 0 }}

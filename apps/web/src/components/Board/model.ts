@@ -53,6 +53,12 @@ export type Task = {
   /** When the task entered a done or cancelled status. */
   closedAt: number | null;
   description?: string;
+  /**
+   * The title and description text as search compares them (`normalizeSearch`). The synced
+   * adapter sets it, since it does not carry the description itself; without it, search reads
+   * the title and `description`.
+   */
+  searchText?: string;
   /** Set on the workspace board, which gathers several projects' tasks. */
   projectId?: string;
 };

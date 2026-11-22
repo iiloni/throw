@@ -9,7 +9,16 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useShell } from '@/components/AppShell/shell';
+import { type ShellState, useShell } from '@/components/AppShell/shell';
+import { matchingIds } from '@/components/Board/filter';
+import {
+  type BoardState,
+  board as boardStore,
+  current,
+  narrowed,
+  setFilter,
+} from '@/components/Board/state';
+import { ActiveFilters, BoardFilters } from '@/components/BoardSearch/BoardFilters';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { Hint } from '@/components/Hint/Hint';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
@@ -33,6 +42,13 @@ import { ProjectBadge, ProjectOptions } from './ProjectOptions';
 
 export type SearchState = ReturnType<typeof useSearch>;
 
+/** The board on screen, when search was opened from one: its filters narrow the results too. */
+function useBoardOnScreen(shell: ShellState): BoardState | null {
+  const state = boardStore.use();
+  const id = shell.crossBoard ? `workspace:${shell.workspace?.id}` : shell.project?.id;
+  return shell.board && state.actions !== null && state.projectId === id ? state : null;
+}
+
 /**
  * Search's state and keyboard handling, apart from where it is drawn: the desktop palette
  * and the phone's drawer arrange the same field, results and scope list differently. A
@@ -53,8 +69,21 @@ export function useSearch({
   const { tasks, isLoading } = useTasks();
   const [query, setQuery] = useState('');
   const board = shell.project;
-  const [chosenFilter, setProjectFilter] = useState('');
-  const projectFilter = board?.id ?? chosenFilter;
+  const [chosenFilter, setChosenFilter] = useState('');
+  const onBoard = useBoardOnScreen(shell);
+  // On the cross-project board the scope is the board's own, so it narrows the board as well.
+  const projectFilter = board?.id ?? (onBoard ? (onBoard.filter.projectId ?? '') : chosenFilter);
+  const setProjectFilter = (value: string) =>
+    onBoard ? setFilter({ projectId: value || null }) : setChosenFilter(value);
+  const boardData = onBoard && current(onBoard);
+  const boardFilter = onBoard?.filter;
+  // The board's sizes and tags narrow the results as they narrow its cards; the words are
+  // the search's own.
+  const allowed = useMemo(
+    () =>
+      boardData && boardFilter ? matchingIds(boardData, { ...boardFilter, query: '' }, true) : null,
+    [boardData, boardFilter],
+  );
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [error, setError] = useState('');
@@ -69,11 +98,11 @@ export function useSearch({
   );
   const results = useMemo(
     () =>
-      searchTasks(indexed, query, {
+      searchTasks(allowed ? indexed.filter((row) => allowed.has(row.task.id)) : indexed, query, {
         projectId: projectFilter,
         currentProjectId: shell.project?.id,
       }),
-    [indexed, query, projectFilter, shell.project?.id],
+    [indexed, allowed, query, projectFilter, shell.project?.id],
   );
   const projects = useMemo(
     () => (board ? [] : searchProjects(shell.projects, query)),
@@ -147,6 +176,8 @@ export function useSearch({
     scope,
     /** Searching one project's board, with no other project to choose. */
     scoped: !!board,
+    /** The board search was opened from, whose filters and sort the filter button opens. */
+    onBoard,
     destination,
     backlog,
     projectFilter,
@@ -272,17 +303,22 @@ export function SearchField({
   );
 }
 
-/** Catch's filter button: opens the project scope, with a dot while one applies. */
+/**
+ * Catch's filter button. Over a board it opens the board's filters and sort; elsewhere, the
+ * project scope. A dot shows while either applies.
+ */
 export function FilterButton({ search }: { search: SearchState }) {
+  const label = search.onBoard ? 'Filter and sort' : 'Filter by project';
+  const active = search.onBoard ? narrowed(search.onBoard) : !!search.scope;
   return (
     // The label stays the action; the hint adds the project it is scoped to.
     <Hint
-      label={search.scope ? `Filter by project (${search.scope.name})` : 'Filter by project'}
-      describe={!!search.scope}
+      label={search.scope && !search.onBoard ? `${label} (${search.scope.name})` : label}
+      describe={!!search.scope && !search.onBoard}
     >
       <motion.button
         type="button"
-        aria-label="Filter by project"
+        aria-label={label}
         aria-expanded={search.filtersOpen}
         onPointerDown={(event) => event.preventDefault()}
         onClick={search.toggleFilters}
@@ -290,16 +326,21 @@ export function FilterButton({ search }: { search: SearchState }) {
         transition={springs.snappy}
         className={cn(
           'glass relative flex size-[var(--dock-height)] shrink-0 items-center justify-center rounded-[var(--dock-radius)] outline-none transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ring/70',
-          search.filtersOpen || search.scope ? 'text-brand-link' : 'text-foreground',
+          search.filtersOpen || active ? 'text-brand-link' : 'text-foreground',
         )}
       >
         <SlidersHorizontal className="size-7" strokeWidth={2.25} aria-hidden />
-        {search.scope && (
+        {active && (
           <span aria-hidden className="absolute top-3 right-3 size-1.5 rounded-full bg-brand" />
         )}
       </motion.button>
     </Hint>
   );
+}
+
+/** What the filter button opens: the board's filters over a board, else the project scope. */
+export function FilterOptions({ search }: { search: SearchState }) {
+  return search.onBoard ? <BoardFilters /> : <ScopeOptions search={search} />;
 }
 
 /** The project scope list: all projects or one of them. */
@@ -349,8 +390,9 @@ export function SearchResults({ search }: { search: SearchState }) {
       };
   return (
     <>
+      {search.onBoard && <ActiveFilters state={search.onBoard} className="pb-4 empty:hidden" />}
       <AnimatePresence initial={false}>
-        {scope && (
+        {scope && !search.onBoard && (
           <motion.div
             key="scope"
             className="overflow-hidden"
@@ -559,8 +601,8 @@ export function PhoneSearchContent({
             exit={{ height: 0, opacity: 0 }}
             transition={reduced ? { duration: 0 } : springs.smooth}
           >
-            <div className="glass mx-3 mb-3 rounded-[var(--dock-radius)] p-3">
-              <ScopeOptions search={search} />
+            <div className="glass mx-3 mb-3 max-h-[min(28rem,55dvh)] overflow-y-auto overscroll-contain rounded-[var(--dock-radius)] p-3">
+              <FilterOptions search={search} />
             </div>
           </motion.div>
         )}
@@ -568,7 +610,7 @@ export function PhoneSearchContent({
       {/* Clear of the gesture bar with the keyboard down; just above the keyboard when up. */}
       <div className="flex shrink-0 items-end gap-3 px-3 pt-1 pb-[max(0.5rem,calc(var(--safe-bottom)+0.75rem-var(--keyboard)))]">
         <SearchField search={search} inputRef={inputRef} onClose={onClose} />
-        {!search.scoped && <FilterButton search={search} />}
+        {(!search.scoped || search.onBoard) && <FilterButton search={search} />}
       </div>
     </div>
   );

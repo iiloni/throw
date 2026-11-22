@@ -65,7 +65,16 @@ async function fixture(page: Page) {
 }
 const palette = (page: Page) => page.getByRole('dialog', { name: 'Search', exact: true });
 const capture = (page: Page) => page.getByRole('dialog', { name: 'New task', exact: true });
-const input = (page: Page) => page.getByRole('combobox', { name: /^Search tasks/ });
+// The palette's field, or on a desktop board the search bar's over the live board.
+const input = (page: Page) =>
+  page
+    .getByRole('combobox', { name: /^Search tasks/ })
+    .or(page.getByRole('searchbox', { name: 'Search tasks', exact: true }));
+/** A task search found: a result in the palette, or a card left on the desktop board. */
+const found = (page: Page, mobile: boolean, title: string) =>
+  mobile
+    ? palette(page).getByRole('option', { name: new RegExp(`^${title}`) })
+    : page.getByRole('article', { name: new RegExp(`${title}$`) });
 async function open(page: Page) {
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   // A phone's drawer opens search on its field, so the keyboard rises with it.
@@ -95,6 +104,7 @@ test('a project board searches titles, identifiers, descriptions, closed tasks a
   page,
   isMobile,
 }) => {
+  test.skip(!isMobile, 'A desktop board searches in place (board-filter.spec.ts)');
   const account = await fixture(page);
   await open(page);
   await expect(palette(page).getByRole('button', { name: 'Filter by project' })).toHaveCount(0);
@@ -145,7 +155,11 @@ test('a project board searches titles, identifiers, descriptions, closed tasks a
   );
 });
 
-test('search finds a task by its tag or the tag above it, and shows the tag', async ({ page }) => {
+test('search finds a task by its tag or the tag above it, and shows the tag', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'A desktop board searches in place (board-filter.spec.ts)');
   const account = await fixture(page);
   const home = await newTag(page.request, account, account.catchProject.id, { name: 'Home' });
   const garden = await newTag(page.request, account, account.catchProject.id, {
@@ -175,7 +189,9 @@ test('search finds a task by its tag or the tag above it, and shows the tag', as
 
 test('project jump on the workspace board, arrow selection, Escape and focus return', async ({
   page,
+  isMobile,
 }) => {
+  test.skip(!isMobile, 'A desktop board searches in place (board-filter.spec.ts)');
   const account = await fixture(page);
   await open(page);
   await page.keyboard.press('Escape');
@@ -229,12 +245,12 @@ test('quick capture lands in the board it was opened from', async ({ page, isMob
     await expect(title).toHaveValue('A newly captured task');
     await title.press('Enter');
   } else {
-    // Search creates in its board's backlog.
+    // The search bar captures into its board's backlog.
     await open(page);
     await input(page).fill('A newly captured task');
-    await expect(page.getByRole('option', { name: /^Create “/ })).toContainText(
-      `In Catch · ${ideas?.name}`,
-    );
+    await expect(
+      page.getByRole('button', { name: 'Create “A newly captured task”', exact: true }),
+    ).toBeVisible();
     await input(page).press('ControlOrMeta+Enter');
   }
   await expect(taskPane(page, isMobile).getByRole('textbox', { name: 'Task title' })).toHaveValue(
@@ -268,9 +284,7 @@ test('offline capture is immediate, searchable, persists and receives a number o
   await closeTask(page);
   await open(page);
   await input(page).fill('Captured with no connection');
-  await expect(
-    palette(page).getByRole('option', { name: /Captured with no connection Pending/ }),
-  ).toBeVisible();
+  await expect(found(page, isMobile, 'Captured with no connection')).toContainText('Pending');
   await closeSearch(page, isMobile);
   await expect(page.getByRole('status')).toContainText('unsaved', { timeout: 40_000 });
   await page.reload();
@@ -279,14 +293,12 @@ test('offline capture is immediate, searchable, persists and receives a number o
   });
   await open(page);
   await input(page).fill('Captured with no connection');
-  await expect(
-    palette(page).getByRole('option', { name: /Captured with no connection Pending/ }),
-  ).toBeVisible();
+  await expect(found(page, isMobile, 'Captured with no connection')).toContainText('Pending');
   // Reconnecting fetches the shapes again; the open search page stays through it.
   await page.unroute('**/api/**');
-  await expect(
-    palette(page).getByRole('option', { name: /Captured with no connection CAT-4/ }),
-  ).toBeVisible({ timeout: 60_000 });
+  await expect(found(page, isMobile, 'Captured with no connection')).toContainText('CAT-4', {
+    timeout: 60_000,
+  });
   const rows = await shapeRows(page.request, 'tasks', account.headers);
   expect(rows.filter((row) => row.title === 'Captured with no connection')).toHaveLength(1);
 });
@@ -364,11 +376,12 @@ test('workspace board asks for capture project; phone search and capture sit abo
     );
   }
   await openWorkspace(page, account.workspaceId);
-  await expect(palette(page).getByRole('button', { name: /^Remove .* filter$/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Remove .* filter$/ })).toHaveCount(0);
   await input(page).fill('Capture from workspace');
-  await expect(palette(page).getByRole('option', { name: /^Create “/ })).toContainText(
-    'Choose a project',
-  );
+  if (phone)
+    await expect(palette(page).getByRole('option', { name: /^Create “/ })).toContainText(
+      'Choose a project',
+    );
   // Search hands the title to the capture window, which opens on its project list.
   await input(page).press('ControlOrMeta+Enter');
   await capture(page).getByRole('option', { name: 'Catch', exact: true }).click();
@@ -462,8 +475,8 @@ test('palette remains usable with reduced motion in light and dark', async ({
   await fixture(page);
   await open(page);
   await input(page).fill('keyboard');
-  const result = palette(page).getByRole('option', { name: /Fix keyboard capture/ });
-  await expect(result).toBeVisible();
+  await expect(found(page, isMobile, 'Fix keyboard capture')).toBeVisible();
+  if (!isMobile) await expect(page.getByRole('article')).toHaveCount(1);
   for (const colorScheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme });
     const name = `palette-${isMobile ? 'phone' : 'desktop'}-${colorScheme}-reduced`;

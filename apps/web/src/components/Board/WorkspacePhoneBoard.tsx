@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronUp, Plus, Search, SlidersHorizontal } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { type ReactNode, useContext, useLayoutEffect, useRef, useState } from 'react';
+import { NarrowedBar } from '@/components/BoardSearch/BoardFilters';
 import { Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { boardDrawerPage } from '@/components/ManagementSurface/ManagementSurface';
@@ -11,7 +12,7 @@ import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { BoardSettingsContent } from './BoardSettingsPanel';
 import { drag, holding, makingWay, pageStride } from './drag';
-import { CATEGORIES, type Category, categoryTarget, groupByPriority, priorityName } from './model';
+import { CATEGORIES, type Category, categoryTarget, priorityName } from './model';
 import {
   DOCK_SPACE,
   DockFace,
@@ -24,6 +25,7 @@ import {
 import { CATEGORY_NAMES } from './StatusMenu';
 import { SwipeReveal } from './SwipeReveal';
 import {
+  bandsOf,
   board,
   countIn,
   current,
@@ -151,6 +153,7 @@ export function WorkspacePhoneBoard({
           <div className="px-5 text-muted-foreground empty:hidden">{syncIndicator}</div>
         )}
         <FlowTrack statuses={COLUMNS} page={page} onTurn={turnTo} />
+        <NarrowedBar />
       </header>
 
       <div className="relative flex min-h-0 flex-1" inert={covered}>
@@ -206,7 +209,7 @@ function CategoryPage({ category }: { category: Category }) {
   const [settings] = useBoardSettings();
   const target = categoryTarget(category);
   const name = CATEGORY_NAMES[category];
-  const bands = groupByPriority(listTasks(state, target)).filter((band) => band.tasks.length > 0);
+  const bands = bandsOf(state, listTasks(state, target));
   const over = makingWay(held) && held.target?.kind === 'status';
   const aimed = over && held.target?.kind === 'status' && held.target.statusId === target;
   const foldable = foldableCategory(category);
@@ -248,12 +251,20 @@ function CategoryPage({ category }: { category: Category }) {
             )}
             {!hidden &&
               bands.map((band) => (
-                <section key={band.priority} aria-label={priorityName(project, band.priority)}>
-                  <div className="zone-header" data-mode={settings.zoneLabels ? 'label' : 'hidden'}>
-                    <div className="zone-header-face">
-                      <span className="truncate">{priorityName(project, band.priority)}</span>
+                <section
+                  key={band.priority ?? 'size'}
+                  aria-label={band.priority ? priorityName(project, band.priority) : undefined}
+                >
+                  {band.priority !== null && (
+                    <div
+                      className="zone-header"
+                      data-mode={settings.zoneLabels ? 'label' : 'hidden'}
+                    >
+                      <div className="zone-header-face">
+                        <span className="truncate">{priorityName(project, band.priority)}</span>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   {band.tasks.map((task) => (
                     <div key={task.id} data-slot={task.id} className="relative pb-3">
                       {open && <SwipeReveal taskId={task.id} />}
