@@ -312,6 +312,10 @@ test('board settings opens in the drawer on a phone and in a panel held to the w
     // The drawer takes its new height on Motion's next frame, before it paints; a read straight
     // after focus moves can come first, so wait for it to come to rest at full height.
     await expect.poll(async () => (await settings.boundingBox())?.y ?? Infinity).toBeLessThan(24);
+  } else {
+    // Radix mounts the popover above the window (`translate(0, -200%)`) until Floating UI has
+    // measured it; it is visible to the test before it is placed, so wait for the placement.
+    await expect(settings).toBeInViewport({ ratio: 1 });
   }
   const bounds = await settings.boundingBox();
   if (!bounds) throw new Error('Board settings has no bounds');
@@ -718,13 +722,15 @@ test('drawer pulls require the scroll boundary at gesture start, including after
   // The list scrolls in its scroll area's viewport, as the backlog does.
   const history = closed.locator('[data-slot="scroll-area-viewport"]');
   await expect(history.getByRole('region', { name: 'Closed tasks', exact: true })).toBeVisible();
-  await history.evaluate((element) => element.scrollTo(0, 240));
+  await scrollListTo(history, { top: 240 });
   await pullFrom(page, isMobile, history, 100);
   await expect(closed).toBeVisible();
   await expect.poll(async () => (await closed.boundingBox())!.y).toBeLessThan(10);
   if (isMobile)
     await expect.poll(() => history.evaluate((element) => element.scrollTop)).toBeLessThan(240);
-  await history.evaluate((element) => element.scrollTo(0, 30));
+  // The pull above flings the list toward the top; a fling left running would reach it
+  // before the next gesture starts, which may then close the page.
+  await scrollListTo(history, { top: 30 });
   await pullFrom(
     page,
     isMobile,
