@@ -34,7 +34,7 @@ test.describe('desktop', () => {
     expect(await titles(page, 'Done')).toEqual(['Pick apples', 'Wash up']);
     // Cancelled starts folded, and opening it is remembered.
     await expect(column(page, 'Cancelled').getByRole('article')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Show cancelled, 1' }).click();
+    await page.getByRole('button', { name: 'Expand Cancelled column' }).click();
     await expect(card(page, 'Flambé')).toBeVisible();
     await page.reload();
     await expect(card(page, 'Flambé')).toBeVisible({ timeout: 30_000 });

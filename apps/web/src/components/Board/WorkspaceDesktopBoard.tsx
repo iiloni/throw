@@ -1,11 +1,7 @@
-import { ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { z } from 'zod';
-import { IconButton } from '@/components/IconButton/IconButton';
 import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
-import { usePersistentState } from '@/lib/storage';
-import { cn } from '@/lib/utils';
+import { BoardColumn, CollapseColumnButton } from './BoardColumn';
 import { OpenTaskPane, SelectionBar, useWidth } from './DesktopBoard';
 import { drag, makingWay } from './drag';
 import { PriorityIcon, StatusGlyph } from './glyphs';
@@ -30,22 +26,13 @@ import {
   sendTasks,
   update,
   useBoardSettings,
+  useCollapsedColumns,
 } from './state';
 import { TaskCard } from './TaskCard';
 
-const foldedSchema = z.object({
-  done: z.boolean().default(false),
-  cancelled: z.boolean().default(true),
-});
-
-/** The categories a column folds away: closed work. */
+/** The categories a phone folds away: closed work. Desktop folds any column. */
 export function foldableCategory(category: string): 'done' | 'cancelled' | null {
   return category === 'done' || category === 'cancelled' ? category : null;
-}
-
-/** Done starts open and Cancelled folded; a choice to fold or open either stays on the device. */
-export function useFoldedColumns() {
-  return usePersistentState('throw-workspace-board-folded', foldedSchema, foldedSchema.parse({}));
 }
 
 /**
@@ -56,7 +43,7 @@ export function WorkspaceDesktopBoard() {
   const state = board.use();
   const { project, tasks } = current(state);
   const [frame, frameWidth] = useWidth();
-  const [folded, setFolded] = useFoldedColumns();
+  const { isCollapsed, setCollapsed } = useCollapsedColumns(project);
   const selected = tasks.filter((task) => state.selection.includes(task.id));
   return (
     <div className="flex h-full overflow-hidden">
@@ -66,17 +53,27 @@ export function WorkspaceDesktopBoard() {
             data-autoscroll-x=""
             className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3 [&>div]:px-6"
           >
-            {CATEGORIES.map((category) => {
-              const foldable = foldableCategory(category);
+            {CATEGORIES.map((category, index) => {
+              const target = categoryTarget(category);
               return (
-                <CategoryColumn
+                <BoardColumn
                   key={category}
+                  columnId={target}
+                  name={CATEGORY_NAMES[category]}
                   category={category}
-                  folded={foldable ? folded[foldable] : false}
-                  onFold={
-                    foldable ? (next) => setFolded({ ...folded, [foldable]: next }) : undefined
-                  }
-                />
+                  count={countIn(state, target)}
+                  collapsed={isCollapsed(target)}
+                  onToggle={(value) => setCollapsed(target, value)}
+                  index={index}
+                  className="min-w-[18rem] max-w-[200rem] grow basis-[18rem]"
+                >
+                  {() => (
+                    <CategoryColumn
+                      category={category}
+                      onCollapse={() => setCollapsed(target, true)}
+                    />
+                  )}
+                </BoardColumn>
               );
             })}
           </ScrollAreaViewport>
@@ -108,17 +105,9 @@ export function WorkspaceDesktopBoard() {
 /**
  * One category across every project. Under a single held card it turns, in place, into that
  * card's own project's statuses for the category; under several, the column takes them all,
- * each to its project's default status there.
+ * each to its project's default status there. Folded, its strip takes either at the default.
  */
-function CategoryColumn({
-  category,
-  folded,
-  onFold,
-}: {
-  category: Category;
-  folded: boolean;
-  onFold?: (folded: boolean) => void;
-}) {
+function CategoryColumn({ category, onCollapse }: { category: Category; onCollapse: () => void }) {
   const state = board.use();
   const [settings] = useBoardSettings();
   const held = drag.use();
@@ -137,8 +126,6 @@ function CategoryColumn({
     : [];
   const count = countIn(state, target);
   const name = CATEGORY_NAMES[category];
-  // A folded column opens under a held card for as long as it is over it.
-  const strip = folded && !over;
   const bands = groupByPriority(listTasks(state, listId)).filter((band) => band.tasks.length > 0);
 
   return (
@@ -147,82 +134,47 @@ function CategoryColumn({
       data-drop-status={target}
       data-status-home={target}
       data-over={over ? '' : undefined}
-      data-surface={settings.surfaces ? '' : undefined}
-      className={cn(
-        'board-column relative mt-[calc(var(--safe-top)+1.25rem)] mb-6 flex min-h-0 shrink-0 flex-col overflow-hidden rounded-3xl',
-        strip ? 'w-16' : 'min-w-[18rem] flex-1',
-      )}
+      className="board-column relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl"
     >
-      {strip ? (
-        <button
-          type="button"
-          aria-label={`Show ${name.toLowerCase()}, ${count}`}
-          aria-expanded={false}
-          onClick={() => onFold?.(false)}
-          className="flex h-full w-16 flex-col items-center gap-3 pt-4 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60"
-        >
-          <ChevronsLeft aria-hidden className="size-4" />
-          <span className="font-display font-semibold text-base tracking-[-0.01em] [writing-mode:vertical-rl]">
-            {name}
-          </span>
-          <span className="text-xs tabular-nums">{count}</span>
-        </button>
-      ) : (
-        <>
-          <div className="flex h-14 shrink-0 items-center gap-2.5 pr-2 pl-5">
-            <StatusGlyph category={category} className="size-4 text-muted-foreground" />
-            <h2 className="truncate font-display font-semibold text-lg tracking-[-0.01em]">
-              {name}
-            </h2>
-            <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-muted-foreground text-xs tabular-nums">
-              {count}
-            </span>
-            <span className="flex-1" />
-            {onFold && !dragging && (
-              <IconButton
-                label={`Fold ${name.toLowerCase()}`}
-                className="size-9"
-                onClick={() => onFold(true)}
-              >
-                <ChevronsRight />
-              </IconButton>
+      <div className="flex h-14 shrink-0 items-center gap-2.5 pr-2.5 pl-5">
+        <StatusGlyph category={category} className="size-4 text-muted-foreground" />
+        <h2 className="truncate font-display font-semibold text-lg tracking-[-0.01em]">{name}</h2>
+        <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-muted-foreground text-xs tabular-nums">
+          {count}
+        </span>
+        <span className="flex-1" />
+        <CollapseColumnButton name={name} onCollapse={onCollapse} />
+      </div>
+      <ScrollArea edges className="card-scroller min-h-0 flex-1 [--scrollbar-inset:0.5rem]">
+        <ScrollAreaViewport data-autoscroll="">
+          <div className="flex flex-col px-3.5 pt-1 pb-3">
+            {bands.map((band) => (
+              <section key={band.priority} aria-label={priorityName(project, band.priority)}>
+                <div className="zone-header" data-mode={settings.zoneLabels ? 'label' : 'hidden'}>
+                  <div className="zone-header-face">
+                    <span className="truncate">{priorityName(project, band.priority)}</span>
+                    <PriorityIcon priority={band.priority} className="zone-chevron" />
+                  </div>
+                </div>
+                {/* Masonry once the column is wide enough for two cards abreast. */}
+                <div className="gap-3 [column-width:16rem]">
+                  {band.tasks.map((task) => (
+                    <div key={task.id} data-slot={task.id} className="break-inside-avoid pb-3">
+                      <TaskCard task={task} showStatus />
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+            {bands.length === 0 && (
+              <p className="px-1 py-10 text-center text-muted-foreground text-sm">
+                {state.awaitingTasks ? 'Loading tasks…' : 'Nothing here.'}
+              </p>
             )}
           </div>
-          <ScrollArea edges className="card-scroller min-h-0 flex-1 [--scrollbar-inset:0.5rem]">
-            <ScrollAreaViewport data-autoscroll="">
-              <div className="flex flex-col px-3.5 pt-1 pb-3">
-                {bands.map((band) => (
-                  <section key={band.priority} aria-label={priorityName(project, band.priority)}>
-                    <div
-                      className="zone-header"
-                      data-mode={settings.zoneLabels ? 'label' : 'hidden'}
-                    >
-                      <div className="zone-header-face">
-                        <span className="truncate">{priorityName(project, band.priority)}</span>
-                        <PriorityIcon priority={band.priority} className="zone-chevron" />
-                      </div>
-                    </div>
-                    {/* Masonry once the column is wide enough for two cards abreast. */}
-                    <div className="gap-3 [column-width:16rem]">
-                      {band.tasks.map((task) => (
-                        <div key={task.id} data-slot={task.id} className="break-inside-avoid pb-3">
-                          <TaskCard task={task} showStatus />
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                ))}
-                {bands.length === 0 && (
-                  <p className="px-1 py-10 text-center text-muted-foreground text-sm">
-                    {state.awaitingTasks ? 'Loading tasks…' : 'Nothing here.'}
-                  </p>
-                )}
-              </div>
-            </ScrollAreaViewport>
-            <ScrollBar />
-          </ScrollArea>
-        </>
-      )}
+        </ScrollAreaViewport>
+        <ScrollBar />
+      </ScrollArea>
       <AnimatePresence>
         {over && (
           <motion.div
