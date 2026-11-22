@@ -3,6 +3,7 @@ import {
   positionBetween,
   STARTER_STATUSES,
   type StatusCategory,
+  taskIdentifier,
 } from '@throw/shared';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
@@ -16,19 +17,23 @@ import {
   statuses,
   tags,
   taskActivity,
+  taskRelations,
   tasks,
   taskTags,
   user,
 } from './schema';
 import {
   buildProjectFixtures,
+  buildRelationFixtures,
   buildTags,
   type CommentSpec,
   DEMO_PROJECTS,
+  DEMO_RELATIONS,
   HOUSE_COMMENTS,
   HOUSE_CREATED_DAYS_AGO,
   HOUSE_TAGS,
   HOUSE_TASKS,
+  type SeededTask,
   type StatusRow,
   type TagSpec,
   type TaskSpec,
@@ -42,8 +47,9 @@ import {
 /**
  * Idempotent development fixtures. `basic` creates the admin account; `demo`
  * adds a regular user and two sample projects with tags, sizes, descriptions, comments,
- * history and trash (`seedFixtures.ts`). A project is filled only while it has never had a
- * task, so a rerun never duplicates rows or overwrites edits.
+ * history, trash and relations between them (`seedFixtures.ts`). A project is filled only
+ * while it has never had a task, and relations only in the run that filled both, so a rerun
+ * never duplicates rows or overwrites edits.
  */
 const profile = process.env.THROW_SEED_PROFILE ?? 'none';
 
@@ -94,15 +100,23 @@ async function ensureDemoProjects(userId: string) {
   console.log(`Seeded ${DEMO_PROJECTS.length} demo projects`);
 }
 
-/** Lock a seeded project and fill it once: only while it has never had a task. */
+type SeededProject = { workspaceId: string; tasks: Map<string, SeededTask> };
+
+/**
+ * Lock a seeded project and fill it once: only while it has never had a task. Answers the
+ * tasks it made by ref, or null when the project was already filled.
+ */
 async function ensureDemoContent(
   userId: string,
   name: string,
-  fill: (tx: Transaction, project: typeof projects.$inferSelect) => Promise<number>,
-) {
+  fill: (
+    tx: Transaction,
+    project: typeof projects.$inferSelect,
+  ) => Promise<{ count: number; tasks: SeededProject['tasks'] }>,
+): Promise<SeededProject | null> {
   const memberships = await memberWorkspaces(db, userId);
   const workspaceIds = memberships.map((workspace) => workspace.id);
-  if (workspaceIds.length === 0) return;
+  if (workspaceIds.length === 0) return null;
   const [project] = await db
     .select()
     .from(projects)
@@ -114,26 +128,27 @@ async function ensureDemoContent(
       ),
     )
     .limit(1);
-  if (!project) return;
-  await db.transaction(async (tx) => {
+  if (!project) return null;
+  return db.transaction(async (tx) => {
     const [locked] = await tx
       .select()
       .from(projects)
       .where(eq(projects.id, project.id))
       .for('update');
-    if (!locked || locked.taskCounter > 0) return;
+    if (!locked || locked.taskCounter > 0) return null;
     const [existing] = await tx
       .select({ id: tasks.id })
       .from(tasks)
       .where(eq(tasks.projectId, project.id))
       .limit(1);
-    if (existing) return;
-    const count = await fill(tx, locked);
+    if (existing) return null;
+    const { count, tasks: seeded } = await fill(tx, locked);
     await tx
       .update(projects)
       .set({ taskCounter: count })
       .where(and(eq(projects.id, project.id), eq(projects.workspaceId, project.workspaceId)));
     console.log(`Seeded ${count} tasks in ${name}`);
+    return { workspaceId: locked.workspaceId, tasks: seeded };
   });
 }
 
@@ -213,7 +228,39 @@ async function fillProject(
     await tx.insert(comments).values(fixtures.comments);
     await tx.insert(commentActivity).values(fixtures.commentActivity);
   }
-  return fixtures.tasks.length;
+  const byId = new Map(fixtures.tasks.map((task) => [task.id, task]));
+  const seeded = new Map<string, SeededTask>();
+  for (const [ref, id] of fixtures.refs) {
+    const task = byId.get(id)!;
+    seeded.set(ref, {
+      id,
+      projectId: project.id,
+      identifier: taskIdentifier(project, task)!,
+      createdAt: task.createdAt!,
+    });
+  }
+  return { count: fixtures.tasks.length, tasks: seeded };
+}
+
+/** Links the demo projects' tasks, once both were filled in this run. */
+async function seedDemoRelations(userId: string, seeded: Record<string, SeededProject>) {
+  const workspaceId = Object.values(seeded)[0]!.workspaceId;
+  const fixtures = buildRelationFixtures({
+    workspaceId,
+    userId,
+    now: new Date(),
+    task: ({ project, ref }) => {
+      const task = seeded[project]?.tasks.get(ref);
+      if (!task) throw new Error(`Unknown task "${ref}" in ${project}`);
+      return task;
+    },
+    relations: DEMO_RELATIONS,
+  });
+  await db.transaction(async (tx) => {
+    await tx.insert(taskRelations).values(fixtures.relations);
+    await tx.insert(taskActivity).values(fixtures.activity);
+  });
+  console.log(`Seeded ${fixtures.relations.length} task relations`);
 }
 
 if (profile === 'basic' || profile === 'demo') {
@@ -221,7 +268,7 @@ if (profile === 'basic' || profile === 'demo') {
   if (profile === 'demo') {
     await ensureAccount(ACCOUNTS.user);
     await ensureDemoProjects(adminId);
-    await ensureDemoContent(adminId, 'Throw', (tx, project) =>
+    const throwProject = await ensureDemoContent(adminId, 'Throw', (tx, project) =>
       fillProject(tx, project, adminId, {
         statuses: THROW_EXTRA_STATUSES,
         tags: THROW_TAGS,
@@ -230,7 +277,7 @@ if (profile === 'basic' || profile === 'demo') {
         createdDaysAgo: THROW_CREATED_DAYS_AGO,
       }),
     );
-    await ensureDemoContent(adminId, 'House move', (tx, project) =>
+    const houseProject = await ensureDemoContent(adminId, 'House move', (tx, project) =>
       fillProject(tx, project, adminId, {
         statuses: [],
         tags: HOUSE_TAGS,
@@ -239,6 +286,8 @@ if (profile === 'basic' || profile === 'demo') {
         createdDaysAgo: HOUSE_CREATED_DAYS_AGO,
       }),
     );
+    if (throwProject && houseProject)
+      await seedDemoRelations(adminId, { Throw: throwProject, 'House move': houseProject });
   }
 } else if (profile !== 'none') {
   throw new Error(`Unknown THROW_SEED_PROFILE "${profile}". Use none, basic or demo.`);
