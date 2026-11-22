@@ -4,6 +4,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { db, type Transaction } from '../db/client';
 import { commentActivity, comments, tasks } from '../db/schema';
+import { enqueueWebhooks } from '../webhooks/enqueue';
 import { currentTxid } from './txid';
 import { memberWorkspaces } from './workspaces';
 import type { WriteActor } from './writeActor';
@@ -13,7 +14,7 @@ export function createComment(actor: WriteActor, body: CreateComment) {
   return db.transaction(async (tx) => {
     // A purge cannot remove the task between this read and the insert.
     const [task] = await tx
-      .select({ workspaceId: tasks.workspaceId, projectId: tasks.projectId })
+      .select({ workspaceId: tasks.workspaceId, projectId: tasks.projectId, number: tasks.number })
       .from(tasks)
       .where(
         and(
@@ -23,13 +24,14 @@ export function createComment(actor: WriteActor, body: CreateComment) {
       )
       .for('key share', { of: tasks });
     if (!task) return 'not-found';
+    const { number, ...scope } = task;
     // Concurrent retries can both hold key-share on the task. The comment's id
     // arbitrates the insert, and a replay never changes its timestamp or author.
     const [inserted] = await tx
       .insert(comments)
       .values({
         ...body,
-        ...task,
+        ...scope,
         userId,
         viaTokenName,
         viaTokenId: tokenId,
@@ -52,6 +54,7 @@ export function createComment(actor: WriteActor, body: CreateComment) {
         txid: inserted.txid,
         createdAt: inserted.createdAt,
       });
+      await announceComment(tx, actor, 'created', { ...inserted, number });
       return currentTxid(tx);
     }
     const [existing] = await tx
@@ -68,13 +71,30 @@ export function createComment(actor: WriteActor, body: CreateComment) {
  */
 const appliedAt = sql`clock_timestamp()`;
 
+function announceComment(
+  tx: Transaction,
+  actor: WriteActor,
+  kind: 'created' | 'updated' | 'deleted',
+  comment: { workspaceId: string; projectId: string; taskId: string; number: number },
+) {
+  return enqueueWebhooks(tx, actor, {
+    event: `comment.${kind}`,
+    workspaceId: comment.workspaceId,
+    projectId: comment.projectId,
+    entityType: 'comment',
+    kind,
+    taskId: comment.taskId,
+    taskNumber: comment.number,
+  });
+}
+
 /** The comment, locked, if the user can reach it. */
 async function lockComment(tx: Transaction, actor: WriteActor, id: string) {
   const workspace = memberWorkspaces(tx, actor.userId, actor.workspaceId);
   // A purge locks the task and cascades to comments. Take the same order before inserting
   // history, whose task foreign key also needs a lock on the task.
   const [task] = await tx
-    .select({ id: tasks.id })
+    .select({ id: tasks.id, number: tasks.number })
     .from(comments)
     .innerJoin(
       tasks,
@@ -95,15 +115,16 @@ async function lockComment(tx: Transaction, actor: WriteActor, id: string) {
       ),
     )
     .for('update', { of: comments });
-  return comment;
+  return comment && { ...comment, number: task.number };
 }
 
-function recordCommentEdit(
+async function recordCommentEdit(
   tx: Transaction,
   actor: WriteActor,
-  comment: typeof comments.$inferSelect,
+  comment: typeof comments.$inferSelect & { number: number },
   body: CommentBody | null,
 ) {
+  await announceComment(tx, actor, body === null ? 'deleted' : 'updated', comment);
   return tx.insert(commentActivity).values({
     id: uuidv7(),
     workspaceId: comment.workspaceId,

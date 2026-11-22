@@ -14,4 +14,5 @@ export * from './statuses';
 export * from './sync';
 export * from './tags';
 export * from './tasks';
+export * from './webhooks';
 export * from './workspaces';

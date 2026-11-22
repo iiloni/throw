@@ -12,6 +12,7 @@ import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import type { z } from 'zod';
 import { db, type Transaction } from '../db/client';
 import { projects, statuses, taskActivity, tasks, taskTags } from '../db/schema';
+import { enqueueWebhooks } from '../webhooks/enqueue';
 import { planSecondaryTags } from './secondaryTags';
 import { lockTagTree, projectTags } from './tagTree';
 import { positionInLane, type RelativePlacement } from './taskPlacement';
@@ -48,6 +49,11 @@ function refusedIn(changes: ActivityChange[]): RefusedField[] {
     const refused = refusedFieldSchema.safeParse(change);
     return !change.applied && refused.success ? [refused.data] : [];
   });
+}
+
+/** The fields a write changed, once each, for a webhook's summary. */
+function changedFields(changes: ActivityChange[]) {
+  return [...new Set(changes.filter((change) => change.applied).map((change) => change.field))];
 }
 
 /** Creates a task and assigns its number in the same transaction. */
@@ -201,6 +207,17 @@ export function createTask(actor: WriteActor, input: z.output<typeof createTaskS
       kind: 'created',
       changes,
       createdAt: appliedAt,
+    });
+    await enqueueWebhooks(tx, actor, {
+      event: 'task.created',
+      workspaceId: project.workspaceId,
+      projectId: project.id,
+      entityType: 'task',
+      kind: 'created',
+      taskId: body.id,
+      taskNumber: counter!.number,
+      changedFields: changedFields(changes),
+      statusTo: { id: status.id, name: status.name, category: status.category },
     });
     const txid = await currentTxid(tx);
     return { txid, changes, ...(validSecondary.length ? { secondaryTagsTxid: txid } : {}) };
@@ -407,6 +424,35 @@ export function updateTask(actor: WriteActor, id: string, input: UpdateTask, mov
       changes: plan.items,
       createdAt: appliedAt,
     });
+    // Announce what changed. Device-only reorders and writes that changed nothing do not.
+    const fields = [
+      ...Object.keys(plan.set).map((field) =>
+        field === 'descriptionVersion' ? 'description' : field,
+      ),
+      ...(plan.trashed === undefined ? [] : ['trashed']),
+      ...(secondary.operations.length ? ['secondaryTags'] : []),
+    ].filter((field, index, all) => all.indexOf(field) === index);
+    if (kind !== 'reordered' && fields.length) {
+      const nextStatus = plan.set.statusId ? statusById.get(plan.set.statusId) : undefined;
+      await enqueueWebhooks(tx, actor, {
+        event: 'task.updated',
+        workspaceId: task.workspaceId,
+        projectId: task.projectId,
+        entityType: 'task',
+        kind:
+          plan.trashed !== undefined
+            ? plan.trashed
+              ? 'trashed'
+              : 'restored'
+            : fields.length === 1 && fields[0] === 'position'
+              ? 'reordered'
+              : 'updated',
+        taskId: id,
+        taskNumber: task.number,
+        changedFields: fields,
+        ...(nextStatus ? { statusTo: nextStatus } : {}),
+      });
+    }
     return {
       txid,
       refused: plan.refused,

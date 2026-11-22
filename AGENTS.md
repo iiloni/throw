@@ -32,6 +32,9 @@ On a phone the same boundary hands the board's drawer the open task's dock and p
 Catch's split view does (`TaskDrawer`). A desktop pane at least 620 px wide moves the task's
 tags and subtasks to a side column beside the card while it has any (ADR 0012,
 `TaskDetails/TaskColumn.tsx`); later extras such as link previews join it there.
+Outbound webhooks (ADR 0015) are server-only: `apps/server/src/webhooks` queues deliveries
+in the write's transaction, checks receivers against its SSRF policy and sends them from a
+worker; Settings manages them at `/settings/webhooks`.
 The activity log syncs to devices and comments are built (`lib/comments.ts`), with a
 timeline query in `collections.ts` and a task history view in `TaskDetails/TaskTimeline.tsx`.
 Tags have their data layer and reusable controls in `components/Tag*`, with a real-data `/prototype/tags` workshop in

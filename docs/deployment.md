@@ -82,6 +82,40 @@ configured trusted proxies. To disable access from outside the server for every 
 block `/api/mcp` at the proxy. To disable one credential, revoke it in Settings. After a
 server restore, create fresh tokens for the clients you want to reconnect.
 
+## Webhooks
+
+[Webhooks](decisions/0015-webhooks.md) wake an external agent when a workspace changes.
+Create one in **Settings → Webhooks** with a name, the receiver's URL, the workspace and
+optionally one project. Copy the signing secret when it is shown. Each delivery is a small
+signed JSON notice. The receiver checks `X-Throw-Signature` (`sha256=` and the hex
+HMAC-SHA256 of the raw body, keyed with the secret), ignores repeated `X-Throw-Delivery`
+IDs, then calls MCP `list_changes` with its saved cursor to read what changed. Deliveries
+are retried for a few minutes and then dropped; `list_changes` still has the change.
+
+By default Throw delivers only to `https://` URLs whose names resolve to public addresses.
+It checks every address a name resolves to before each delivery, connects only to a
+checked address and does not follow redirects. Loopback, link-local and cloud metadata
+addresses are always refused. To reach a receiver on a private network, such as a tailnet,
+trust it explicitly:
+
+- `WEBHOOK_ALLOWED_HOSTS`: comma-separated host names or `*.` suffixes. A trusted name may
+  resolve to private, CGNAT or ULA addresses, but never to loopback or link-local ones.
+  For Tailscale HTTPS, use your tailnet's MagicDNS suffix, such as
+  `*.example-tailnet.ts.net`.
+- `WEBHOOK_ALLOWED_CIDRS`: comma-separated address ranges that are always allowed, such
+  as Tailscale's `100.64.0.0/10,fd7a:115c:a1e0::/48`. Keep ranges as narrow as you can:
+  an allowed range is reachable from any webhook on the server.
+
+In the combined example, set `THROW_WEBHOOK_ALLOWED_HOSTS` and
+`THROW_WEBHOOK_ALLOWED_CIDRS`. The Throw container must be able to reach the receiver,
+for example by running Tailscale on the host. Receivers still need a valid certificate;
+Tailscale HTTPS certificates work. `WEBHOOK_ALLOW_LOOPBACK_HTTP` exists for automated
+tests and is refused in production.
+
+The signing secret is encrypted with a key derived from `BETTER_AUTH_SECRET`. Changing
+that secret leaves existing webhooks unable to sign: make a new secret for each in
+Settings. A restore removes webhooks, as it removes MCP tokens.
+
 ## Catch and Throw together
 
 Copy the contents (including `.env.example`) of [deploy/combined](../deploy/combined) to

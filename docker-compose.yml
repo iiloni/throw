@@ -23,6 +23,8 @@ services:
       UPDATE_BACKUPS: ${UPDATE_BACKUPS:-true}
       UPDATE_BACKUPS_KEPT: ${UPDATE_BACKUPS_KEPT:-10}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      WEBHOOK_ALLOWED_HOSTS: ${WEBHOOK_ALLOWED_HOSTS:-}
+      WEBHOOK_ALLOWED_CIDRS: ${WEBHOOK_ALLOWED_CIDRS:-}
     volumes:
       - ${THROW_BACKUPS_MOUNT:-backup_data}:/data/backups
     healthcheck:
