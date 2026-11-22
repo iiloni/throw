@@ -63,6 +63,32 @@ async function pullFrom(
   }
 }
 
+/**
+ * Scrolls a list once an earlier swipe's fling has stopped. A programmatic scroll does not
+ * end a fling, which would otherwise carry the list on to an edge before the next gesture.
+ */
+async function scrollListTo(scroller: Locator, position: { top: number } | { fromBottom: number }) {
+  await expect
+    .poll(() =>
+      scroller.evaluate(
+        (element) =>
+          new Promise<boolean>((resolve) => {
+            const top = element.scrollTop;
+            setTimeout(() => resolve(element.scrollTop === top), 100);
+          }),
+      ),
+    )
+    .toBe(true);
+  await scroller.evaluate(
+    (element, at) =>
+      element.scrollTo(
+        0,
+        'top' in at ? at.top : element.scrollHeight - element.clientHeight - at.fromBottom,
+      ),
+    position,
+  );
+}
+
 async function atDetent(drawer: Locator, detent: 'full' | 'half' | 'closed') {
   await expect(drawer).toHaveAttribute('data-detent', detent);
   await expect
@@ -637,9 +663,7 @@ test('drawer pulls require the scroll boundary at gesture start, including after
   await atDetent(backlog, 'half');
   if (isMobile)
     await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-  await scroller.evaluate((element) =>
-    element.scrollTo(0, element.scrollHeight - element.clientHeight - 30),
-  );
+  await scrollListTo(scroller, { fromBottom: 30 });
   // Firefox has no native touch scrolling; advance it after pointerdown to check
   // the same boundary change. Android reaches the edge through the touch itself.
   await pullFrom(
@@ -665,12 +689,12 @@ test('drawer pulls require the scroll boundary at gesture start, including after
   await pullFrom(page, isMobile, scroller, -330);
   await atDetent(backlog, 'full');
   // There is content above: pulling down scrolls instead of collapsing the drawer.
-  await scroller.evaluate((element) => element.scrollTo(0, 240));
+  await scrollListTo(scroller, { top: 240 });
   await pullFrom(page, isMobile, scroller, 100);
   await atDetent(backlog, 'full');
   if (isMobile)
     await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeLessThan(240);
-  await scroller.evaluate((element) => element.scrollTo(0, 30));
+  await scrollListTo(scroller, { top: 30 });
   await pullFrom(
     page,
     isMobile,
