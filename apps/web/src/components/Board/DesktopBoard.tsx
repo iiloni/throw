@@ -8,7 +8,7 @@ import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scrol
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
-import { BoardColumn, CollapseColumnButton } from './BoardColumn';
+import { BoardColumn, ColumnHeader } from './BoardColumn';
 import { BoardSettingsPanel } from './BoardSettingsPanel';
 import { CardList } from './CardList';
 import { drag, makingWay } from './drag';
@@ -328,19 +328,11 @@ function StatusColumn({ status, index }: { status: Status; index: number }) {
           revealed={revealed}
           className="flex-1 pb-2"
           header={
-            <div className="flex h-14 shrink-0 items-center gap-2.5 pr-2.5 pl-5">
-              <h2 className="truncate font-display font-semibold text-lg tracking-[-0.01em]">
-                {status.name}
-              </h2>
-              <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-muted-foreground text-xs tabular-nums">
-                {count}
-              </span>
-              <span className="flex-1" />
-              <CollapseColumnButton
-                name={status.name}
-                onCollapse={() => setCollapsed(status.id, true)}
-              />
-            </div>
+            <ColumnHeader
+              name={status.name}
+              count={count}
+              onCollapse={() => setCollapsed(status.id, true)}
+            />
           }
         />
       )}

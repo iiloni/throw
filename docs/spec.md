@@ -268,8 +268,8 @@ motion.
   sent to a backlog status through its filters, never placed in the mixed gallery.
 - On a desktop, an active column folds to a narrow strip and opens again, as a column of
   Catch's deck does: the strip shows the status's name turned on its side, its glyph and its
-  count, and the whole strip opens it. An open column folds from a control in its header,
-  shown on hover or focus with a mouse and always on a touch screen. The width springs between
+  count, and the whole strip opens it. An open column folds from its header, which is the
+  control, as on Catch's deck. The width springs between
   the two, and the column's content fades in once it has mostly resized. Folded columns are
   remembered per project on the device. A card dropped on a strip is sent to its status
   without the column opening ([ADR 0008](decisions/0008-board-drag-model.md)); carrying a card

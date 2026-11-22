@@ -1,7 +1,7 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
-import { BoardColumn, CollapseColumnButton } from './BoardColumn';
+import { BoardColumn, ColumnHeader } from './BoardColumn';
 import { OpenTaskPane, SelectionBar, useWidth } from './DesktopBoard';
 import { drag, makingWay } from './drag';
 import { PriorityIcon, StatusGlyph } from './glyphs';
@@ -136,15 +136,7 @@ function CategoryColumn({ category, onCollapse }: { category: Category; onCollap
       data-over={over ? '' : undefined}
       className="board-column relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl"
     >
-      <div className="flex h-14 shrink-0 items-center gap-2.5 pr-2.5 pl-5">
-        <StatusGlyph category={category} className="size-4 text-muted-foreground" />
-        <h2 className="truncate font-display font-semibold text-lg tracking-[-0.01em]">{name}</h2>
-        <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-muted-foreground text-xs tabular-nums">
-          {count}
-        </span>
-        <span className="flex-1" />
-        <CollapseColumnButton name={name} onCollapse={onCollapse} />
-      </div>
+      <ColumnHeader name={name} count={count} category={category} onCollapse={onCollapse} />
       <ScrollArea edges className="card-scroller min-h-0 flex-1 [--scrollbar-inset:0.5rem]">
         <ScrollAreaViewport data-autoscroll="">
           <div className="flex flex-col px-3.5 pt-1 pb-3">

@@ -173,27 +173,59 @@ function ColumnStrip({
 }
 
 /**
- * The open column's control to fold it. A mouse finds it on hover or focus; a touch screen
- * has no hover, so there it always shows. It steps aside while a card is held.
+ * The open column's header, which folds it, as Catch's deck does: the whole header is the
+ * control, so it needs no hover to find on a mouse and is a large target on a touch screen.
+ * While a card is held it is only a header.
  */
-export function CollapseColumnButton({
+export function ColumnHeader({
   name,
+  count,
+  category,
   onCollapse,
 }: {
   name: string;
+  count: number;
+  /** Shown beside the name where the columns are categories rather than statuses. */
+  category?: Category;
   onCollapse: () => void;
 }) {
   const held = drag.use();
-  if (makingWay(held)) return null;
+  const holding = makingWay(held);
   return (
-    <IconButton
-      label={`Collapse ${name} column`}
-      aria-expanded
-      data-column-toggle=""
-      className="size-9 opacity-0 transition-opacity focus-visible:opacity-100 group-hover/column:opacity-100 any-pointer-coarse:opacity-100"
-      onClick={onCollapse}
-    >
-      <ChevronsRightLeft />
-    </IconButton>
+    <div className="flex h-14 shrink-0 items-center px-2.5">
+      <h2 className="min-w-0 flex-1">
+        <Hint label={`Collapse ${name} column`} side="bottom" disabled={holding}>
+          <button
+            type="button"
+            aria-label={`Collapse ${name} column`}
+            aria-expanded
+            data-column-toggle=""
+            onClick={onCollapse}
+            className={cn(
+              'group/header flex h-11 w-full items-center gap-2.5 rounded-2xl pr-2 pl-2.5 text-left outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/60',
+              !holding && 'hover:bg-foreground/[0.04]',
+            )}
+          >
+            {category && (
+              <StatusGlyph category={category} className="size-4 text-muted-foreground" />
+            )}
+            <span className="truncate font-display font-semibold text-lg tracking-[-0.01em]">
+              {name}
+            </span>
+            <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-muted-foreground text-xs tabular-nums">
+              {count}
+            </span>
+            <span className="flex-1" />
+            <ChevronsRightLeft
+              aria-hidden
+              className={cn(
+                'size-4 shrink-0 text-muted-foreground transition-opacity group-hover/header:text-foreground',
+                holding && 'opacity-0',
+              )}
+            />
+          </button>
+        </Hint>
+      </h2>
+    </div>
   );
 }

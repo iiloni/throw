@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { BoardColumn, CollapseColumnButton } from './BoardColumn';
+import { BoardColumn, ColumnHeader } from './BoardColumn';
 import { type DragState, drag } from './drag';
 
 function Column({
@@ -10,7 +10,7 @@ function Column({
   children = (revealed: boolean) => (
     <div>
       <p>{revealed ? 'revealed' : 'shown'}</p>
-      <CollapseColumnButton name="Review" onCollapse={() => onToggle(true)} />
+      <ColumnHeader name="Review" count={3} onCollapse={() => onToggle(true)} />
     </div>
   ),
 }: {
@@ -73,6 +73,8 @@ describe('a board column', () => {
     render(<Stateful />);
     const collapse = screen.getByRole('button', { name: 'Collapse Review column' });
     expect(collapse).toHaveAttribute('aria-expanded', 'true');
+    // The header is the control, as on Catch's deck.
+    expect(collapse.closest('h2')).toHaveTextContent('Review3');
     collapse.focus();
     fireEvent.click(collapse);
     expect(screen.getByRole('button', { name: 'Expand Review column' })).toHaveFocus();
@@ -80,7 +82,7 @@ describe('a board column', () => {
     expect(screen.getByRole('button', { name: 'Collapse Review column' })).toHaveFocus();
   });
 
-  it('lights the strip under a held card and hides the collapse control while one is held', () => {
+  it('lights the strip under a held card, and keeps the open column’s header while one is held', () => {
     const { rerender } = render(<Column collapsed />);
     const held: DragState = {
       ids: ['task'],
@@ -104,6 +106,6 @@ describe('a board column', () => {
       '',
     );
     rerender(<Column collapsed={false} />);
-    expect(screen.queryByRole('button', { name: 'Collapse Review column' })).toBeNull();
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Review3');
   });
 });
