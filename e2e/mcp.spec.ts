@@ -972,6 +972,10 @@ test('list_changes follows REST and MCP writes with stable pages and token attri
       });
     }
 
+    await call(other, 'update_task', {
+      task: task.id,
+      changes: { trashed: { before: false, after: false } },
+    });
     const { commentId } = await call(other, 'add_comment', {
       task: task.id,
       body: 'Original comment',

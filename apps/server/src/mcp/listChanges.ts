@@ -58,10 +58,9 @@ function taskChange(
   kind: ActivityKind,
   fields: ActivityChange[],
 ): Pick<Change, 'kind' | 'changes'> {
-  const trash = fields.find((field) => field.field === 'trashed' && field.applied);
-  const moved = fields.some(
-    (field) => field.applied && ['statusId', 'position', 'parentId'].includes(field.field),
-  );
+  const changed = fields.filter((field) => field.applied && field.previous !== field.requested);
+  const trash = changed.find((field) => field.field === 'trashed');
+  const moved = changed.some((field) => ['statusId', 'position', 'parentId'].includes(field.field));
   return {
     kind:
       kind === 'created'
@@ -177,7 +176,10 @@ function readBatch(
     a.task_id AS entity_id, 'task'::text AS entity_type, a.changes AS fields, ${taskMetadata}
   `,
     taskJoins,
-    sql`AND a.changes <> '[]'::jsonb`,
+    sql`AND EXISTS (
+      SELECT 1 FROM jsonb_array_elements(a.changes) AS field
+      WHERE field->>'applied' = 'false' OR field->'previous' IS DISTINCT FROM field->'requested'
+    )`,
   );
   const comment = page(
     'comment',
