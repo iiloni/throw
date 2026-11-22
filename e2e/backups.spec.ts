@@ -30,6 +30,9 @@ test('admins make, download, upload and delete backups and change the daily sche
     .setInputFiles({ name: 'copy.zip', mimeType: 'application/zip', buffer: archive });
   await expect(backups).toHaveCount(before + 2);
   for (let i = 0; i < 2; i++) {
+    // A menu still animating closed dismisses one reopened from its trigger, as a click
+    // outside it, so wait for the last one to leave first.
+    await expect(page.getByRole('menu')).toHaveCount(0);
     await backups.first().click();
     await page.getByRole('menuitem', { name: 'Delete', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
