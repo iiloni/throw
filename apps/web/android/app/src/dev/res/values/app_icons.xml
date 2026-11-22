@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <bool name="default_stable_icon">false</bool>
+    <bool name="default_preview_icon">false</bool>
+    <bool name="default_dev_icon">true</bool>
+</resources>

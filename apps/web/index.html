@@ -30,6 +30,22 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Restore this device's app icon before the app starts, offline too (src/lib/appIcon.ts).
+      try {
+        const channel = '__THROW_CHANNEL__';
+        const icons = ['stable', 'preview', 'dev'];
+        const saved = JSON.parse(localStorage.getItem('throw-app-icon') ?? 'null');
+        const icon = icons.indexOf(saved) >= 0 && icons.indexOf(saved) <= icons.indexOf(channel) ? saved : channel;
+        const base = icon === 'stable' ? '' : `/${icon}`;
+        for (const link of document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]')) {
+          const filename = new URL(link.href).pathname.split('/').pop();
+          link.href = `${base}/${filename}`;
+        }
+        const manifest = document.querySelector('link[rel="manifest"]');
+        if (manifest) manifest.href = `/manifest-${icon}.webmanifest`;
+      } catch {}
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

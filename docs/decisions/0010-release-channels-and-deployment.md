@@ -16,7 +16,10 @@ Compose profiles. No Catch file/repository is modified or required at build time
 
 Differences from Catch: Throw uses its own signing key, artifact/package IDs and workflow
 queues; Android version codes allocate 1,000,000,000 plus Throw's release run number
-(1–99,999,999). Throw retains its existing channel artwork without Catch's icon picker.
+(1–99,999,999). Throw ports Catch's app icon switcher, but each build keeps its own
+channel's icon by default (Catch defaults released builds to stable): preview builds can
+choose Stable, dev builds any of the three, and stable builds have no choice. See
+[branding](../branding.md#app-icon-switcher).
 The combined example uses non-superuser database owners with CREATEDB and REPLICATION,
 rather than handing either app cluster-superuser credentials. Shared replication resources
 and availability remain a trust boundary; separate stacks provide stronger isolation.

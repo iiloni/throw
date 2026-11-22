@@ -130,13 +130,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Install Android SDK packages
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"'
-      - name: Compile bundled debug apps for all channels
+      - name: Compile and unit test bundled debug apps for all channels
         # One runner and Gradle cache; no emulator, signing secrets or release artifacts.
+        # Robolectric unit tests check each flavor's launcher aliases (AppIconsTest).
         run: |
           for channel in dev stable preview; do
             THROW_CHANNEL="$channel" pnpm --filter @throw/web android:sync
-            task="assemble${channel^}Debug"
-            (cd apps/web/android && ./gradlew "$task" --no-daemon --no-configuration-cache)
+            (cd apps/web/android && ./gradlew "assemble${channel^}Debug" "test${channel^}DebugUnitTest" \
+              --no-daemon --no-configuration-cache)
           done
 
   # Each shard has its own runner and dev stack.

@@ -4,18 +4,46 @@ import tailwindcss from '@tailwindcss/vite';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
 import { defaultAllowedOrigins } from 'vite';
-import { VitePWA } from 'vite-plugin-pwa';
+import { type ManifestOptions, VitePWA } from 'vite-plugin-pwa';
 import { defineConfig } from 'vitest/config';
 import { type WebBuild, webBuildSchema } from '../../packages/shared/src/releases.ts';
 import { buildChannel } from '../../scripts/build-channel.ts';
 import { developmentServerUrl } from '../../scripts/dev-server.ts';
 
 const channel = buildChannel(process.env.THROW_CHANNEL);
-const iconBase = channel === 'stable' ? '' : `/${channel}`;
 const webBuild = webBuildSchema.parse({ id: randomUUID() } satisfies WebBuild);
+
+const manifest = {
+  name: 'Throw',
+  short_name: 'Throw',
+  description: 'Self-hosted project management that works offline.',
+  theme_color: '#20ae96',
+  background_color: '#f7f6f2',
+  display: 'standalone',
+  // One identity for every icon's manifest, so switching icons keeps the installed app.
+  id: '/',
+  start_url: '/',
+  icons: [
+    { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+    { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+    { src: '/maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+  ],
+} satisfies Partial<ManifestOptions>;
+
+// The app icon switcher (lib/appIcon.ts) points the page at one of these.
+function iconManifest(icon: 'stable' | 'preview' | 'dev') {
+  return {
+    ...manifest,
+    icons: manifest.icons.map((entry) => ({
+      ...entry,
+      src: icon === 'stable' ? entry.src : `/${icon}${entry.src}`,
+    })),
+  };
+}
 
 export default defineConfig(({ command }) => ({
   define: {
+    'import.meta.env.THROW_CHANNEL': JSON.stringify(channel),
     'import.meta.env.THROW_WEB_BUILD': JSON.stringify(String(command === 'build')),
     'import.meta.env.THROW_BUILD_ID': JSON.stringify(webBuild.id),
     'import.meta.env.THROW_DEV_SERVER_URL': JSON.stringify(
@@ -27,15 +55,24 @@ export default defineConfig(({ command }) => ({
       name: 'web-build-metadata',
       generateBundle() {
         this.emitFile({ type: 'asset', fileName: 'build.json', source: JSON.stringify(webBuild) });
+        for (const icon of ['stable', 'preview', 'dev'] as const) {
+          this.emitFile({
+            type: 'asset',
+            fileName: `manifest-${icon}.webmanifest`,
+            source: JSON.stringify(iconManifest(icon)),
+          });
+        }
       },
     },
     {
       name: 'channel-icons',
       transformIndexHtml(html) {
-        return html.replace(
-          /href="\/(favicon\.ico|favicon-mark\.svg|apple-touch-icon\.png)"/g,
-          `href="${iconBase}/$1"`,
-        );
+        return html
+          .replaceAll('__THROW_CHANNEL__', channel)
+          .replace(
+            /href="\/(favicon\.ico|favicon-mark\.svg|apple-touch-icon\.png)"/g,
+            `href="${channel === 'stable' ? '' : `/${channel}`}/$1"`,
+          );
       },
     },
     tanstackRouter({ target: 'react', autoCodeSplitting: true }),
@@ -47,27 +84,9 @@ export default defineConfig(({ command }) => ({
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.ts',
-      manifest: {
-        name: 'Throw',
-        short_name: 'Throw',
-        description: 'Self-hosted project management that works offline.',
-        theme_color: '#20ae96',
-        background_color: '#f7f6f2',
-        display: 'standalone',
-        start_url: '/',
-        icons: [
-          { src: `${iconBase}/pwa-192x192.png`, sizes: '192x192', type: 'image/png' },
-          { src: `${iconBase}/pwa-512x512.png`, sizes: '512x512', type: 'image/png' },
-          {
-            src: `${iconBase}/maskable-512x512.png`,
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ],
-      },
+      manifest: iconManifest(channel),
       injectManifest: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2,webmanifest}'],
       },
     }),
   ],

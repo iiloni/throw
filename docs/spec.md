@@ -312,6 +312,12 @@ rails' placement shape desktop columns, so a phone does not show them.
 | Holding a card | Compact | Compact or Full; see [Ordering and priority](#ordering-and-priority). |
 | Theme | System | System, Light or Dark. The browser and installed app bars follow the chosen theme. |
 
+General also has Catch's app icon switcher on dev and preview builds. A build starts with
+its own channel's icon; preview can switch to Stable, and dev to Stable or Preview. Testers
+can then see the released icons on one device. The choice is kept on the device. It changes the Android launcher
+icon, or the web app's favicons and install manifest. A stable build has its one icon and
+no switcher. See [branding](branding.md#app-icon-switcher).
+
 The board practises progressive disclosure: what is not needed at rest is not drawn at rest.
 Applying this further is ongoing.
 
@@ -656,7 +662,7 @@ dock rather than opening as a page. Desktop has no drawer. The rules are in
   workspace. The workspace menu and desktop rail open it. Each trash offers restore,
   confirmed permanent removal and confirmed emptying of that scope.
 - `/settings` redirects to `/settings/general`. Settings has Catch's pages: General
-  (theme and board), Account (name, password, the server on Android, signing out), Update,
+  (theme, the app icon on dev and preview builds, and board), Account (name, password, the server on Android, signing out), Update,
   and Backups for the server's admin at `/settings/admin/backups`. Throw adds MCP tokens
   at `/settings/mcp` for creating and revoking the account's workspace tokens. Wide, the
   pages are listed beside the open one; on a phone the dock picks between them. Changing the
