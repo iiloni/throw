@@ -435,8 +435,11 @@ function send(
     switch (mutation.type) {
       case 'insert':
         return sending(api.createTag(tagCreateRequest(mutation.modified as Tag)), tagsCollection);
-      case 'update':
-        return sending(api.updateTag(key, updateTagSchema.parse(mutation.changes)), tagsCollection);
+      case 'update': {
+        // The server derives the new position from the parent change on replay.
+        const { position: _position, ...changes } = mutation.changes as Partial<Tag>;
+        return sending(api.updateTag(key, updateTagSchema.parse(changes)), tagsCollection);
+      }
       case 'delete':
         return tag.parentId && deletedInWrite(mutations, tagsCollection.id, tag.parentId)
           ? null

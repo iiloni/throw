@@ -2,14 +2,14 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { type APIRequestContext, expect, test } from '@playwright/test';
+import { type APIRequestContext, expect, type Route, test } from '@playwright/test';
 import { type McpOutput, type McpToolName, mcpTools } from '../packages/shared/src/mcp';
 import {
   createMcpTokenResponseSchema,
   mcpTokensResponseSchema,
 } from '../packages/shared/src/mcpTokens';
 import { STARTER_STATUSES } from '../packages/shared/src/statuses';
-import { createAccount, shapeRows } from './helpers';
+import { APP_LOAD_TIMEOUT, createAccount, shapeRows, signUp } from './helpers';
 
 const endpoint = () => new URL('/api/mcp', test.info().project.use.baseURL);
 type Account = Awaited<ReturnType<typeof createAccount>>;
@@ -797,4 +797,73 @@ test('MCP status and tag writes enforce category, hierarchy and workspace bounda
   } finally {
     await client.close();
   }
+});
+
+test('reparenting a manually ordered tag offline clears its position immediately and on replay', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Both layouts use the same tag action and outbox.');
+  const account = await signUp(page);
+  const credential = await makeToken(page.request, account);
+  const project = await makeProject(page.request, account, credential.metadata.workspaceId);
+  const client = await connect(credential.token);
+  let tagId: string;
+  let parentId: string;
+  let originalPosition: string | null;
+  try {
+    const createRoot = async (name: string) =>
+      (
+        await call(client, 'create_tag', {
+          projectId: project.id,
+          name,
+          operationId: structureId(),
+        })
+      ).current;
+    const parent = await createRoot('Alpha');
+    const tag = await createRoot('Zulu');
+    parentId = parent.id;
+    tagId = tag.id;
+    const moved = await call(client, 'move_tag', {
+      operationId: structureId(),
+      tagId,
+      before: { parentId: null, position: null },
+      placement: { side: 'before', neighborId: parentId },
+    });
+    originalPosition = moved.current.position;
+    expect(originalPosition).not.toBeNull();
+  } finally {
+    await client.close();
+  }
+
+  const localTag = () =>
+    page.evaluate(async (id) => {
+      const { tagsCollection } = await import(/* @vite-ignore */ '/src/lib/collections.ts');
+      const tag = tagsCollection.get(id);
+      return tag && { parentId: tag.parentId, position: tag.position };
+    }, tagId);
+  await expect.poll(localTag, { timeout: APP_LOAD_TIMEOUT }).toEqual({
+    parentId: null,
+    position: originalPosition,
+  });
+  const offline = (route: Route) => route.abort('connectionfailed');
+  await page.route('**/api/**', offline);
+  await page.evaluate(
+    async ({ tagId, parentId }) => {
+      const { updateTag } = await import(/* @vite-ignore */ '/src/lib/tags.ts');
+      updateTag(tagId, { parentId });
+    },
+    { tagId, parentId },
+  );
+  await expect.poll(localTag).toEqual({ parentId, position: null });
+
+  await page.unroute('**/api/**', offline);
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect
+    .poll(
+      async () =>
+        (await shapeRows(page.request, 'tags', account.headers)).find(({ id }) => id === tagId),
+      { timeout: APP_LOAD_TIMEOUT },
+    )
+    .toMatchObject({ parent_id: parentId, position: null });
 });

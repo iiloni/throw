@@ -24,6 +24,12 @@ test('reindexing places items exactly when app writers produced equal or legacy 
   expect(appended.position).toBe('a2');
 });
 
+test('an already satisfied move leaves alphabetically ordered siblings unpositioned', () => {
+  const siblings = [a, b, c].map(({ id }) => ({ id, position: null }));
+  expect(planSiblingMove(siblings, b.id, { side: 'after', neighborId: a.id })).toEqual([]);
+  expect(planSiblingMove(siblings, b.id, { side: 'before', neighborId: c.id })).toEqual([]);
+});
+
 test('moving among alphabetical tags gives them positions in the requested order', () => {
   const siblings = [a, b, c].map(({ id }) => ({ id, position: null }));
   const changes = planSiblingMove(siblings, c.id, { side: 'before', neighborId: a.id })!;

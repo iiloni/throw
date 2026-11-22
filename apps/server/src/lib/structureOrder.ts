@@ -19,12 +19,14 @@ function between(lower: string | null, upper: string | null) {
 
 /** Calculate a move in the supplied display order while holding the sibling group's write lock. */
 export function planSiblingMove(rows: readonly Sibling[], id: string, placement: Placement) {
-  const target = rows.find((row) => row.id === id);
-  if (!target) return null;
+  const currentIndex = rows.findIndex((row) => row.id === id);
+  if (currentIndex < 0) return null;
+  const target = rows[currentIndex]!;
   const siblings = rows.filter((row) => row.id !== id);
   const neighbor = siblings.findIndex((row) => row.id === placement.neighborId);
   if (neighbor < 0) return null;
   const index = neighbor + (placement.side === 'after' ? 1 : 0);
+  if (index === currentIndex) return [];
   const lower = siblings[index - 1];
   const upper = siblings[index];
   const position =
