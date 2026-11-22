@@ -71,7 +71,7 @@ test('main, manual dispatch and merge queue run full validation without a PR lab
   }
 });
 
-test('only main/tag CI can reuse an independently verified full pass', () => {
+test('main/tag CI can reuse an independently verified full pass', () => {
   const skipped = {
     RUN_CHECKS: 'false',
     CHECK_RESULT: 'skipped',
@@ -84,6 +84,42 @@ test('only main/tag CI can reuse an independently verified full pass', () => {
   }
   for (const EVENT_NAME of ['pull_request', 'merge_group', '']) {
     assert.equal(validate({ ...skipped, EVENT_NAME }).status, 1);
+  }
+});
+
+test('a PR label change can reuse full CI only with verified current approval', () => {
+  const reused = {
+    EVENT_ACTION: 'labeled',
+    RUN_CHECKS: 'false',
+    PR_CI_SOURCE: '12345',
+    PR_APPROVED_NOW: 'true',
+    CHECK_RESULT: 'skipped',
+    NATIVE_RESULT: 'skipped',
+    DESKTOP_RESULT: 'skipped',
+    ANDROID_RESULT: 'skipped',
+  };
+  for (const EVENT_ACTION of ['labeled', 'unlabeled']) {
+    const result = validate({ ...reused, EVENT_ACTION });
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /Full CI already passed for this merge commit in run 12345/);
+  }
+  assert.match(
+    validate({ ...reused, MERGE_APPROVED: 'false' }).stdout,
+    /but merge approval is still required/,
+  );
+  for (const [key, value] of [
+    ['REUSE_RESULT', 'failure'],
+    ['EVENT_ACTION', 'synchronize'],
+    ['EVENT_NAME', 'merge_group'],
+    ['DOCS_ONLY', 'true'],
+    ['E2E_REQUESTED', 'false'],
+    ['PR_CI_SOURCE', ''],
+    ['PR_CI_SOURCE', 'unknown'],
+    ['MERGE_APPROVED', 'false'],
+    ['PR_APPROVED_NOW', ''],
+    ['PR_APPROVED_NOW', 'false'],
+  ]) {
+    assert.equal(validate({ ...reused, [key]: value }).status, 1, `${key}=${value}`);
   }
 });
 
@@ -140,7 +176,7 @@ test('missing test-plan outputs cannot turn skipped jobs into successful validat
 
 test('CI runs E2E for `run e2e`, and otherwise for code that is approved or already on main', () => {
   const workflow = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
-  const expression = workflow.match(/^\s+run_e2e: \$\{\{ (.+) \}\}$/m)?.[1];
+  const expression = workflow.match(/^\s+E2E_REQUESTED: \$\{\{ (contains\(.+) \}\}$/m)?.[1];
   assert.ok(expression);
   assert.match(workflow, /types: \[opened, synchronize, reopened, labeled, unlabeled\]/);
   assert.match(

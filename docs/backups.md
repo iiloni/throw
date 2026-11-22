@@ -19,7 +19,9 @@ limits. Verification rejects unexpected members, damaged checksums, and Catch ar
 Any unzip tool can read it; `pg_restore` can read the dump independently of Throw.
 Sessions, MCP tokens and MCP structure replay records are excluded, including when
 restoring a dump that contains them. After a restore, issue fresh MCP tokens for the clients you want to reconnect.
-Existing task history and comments retain their token-name attribution.
+Task, comment and board structure history retain their attribution. Restore invalidates
+saved MCP change cursors, so reconnecting clients need to read the board again or start a
+[time-based catch-up](decisions/0014-mcp-server.md#change-feed).
 
 Backups are **not encrypted** and include password hashes and everyone's data. Files are
 owner-only. Keep credentials and backup copies securely off the server and test restores.

@@ -12,7 +12,7 @@ export function newMcpCredential() {
   return { token, digest: digest(token) };
 }
 
-export type McpActor = Extract<WriteActor, { workspaceId: string }> & { tokenId: string };
+export type McpActor = Extract<WriteActor, { workspaceId: string }>;
 
 export async function verifyMcpToken(authorization: string | undefined): Promise<McpActor | null> {
   const match = /^Bearer (throw_mcp_[A-Za-z0-9_-]{43})$/i.exec(authorization ?? '');

@@ -8,9 +8,11 @@ import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scrol
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
+import { BoardColumn, ColumnHeader } from './BoardColumn';
 import { BoardSettingsPanel } from './BoardSettingsPanel';
 import { CardList } from './CardList';
 import { drag, makingWay } from './drag';
+import type { Status } from './model';
 import { railWidth, SideZone, STRIP_WIDTH, zoneWidth } from './SideZone';
 import { StatusMenu } from './StatusMenu';
 import { StatusTile } from './StatusTile';
@@ -23,6 +25,7 @@ import {
   setSubtasksAsCards,
   update,
   useBoardSettings,
+  useCollapsedColumns,
 } from './state';
 import { PANE_MIN, SplitHandle, TaskPane } from './TaskView';
 import { TaskPaneWidthContext } from './taskMotionContext';
@@ -261,23 +264,8 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
                           ))}
                         </motion.div>
                       )
-                    : active.map((status) => (
-                        <CardList
-                          key={status.id}
-                          listId={`status:${status.id}`}
-                          surface
-                          className="mt-[calc(var(--safe-top)+1.25rem)] mb-6 min-w-[17.5rem] max-w-[27rem] flex-1 pb-2"
-                          header={
-                            <div className="flex h-14 shrink-0 items-center gap-2.5 px-5">
-                              <h2 className="truncate font-display font-semibold text-lg tracking-[-0.01em]">
-                                {status.name}
-                              </h2>
-                              <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-muted-foreground text-xs tabular-nums">
-                                {countIn(state, status.id)}
-                              </span>
-                            </div>
-                          }
-                        />
+                    : active.map((status, index) => (
+                        <StatusColumn key={status.id} status={status} index={index} />
                       ))}
                   {closedBound ? (
                     <>
@@ -314,6 +302,41 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
         </StatusMenu>
       </SelectionBar>
     </div>
+  );
+}
+
+/** An active status's column, which folds to a strip and is remembered folded per project. */
+function StatusColumn({ status, index }: { status: Status; index: number }) {
+  const state = board.use();
+  const { project } = current(state);
+  const { isCollapsed, setCollapsed } = useCollapsedColumns(project);
+  const count = countIn(state, status.id);
+  return (
+    <BoardColumn
+      columnId={status.id}
+      name={status.name}
+      category={status.category}
+      count={count}
+      collapsed={isCollapsed(status.id)}
+      onToggle={(value) => setCollapsed(status.id, value)}
+      index={index}
+      className="min-w-[17.5rem] max-w-[27rem] grow basis-[17.5rem]"
+    >
+      {(revealed) => (
+        <CardList
+          listId={`status:${status.id}`}
+          revealed={revealed}
+          className="flex-1 pb-2"
+          header={
+            <ColumnHeader
+              name={status.name}
+              count={count}
+              onCollapse={() => setCollapsed(status.id, true)}
+            />
+          }
+        />
+      )}
+    </BoardColumn>
   );
 }
 

@@ -13,7 +13,9 @@ import type {
 import { sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
+  bigint,
   boolean,
+  customType,
   index,
   integer,
   jsonb,
@@ -27,6 +29,10 @@ import {
 } from 'drizzle-orm/pg-core';
 
 const createdAt = () => timestamp({ withTimezone: true }).notNull().defaultNow();
+const xid8 = customType<{ data: string }>({ dataType: () => 'xid8' });
+const writingTxid = () => xid8().notNull().default(sql`pg_current_xact_id()`);
+// Preserve the order of older events when migration or restore gives them a shared xid.
+const feedOrder = () => bigint({ mode: 'bigint' }).notNull().default(sql`0`);
 const updatedAt = () =>
   timestamp({ withTimezone: true })
     .notNull()
@@ -282,8 +288,8 @@ export const tasks = pgTable(
 /**
  * The tasks' activity log (ADR 0006), written only by the server in the transaction of the
  * write it describes. An update's entry is also the record that its change id was applied,
- * which is how a resent update is recognised. `reordered` entries are kept for that alone and
- * are not synced.
+ * which is how a resent update is recognised. `reordered` entries are not synced. Device
+ * positions are kept separately for the change feed to preserve the timeline’s format.
  */
 export const taskActivity = pgTable(
   'task_activity',
@@ -302,11 +308,18 @@ export const taskActivity = pgTable(
     /** Who sent the write. Kept when the account is deleted, as the entry is the task's. */
     userId: text().references(() => user.id, { onDelete: 'set null' }),
     viaTokenName: text(),
+    viaTokenId: uuid(),
+    txid: writingTxid(),
+    feedOrder: feedOrder(),
     kind: text().$type<ActivityKind>().notNull(),
     changes: jsonb().$type<ActivityChange[]>().notNull(),
+    feedPosition: jsonb().$type<ActivityChange>(),
     createdAt: createdAt(),
   },
-  (table) => [index().on(table.workspaceId), index().on(table.taskId)],
+  (table) => [
+    index().on(table.workspaceId, table.txid, table.feedOrder, table.id),
+    index().on(table.taskId),
+  ],
 );
 
 /**
@@ -329,12 +342,77 @@ export const comments = pgTable(
     /** The author, the only one who can edit or delete it. Kept as null if the account goes. */
     userId: text().references(() => user.id, { onDelete: 'set null' }),
     viaTokenName: text(),
+    viaTokenId: uuid(),
+    txid: writingTxid(),
     /** A BlockNote document. */
     body: jsonb().$type<CommentBody>().notNull(),
     createdAt: createdAt(),
     editedAt: timestamp({ withTimezone: true }),
   },
-  (table) => [index().on(table.workspaceId), index().on(table.taskId)],
+  (table) => [index().on(table.workspaceId, table.txid, table.id), index().on(table.taskId)],
+);
+
+// Cursor generations change when a restore replaces the live database's history.
+export const changeFeedGeneration = pgTable('change_feed_generation', {
+  id: boolean().primaryKey().default(true),
+  generation: uuid().notNull().defaultRandom(),
+});
+
+export type HistoryField = { field: string; before: unknown; after: unknown };
+
+/** Structure history survives the individual project, status or tag. */
+export const structureActivity = pgTable(
+  'structure_activity',
+  {
+    id: uuid().primaryKey(),
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    projectId: uuid(),
+    projectKey: text(),
+    entityType: text().$type<'project' | 'status' | 'tag'>().notNull(),
+    entityId: uuid().notNull(),
+    kind: text()
+      .$type<'created' | 'updated' | 'reordered' | 'trashed' | 'restored' | 'deleted'>()
+      .notNull(),
+    changes: jsonb().$type<HistoryField[]>().notNull(),
+    userId: text().references(() => user.id, { onDelete: 'set null' }),
+    viaTokenName: text(),
+    viaTokenId: uuid(),
+    txid: writingTxid(),
+    feedOrder: feedOrder(),
+    createdAt: timestamp({ withTimezone: true }).notNull().default(sql`clock_timestamp()`),
+  },
+  (table) => [index().on(table.workspaceId, table.txid, table.feedOrder, table.id)],
+);
+
+/** Keep each version that the feed needs even after the editable comment is gone. */
+export const commentActivity = pgTable(
+  'comment_activity',
+  {
+    id: uuid().primaryKey(),
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    projectId: uuid().notNull(),
+    taskId: uuid()
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    commentId: uuid().notNull(),
+    kind: text().$type<'created' | 'updated' | 'deleted'>().notNull(),
+    beforeBody: jsonb().$type<CommentBody>(),
+    afterBody: jsonb().$type<CommentBody>(),
+    userId: text().references(() => user.id, { onDelete: 'set null' }),
+    viaTokenName: text(),
+    viaTokenId: uuid(),
+    txid: writingTxid(),
+    feedOrder: feedOrder(),
+    createdAt: timestamp({ withTimezone: true }).notNull().default(sql`clock_timestamp()`),
+  },
+  (table) => [
+    index().on(table.workspaceId, table.txid, table.feedOrder, table.id),
+    index().on(table.taskId),
+  ],
 );
 
 /** One independent assignment per task and secondary tag. */

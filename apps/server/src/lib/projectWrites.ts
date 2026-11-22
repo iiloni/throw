@@ -4,9 +4,11 @@ import {
   settleProjectKey,
   type UpdateProject,
 } from '@throw/shared';
-import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import type { Transaction } from '../db/client';
 import { projects, statuses, workspaces } from '../db/schema';
+import { recordStructure } from './structureActivity';
+import { lockTagTree } from './tagTree';
 import { currentTxid } from './txid';
 import { memberWorkspaces } from './workspaces';
 import type { WriteActor } from './writeActor';
@@ -77,7 +79,7 @@ export async function createProject(tx: Transaction, actor: WriteActor, body: Cr
     .select({ key: projects.key })
     .from(projects)
     .where(and(eq(projects.workspaceId, project.workspaceId), projectMember(tx, actor)));
-  const inserted = await tx
+  const [inserted] = await tx
     .insert(projects)
     .values({
       ...project,
@@ -85,8 +87,8 @@ export async function createProject(tx: Transaction, actor: WriteActor, body: Cr
       priorityNames: priorityNames ?? EMPTY_PRIORITY_NAMES,
     })
     .onConflictDoNothing()
-    .returning({ id: projects.id });
-  if (!inserted.length) return (await findProject(tx, actor, project.id)) ? null : 'taken';
+    .returning();
+  if (!inserted) return (await findProject(tx, actor, project.id)) ? null : 'taken';
 
   const initial = await tx
     .insert(statuses)
@@ -98,8 +100,27 @@ export async function createProject(tx: Transaction, actor: WriteActor, body: Cr
       })),
     )
     .onConflictDoNothing()
-    .returning({ id: statuses.id });
+    .returning();
   if (initial.length !== firstStatuses.length) throw new StarterStatusIdTaken();
+  await logProject(tx, actor, 'created', undefined, inserted);
+  for (const {
+    id,
+    workspaceId,
+    projectId,
+    createdAt: _,
+    updatedAt: _updatedAt,
+    ...fields
+  } of initial) {
+    await recordStructure(
+      tx,
+      actor,
+      'status',
+      { id, workspaceId, projectId, projectKey: inserted.key },
+      'created',
+      {},
+      fields,
+    );
+  }
   return currentTxid(tx);
 }
 
@@ -136,10 +157,59 @@ export async function updateProject(
       : { deletedAt: trashed ? sql`coalesce(${projects.deletedAt}, now())` : null }),
   };
   if (Object.keys(set).length === 0) return null;
-  const updated = await tx
+  const [updated] = await tx
     .update(projects)
     .set(set)
     .where(and(eq(projects.id, id), projectMember(tx, actor)))
-    .returning({ id: projects.id });
-  return updated.length === 0 ? 'not-found' : currentTxid(tx);
+    .returning();
+  if (!updated) return 'not-found';
+  const kind =
+    Boolean(project.deletedAt) !== Boolean(updated.deletedAt)
+      ? updated.deletedAt
+        ? 'trashed'
+        : 'restored'
+      : Object.keys(set).length === 1 && changes.position !== undefined
+        ? 'reordered'
+        : 'updated';
+  await logProject(tx, actor, kind, project, updated);
+  return currentTxid(tx);
+}
+
+type ProjectRow = typeof projects.$inferSelect;
+
+function projectFields(row?: ProjectRow) {
+  if (!row) return {};
+  const { name, key, color, icon, position, priorityNames, deletedAt } = row;
+  return { name, key, color, icon, position, priorityNames, trashed: deletedAt !== null };
+}
+
+function logProject(
+  tx: Transaction,
+  actor: WriteActor,
+  kind: 'created' | 'updated' | 'reordered' | 'trashed' | 'restored' | 'deleted',
+  before: ProjectRow | undefined,
+  after?: ProjectRow,
+) {
+  const { id, workspaceId, key } = (after ?? before)!;
+  return recordStructure(
+    tx,
+    actor,
+    'project',
+    { id, workspaceId, projectId: id, projectKey: key },
+    kind,
+    projectFields(before),
+    projectFields(after),
+  );
+}
+
+/** Purge only projects still in the trash when the queued write arrives. */
+export async function deleteProject(tx: Transaction, actor: WriteActor, id: string) {
+  await lockTagTree(tx, id);
+  const [deleted] = await tx
+    .delete(projects)
+    .where(and(eq(projects.id, id), projectMember(tx, actor), isNotNull(projects.deletedAt)))
+    .returning();
+  if (!deleted) return null;
+  await logProject(tx, actor, 'deleted', deleted);
+  return currentTxid(tx);
 }

@@ -380,6 +380,24 @@
 .board-column[data-over] {
   --column: color-mix(in oklab, var(--accent) 75%, transparent);
 }
+/*
+ * A desktop column folds to a strip and opens again on Catch's deck timing. Both states size
+ * with the same properties, in units CSS can interpolate, so the width animates rather than
+ * snapping between keywords.
+ */
+.board-column[data-column] {
+  transition:
+    flex-grow 500ms var(--ease-emphasized),
+    flex-basis 500ms var(--ease-emphasized),
+    min-width 500ms var(--ease-emphasized),
+    max-width 500ms var(--ease-emphasized),
+    background-color 200ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .board-column[data-column] {
+    transition: background-color 200ms ease-out;
+  }
+}
 
 /* A card's place in a column. Folding is a grid row closing, which needs no measured height. */
 .board-slot {
