@@ -30,17 +30,18 @@ describe('code block languages', () => {
     }
   });
 
-  it('colors known code with theme tokens', async () => {
+  it.each([
+    ['javascript', 'const answer = 42;', 'const', 'keyword'],
+    ['json', '{ "ready": true }', 'true', 'constant'],
+  ])('colors %s code with theme tokens', async (language, source, content, token) => {
     const highlighter = await createCodeHighlighter();
     try {
-      await highlighter.loadLanguage('javascript');
-      const tokens = highlighter.codeToTokens('const answer = 42;', {
-        lang: 'javascript',
-        theme: 'throw',
-      });
+      await highlighter.loadLanguage(language);
+      expect(highlighter.getLoadedLanguages()).toContain(language);
+      const tokens = highlighter.codeToTokens(source, { lang: language, theme: 'throw' });
       expect(tokens.tokens.flat()).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ content: 'const', color: 'var(--code-token-keyword)' }),
+          expect.objectContaining({ content, color: `var(--code-token-${token})` }),
         ]),
       );
     } finally {

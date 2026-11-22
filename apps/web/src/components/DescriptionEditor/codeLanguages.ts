@@ -134,7 +134,13 @@ export const CODE_LANGUAGES = {
     icon: 'json',
     name: 'JSON',
     aliases: ['jsonc', 'json5'],
-    load: () => import('@shikijs/langs-precompiled/jsonc'),
+    // Use the comment-aware grammar under the ID the editor sends to Shiki.
+    load: () =>
+      import('@shikijs/langs-precompiled/jsonc').then(({ default: grammars }) =>
+        grammars.map((grammar) =>
+          grammar.name === 'jsonc' ? { ...grammar, name: 'json' } : grammar,
+        ),
+      ),
   },
   jsx: {
     fileName: 'snippet.jsx',
