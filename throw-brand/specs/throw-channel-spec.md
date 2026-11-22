@@ -4,7 +4,7 @@
 
 Shared Arc Forward geometry + shared neutral surface/detail colors + one channel paint file = a complete icon. Stable is Throw's product identity; preview and dev identify builds. Dev is not an official public release channel. No channel token changes the application UI.
 
-All channel geometry, gradient vectors and stop positions are identical. The channel override files contain only background, upper/lower ribbon, project-square, micro paint and attached-shadow colors. They extend the shared token file through the supplied generator, not automatic JSON inheritance.
+All channels share shape geometry, foreground gradient vectors and stop positions. Preview overrides the background gradient vector. The derivation tool applies each channel's paint tokens to the canonical SVG.
 
 ## Shared colors
 
@@ -46,21 +46,21 @@ Every listed gradient color has alpha 1; attached-shadow alpha is 0.14. No addit
 
 | Semantic name | HEX | RGB | Alpha | Usage |
 |---|---|---|---:|---|
-| backgroundStart | `#6654B0` | 102, 84, 176 | 1 | preview background gradient stop at 0% |
-| backgroundMid | `#504389` | 80, 67, 137 | 1 | preview background gradient stop at 55% |
-| backgroundEnd | `#363166` | 54, 49, 102 | 1 | preview background gradient stop at 100% |
-| ribbonUpperStart | `#8272C5` | 130, 114, 197 | 1 | preview ribbonUpper gradient stop at 0% |
-| ribbonUpperMid | `#DBD3FF` | 219, 211, 255 | 1 | preview ribbonUpper gradient stop at 48% |
-| ribbonUpperEnd | `#A798E0` | 167, 152, 224 | 1 | preview ribbonUpper gradient stop at 100% |
-| ribbonLowerStart | `#6654B0` | 102, 84, 176 | 1 | preview ribbonLower gradient stop at 0% |
-| ribbonLowerMid | `#B6A7EB` | 182, 167, 235 | 1 | preview ribbonLower gradient stop at 52% |
-| ribbonLowerEnd | `#8171C0` | 129, 113, 192 | 1 | preview ribbonLower gradient stop at 100% |
-| projectAccentStart | `#9683D8` | 150, 131, 216 | 1 | preview projectAccent gradient stop at 0% |
-| projectAccentMid | `#6654B0` | 102, 84, 176 | 1 | preview projectAccent gradient stop at 55% |
-| projectAccentEnd | `#504389` | 80, 67, 137 | 1 | preview projectAccent gradient stop at 100% |
-| tileShadow | `#18122E` | 24, 18, 46 | 0.14 | tile-attached primary shadow only |
-| microUpper | `#D7CDFA` | 215, 205, 250 | 1 | preview micro ribbon flat fill |
-| microLower | `#B3A3E6` | 179, 163, 230 | 1 | preview micro ribbon flat fill |
+| backgroundStart | `#8C68FF` | 140, 104, 255 | 1 | preview background gradient stop at 0% |
+| backgroundMid | `#6044CF` | 96, 68, 207 | 1 | preview background gradient stop at 55% |
+| backgroundEnd | `#3B2AA6` | 59, 42, 166 | 1 | preview background gradient stop at 100% |
+| ribbonUpperStart | `#AD93FF` | 173, 147, 255 | 1 | preview ribbonUpper gradient stop at 0% |
+| ribbonUpperMid | `#E5DBFF` | 229, 219, 255 | 1 | preview ribbonUpper gradient stop at 48% |
+| ribbonUpperEnd | `#BFA8FF` | 191, 168, 255 | 1 | preview ribbonUpper gradient stop at 100% |
+| ribbonLowerStart | `#9276EC` | 146, 118, 236 | 1 | preview ribbonLower gradient stop at 0% |
+| ribbonLowerMid | `#C7B4FA` | 199, 180, 250 | 1 | preview ribbonLower gradient stop at 52% |
+| ribbonLowerEnd | `#9C82E7` | 156, 130, 231 | 1 | preview ribbonLower gradient stop at 100% |
+| projectAccentStart | `#9C7BFF` | 156, 123, 255 | 1 | preview projectAccent gradient stop at 0% |
+| projectAccentMid | `#7052E0` | 112, 82, 224 | 1 | preview projectAccent gradient stop at 55% |
+| projectAccentEnd | `#5138BE` | 81, 56, 190 | 1 | preview projectAccent gradient stop at 100% |
+| tileShadow | `#231457` | 35, 20, 87 | 0.14 | tile-attached primary shadow only |
+| microUpper | `#E3D6FF` | 227, 214, 255 | 1 | preview micro ribbon flat fill |
+| microLower | `#BFA9F5` | 191, 169, 245 | 1 | preview micro ribbon flat fill |
 
 ### Dev
 
@@ -84,19 +84,22 @@ Every listed gradient color has alpha 1; attached-shadow alpha is 0.14. No addit
 
 ## Stop positions and direction
 
-- Background: upper-left `(0,0)` to lower-right `(1024,1024)`, stops 0%, 55%, 100%.
+- Stable and dev backgrounds: upper-left `(0,0)` to lower-right `(1024,1024)`, stops 0%, 55%, 100%.
+- Preview background: left `(0,512)` to right `(1024,512)`, stops 0%, 55%, 100%.
 - Upper ribbon: `(36,916)` to `(690,340)`, stops 0%, 48%, 100%.
 - Lower ribbon: `(60,950)` to `(750,565)`, stops 0%, 52%, 100%.
 - Internal square: tile-local `(-114,-126)` to `(4,-8)`, stops 0%, 55%, 100%.
 - Tile: tile-local `(-182,-192)` to `(182,192)`, creamHighlight at 0%, cream at 100%; inherited unchanged across treatments.
 
-“Start/Mid/End” suffixes refer to the above role-specific stops. Gradient vectors are in shared tokens; per-channel files reference their semantic gradient IDs.
+“Start/Mid/End” suffixes refer to the above role-specific stops. Default vectors are in the shared tokens. Preview defines its background vector in the channel tokens.
 
 ## Scope and source decisions
 
 Stable uses the agreed #20AE96 primary jade anchor. The final light stop #34D5B5 is slightly brighter than the provisional #34CDB2 to better match the approved upper-left light, with #179A86 providing restrained depth. This is deliberately lighter and simpler than the reference's darker right-edge shading.
 
-Preview background #6654B0 / #504389 / #363166 reuses the saved Catch preview token file. Catch's externally corrected current repository artwork was not supplied; this package does not claim those saved values are the current external implementation. Dev background #9AD6FA / #69B3F4 / #3C86EC reuses the saved Catch dev convention. Both treatments recolor Throw's ribbons and internal square coherently while keeping every contour and neutral detail unchanged.
+Preview uses Catch Preview's `#8C68FF` / `#6044CF` / `#3B2AA6` stops and horizontal vector. Matching the direction puts the same purple at each horizontal position under the launcher mask. Preview's lighter upper ribbon and darker lower ribbon preserve tonal separation through the sweep, and the micro fills maintain that separation at favicon sizes. The mid-purple square contrasts with the cream tile. Throw uses Catch Preview's `#231457` shadow tint at Throw's 14% tile-attached opacity.
+
+Dev uses Catch Dev's `#9AD6FA` / `#69B3F4` / `#3C86EC` stops, diagonal vector and `#225E92` shadow tint. The square repeats the background's three stops in tile-local space. Throw's blue ribbon and micro fills are specific to Arc Forward. Catch uses cream motion marks, charcoal lines and an 18% landing shadow. Throw's tile shadow uses 14% opacity in all channels.
 
 Small sources omit the attached shadow and use a flat cream tile. Micro sources also replace ribbon/square gradients with explicit role-specific flat colors; the square uses projectAccentMid. No channel geometry variation, badge or label exists. Shared monochrome marks and themed icons intentionally have no channel differentiation.
 
