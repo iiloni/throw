@@ -4,9 +4,10 @@ import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { createApp } from './app';
-import { startBackupSchedule } from './backups/service';
+import { isBusy, startBackupSchedule } from './backups/service';
 import { env } from './env';
 import { appContentSecurityPolicy, securityHeaders } from './lib/securityHeaders';
+import { startWebhookWorker } from './webhooks/worker';
 
 const webDist = env.WEB_DIST_DIR;
 const indexHtml = webDist ? await readFile(join(webDist, 'index.html'), 'utf8') : null;
@@ -35,7 +36,16 @@ if (webDist && indexHtml !== null) {
 }
 
 startBackupSchedule();
+const webhookWorker = startWebhookWorker({ paused: isBusy });
 
-serve({ fetch: app.fetch, port: env.PORT }, (info) => {
+const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
   console.log(`Throw server listening on http://localhost:${info.port}`);
 });
+
+// Stop claiming deliveries before exiting. One cut off mid-send is retried once its lease ends.
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.once(signal, () => {
+    server.close();
+    void webhookWorker.stop().finally(() => process.exit(0));
+  });
+}

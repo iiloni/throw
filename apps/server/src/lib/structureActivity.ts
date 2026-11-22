@@ -2,9 +2,10 @@ import { isDeepStrictEqual } from 'node:util';
 import { uuidv7 } from 'uuidv7';
 import type { Transaction } from '../db/client';
 import { structureActivity } from '../db/schema';
+import { enqueueWebhooks } from '../webhooks/enqueue';
 import type { WriteActor } from './writeActor';
 
-export function recordStructure(
+export async function recordStructure(
   tx: Transaction,
   actor: WriteActor,
   entityType: typeof structureActivity.$inferInsert.entityType,
@@ -22,7 +23,7 @@ export function recordStructure(
       : [];
   });
   if (changes.length === 0) return;
-  return tx.insert(structureActivity).values({
+  await tx.insert(structureActivity).values({
     id: uuidv7(),
     workspaceId: entity.workspaceId,
     projectId: entity.projectId,
@@ -34,5 +35,16 @@ export function recordStructure(
     userId: actor.userId,
     viaTokenName: actor.viaTokenName,
     viaTokenId: actor.tokenId,
+  });
+  // A device's drag reorders are frequent and carry nothing an agent acts on.
+  if (kind === 'reordered' && !actor.tokenId) return;
+  await enqueueWebhooks(tx, actor, {
+    event: 'structure.updated',
+    workspaceId: entity.workspaceId,
+    projectId: entity.projectId,
+    projectKey: entity.projectKey,
+    entityType,
+    kind,
+    changedFields: changes.map(({ field }) => `${entityType}.${field}`),
   });
 }

@@ -5,6 +5,7 @@ import type {
   CreateStatus,
   CreateTag,
   CreateTask,
+  CreateWebhook,
   CreateWorkspace,
   ReleasesResponse,
   TagWriteResponse,
@@ -15,10 +16,18 @@ import type {
   UpdateTag,
   UpdateTask,
   UpdateTaskResponse,
+  UpdateWebhook,
   UpdateWorkspace,
   VersionInfo,
 } from '@throw/shared';
-import { createMcpTokenResponseSchema, mcpTokensResponseSchema } from '@throw/shared';
+import {
+  createMcpTokenResponseSchema,
+  mcpTokensResponseSchema,
+  webhookResponseSchema,
+  webhookSecretResponseSchema,
+  webhooksResponseSchema,
+  webhookTestResponseSchema,
+} from '@throw/shared';
 import { getAuthToken } from './auth';
 import { compatibleFetch, ensureTaskSizeSupport } from './compatibility';
 import { getServerUrl } from './serverUrl';
@@ -99,6 +108,33 @@ export const api = {
       method: 'DELETE',
       signal: AbortSignal.timeout(20_000),
     }),
+  webhooks: (signal?: AbortSignal) =>
+    request<unknown>('/webhooks', { cache: 'no-store', signal }).then(webhooksResponseSchema.parse),
+  createWebhook: (body: CreateWebhook) =>
+    request<unknown>('/webhooks', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20_000),
+    }).then(webhookSecretResponseSchema.parse),
+  updateWebhook: (id: string, body: UpdateWebhook) =>
+    request<unknown>(`/webhooks/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20_000),
+    }).then(webhookResponseSchema.parse),
+  deleteWebhook: (id: string) =>
+    apiResponse(`/webhooks/${id}`, { method: 'DELETE', signal: AbortSignal.timeout(20_000) }),
+  rotateWebhookSecret: (id: string) =>
+    request<unknown>(`/webhooks/${id}/secret`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(20_000),
+    }).then(webhookSecretResponseSchema.parse),
+  // The server waits up to ten seconds for the receiver.
+  testWebhook: (id: string) =>
+    request<unknown>(`/webhooks/${id}/test`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(30_000),
+    }).then(webhookTestResponseSchema.parse),
   versionInfo: () => bootstrap<VersionInfo>('/updates'),
   releases: () => bootstrap<ReleasesResponse>('/updates/releases'),
   createWorkspace: (body: CreateWorkspace) =>

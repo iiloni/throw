@@ -11,6 +11,7 @@ import { lockTagTree } from '../lib/tagTree';
 import { createTask, lockTask, updateTask } from '../lib/taskWrites';
 import { currentTxid } from '../lib/txid';
 import { memberWorkspaces } from '../lib/workspaces';
+import { enqueueWebhooks } from '../webhooks/enqueue';
 
 const idParam = zValidator('param', z.object({ id: z.uuid() }));
 
@@ -66,7 +67,7 @@ export const taskRoutes = new Hono<AppEnv>()
       // Holding the parent and project as well means a restore of either cannot commit between
       // this check and the delete.
       const [project] = await tx
-        .select({ deletedAt: projects.deletedAt })
+        .select({ deletedAt: projects.deletedAt, key: projects.key })
         .from(projects)
         .where(eq(projects.id, task.projectId))
         .for('share');
@@ -79,7 +80,27 @@ export const taskRoutes = new Hono<AppEnv>()
               .where(eq(tasks.id, task.parentId))
               .for('share');
       if (!task.deletedAt && !parent?.deletedAt && !project?.deletedAt) return null;
+      // Subtasks go with their parent through the foreign key; each is announced too.
+      const subtasks = await tx
+        .select({ id: tasks.id, number: tasks.number })
+        .from(tasks)
+        .where(eq(tasks.parentId, id));
       await tx.delete(tasks).where(eq(tasks.id, id));
+      for (const purged of [{ id, number: task.number }, ...subtasks])
+        await enqueueWebhooks(
+          tx,
+          { userId },
+          {
+            event: 'task.deleted',
+            workspaceId: task.workspaceId,
+            projectId: task.projectId,
+            projectKey: project?.key ?? null,
+            entityType: 'task',
+            kind: 'deleted',
+            taskId: purged.id,
+            taskNumber: purged.number,
+          },
+        );
       return currentTxid(tx);
     });
     // Already gone, perhaps purged by an earlier try of this same queued write.

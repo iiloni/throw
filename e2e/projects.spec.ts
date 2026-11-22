@@ -320,8 +320,11 @@ test('the collapsed rail names its icons in Throw tooltips, and a tap shows none
   await expect(tooltip).toHaveText('Garden');
   // Beside the rail, not over the icons below.
   const content = page.locator('[data-slot="tooltip-content"]');
-  const [tile, hint] = await Promise.all([project.boundingBox(), content.boundingBox()]);
-  expect(hint!.x).toBeGreaterThanOrEqual(tile!.x + tile!.width);
+  // Radix holds the tooltip above the window until Floating UI places it, so poll its bounds.
+  const tile = (await project.boundingBox())!;
+  await expect
+    .poll(async () => (await content.boundingBox())?.x ?? -1)
+    .toBeGreaterThanOrEqual(tile.x + tile.width);
   // The workspace menu names the workspace it switches, to a screen reader too.
   const menu = page.getByRole('button', { name: 'Switch workspace', exact: true });
   await expect(menu).toHaveAccessibleDescription(/\S/);

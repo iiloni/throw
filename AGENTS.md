@@ -32,6 +32,9 @@ On a phone the same boundary hands the board's drawer the open task's dock and p
 Catch's split view does (`TaskDrawer`). A desktop pane at least 620 px wide moves the task's
 tags and subtasks to a side column beside the card while it has any (ADR 0012,
 `TaskDetails/TaskColumn.tsx`); later extras such as link previews join it there.
+Outbound webhooks (ADR 0015) are server-only: `apps/server/src/webhooks` queues deliveries
+in the write's transaction, checks receivers against its SSRF policy and sends them from a
+worker; Settings manages them at `/settings/webhooks`.
 The activity log syncs to devices and comments are built (`lib/comments.ts`), with a
 timeline query in `collections.ts` and a task history view in `TaskDetails/TaskTimeline.tsx`.
 Tags have their data layer and reusable controls in `components/Tag*`, with a real-data `/prototype/tags` workshop in
@@ -334,6 +337,34 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
 - Every Postgres query that touches workspace data filters by membership
   (`memberWorkspaces` in `apps/server/src/lib/workspaces.ts`).
 - Keep comments for the *why*; do not narrate the code.
+
+### Motion and transitions
+
+Throw moves as Catch does (Catch's `docs/decisions/0003-design-system-and-motion.md`).
+
+- Use the presets in `apps/web/src/lib/motion.ts`, and `--ease-emphasized` in CSS. Do not
+  invent durations or easings, and do not animate layout changes with CSS transitions.
+- Springs keep motion interruptible: a new target picks up the current velocity.
+  - `springs.snappy` (0.3 s, bounce 0.2): small controls, tab indicators, press feedback,
+    icon swaps.
+  - `springs.smooth` (0.4 s, bounce 0.15): surfaces changing size, the drawer, cards
+    reflowing.
+  - `springs.bouncy` (0.45 s, bounce 0.28): surfaces that should feel thrown or pop open.
+  - `springs.pane` (0.45 s, no bounce): edge-docked panes and side columns, where bounce
+    would pull them off the screen edge.
+- `curves` (`EASE_EMPHASIZED = [0.2, 0, 0, 1]`) are for what a spring's overshoot would
+  break: full-screen container transforms (`expand`, `collapse`), startup and entry settles
+  (`enter`), and surfaces folding to zero (`fold`, where bounce dips below zero).
+- When a change mounts heavy content or re-measures cards, start the animation after paint
+  (`afterPaint`) or step it by painted frames (`animateSteady`, `animateSteadySpring`), so
+  layout work does not eat the opening frames. During a continuous pointer resize (a split
+  handle, a window drag), track the width directly with no spring lag, and spring again once
+  it settles (Catch's `RESIZE_SETTLE_MS = 150` in `NoteGrid`).
+- Keep elements mounted and animate their geometry (or FLIP them) rather than swapping
+  components between layout states.
+- Respect `useReducedMotion()`: switch in place, or fade with `curves.fade`.
+- Page changes use view transitions and entry motion (ADR 0013); the task side column is
+  ADR 0012.
 
 ### Porting from Catch
 

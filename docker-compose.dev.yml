@@ -23,6 +23,8 @@ services:
       THROW_SEED_PROFILE: ${THROW_SEED_PROFILE:-demo}
       # Seeding and the E2E tests make accounts of their own.
       REGISTRATION: open
+      # The E2E webhook receiver listens on the app container's loopback over plain HTTP.
+      WEBHOOK_ALLOW_LOOPBACK_HTTP: 'true'
       THROW_DEV_HOST: 0.0.0.0
       THROW_DEV_ALLOWED_HOSTS: ${THROW_PUBLIC_HOST:-localhost},.ts.net
       PNPM_CONFIG_STORE_DIR: /pnpm-store

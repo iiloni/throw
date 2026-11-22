@@ -20,6 +20,7 @@ import { statusRoutes } from './routes/statuses';
 import { tagRoutes } from './routes/tags';
 import { taskRoutes } from './routes/tasks';
 import { updateRoutes } from './routes/updates';
+import { webhookRoutes } from './routes/webhooks';
 import { workspaceRoutes } from './routes/workspaces';
 
 /** JSON bodies are read into memory whole. */
@@ -105,6 +106,7 @@ export function createApp() {
     .route('/updates', updateRoutes)
     .route('/admin/backups', backupRoutes)
     .route('/mcp-tokens', mcpTokenRoutes)
+    .route('/webhooks', webhookRoutes)
     .route('/workspaces', workspaceRoutes)
     .route('/projects', projectRoutes)
     .route('/statuses', statusRoutes)

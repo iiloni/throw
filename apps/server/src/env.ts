@@ -1,6 +1,7 @@
 import { releaseChannelSchema } from '@throw/shared';
 import { z } from 'zod';
 import { isProxyRange } from './lib/clientIp';
+import { isAllowedHostPattern } from './webhooks/policy';
 
 const list = (value: string) =>
   value
@@ -48,9 +49,37 @@ const envSchema = z.object({
     .transform((v) => v === 'true'),
   UPDATE_BACKUPS_KEPT: z.coerce.number().int().min(1).default(10),
   THROW_CHANNEL: releaseChannelSchema.default('dev'),
+  /**
+   * Webhook hosts the operator trusts on a private network, such as a tailnet: exact names
+   * or `*.` suffixes (`*.example-tailnet.ts.net`). Comma separated. See ADR 0015.
+   */
+  WEBHOOK_ALLOWED_HOSTS: z
+    .string()
+    .default('')
+    .transform(list)
+    .refine(
+      (entries) => entries.every(isAllowedHostPattern),
+      'Use host names or *.suffix patterns',
+    ),
+  /** Address ranges webhooks may reach even when they are private, such as 100.64.0.0/10. */
+  WEBHOOK_ALLOWED_CIDRS: z
+    .string()
+    .default('')
+    .transform(list)
+    .refine((entries) => entries.every(isProxyRange), 'Use IP addresses or CIDR ranges'),
+  /** Lets webhooks reach plain-HTTP loopback receivers. For automated tests only. */
+  WEBHOOK_ALLOW_LOOPBACK_HTTP: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
 });
 
-export const env = envSchema.parse(process.env);
+export const env = envSchema
+  .refine(
+    (parsed) => !(parsed.NODE_ENV === 'production' && parsed.WEBHOOK_ALLOW_LOOPBACK_HTTP),
+    'WEBHOOK_ALLOW_LOOPBACK_HTTP is for tests and cannot be set in production',
+  )
+  .parse(process.env);
 
 /** Origins used by the Capacitor Android WebView. */
 export const NATIVE_APP_ORIGINS = ['https://localhost', 'capacitor://localhost'];
