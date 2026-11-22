@@ -133,6 +133,13 @@ test('a dev build switches its app icon and restores the choice before the app l
       .toBeLessThan(0.5);
     for (const theme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme: theme });
+      // Let the labels' color transitions finish in the new theme.
+      await section.evaluate(async (element) => {
+        getComputedStyle(element).color;
+        await Promise.allSettled(
+          element.getAnimations({ subtree: true }).map((animation) => animation.finished),
+        );
+      });
       await section.screenshot({
         path: test.info().outputPath(`app-icon-${icon.toLowerCase()}-${theme}.png`),
       });
