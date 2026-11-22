@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Validate sources and assemble proof sheets after render-validation.cjs. Requires Pillow/numpy."""
-import json,math,hashlib,re,subprocess,sys
+import json,math,os,re
 from pathlib import Path
 import xml.etree.ElementTree as ET
 from PIL import Image,ImageDraw,ImageFont
 import numpy as np
 
 ROOT=Path(__file__).resolve().parents[1];WORK=ROOT.parent/'throw-work';V=ROOT/'validation'
-fontpath='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+fontpath=os.environ.get('THROW_PROOF_FONT','DejaVuSans.ttf')
 def font(n):return ImageFont.truetype(fontpath,n)
 INK='#292B2D';PAPER='#F4F5F3'
 def canvas(w,h,title,subtitle=''):
@@ -37,14 +37,29 @@ for p in svgs:
    assert not k.endswith('href'),p
    for id in re.findall(r'url\(#([^)]*)\)',v):assert id in ids,(p,id)
  assert 'data:' not in p.read_text(),p
-def geom(p):
+def geom(p, *, shared_only=False):
  r=ET.parse(p).getroot();keys={'d','x','y','width','height','rx','ry','cx','cy','r','transform','viewBox','x1','x2','y1','y2'}
- return [(e.tag,sorted((k,v) for k,v in e.attrib.items() if k in keys)) for e in r.iter()]
-for template in ['throw-icon-{}.svg','throw-icon-{}-small.svg','throw-favicon-{}.svg','throw-adaptive-foreground-{}.svg','throw-adaptive-background-{}.svg','throw-maskable-{}.svg']:
- paths=[ROOT/c/template.format(c) for c in ('stable','preview','dev')]
- assert geom(paths[0])==geom(paths[1])==geom(paths[2]),template
-assert geom(ROOT/'shared/throw-icon-geometry.svg')==geom(ROOT/'stable/throw-icon-stable.svg')
+ vector={'x1','y1','x2','y2'}
+ return [(e.tag,sorted((k,v) for k,v in e.attrib.items()
+                        if k in (keys-vector if shared_only and e.get('id')=='channel-background' else keys)))
+         for e in r.iter()]
 shared=json.loads((ROOT/'shared/throw-brand-tokens.json').read_text());safe=shared['adaptive']['safeCircle']['radius']
+channels=('stable','preview','dev')
+channel_tokens={c:json.loads((ROOT/c/f'throw-{c}-tokens.json').read_text()) for c in channels}
+for template in ['throw-icon-{}.svg','throw-icon-{}-small.svg','throw-favicon-{}.svg','throw-adaptive-foreground-{}.svg','throw-adaptive-background-{}.svg','throw-maskable-{}.svg']:
+ paths=[ROOT/c/template.format(c) for c in channels]
+ assert geom(paths[0],shared_only=True)==geom(paths[1],shared_only=True)==geom(paths[2],shared_only=True),template
+ if template=='throw-adaptive-foreground-{}.svg':continue
+ for c,p in zip(channels,paths,strict=True):
+  background=channel_tokens[c]['gradientOverrides']['background']
+  vector=background.get('vector',shared['gradients']['background'])
+  grad=ET.parse(p).getroot().find(".//{*}linearGradient[@id='channel-background']")
+  assert [float(grad.get(k)) for k in ('x1','y1','x2','y2')]==vector['from']+vector['to'],p
+  assert [float(stop.get('offset')) for stop in grad]==shared['gradients']['background']['offsets'],p
+  assert [stop.get('stop-color') for stop in grad]==[
+   channel_tokens[c]['palette'][stop['color']]['hex'] for stop in background['stops']
+  ],p
+assert geom(ROOT/'shared/throw-icon-geometry.svg')==geom(ROOT/'stable/throw-icon-stable.svg')
 def alpha_metrics(p):
  a=np.asarray(Image.open(p).convert('RGBA'))[:,:,3];yy,xx=np.where(a>1)
  radius=np.hypot((xx+.5)*1024/a.shape[1]-512,(yy+.5)*1024/a.shape[0]-512)
@@ -125,7 +140,7 @@ for row,ink in enumerate(('dark','light')):
   p=WORK/'svg-renders'/f'wordmarks__{c}__throw-lockup-stacked-{c}-{ink}-small.svg.png';raw=Image.open(p);ww=150;hh=round(raw.height/raw.width*ww);paste(im,raw,(x+80,y+155),(ww,hh))
 save(im,'throw-wordmark-proof.png')
 
-report={'checks':{'svgXmlParsing':f'passed: {len(svgs)} SVGs','jsonParsing':f'passed: {len(jsons)} JSON files at validation time','noRasterOrRuntimeFonts':'passed','uniqueIdsAndResolvedPaintReferences':'passed','allChannelGeometryEqual':'passed for primary, small, micro, adaptive layers and PWA maskable','canonicalEqualsStableGeometry':'passed','adaptiveNoBackgroundTileOrShadow':'passed','adaptiveSafeCircle':'passed','maskableFullBleedOpaque':'passed'},'adaptiveSafeRadius':safe,'adaptivePaintMetrics':adaptive,'limitations':['Proof masks and bounds are source-level tests, not an Android emulator/device build.','No application or platform integration/build was performed.','No current external Catch repository palette was supplied; preview follows the saved Catch token file.'],'manualReview':'Pending visual inspection of generated sheets before final release.'}
+report={'checks':{'svgXmlParsing':f'passed: {len(svgs)} SVGs','jsonParsing':f'passed: {len(jsons)} JSON files at validation time','noRasterOrRuntimeFonts':'passed','uniqueIdsAndResolvedPaintReferences':'passed','allChannelGeometryEqual':'passed for primary, small, micro, adaptive layers and PWA maskable','channelBackgroundPaint':'passed for all icon tiers, adaptive backgrounds and PWA maskable','canonicalEqualsStableGeometry':'passed','adaptiveNoBackgroundTileOrShadow':'passed','adaptiveSafeCircle':'passed','maskableFullBleedOpaque':'passed'},'adaptiveSafeRadius':safe,'adaptivePaintMetrics':adaptive,'limitations':['Proof masks and bounds are source-level tests, not an Android emulator/device build.'],'manualReview':'Inspect the generated proof sheets after changes to the artwork.'}
 report['checks']['pwaMaskableSafeCircle']='passed';report['pwaForegroundMetrics']=pwa
 (V/'validation-report.json').write_text(json.dumps(report,indent=2)+'\n')
 print(f'Parsed {len(svgs)} SVGs and {len(jsons)} JSON files; channel geometry invariant. Adaptive maximum radii:',{c:round(m['maxPaintedRadius'],3) for c,m in adaptive.items()},'safe radius',round(safe,3))

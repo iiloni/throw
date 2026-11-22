@@ -37,4 +37,4 @@ Do not choose detail from a retina backing size alone: a 40 px displayed icon ex
 
 Report changed files, exact generation commands, build/check results, representative screenshots and unavailable validations. Preserve this source-of-truth package and Catch files. Do not reinterpret colors, ribbon curvature/taper, tile dimensions/rotation, internal details, shadow properties, safe-zone transforms or wordmark spacing.
 
-The package's preview background deliberately matches the saved Catch preview token file available during source creation. Current external Catch repository corrections were not supplied. Use these finalized Throw values rather than silently substituting a different purple; any future color-convention alignment must be an explicit channel-token change followed by regeneration.
+Throw Preview and Dev use the stops and directions of the corresponding Catch backgrounds. Future alignment starts with an explicit channel-token change, followed by regeneration and visual checks.

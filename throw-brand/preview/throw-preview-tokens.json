@@ -7,151 +7,151 @@
   "scope": "icon and lockup icon paints only",
   "palette": {
     "backgroundStart": {
-      "hex": "#6654B0",
+      "hex": "#8C68FF",
       "rgb": [
-        102,
-        84,
-        176
+        140,
+        104,
+        255
       ],
       "alpha": 1,
-      "usage": "preview background gradient stop at 0%"
+      "usage": "preview background gradient stop at 0%, left"
     },
     "backgroundMid": {
-      "hex": "#504389",
+      "hex": "#6044CF",
       "rgb": [
-        80,
-        67,
-        137
+        96,
+        68,
+        207
       ],
       "alpha": 1,
       "usage": "preview background gradient stop at 55%"
     },
     "backgroundEnd": {
-      "hex": "#363166",
+      "hex": "#3B2AA6",
       "rgb": [
-        54,
-        49,
-        102
+        59,
+        42,
+        166
       ],
       "alpha": 1,
-      "usage": "preview background gradient stop at 100%"
+      "usage": "preview background gradient stop at 100%, right"
     },
     "ribbonUpperStart": {
-      "hex": "#8272C5",
+      "hex": "#AD93FF",
       "rgb": [
-        130,
-        114,
-        197
+        173,
+        147,
+        255
       ],
       "alpha": 1,
       "usage": "preview ribbonUpper gradient stop at 0%"
     },
     "ribbonUpperMid": {
-      "hex": "#DBD3FF",
+      "hex": "#E5DBFF",
       "rgb": [
+        229,
         219,
-        211,
         255
       ],
       "alpha": 1,
       "usage": "preview ribbonUpper gradient stop at 48%"
     },
     "ribbonUpperEnd": {
-      "hex": "#A798E0",
+      "hex": "#BFA8FF",
       "rgb": [
-        167,
-        152,
-        224
+        191,
+        168,
+        255
       ],
       "alpha": 1,
       "usage": "preview ribbonUpper gradient stop at 100%"
     },
     "ribbonLowerStart": {
-      "hex": "#6654B0",
+      "hex": "#9276EC",
       "rgb": [
-        102,
-        84,
-        176
+        146,
+        118,
+        236
       ],
       "alpha": 1,
       "usage": "preview ribbonLower gradient stop at 0%"
     },
     "ribbonLowerMid": {
-      "hex": "#B6A7EB",
+      "hex": "#C7B4FA",
       "rgb": [
-        182,
-        167,
-        235
+        199,
+        180,
+        250
       ],
       "alpha": 1,
       "usage": "preview ribbonLower gradient stop at 52%"
     },
     "ribbonLowerEnd": {
-      "hex": "#8171C0",
+      "hex": "#9C82E7",
       "rgb": [
-        129,
-        113,
-        192
+        156,
+        130,
+        231
       ],
       "alpha": 1,
       "usage": "preview ribbonLower gradient stop at 100%"
     },
     "projectAccentStart": {
-      "hex": "#9683D8",
+      "hex": "#9C7BFF",
       "rgb": [
-        150,
-        131,
-        216
+        156,
+        123,
+        255
       ],
       "alpha": 1,
       "usage": "preview projectAccent gradient stop at 0%"
     },
     "projectAccentMid": {
-      "hex": "#6654B0",
+      "hex": "#7052E0",
       "rgb": [
-        102,
-        84,
-        176
+        112,
+        82,
+        224
       ],
       "alpha": 1,
       "usage": "preview projectAccent gradient stop at 55%"
     },
     "projectAccentEnd": {
-      "hex": "#504389",
+      "hex": "#5138BE",
       "rgb": [
-        80,
-        67,
-        137
+        81,
+        56,
+        190
       ],
       "alpha": 1,
       "usage": "preview projectAccent gradient stop at 100%"
     },
     "tileShadow": {
-      "hex": "#18122E",
+      "hex": "#231457",
       "rgb": [
-        24,
-        18,
-        46
+        35,
+        20,
+        87
       ],
       "alpha": 0.14,
       "usage": "tile-attached primary shadow only"
     },
     "microUpper": {
-      "hex": "#D7CDFA",
+      "hex": "#E3D6FF",
       "rgb": [
-        215,
-        205,
-        250
+        227,
+        214,
+        255
       ],
       "alpha": 1,
       "usage": "preview micro ribbon flat fill"
     },
     "microLower": {
-      "hex": "#B3A3E6",
+      "hex": "#BFA9F5",
       "rgb": [
-        179,
-        163,
-        230
+        191,
+        169,
+        245
       ],
       "alpha": 1,
       "usage": "preview micro ribbon flat fill"
@@ -160,6 +160,16 @@
   "gradientOverrides": {
     "background": {
       "gradientId": "channel-background",
+      "vector": {
+        "from": [
+          0,
+          512
+        ],
+        "to": [
+          1024,
+          512
+        ]
+      },
       "stops": [
         {
           "offset": 0,

@@ -13,8 +13,8 @@ assert(
   'Usage: node scripts/generate-brand-assets.mjs [--check]',
 );
 
-// The supplied package is immutable provenance. This also guards exported SVGs before
-// copying them, without requiring Python in the development/build containers.
+// Verify reviewed brand sources and their exported SVGs before copying them, without
+// requiring Python in the development or build containers.
 const manifest = JSON.parse(await readFile(resolve(sourceRoot, 'package-manifest.json'), 'utf8'));
 for (const [path, entry] of Object.entries(manifest.files)) {
   const bytes = await readFile(resolve(sourceRoot, path));

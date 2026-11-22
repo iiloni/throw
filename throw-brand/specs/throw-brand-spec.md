@@ -6,7 +6,7 @@ The identity is a cream project tile advancing above two broad upward-curving ri
 
 The supplied 1536-square reference includes a white presentation margin. For comparison only, its tile was cropped at `(75,83)`–`(1462,1459)` and normalized to a square. These approximate raster bounds are not construction constants. Production uses a clean 1024-square tile and smooth deliberately constructed vectors, not traced raster edges.
 
-The reference contains uneven lighting and a deeper right-hand teal. Production standardizes that lighting into explicit gradients, retains `#20AE96` as primary jade and uses a lighter `#179A86` deep stop. This avoids the previously rejected dark-forest treatment. The reference's relative foreground sizing, two sweep silhouettes and near-upper-right tile placement are preserved closely, but the production colors and lighting are deliberately not pixel samples.
+The reference contains uneven lighting and a deeper right-hand teal. Production uses a diagonal gradient with `#43DEBD` in the upper left, primary jade `#20AE96` at 55%, and `#148B79` in the lower right. The reference informs the highlight, foreground sizing, two sweep silhouettes and near-upper-right tile placement.
 
 ## Canonical geometry
 
@@ -71,7 +71,8 @@ All gradients are linear, `gradientUnits="userSpaceOnUse"`, explicitly sRGB-inte
 
 | Paint role | Vector | Stops | Coordinate space |
 |---|---|---|---|
-| Channel background | `(0,0)` → `(1024,1024)` | 0%, 55%, 100% | canvas; 45° down/right |
+| Stable and dev backgrounds | `(0,0)` → `(1024,1024)` | 0%, 55%, 100% | canvas; 45° down/right |
+| Preview background | `(0,512)` → `(1024,512)` | 0%, 55%, 100% | canvas; left to right |
 | Upper ribbon | `(36,916)` → `(690,340)` | 0%, 48%, 100% | canvas; up/right |
 | Lower ribbon | `(60,950)` → `(750,565)` | 0%, 52%, 100% | canvas; up/right |
 | Internal square | `(-114,-126)` → `(4,-8)` | 0%, 55%, 100% | tile-local; rotates with tile |
@@ -121,7 +122,7 @@ PWA maskable sources use a separate transform: `q = (512,512) + 0.70 × (p − (
 | Clean 16° rotation and rounded rectangles | Reproducible approximation of the approved softened raster shapes |
 | Two closed cubic ribbons | Faithful broad tapered sweeps, controlled separation and maintainable geometry |
 | Finite tips just inside the background boundary | Avoid clipped/blurred raster-tail ambiguity and keep platform transforms deterministic |
-| Lighter deep jade and simpler lighting than the reference | Preserve the specified jade anchor and avoid rejected dark-forest teal |
+| Bright jade highlight and deeper teal finish | Increase background depth while preserving the specified jade anchor |
 | One modest attached shadow; no ellipse | Restrained depth while honoring the explicit exclusion |
 | Purple/blue ribbons and square as documented paint overrides | Coherent channel treatment without changing shape or leaving unrelated jade accents |
 | Micro paint simplification and slightly thicker line | Reduce shading noise and preserve internal detail at favicon sizes |
@@ -131,8 +132,8 @@ PWA maskable sources use a separate transform: `q = (512,512) + 0.70 × (p − (
 
 ## Completed QA and limits
 
-All 60 SVGs were XML-parsed and rasterized using sharp/libvips/librsvg 2.63.2. Sources contain no raster image, text/font dependency, script or external reference. IDs are unique and paint/mask references resolve. JSON files parse. Geometry signatures match across all channel pairs for every icon tier, both adaptive layers and maskable artwork; canonical/master signatures match.
+All 60 SVGs were XML-parsed and rasterized using sharp/libvips/librsvg 2.63.2. Sources contain no raster image, text/font dependency, script or external reference. IDs are unique and paint/mask references resolve. JSON files parse. Shape geometry and foreground vectors match across channels for every icon tier, both adaptive layers and maskable artwork. Background vectors and stops are checked against the paint tokens, and the stable primary geometry matches the canonical SVG.
 
 Actual assigned-size PNGs were produced at 1024, 512, 192, 128, 64, 48, 32, 24 and 16 px for each treatment. The stable reference comparison, all channel size sheets, enlarged small-size comparisons, adaptive masks, monochrome mark and horizontal/stacked light/dark wordmarks were visually inspected. At 16 px the square and line remain antialiased detail clusters rather than independently crisp UI symbols. Development blue has intentionally lower tonal contrast than preview purple, while the tile and separated sweeps remain readable.
 
-Raster proofs are artwork QA, not WCAG certification or application/device testing. No Android build, emulator, physical launcher or web project was available or modified. The later integration agent must perform platform checks. All 23 previously snapshotted Catch source files remained unchanged. The validation and integrity reports are included.
+Raster proofs cover artwork geometry and legibility. The Android proof simulates launcher masks over the adaptive layers. The validation and integrity reports are included.
