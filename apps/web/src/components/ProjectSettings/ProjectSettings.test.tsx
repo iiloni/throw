@@ -31,6 +31,7 @@ const statusActions = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/statuses', () => statusActions);
 vi.mock('@/lib/collections', () => ({
+  useLocalRowsReady: () => true,
   useProjects: () => ({ projects: [project], isLoading: false }),
   useStatuses: () => ({ statuses: [], isLoading: false }),
   useTasks: () => ({ tasks: [], isLoading: false }),
