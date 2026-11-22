@@ -130,6 +130,20 @@ export const mcpTokens = pgTable(
   (table) => [index().on(table.userId), index().on(table.workspaceId)],
 );
 
+/** Replay outcomes live only as long as the credential that can retry them. */
+export const mcpStructureOperations = pgTable(
+  'mcp_structure_operations',
+  {
+    id: uuid().primaryKey(),
+    tokenId: uuid()
+      .notNull()
+      .references(() => mcpTokens.id, { onDelete: 'cascade' }),
+    requestHash: text().notNull(),
+    result: jsonb().notNull(),
+  },
+  (table) => [index().on(table.tokenId)],
+);
+
 export const workspaceMembers = pgTable(
   'workspace_members',
   {
@@ -153,7 +167,7 @@ export const projects = pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: 'cascade' }),
     name: text().notNull(),
-    color: text().notNull(),
+    color: text().$type<Color>().notNull(),
     icon: text(),
     /** Fractional index among the workspace's projects. */
     position: text().notNull(),
@@ -216,6 +230,7 @@ export const tags = pgTable(
     parentId: uuid().references((): AnyPgColumn => tags.id, { onDelete: 'cascade' }),
     icon: text().$type<TagIconName>(),
     color: text().$type<Color>(),
+    position: text(),
   },
   (table) => [
     index().on(table.workspaceId),

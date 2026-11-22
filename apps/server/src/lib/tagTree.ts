@@ -9,11 +9,19 @@ export async function lockTagTree(tx: Transaction, projectId: string) {
     sql`SELECT pg_advisory_xact_lock(hashtextextended(${`tags/${projectId.toLowerCase()}`}, 0))`,
   );
 }
-export function projectTags(tx: Transaction, userId: string, projectId: string) {
+export function projectTags(
+  tx: Transaction,
+  userId: string,
+  projectId: string,
+  workspaceId?: string,
+) {
   return tx
     .select()
     .from(tags)
     .where(
-      and(eq(tags.projectId, projectId), inArray(tags.workspaceId, memberWorkspaces(tx, userId))),
+      and(
+        eq(tags.projectId, projectId),
+        inArray(tags.workspaceId, memberWorkspaces(tx, userId, workspaceId)),
+      ),
     );
 }

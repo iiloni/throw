@@ -36,6 +36,13 @@
       "when": 1795210187293,
       "tag": "0004_mcp_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795327468922,
+      "tag": "0005_mcp-structure",
+      "breakpoints": true
     }
   ]
 }

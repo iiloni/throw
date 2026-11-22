@@ -55,7 +55,7 @@ function TokenList({
     <div className="flex flex-col gap-6">
       <SettingsSection
         title="Workspace access"
-        description="A token lets an external client read and change tasks in one workspace."
+        description="A token lets an external client manage tasks, projects, statuses and tags in one workspace."
       >
         {inventory.tokens.map((token) => (
           <SettingsRow

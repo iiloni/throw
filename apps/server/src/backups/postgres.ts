@@ -45,6 +45,7 @@ function withDatabase(url: string, name: string, login?: { user: string; passwor
 const WITHOUT_CREDENTIALS = [
   '--exclude-table-data=public.session',
   '--exclude-table-data=public.mcp_tokens',
+  '--exclude-table-data=public.mcp_structure_operations',
 ];
 
 const UNSAFE_ROLE =

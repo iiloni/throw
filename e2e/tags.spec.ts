@@ -91,7 +91,7 @@ test('tags and assignments isolate membership and project references @api', asyn
   });
   const row = (await shapeRows(request, 'tags', owner.headers)).find((row) => row.id === tag.id)!;
   expect(Object.keys(row).sort()).toEqual(
-    ['id', 'workspace_id', 'project_id', 'name', 'parent_id', 'icon', 'color'].sort(),
+    ['id', 'workspace_id', 'project_id', 'name', 'parent_id', 'icon', 'color', 'position'].sort(),
   );
   expect(Object.keys((await shapeRows(request, 'task-tags', owner.headers))[0]!).sort()).toEqual(
     ['task_id', 'tag_id', 'workspace_id', 'project_id'].sort(),

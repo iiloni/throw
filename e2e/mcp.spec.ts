@@ -403,3 +403,398 @@ test('MCP task writes use project numbering, conflict rules and live attributed 
     await client.close();
   }
 });
+
+function structureId() {
+  const time = Date.now().toString(16).padStart(12, '0');
+  return `${time.slice(0, 8)}-${time.slice(8)}-7${randomUUID().slice(15)}`;
+}
+
+async function expectToolError(
+  client: Client,
+  name: McpToolName,
+  args: Record<string, unknown>,
+  message: string,
+) {
+  const result = await client.callTool({
+    name,
+    arguments: { operationId: structureId(), ...args },
+  });
+  expect(result.isError, JSON.stringify(result.content)).toBe(true);
+  expect(JSON.stringify(result.content)).toContain(message);
+}
+
+test('MCP creates, edits and orders projects and replays concurrent or delayed requests @api', async ({
+  request,
+}) => {
+  const account = await createAccount(request);
+  const credential = await makeToken(request, account);
+  const client = await connect(credential.token);
+  try {
+    const args = { operationId: structureId(), name: 'Roadmap', key: 'ROAD', color: 'teal' };
+    const [first, retry] = await Promise.all([
+      call(client, 'create_project', args),
+      call(client, 'create_project', args),
+    ]);
+    expect(retry).toEqual(first);
+    const project = first.current;
+    const other = (
+      await call(client, 'create_project', {
+        operationId: structureId(),
+        name: 'Other',
+        key: 'ROAD',
+      })
+    ).current;
+    expect(other.key).toBe('ROAD2');
+    expect(project.position < other.position).toBe(true);
+
+    const projectId = project.id;
+    const starters = (await call(client, 'list_statuses', { projectId })).items;
+    expect(starters.map(({ category, isDefault }) => [category, isDefault]).sort()).toEqual(
+      STARTER_STATUSES.map(({ category }) => [category, true]).sort(),
+    );
+    const task = (await call(client, 'create_task', { projectId, title: 'Milestone' })).task;
+    expect(task.key).toBe('ROAD-1');
+    await expectToolError(
+      client,
+      'update_project',
+      {
+        projectId,
+        changes: { key: { before: 'ROAD', after: 'ROAD2' } },
+      },
+      'Another project has this key',
+    );
+    const update = {
+      operationId: structureId(),
+      projectId,
+      changes: {
+        name: { before: project.name, after: 'Release roadmap' },
+        key: { before: project.key, after: 'SHIP' },
+        icon: { before: null, after: 'rocket' },
+        color: { before: 'teal', after: 'amber' },
+        priorityNames: { before: project.priorityNames, after: ['Now', '', '', '', ''] },
+      },
+    };
+    const updated = await call(client, 'update_project', update);
+    expect(updated.current).toMatchObject({
+      name: 'Release roadmap',
+      key: 'SHIP',
+      color: 'amber',
+      icon: 'rocket',
+      priorityNames: ['Now', '', '', '', ''],
+    });
+    expect((await call(client, 'get_task', { task: task.id })).task.key).toBe('SHIP-1');
+    expect(
+      (await client.callTool({ name: 'get_task', arguments: { task: 'ROAD-1' } })).isError,
+    ).toBe(true);
+
+    const moved = await call(client, 'move_project', {
+      operationId: structureId(),
+      projectId,
+      before: { position: project.position },
+      placement: { side: 'after', neighborId: other.id },
+    });
+    expect(moved.current.position > other.position).toBe(true);
+    expect((await call(client, 'list_projects')).items.find(({ id }) => id === projectId)).toEqual(
+      moved.current,
+    );
+    const restored = await call(client, 'move_project', {
+      operationId: structureId(),
+      projectId,
+      before: { position: moved.current.position },
+      placement: { side: 'before', neighborId: other.id },
+    });
+    expect(restored.current.position).toBe(project.position);
+
+    expect(
+      (
+        await request.patch(`/api/projects/${projectId}`, {
+          headers: account.headers,
+          data: { name: project.name },
+        })
+      ).status(),
+    ).toBe(200);
+    expect(await call(client, 'update_project', update)).toEqual(updated);
+    expect(await call(client, 'create_project', args)).toEqual(first);
+    await expectToolError(client, 'create_project', { ...args, name: 'Different' }, 'already used');
+    expect(
+      (await call(client, 'list_projects')).items.find(({ id }) => id === projectId)?.name,
+    ).toBe(project.name);
+
+    const stale = await call(client, 'update_project', {
+      operationId: structureId(),
+      projectId,
+      changes: {
+        name: { before: 'Release roadmap', after: 'Stale rename' },
+        color: { before: 'amber', after: 'red' },
+      },
+    });
+    expect(stale).toMatchObject({
+      outcome: 'conflict',
+      conflicts: ['name'],
+      current: { name: project.name, color: 'amber' },
+    });
+    const history = (await call(client, 'get_task', { task: task.id })).history.items;
+    expect(history.map(({ kind, viaTokenName }) => [kind, viaTokenName])).toEqual([
+      ['created', 'Queue agent'],
+    ]);
+  } finally {
+    await client.close();
+  }
+});
+
+test('MCP status and tag writes enforce category, hierarchy and workspace boundaries @api', async ({
+  request,
+}) => {
+  const owner = await createAccount(request);
+  const stranger = await createAccount(request);
+  const credential = await makeToken(request, owner);
+  const otherCredential = await makeToken(request, stranger);
+  const own = await makeProject(request, owner, credential.metadata.workspaceId);
+  const foreign = await makeProject(request, stranger, otherCredential.metadata.workspaceId);
+  const extraId = randomUUID();
+  expect(
+    (
+      await request.post('/api/workspaces', {
+        headers: owner.headers,
+        data: { id: extraId, name: 'Other workspace', position: 'a1' },
+      })
+    ).status(),
+  ).toBe(201);
+  const extra = await makeProject(request, owner, extraId);
+  const client = await connect(credential.token);
+
+  try {
+    const initialDefault = own.statuses.find(({ category }) => category === 'active')!;
+    const created = (
+      await call(client, 'create_status', {
+        operationId: structureId(),
+        projectId: own.id,
+        category: 'active',
+        name: 'Verify',
+      })
+    ).current;
+    const later = (
+      await call(client, 'create_status', {
+        operationId: structureId(),
+        projectId: own.id,
+        category: 'active',
+        name: 'Review',
+      })
+    ).current;
+    expect(created).toMatchObject({ isDefault: false, defaultStatusId: initialDefault.id });
+    expect(created.position > initialDefault.position).toBe(true);
+    expect(
+      (
+        await request.patch(`/api/statuses/${later.id}`, {
+          headers: owner.headers,
+          data: { isDefault: true },
+        })
+      ).status(),
+    ).toBe(200);
+    const changeDefault = {
+      operationId: structureId(),
+      statusId: created.id,
+      changes: { defaultStatusId: { before: initialDefault.id, after: created.id } },
+    };
+    expect(await call(client, 'update_status', changeDefault)).toMatchObject({
+      outcome: 'conflict',
+      conflicts: ['defaultStatusId'],
+      current: { defaultStatusId: later.id },
+    });
+    const renamed = await call(client, 'update_status', {
+      ...changeDefault,
+      operationId: structureId(),
+      changes: {
+        name: { before: 'Verify', after: 'Testing' },
+        defaultStatusId: { before: later.id, after: created.id },
+      },
+    });
+    expect(renamed.current).toMatchObject({
+      name: 'Testing',
+      isDefault: true,
+      defaultStatusId: created.id,
+    });
+    await expectToolError(
+      client,
+      'update_status',
+      {
+        statusId: created.id,
+        changes: { defaultStatusId: { before: created.id, after: initialDefault.id } },
+      },
+      'Set defaultStatusId.after',
+    );
+    const moved = await call(client, 'move_status', {
+      operationId: structureId(),
+      statusId: created.id,
+      before: { position: created.position },
+      placement: { side: 'before', neighborId: initialDefault.id },
+    });
+    expect(moved.current.position < initialDefault.position).toBe(true);
+    await expectToolError(
+      client,
+      'move_status',
+      {
+        statusId: created.id,
+        before: { position: moved.current.position },
+        placement: {
+          side: 'before',
+          neighborId: own.statuses.find(({ category }) => category === 'done')!.id,
+        },
+      },
+      'same project and category',
+    );
+    const statuses = (await call(client, 'list_statuses', { projectId: own.id })).items;
+    expect(statuses.filter(({ isDefault }) => isDefault)).toHaveLength(4);
+    expect(
+      statuses
+        .filter(({ isDefault, category }) => isDefault && category === 'active')
+        .map(({ id }) => id),
+    ).toEqual([created.id]);
+
+    const makeTag = async (name: string, fields: Record<string, unknown> = {}) =>
+      (
+        await call(client, 'create_tag', {
+          operationId: structureId(),
+          projectId: own.id,
+          name,
+          ...fields,
+        })
+      ).current;
+    const root = await makeTag('Team', { color: 'teal', icon: 'rocket' });
+    await expectToolError(
+      client,
+      'create_tag',
+      { projectId: own.id, name: 'Duplicate color', color: 'teal' },
+      'already linked',
+    );
+    await expectToolError(
+      client,
+      'create_tag',
+      { projectId: own.id, name: 'Colored child', parentId: root.id, color: 'red' },
+      'Only top-level tags',
+    );
+    const child = await makeTag('Queue', { parentId: root.id });
+    const sibling = await makeTag('Backlog', { parentId: root.id });
+    const leaf = await makeTag('Mobile', { color: 'amber', icon: 'heart' });
+    await expectToolError(
+      client,
+      'update_tag',
+      {
+        tagId: root.id,
+        changes: { parentId: { before: null, after: child.id } },
+      },
+      'own branch',
+    );
+    await expectToolError(
+      client,
+      'update_tag',
+      {
+        tagId: leaf.id,
+        changes: { parentId: { before: null, after: child.id } },
+      },
+      'Only top-level tags',
+    );
+    const nested = await call(client, 'update_tag', {
+      operationId: structureId(),
+      tagId: leaf.id,
+      changes: {
+        name: { before: 'Mobile', after: 'App' },
+        parentId: { before: null, after: child.id },
+        color: { before: 'amber', after: null },
+        icon: { before: 'heart', after: null },
+      },
+    });
+    expect(nested.current).toMatchObject({
+      name: 'App',
+      parentId: child.id,
+      color: null,
+      icon: null,
+    });
+    const move = {
+      operationId: structureId(),
+      tagId: child.id,
+      before: { parentId: root.id, position: null },
+      placement: { side: 'before', neighborId: sibling.id },
+    };
+    const movedTag = await call(client, 'move_tag', move);
+    expect(await call(client, 'move_tag', move)).toEqual(movedTag);
+    const items = (await call(client, 'list_tags', { projectId: own.id })).items;
+    expect(items.find(({ id }) => id === leaf.id)?.path).toEqual(['Team', 'Queue', 'App']);
+    expect(items.find(({ id }) => id === sibling.id)!.position! > movedTag.current.position!).toBe(
+      true,
+    );
+    await expect
+      .poll(
+        async () =>
+          (await shapeRows(request, 'tags', owner.headers)).find((row) => row.id === child.id)
+            ?.position,
+      )
+      .toBe(movedTag.current.position);
+
+    const foreignTagId = randomUUID();
+    expect(
+      (
+        await request.post('/api/tags', {
+          headers: stranger.headers,
+          data: {
+            id: foreignTagId,
+            projectId: foreign.id,
+            name: 'Private',
+            color: null,
+            icon: null,
+            parentId: null,
+          },
+        })
+      ).status(),
+    ).toBe(201);
+    await expectToolError(
+      client,
+      'update_tag',
+      {
+        tagId: foreignTagId,
+        changes: { name: { before: 'Private', after: 'Leaked' } },
+      },
+      'Tag not found',
+    );
+    await expectToolError(
+      client,
+      'create_tag',
+      { projectId: own.id, name: 'Child', parentId: foreignTagId },
+      'Parent tag not in this project',
+    );
+    for (const project of [foreign, extra]) {
+      await expectToolError(
+        client,
+        'update_project',
+        {
+          projectId: project.id,
+          changes: { name: { before: project.name, after: 'Leaked' } },
+        },
+        'Project not found',
+      );
+      await expectToolError(
+        client,
+        'create_status',
+        { projectId: project.id, name: 'Hidden', category: 'active' },
+        'Project not found',
+      );
+      await expectToolError(
+        client,
+        'create_tag',
+        { projectId: project.id, name: 'Hidden' },
+        'Project not found',
+      );
+      await expectToolError(
+        client,
+        'update_status',
+        {
+          statusId: project.statuses[0]!.id,
+          changes: { name: { before: 'Backlog', after: 'Leaked' } },
+        },
+        'Status not found',
+      );
+    }
+  } finally {
+    await client.close();
+  }
+});

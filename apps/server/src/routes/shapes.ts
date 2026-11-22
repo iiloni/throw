@@ -40,7 +40,7 @@ const SHAPES: Record<string, { table: string; columns: string[]; where: string }
   },
   tags: {
     table: 'tags',
-    columns: ['id', 'workspace_id', 'project_id', 'name', 'parent_id', 'icon', 'color'],
+    columns: ['id', 'workspace_id', 'project_id', 'name', 'parent_id', 'icon', 'color', 'position'],
     where: `workspace_id IN (${MEMBER_WORKSPACES})`,
   },
   'task-tags': {

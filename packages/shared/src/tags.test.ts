@@ -108,6 +108,16 @@ describe('tree operations ported from Catch', () => {
     expect([...tagSubtreeIds(tags, child.id)]).toEqual([child.id, leaf.id]);
     expect(tagPath(tags, leaf.id).map((tag) => tag.name)).toEqual(['Product', 'Mobile', 'Android']);
   });
+  it('uses manual positions within each sibling group and keeps unpositioned tags alphabetical', () => {
+    const positionedRoot = tag(4, { name: 'Zebra', position: 'a1' });
+    const positionedChild = tag(5, { name: 'Web', parentId: root.id, position: 'a0' });
+    const earlyRoot = tag(6, { name: 'Alpha' });
+    expect(
+      tagTree([root, child, leaf, earlyRoot, positionedChild, positionedRoot]).map(
+        ({ tag }) => tag.id,
+      ),
+    ).toEqual([positionedRoot.id, earlyRoot.id, root.id, positionedChild.id, child.id, leaf.id]);
+  });
   it('handles deep trees iteratively and partial/cyclic snapshots without looping', () => {
     const deep = Array.from({ length: 12000 }, (_, n) =>
       tag(n + 1, { parentId: n ? id(n) : null }),

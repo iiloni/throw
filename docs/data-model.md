@@ -152,19 +152,21 @@ no separate tag-owner or administrator role.
 | `parentId` | Client | Nullable; a tag of the same project. No depth limit. |
 | `color` | Client | Nullable palette color, roots only. Descendants inherit. |
 | `icon` | Client | Nullable bundled Lucide name, roots only. Descendants inherit. |
+| `position` | Server | Nullable fractional index within the tag's siblings. |
 
-- Siblings sort alphabetically by name, then id for equal names **(default tie-break)**.
-  There is no manual position. Renaming immediately changes that order. Names need not be
-  unique, including among siblings, as in Catch; ids identify tags and full paths provide context.
+- Siblings with manual positions sort first by position, then by name and id for ties.
+  Siblings without positions sort by name and id. MCP can reorder siblings, and reparenting
+  clears the old position. Names need not be unique, including among siblings. IDs identify
+  tags and full paths provide context.
 - A non-null color belongs to at most one root **per project**, as in Catch per user.
   Null means no color and may occur on many roots. The primary tag's root determines a
   task's color; without a complete valid root path, the color helper returns null.
   Moving a branch or recoloring a root changes derived colors without rewriting tasks.
 - Creation validates the parent, root appearance and color uniqueness. An existing id in
   the same project is a replay and answers `{ txid: null }`; an id elsewhere answers 409.
-- Rename, recolor, change icon and reparent apply only the fields sent, in server arrival
-  order **(default)**, like statuses. There is no task-style before-value check or log for
-  tree edits. Unchanged edits skip the UPDATE and answer `{ txid: null }`.
+- App edits apply only the fields sent, in server arrival order. Unchanged edits skip the
+  UPDATE and answer `{ txid: null }`. MCP edits compare the before values described in
+  [ADR 0014](decisions/0014-mcp-server.md). Tree edits have no activity log.
 - Moving under self or any descendant is refused with 409. A missing or foreign-project
   parent is refused. Moving a colored/icon-bearing root under another tag must explicitly
   clear its color and icon in that write, as in Catch. Promoting a child to root starts

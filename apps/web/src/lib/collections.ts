@@ -199,7 +199,7 @@ export const tagsCollection = createCollection(
       getKey: (tag) => tag.id,
       shapeOptions: shapeOptions('tags'),
     }),
-    1,
+    2,
   ),
 );
 export const taskTagsCollection = createCollection(

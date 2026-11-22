@@ -64,9 +64,10 @@ integrations.
 - Search through a command palette or an integrated input.
 - Trash with restore.
 - Offline-first web app and Android app.
-- An MCP server for reading workspace data and managing tasks. The account holder creates
-  a named token for one workspace in Settings and can revoke it there. Agent changes sync
-  to the board and show their source in the task's history or comments.
+- An MCP server for reading workspace data, managing tasks, and creating, editing and
+  reordering projects, statuses and tags. The account holder creates a named token for one
+  workspace in Settings and can revoke it there. Agent writes sync to the board. Task
+  changes show their source in the task's history or comments.
 
 ### Out of scope
 
