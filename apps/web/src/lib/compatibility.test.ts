@@ -1,3 +1,4 @@
+import { act, renderHook } from '@testing-library/react';
 import { API_PROTOCOL_HEADER, API_PROTOCOL_VERSION } from '@throw/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -217,4 +218,26 @@ it('uses the live size capability when local storage is full', async () => {
   } finally {
     setItem.mockRestore();
   }
+});
+
+it('reflects size capability changes made by another tab', async () => {
+  fetcher.mockResolvedValueOnce(json(compatible));
+  const { checkCompatibility, ensureTaskSizeSupport, useTaskSizeSupport } = await import(
+    './compatibility'
+  );
+  await checkCompatibility();
+  const { result } = renderHook(useTaskSizeSupport);
+  expect(result.current).toBe(false);
+
+  const key = 'throw-task-size-support:https://throw.example';
+  for (const supported of [true, false]) {
+    act(() => {
+      localStorage.setItem(key, String(supported));
+      window.dispatchEvent(new StorageEvent('storage', { key, newValue: String(supported) }));
+    });
+    expect(result.current).toBe(supported);
+    if (supported) await expect(ensureTaskSizeSupport()).resolves.toBeUndefined();
+    else await expect(ensureTaskSizeSupport()).rejects.toThrow('Waiting for a server update');
+  }
+  expect(fetcher).toHaveBeenCalledTimes(1);
 });

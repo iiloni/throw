@@ -20,7 +20,8 @@ export class CompatibilityError extends Error {
   }
 }
 
-const taskSizeKey = (server: string) => `throw-task-size-support:${server}`;
+const taskSizeKeyPrefix = 'throw-task-size-support:';
+const taskSizeKey = (server: string) => `${taskSizeKeyPrefix}${server}`;
 const storedTaskSize = z.boolean();
 const taskSizeSupport = createStore<{ server: string; supported: boolean } | null>(null);
 
@@ -31,6 +32,15 @@ function taskSizeSupported() {
     ? current.supported
     : readPreference(taskSizeKey(server), storedTaskSize, false);
 }
+
+// A capability saved by one tab also updates the other tabs' live values.
+window.addEventListener('storage', ({ key }) => {
+  if (!key?.startsWith(taskSizeKeyPrefix)) return;
+  const server = getServerUrl();
+  if (key === taskSizeKey(server)) {
+    taskSizeSupport.set({ server, supported: readPreference(key, storedTaskSize, false) });
+  }
+});
 
 export function useTaskSizeSupport() {
   return useSyncExternalStore(taskSizeSupport.subscribe, taskSizeSupported);
