@@ -24,8 +24,13 @@ const localTask = (page: Page, id: string) =>
 test('signing in again after a 401 replays the account’s saved write', async ({ page }) => {
   const fixture = await workspaceFixture(page);
   const taskId = fixture.ids['Bake bread']!;
-  const endpoint = `**/api/tasks/${taskId}`;
-  await page.route(endpoint, (route) => route.fulfill({ status: 401 }));
+  // The route stays in place and stops refusing instead of being removed: unrouting turns
+  // Chromium's request interception off, and doing that while the sign-in page loads could
+  // leave one of its modules unanswered, a blank page with no form.
+  let refusing = true;
+  await page.route(`**/api/tasks/${taskId}`, (route) =>
+    refusing ? route.fulfill({ status: 401 }) : route.fallback(),
+  );
   await page.evaluate(async (id) => {
     const { updateTask } = await import(/* @vite-ignore */ '/src/lib/tasks.ts');
     updateTask(id, { title: 'Bake bread after signing in' });
@@ -35,7 +40,7 @@ test('signing in again after a 401 replays the account’s saved write', async (
   );
   await page.getByRole('button', { name: 'Sign in again' }).click();
   await page.waitForURL('**/login?**');
-  await page.unroute(endpoint);
+  refusing = false;
   await page.getByRole('textbox', { name: 'Email' }).fill(fixture.email);
   await page.getByLabel('Password', { exact: true }).fill('password123');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
