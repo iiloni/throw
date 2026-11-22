@@ -73,6 +73,25 @@ dependencies {
     testImplementation "org.robolectric:robolectric:4.16.1"
 }
 
+// Resolve AppIconsTest's SDKs through Gradle so test workers can run offline. Keep these
+// versions in sync with Robolectric's DefaultSdkProvider when upgrading the test runner.
+def robolectricSdkDir = layout.buildDirectory.dir('robolectric-sdks')
+def stageRobolectricSdks = tasks.register('stageRobolectricSdks', Sync) {
+    // Resolve each API level separately so Gradle keeps both versions of the same module.
+    ['7.0.0_r1-robolectric-r1-i7', '16-robolectric-13921718-i7'].each { version ->
+        from configurations.detachedConfiguration(
+            dependencies.create("org.robolectric:android-all-instrumented:${version}@jar")
+        )
+    }
+    into robolectricSdkDir
+}
+
+tasks.withType(Test).configureEach {
+    inputs.files(stageRobolectricSdks).withPathSensitivity(PathSensitivity.RELATIVE)
+    systemProperty 'robolectric.offline', 'true'
+    systemProperty 'robolectric.dependency.dir', robolectricSdkDir.get().asFile.absolutePath
+}
+
 apply from: 'capacitor.build.gradle'
 
 
