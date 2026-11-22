@@ -10,7 +10,8 @@ import { useSyncExternalStore } from 'react';
 import { z } from 'zod';
 import { getAuthToken } from './auth';
 import { getServerUrl } from './serverUrl';
-import { readPreference, watchPreferences, writePreference } from './storage';
+import { readPreference, writePreference } from './storage';
+import { createStore } from './store';
 import { getSyncStatus, subscribeToSyncStatus, updateSyncStatus } from './syncStatus';
 
 export class CompatibilityError extends Error {
@@ -21,18 +22,29 @@ export class CompatibilityError extends Error {
 
 const taskSizeKey = (server: string) => `throw-task-size-support:${server}`;
 const storedTaskSize = z.boolean();
+const taskSizeSupport = createStore<{ server: string; supported: boolean } | null>(null);
 
 function taskSizeSupported() {
-  return readPreference(taskSizeKey(getServerUrl()), storedTaskSize, false);
+  const server = getServerUrl();
+  const current = taskSizeSupport.get();
+  return current?.server === server
+    ? current.supported
+    : readPreference(taskSizeKey(server), storedTaskSize, false);
 }
 
 export function useTaskSizeSupport() {
-  return useSyncExternalStore(watchPreferences, taskSizeSupported);
+  return useSyncExternalStore(taskSizeSupport.subscribe, taskSizeSupported);
 }
 
 function rememberTaskSizeSupport(server: string, supported: boolean) {
-  if (readPreference(taskSizeKey(server), storedTaskSize, false) !== supported)
-    writePreference(taskSizeKey(server), supported);
+  taskSizeSupport.set({ server, supported });
+  const key = taskSizeKey(server);
+  if (readPreference(key, storedTaskSize, false) === supported) return;
+  try {
+    writePreference(key, supported);
+  } catch {
+    // The live server response still applies when the offline cache cannot be written.
+  }
 }
 
 export async function ensureTaskSizeSupport(force = false) {

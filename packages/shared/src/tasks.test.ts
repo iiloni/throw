@@ -94,6 +94,9 @@ describe('create schema', () => {
       size: null,
     });
   });
+  it('accepts each size on create', () => {
+    for (const size of SIZES) expect(createTaskSchema.parse({ ...create, size }).size).toBe(size);
+  });
   it('takes no server values', () => {
     expect(createTaskSchema.safeParse({ ...create, number: 4 }).success).toBe(false);
     expect(createTaskSchema.safeParse({ ...create, workspaceId: id(3) }).success).toBe(false);
@@ -140,11 +143,16 @@ describe('update schema', () => {
   });
 });
 
-it('uses the fixed T-shirt scale for creates and nullable before and after values', () => {
+it('uses the fixed T-shirt scale for nullable size changes', () => {
   expect(SIZES.map(sizeLabel)).toEqual(['XS', 'S', 'M', 'L', 'XL']);
   for (const size of SIZES) {
-    const changes = { size: { before: size, after: null } };
-    expect(updateTaskSchema.parse({ changeId: id(9), changes }).changes).toEqual(changes);
+    for (const change of [
+      { before: null, after: size },
+      { before: size, after: null },
+    ]) {
+      const changes = { size: change };
+      expect(updateTaskSchema.parse({ changeId: id(9), changes }).changes).toEqual(changes);
+    }
   }
   for (const size of [0, 6, 2.5, '3']) {
     expect(

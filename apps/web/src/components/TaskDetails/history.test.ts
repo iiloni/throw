@@ -116,6 +116,7 @@ describe('history sentences', () => {
             change('title', null, 'Plan'),
             change('statusId', null, 'backlog', { requestedName: 'Backlog', reason: 'replaced' }),
             change('priority', null, 3),
+            change('size', null, 3),
             change('secondaryTags', null, 'gone', { applied: false, reason: 'invalid' }),
           ],
           'created',

@@ -623,8 +623,8 @@ test('REST task size defaults, clears, and records replays and stale changes @ap
   const project = await createProject(request, account);
   const id = await newTask(request, account, { projectId: project.id, size: 2 });
   const legacy = await newTask(request, account, { projectId: project.id });
-  expect((await taskRow(request, account, legacy))?.size).toBeNull();
-  expect((await taskRow(request, account, id))?.size).toBe('2');
+  await expect.poll(async () => (await taskRow(request, account, legacy))?.size).toBeNull();
+  await expect.poll(async () => (await taskRow(request, account, id))?.size).toBe('2');
   expect((await createTask(request, account, { projectId: project.id, size: 6 })).status()).toBe(
     400,
   );
@@ -644,20 +644,23 @@ test('REST task size defaults, clears, and records replays and stale changes @ap
     (await updateTask(request, account, id, { title: { before: 'Task', after: 'Renamed' } }))
       .refused,
   ).toEqual([]);
-  expect((await taskRow(request, account, id))?.size).toBe('4');
+  await expect.poll(async () => (await taskRow(request, account, id))?.size).toBe('4');
 
   const staleId = randomUUID();
   const clear = { size: { before: 2, after: null } };
   const refused = { txid: null, refused: [{ field: 'size', reason: 'stale' }] };
   expect(await updateTask(request, account, id, clear, staleId)).toEqual(refused);
   expect(await updateTask(request, account, id, clear, staleId)).toEqual(refused);
-  const history = await shapeRows(request, 'task_activity', account.headers);
-  expect(JSON.parse(String(history.find((row) => row.id === staleId)?.changes))).toEqual([
-    { field: 'size', previous: 4, requested: null, applied: false, reason: 'stale' },
-  ]);
+  await expect
+    .poll(async () => {
+      const history = await shapeRows(request, 'task_activity', account.headers);
+      const entry = history.find((row) => row.id === staleId);
+      return entry ? JSON.parse(String(entry.changes)) : undefined;
+    })
+    .toEqual([{ field: 'size', previous: 4, requested: null, applied: false, reason: 'stale' }]);
 
   expect(
     (await updateTask(request, account, id, { size: { before: 4, after: null } })).refused,
   ).toEqual([]);
-  expect((await taskRow(request, account, id))?.size).toBeNull();
+  await expect.poll(async () => (await taskRow(request, account, id))?.size).toBeNull();
 });

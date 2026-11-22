@@ -200,3 +200,21 @@ it('keeps ordinary task writes compatible and retries sized writes after a serve
   fetcher.mockResolvedValueOnce(json({}, 400)).mockResolvedValueOnce(json(compatible));
   await expect(api.updateTask('task', size)).rejects.toBeInstanceOf(CompatibilityError);
 });
+
+it('uses the live size capability when local storage is full', async () => {
+  const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new DOMException('Storage quota exceeded', 'QuotaExceededError');
+  });
+  try {
+    fetcher.mockResolvedValueOnce(json({ ...compatible, taskSize: true }));
+    fetcher.mockResolvedValueOnce(json({ txid: 42, refused: [] }));
+    const { api } = await import('./api');
+    await expect(
+      api.updateTask('task', { changeId: 'queued', changes: { size: { before: null, after: 3 } } }),
+    ).resolves.toMatchObject({ txid: 42 });
+    expect(setItem).toHaveBeenCalledWith('throw-task-size-support:https://throw.example', 'true');
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  } finally {
+    setItem.mockRestore();
+  }
+});
