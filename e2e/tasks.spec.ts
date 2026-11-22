@@ -169,6 +169,7 @@ test('statuses and tasks are visible and writable only to members of their works
     description_version: null,
     status_id: project.statuses.backlog,
     priority: '3',
+    size: null,
     position: 'a0',
     parent_id: null,
     primary_tag_id: null,
