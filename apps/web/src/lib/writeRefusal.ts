@@ -11,6 +11,10 @@ const messages = new Map([
     'This status is now the default. Choose another default before deleting it.',
   ],
   [
+    'The other task already has the reverse relation',
+    'The other task already had the opposite relation, so this one was not added.',
+  ],
+  [
     'Tasks use this status',
     'Tasks now use this status, including possibly tasks in the trash. Move them before deleting it.',
   ],

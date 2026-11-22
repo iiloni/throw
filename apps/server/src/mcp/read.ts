@@ -4,7 +4,10 @@ import {
   type McpInput,
   type McpOutput,
   type McpPageInput,
+  openBlockers,
+  relationRole,
   SYNCED_ACTIVITY_KINDS,
+  TASK_RELATION_ROLES,
 } from '@throw/shared';
 import {
   and,
@@ -28,6 +31,7 @@ import {
   statuses,
   tags,
   taskActivity,
+  taskRelations,
   tasks,
   taskTags,
   workspaces,
@@ -323,6 +327,61 @@ export function exposeChanges(changes: ActivityChange[]) {
   });
 }
 
+/** A task's relations, as it sees them, with the tasks on their other ends. */
+export async function taskRelationsOf(actor: McpActor, taskId: string) {
+  const rows = await db
+    .select()
+    .from(taskRelations)
+    .where(
+      and(
+        or(eq(taskRelations.sourceTaskId, taskId), eq(taskRelations.targetTaskId, taskId)),
+        inArray(taskRelations.workspaceId, workspacesFor(actor)),
+      ),
+    );
+  const seen = rows.map((row) => ({ row, ...relationRole(row, taskId)! }));
+  const others = seen.length
+    ? await db
+        .select({
+          id: tasks.id,
+          key,
+          projectId: tasks.projectId,
+          title: tasks.title,
+          category: statuses.category,
+          effectivelyTrashed: sql<boolean>`${trashed}`,
+        })
+        .from(tasks)
+        .innerJoin(projects, eq(tasks.projectId, projects.id))
+        .innerJoin(statuses, eq(tasks.statusId, statuses.id))
+        .leftJoin(parent, eq(tasks.parentId, parent.id))
+        .where(
+          and(
+            inArray(
+              tasks.id,
+              seen.map((item) => item.otherTaskId),
+            ),
+            inArray(tasks.workspaceId, workspacesFor(actor)),
+          ),
+        )
+    : [];
+  const byId = new Map(others.map((task) => [task.id, task]));
+  const relations = seen
+    .flatMap(({ row, role, otherTaskId }) => {
+      const task = byId.get(otherTaskId);
+      return task ? [{ id: row.id, relation: role, task }] : [];
+    })
+    .sort(
+      (a, b) =>
+        TASK_RELATION_ROLES.indexOf(a.relation) - TASK_RELATION_ROLES.indexOf(b.relation) ||
+        a.task.key.localeCompare(b.task.key, undefined, { numeric: true }),
+    );
+  const blocked =
+    openBlockers(taskId, rows, (id) => {
+      const task = byId.get(id);
+      return task && { task, category: task.category, trashed: task.effectivelyTrashed };
+    }).length > 0;
+  return { relations, blocked };
+}
+
 export async function getTask(
   actor: McpActor,
   input: McpInput<'get_task'>,
@@ -341,7 +400,7 @@ export async function getTask(
     .limit(1);
   if (!task) throw new ToolError('Task not found.');
 
-  const [subtaskRows, commentRows, historyRows, assignments] = await Promise.all([
+  const [subtaskRows, commentRows, historyRows, assignments, linked] = await Promise.all([
     taskPage(actor, input.subtasks, eq(tasks.parentId, task.id)),
     db
       .select({
@@ -387,6 +446,7 @@ export async function getTask(
       .from(taskTags)
       .where(and(eq(taskTags.taskId, task.id), inArray(taskTags.workspaceId, workspacesFor(actor))))
       .orderBy(taskTags.tagId),
+    taskRelationsOf(actor, task.id),
   ]);
 
   const commentPage = timelinePage(commentRows, input.comments.limit);
@@ -397,7 +457,9 @@ export async function getTask(
       ...summarize(row),
       description: blocksToMarkdown(description),
       secondaryTagIds: assignments.map(({ tagId }) => tagId),
+      blocked: linked.blocked,
     },
+    relations: linked.relations,
     subtasks: uuidPage(subtaskRows.map(summarize), input.subtasks),
     comments: {
       ...commentPage,

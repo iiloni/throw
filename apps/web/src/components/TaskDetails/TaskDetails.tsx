@@ -10,11 +10,13 @@ import {
 } from '@throw/shared';
 import { ChevronLeft, ChevronRight, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
+import { ShellContext } from '@/components/AppShell/shell';
 import { StatusGlyph } from '@/components/Board/glyphs';
 import { type Task as BoardTask, projectOf } from '@/components/Board/model';
 import { StatusMenu } from '@/components/Board/StatusMenu';
 import {
   board,
+  canOpenTask,
   current,
   leaveTask,
   openNewSubtask,
@@ -25,6 +27,7 @@ import { CARD_STATUS_CONTROL, TaskCard } from '@/components/Board/TaskCard';
 import { cardSurface, TaskTitle } from '@/components/Board/TaskView';
 import { TaskPaneWidthContext, TaskScrollContext } from '@/components/Board/taskMotionContext';
 import { IconButton } from '@/components/IconButton/IconButton';
+import { TaskRelations, useRelationGroups } from '@/components/TaskRelations/TaskRelations';
 import { TaskTags } from '@/components/TaskTags/TaskTags';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useTags, useTaskTags } from '@/lib/collections';
@@ -121,13 +124,27 @@ export function TaskDetails({
   const hasTags = [task.primaryTagId, ...secondaryTagIds].some(
     (id) => id !== null && tags.some((tag) => tag.id === id),
   );
+  const shell = useContext(ShellContext);
+  const { groups: relationGroups, isLoading: relationsLoading } = useRelationGroups(task);
   const column = useTaskColumn({
     paneWidth: phone ? null : paneWidth,
-    hasExtras: hasTags || (task.parentId === null && children.length > 0),
-    ready: !tagsLoading && !taskTagsLoading,
+    hasExtras:
+      hasTags || (task.parentId === null && children.length > 0) || relationGroups.length > 0,
+    ready: !tagsLoading && !taskTagsLoading && !relationsLoading,
   });
   const tagRow = (
     <TaskTags tags={tags} primaryTagId={task.primaryTagId} secondaryTagIds={secondaryTagIds} />
+  );
+  /**
+   * A related task on this board opens over this one, so Back returns here as it does from a
+   * subtask. One in another project opens on its own board.
+   */
+  function openRelated(other: Task) {
+    if (canOpenTask(other.id)) openSubtask(other.id);
+    else shell?.openTask(other.projectId, other.id);
+  }
+  const relations = (className?: string) => (
+    <TaskRelations task={task} groups={relationGroups} onOpen={openRelated} className={className} />
   );
   /** The subtasks with their slot to add one, inline below the description or in the column. */
   const subtasks = (className?: string, wrapList: (list: ReactNode) => ReactNode = (l) => l) => (
@@ -236,6 +253,9 @@ export function TaskDetails({
               ))}
             </Fold>
           )}
+          <Fold data-fold="relations" amount={column.inline} hidden={column.fits}>
+            {column.inlineMounted && relations('mt-8')}
+          </Fold>
           <TaskTimeline
             key={`timeline:${task.id}`}
             task={task}
@@ -338,6 +358,7 @@ export function TaskDetails({
         <TaskColumnFrame layout={column} card={card}>
           {tagRow}
           {task.parentId === null && subtasks()}
+          {relations()}
         </TaskColumnFrame>
       )}
       {!phone && <TaskDrawer task={task} statuses={statuses} />}

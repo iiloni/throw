@@ -18,6 +18,7 @@ import { projectRoutes } from './routes/projects';
 import { shapeRoutes } from './routes/shapes';
 import { statusRoutes } from './routes/statuses';
 import { tagRoutes } from './routes/tags';
+import { taskRelationRoutes } from './routes/taskRelations';
 import { taskRoutes } from './routes/tasks';
 import { updateRoutes } from './routes/updates';
 import { webhookRoutes } from './routes/webhooks';
@@ -113,6 +114,7 @@ export function createApp() {
     .route('/tasks', taskRoutes)
     .route('/comments', commentRoutes)
     .route('/tags', tagRoutes)
+    .route('/task-relations', taskRelationRoutes)
     .route('/shapes', shapeRoutes);
 
   return api;

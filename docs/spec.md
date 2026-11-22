@@ -62,11 +62,12 @@ integrations.
 - Custom statuses mapped to categories, five priority ranks, optional task sizes and nested tags.
 - The project board, the cross-project board and the task view.
 - Comments and a full activity log.
+- Task relations across the projects of a workspace: blocks, duplicate of and relates to.
 - Search through a command palette or an integrated input.
 - Trash with restore.
 - Offline-first web app and Android app.
-- An MCP server for reading workspace data, managing tasks, and creating, editing and
-  reordering projects, statuses and tags. The account holder creates a named token for one
+- An MCP server for reading workspace data, managing tasks and their relations, and
+  creating, editing and reordering projects, statuses and tags. The account holder creates a named token for one
   workspace in Settings and can revoke it there. Agent writes sync to the board. Task
   changes show their source in the task's history or comments. Agents can follow workspace
   changes with a cursor-based feed.
@@ -87,7 +88,6 @@ integrations.
 | Filtering by tag across projects | Tags are per project. |
 | Automation inside Throw | Scheduled jobs and rules that change tasks are out of scope. Webhooks only notify. |
 | Other integrations, import, export | Out of scope for the first version. |
-| Task relations (blocks, duplicate of) | Later. |
 | Reports (cycle time, burndown) | Later; the activity log makes them possible. |
 | Time tracking | Out of scope until further notice. |
 | Moving a task to another project | Not supported for now. A task filed in the wrong project is recreated. |
@@ -202,6 +202,37 @@ Tags follow Catch's model (Catch ADR 0016), scoped to a project instead of a use
 - The primary tag sets the card's color through its root. Status is already shown by the
   column, so color is free to separate kinds of work.
 
+### Relations
+
+A task can be linked to any other task of its workspace, in its own project or another
+one (2026-11-22). A link is one of three kinds, and each task sees it from its own side:
+
+| Kind | One side reads | The other side reads |
+| --- | --- | --- |
+| Blocks | Blocks | Blocked by |
+| Duplicates | Duplicate of | Duplicated by |
+| Relates to | Relates to | Relates to |
+
+- Relations are informational, like subtasks: a blocked task can still be moved, edited and
+  closed, and closing a duplicate closes nothing else.
+- A pair is linked once per kind. A task cannot be linked to itself, and a directed link
+  cannot be added beside its reverse: if B blocks A, A cannot also block B.
+- The task view lists them in groups (Blocked by, Blocks, Duplicate of, Duplicated by,
+  Relates to), empty groups left out. Each row shows the other task's status, identifier
+  and title, struck through when it is closed or in the trash, and its project's name when
+  it is in another project. Tapping a row opens that task, over this one on the same board
+  so Back returns, or on its own project's board. Each row has a remove button, always
+  shown since a touch screen has no hover.
+- The dock's link control opens a picker: the kind (Blocks, Blocked by, Duplicate of,
+  Relates to), then a search of the workspace's tasks out of the trash by identifier or
+  title. “Blocked by” is stored as the other task blocking this one. Tasks already linked
+  that way, or whose reverse is linked, are shown but cannot be picked.
+- A card whose blocker is still open (not closed, not in the trash, in any project) shows a
+  small blocked mark beside its identifier, named “Blocked by APP-4” or “Blocked by 2
+  tasks”. It goes once every blocker closes or is trashed. Closed cards do not show it.
+- Adding and removing a relation is recorded in both tasks' history, and reaches agents
+  through MCP and webhooks.
+
 ### Comments and activity
 
 Every task has an append-only activity log, shown as the task's history. Comments sit
@@ -209,7 +240,7 @@ beside it on the task, each under its own tab.
 
 - The server writes the log from the changes it applies; no device writes to it (ADR 0006).
 - It records creation and changes to the title, description, status, priority, size, parent,
-  tags and trash state. History also records agent reorders and names the token used for
+  tags, relations and trash state. History also records agent reorders and names the token used for
   agent writes. Agent comments show the same attribution in Comments. A description
   entry says the description changed and holds no text.
 - Entries are dated and ordered by the server's clock. A change made offline is dated when
@@ -503,7 +534,8 @@ view), comments and activity.
   down from the top closes it too.
 - While a task is open on a phone, the dock (the collapsed [drawer](#the-drawer)) holds
   that task's actions, as it does for a note in Catch: Status, Priority, Color and Tags
-  (once the project has any) and More (close or reopen, copy link). The controls act as
+  (once the project has any), Link a task (see [Relations](#relations)) and More (close or
+  reopen, copy link). The controls act as
   tabs: each opens its panel in the drawer beneath the dock, which stays as the panel's
   header, and the drawer holds still until a panel is open. The status panel is the
   board's grid of statuses by category. As Catch keeps a note's color and tags apart
@@ -542,8 +574,8 @@ view), comments and activity.
   over the parent's pane and shrinks back into it.
 - A desktop pane at least 620 px wide has a side column beside the task's card, as a wide
   Catch note pane does (2026-11-19, ADR 0012). It holds the task's tags and then its
-  subtasks, and later its link previews and media. It opens with the first of them and
-  closes with the last. Until then, “Add subtask” stays below the description. Narrower panes
+  subtasks, then its relations, and later its link previews and media. It opens with the
+  first of them and closes with the last. Until then, “Add subtask” stays below the description. Narrower panes
   and phones keep them inline.
 - Phone opening/closing uses Catch's card-to-note container transform and timing: the
   surface grows from its card and shrinks into its current position, with a fade when no
@@ -764,5 +796,6 @@ little as possible; it is not the normal way to use the app (ADR 0005).
    an overview; see [The project board](#the-project-board).
 7. **The task view — settled for the first version (2026-11-18).** It holds what
    [The task view](#the-task-view) lists: the title and identifier, status, priority and
-   tags, the description, subtasks, and its comments and history, each under its own tab. More fields
+   tags, the description, subtasks, relations, and its comments and history, each under its
+   own tab. More fields
    arrive with the out-of-scope items that need them, such as dates.

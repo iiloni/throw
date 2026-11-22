@@ -6,7 +6,7 @@ import {
   type Task,
   taskTagColor,
 } from '@throw/shared';
-import { Flag, MoreHorizontal, Palette, Scaling, Tag } from 'lucide-react';
+import { Flag, Link2, MoreHorizontal, Palette, Scaling, Tag } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import type { ButtonHTMLAttributes, KeyboardEventHandler, ReactNode } from 'react';
 import { PriorityGlyph, StatusGlyph } from '@/components/Board/glyphs';
@@ -16,6 +16,7 @@ import type { TaskDrawerContent } from '@/components/Board/taskContent';
 import { touchEditor } from '@/components/DescriptionEditor/editorControls';
 import { FormattingBar } from '@/components/FormattingBar/FormattingBar';
 import { IconButton } from '@/components/IconButton/IconButton';
+import { RelationPicker } from '@/components/TaskRelations/TaskRelations';
 import { useTags, useTaskTags } from '@/lib/collections';
 import { useTaskSizeSupport } from '@/lib/compatibility';
 import { springs } from '@/lib/motion';
@@ -28,7 +29,7 @@ import {
   TagsPicker,
 } from './TaskPickers';
 
-export type TaskPanel = 'status' | 'priority' | 'size' | 'color' | 'tags' | 'more';
+export type TaskPanel = 'status' | 'priority' | 'size' | 'color' | 'tags' | 'relations' | 'more';
 
 export const panelTitle: Record<TaskPanel, string> = {
   status: 'Status',
@@ -36,6 +37,7 @@ export const panelTitle: Record<TaskPanel, string> = {
   size: 'Size',
   color: 'Color',
   tags: 'Tags',
+  relations: 'Link a task',
   more: 'More',
 };
 
@@ -90,6 +92,7 @@ export function TaskControls({
       onOpen={onOpen}
       controlProps={controlProps}
       tooltips={tooltips}
+      relations
       more
     />
   );
@@ -109,6 +112,7 @@ export function ControlButtons({
   onOpen,
   controlProps,
   tooltips = true,
+  relations = false,
   more = false,
 }: {
   status: Status | undefined;
@@ -120,6 +124,8 @@ export function ControlButtons({
   onOpen(panel: TaskPanel, element: HTMLButtonElement): void;
   controlProps(panel: TaskPanel): ControlProps;
   tooltips?: boolean;
+  /** Links to other tasks, which a task still being written cannot have yet. */
+  relations?: boolean;
   more?: boolean;
 }) {
   return (
@@ -186,6 +192,17 @@ export function ControlButtons({
           <Tag />
         </IconButton>
       )}
+      {relations && (
+        <IconButton
+          label="Link a task"
+          className={control}
+          tooltip={tooltips}
+          {...controlProps('relations')}
+          onClick={(event) => onOpen('relations', event.currentTarget)}
+        >
+          <Link2 />
+        </IconButton>
+      )}
       {more && (
         <IconButton
           label="More task actions"
@@ -220,6 +237,7 @@ export function TaskPanelContent({
   if (panel === 'size') return <SizePicker task={task} onPicked={onDone} />;
   if (panel === 'color') return <ColorTagsPicker task={task} />;
   if (panel === 'tags') return <TagsPicker task={task} />;
+  if (panel === 'relations') return <RelationPicker task={task} onPicked={onDone} />;
   return <TaskActions task={task} statuses={statuses} onDone={onDone} />;
 }
 

@@ -39,6 +39,15 @@ describe('history sentences', () => {
     [change('size', 2, 4), 'Changed size from S to L.'],
     [change('size', 3, null), 'Cleared size.'],
     [
+      change('relations', null, 'other', { relation: 'blocked_by', requestedName: 'OPS-4' }),
+      'Marked as blocked by OPS-4.',
+    ],
+    [
+      change('relations', 'other', null, { relation: 'duplicated_by', previousName: 'APP-9' }),
+      'APP-9 is no longer a duplicate of this task.',
+    ],
+    [change('relations', null, 'other', { requestedName: 'APP-1' }), 'Linked to APP-1.'],
+    [
       change('size', 3, null, { applied: false, reason: 'stale' }),
       'Could not clear size because it changed before this update synced. Kept M.',
     ],

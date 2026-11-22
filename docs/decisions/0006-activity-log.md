@@ -28,7 +28,7 @@ Friday is dated Friday. The timeline is ordered by that time, so the last entry 
 always states the field's current value.
 
 **What is recorded.** Creation, and changes to the title, description, status, priority, size,
-parent, tags and trash state. Device reorders are kept on the server for replay. Agent
+parent, tags, relations (on both tasks) and trash state. Device reorders are kept on the server for replay. Agent
 reorders appear in task history under ADR 0014. A description entry says the description
 changed and holds no text. Fields that were not applied are recorded with the
 reason (ADR 0005); only there, a refused description keeps its document.

@@ -30,8 +30,10 @@ import {
 } from './structure';
 import {
   addCommentTool,
+  addTaskRelationTool,
   createTaskTool,
   moveTaskTool,
+  removeTaskRelationTool,
   setTaskTagsTool,
   updateTaskTool,
 } from './write';
@@ -60,9 +62,13 @@ export function throwMcpServer(actor: McpActor) {
             readOnly ||
             name.endsWith('_project') ||
             name.endsWith('_status') ||
-            name.endsWith('_tag'),
+            name.endsWith('_tag') ||
+            name.endsWith('_task_relation'),
           openWorldHint: false,
-          destructiveHint: name.startsWith('update_') || name === 'set_task_tags',
+          destructiveHint:
+            name.startsWith('update_') ||
+            name === 'set_task_tags' ||
+            name === 'remove_task_relation',
         },
       },
       async (args: unknown): Promise<CallToolResult> => {
@@ -208,7 +214,7 @@ export function throwMcpServer(actor: McpActor) {
   register(
     'get_task',
     mcpTools.get_task,
-    'Read a task by UUID or current key (such as THR-12), its Markdown description and version, and pages of subtasks, comments, and history.',
+    'Read a task by UUID or current key (such as THR-12), its Markdown description and version, its relations to other tasks (blocked is true while a blocking task is open), and pages of subtasks, comments, and history.',
     getTask,
     true,
   );
@@ -235,6 +241,18 @@ export function throwMcpServer(actor: McpActor) {
     mcpTools.set_task_tags,
     'Set or clear the primary tag using its last-read value. Add or remove secondary tags by ID with present: true or false. Inspect changes for refused tags.',
     setTaskTagsTool,
+  );
+  register(
+    'add_task_relation',
+    mcpTools.add_task_relation,
+    'Link a task to another task in this workspace, in any project: blocks, blocked_by, duplicates (this task is a duplicate of the other), duplicated_by or relates_to. Relations are informational and never stop a task from moving. Adding the reverse of an existing blocks or duplicates relation is refused. A link that already exists answers outcome existing.',
+    addTaskRelationTool,
+  );
+  register(
+    'remove_task_relation',
+    mcpTools.remove_task_relation,
+    'Remove a relation by its id from get_task, or by the task, relation and other task as add_task_relation takes them. A relation that is already gone answers outcome absent.',
+    removeTaskRelationTool,
   );
   register(
     'add_comment',

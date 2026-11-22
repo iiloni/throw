@@ -48,6 +48,12 @@ const SHAPES: Record<string, { table: string; columns: string[]; where: string }
     columns: ['task_id', 'tag_id', 'workspace_id', 'project_id'],
     where: `workspace_id IN (${MEMBER_WORKSPACES})`,
   },
+  // Links between those tasks, across projects of one workspace.
+  'task-relations': {
+    table: 'task_relations',
+    columns: ['id', 'workspace_id', 'source_task_id', 'target_task_id', 'kind', 'created_at'],
+    where: `workspace_id IN (${MEMBER_WORKSPACES})`,
+  },
   // Every task the user can reach, in the trash and closed ones included, so both can be
   // shown offline.
   tasks: {
