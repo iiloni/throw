@@ -41,11 +41,15 @@ function withDatabase(url: string, name: string, login?: { user: string; passwor
 /**
  * Keep credentials out of archives and out of the data restored from imported archives.
  * Restore truncates the tables, so it also clears any active credentials on the server.
+ * Webhooks hold signing secrets, and their delivery queue only means anything to the
+ * server that queued it (ADR 0015).
  */
 const WITHOUT_CREDENTIALS = [
   '--exclude-table-data=public.session',
   '--exclude-table-data=public.mcp_tokens',
   '--exclude-table-data=public.mcp_structure_operations',
+  '--exclude-table-data=public.webhooks',
+  '--exclude-table-data=public.webhook_deliveries',
 ];
 
 const UNSAFE_ROLE =

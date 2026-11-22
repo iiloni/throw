@@ -5,6 +5,7 @@ import {
   KeyRound,
   type LucideIcon,
   SlidersHorizontal,
+  Webhook,
 } from 'lucide-react';
 import { z } from 'zod';
 import { authClient } from './auth';
@@ -17,6 +18,7 @@ export const SETTINGS_TABS = [
   { path: '/settings/general', label: 'General', icon: SlidersHorizontal, section: 'User' },
   { path: '/settings/account', label: 'Account', icon: CircleUser, section: 'User' },
   { path: '/settings/mcp', label: 'MCP tokens', icon: KeyRound, section: 'User' },
+  { path: '/settings/webhooks', label: 'Webhooks', icon: Webhook, section: 'User' },
   { path: '/settings/update', label: 'Update', icon: Download, section: 'User' },
   { path: '/settings/admin/backups', label: 'Backups', icon: DatabaseBackup, section: 'Admin' },
 ] as const satisfies ReadonlyArray<{
@@ -31,14 +33,22 @@ export type SettingsPath = SettingsTab['path'];
 
 const pageOf = (tab: SettingsTab) => ({ ...tab, key: tab.path, link: { to: tab.path } });
 
+/** Pages listed only once the server answers that it has their API. */
+export type OptionalSettingsPath = '/settings/mcp' | '/settings/webhooks';
+
 /** The pages this account can open, grouped as the settings list shows them. */
-export function settingsGroupsFor(isAdmin: boolean, mcpAvailable = false) {
+export function settingsGroupsFor(
+  isAdmin: boolean,
+  available: Partial<Record<OptionalSettingsPath, boolean>> = {},
+) {
+  const optional = (path: string): path is OptionalSettingsPath =>
+    path === '/settings/mcp' || path === '/settings/webhooks';
   return (['User', 'Admin'] as const)
     .filter((section) => section === 'User' || isAdmin)
     .map((label) => ({
       label,
       pages: SETTINGS_TABS.filter(
-        (tab) => tab.section === label && (tab.path !== '/settings/mcp' || mcpAvailable),
+        (tab) => tab.section === label && (!optional(tab.path) || available[tab.path] === true),
       ).map(pageOf),
     }));
 }

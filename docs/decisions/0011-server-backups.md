@@ -10,7 +10,8 @@ initiating admin's session is retained if their account survives the restore.
 
 Restore validates first, loads/migrates a scratch database, then truncates/refills existing
 live tables atomically. Their Electric identities survive and truncation causes refetch.
-MCP tokens and their replay records are excluded from restored data. The MCP change feed
+MCP tokens and their replay records are excluded from restored data, as are webhooks and
+their delivery queue ([ADR 0015](0015-webhooks.md)). The MCP change feed
 retains restored history, re-stamps its transaction IDs in the live cluster, and invalidates
 pre-restore cursors. See [ADR 0014](0014-mcp-server.md).
 

@@ -220,6 +220,10 @@ case "$command" in
     shell)
         "${compose[@]}" exec app bash
         ;;
+    exec)
+        # Without a TTY, so scripts and tests can drive a process in the container.
+        "${compose[@]}" exec -T app "$@"
+        ;;
     backup)
         "${compose[@]}" exec -T app pnpm --silent --filter @throw/server backup "$@"
         ;;
@@ -275,6 +279,7 @@ Usage: ./scripts/dev.sh <command>
                       --usb: forward this worktree's port through adb (USB or wireless adb)
                       Other options pass to cap run; the channel is always dev
   shell               Open a shell in the app container
+  exec <command>      Run a command in the app container without a TTY
   backup [args]       Server backup CLI for this worktree
   psql [args]         Open psql against this worktree's database
   fix-permissions     Return ownership of generated files to the host user

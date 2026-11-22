@@ -9,6 +9,7 @@ import type {
   Size,
   StatusCategory,
   TagIconName,
+  WebhookPayload,
   WorkspaceRole,
 } from '@throw/shared';
 import { sql } from 'drizzle-orm';
@@ -441,5 +442,61 @@ export const taskTags = pgTable(
     index().on(table.workspaceId),
     index().on(table.projectId),
     index().on(table.tagId),
+  ],
+);
+
+/**
+ * Outbound webhooks (ADR 0015). Server-only: never synced, excluded from backups and cleared
+ * by a restore, like MCP tokens. The signing secret is encrypted with a key derived from the
+ * server's auth secret, since delivery needs it back to sign.
+ */
+export const webhooks = pgTable(
+  'webhooks',
+  {
+    id: uuid().primaryKey(),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    // Purging the project removes a webhook limited to it rather than widening its scope.
+    projectId: uuid().references(() => projects.id, { onDelete: 'cascade' }),
+    name: text().notNull(),
+    url: text().notNull(),
+    encryptedSecret: text().notNull(),
+    ignoreTokenWrites: boolean().notNull().default(true),
+    enabled: boolean().notNull().default(true),
+    lastDeliveryAt: timestamp({ withTimezone: true }),
+    lastDeliveryStatus: text().$type<'ok' | 'error'>(),
+    lastResponseStatus: smallint(),
+    lastError: text(),
+    createdAt: createdAt(),
+  },
+  (table) => [index().on(table.userId), index().on(table.workspaceId), index().on(table.projectId)],
+);
+
+/** The delivery queue, written in the transaction of the change it announces. */
+export const webhookDeliveries = pgTable(
+  'webhook_deliveries',
+  {
+    /** Sent as `X-Throw-Delivery` and in the body. */
+    id: uuid().primaryKey(),
+    webhookId: uuid()
+      .notNull()
+      .references(() => webhooks.id, { onDelete: 'cascade' }),
+    event: text().notNull(),
+    payload: jsonb().$type<WebhookPayload>().notNull(),
+    attempts: integer().notNull().default(0),
+    nextAttemptAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    status: text().$type<'pending' | 'delivered' | 'failed'>().notNull().default('pending'),
+    lastError: text(),
+    createdAt: createdAt(),
+    deliveredAt: timestamp({ withTimezone: true }),
+  },
+  (table) => [
+    index().on(table.nextAttemptAt).where(sql`${table.status} = 'pending'`),
+    index().on(table.webhookId),
+    index().on(table.createdAt),
   ],
 );

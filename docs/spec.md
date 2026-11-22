@@ -31,6 +31,7 @@ integrations.
   external agent and authorize it to act in a workspace. Throw records which credential the
   agent used for each change. Throw itself never moves or completes a task on a schedule.
 - **Few integrations, all opt-in.** The first is [MCP](decisions/0014-mcp-server.md).
+  [Webhooks](decisions/0015-webhooks.md) are its push companion: they tell an agent to look.
 - **Boards are for managing, task views are for executing.** A card carries enough to manage
   a task's lifecycle; the work happens in the task's own view.
 
@@ -69,6 +70,9 @@ integrations.
   workspace in Settings and can revoke it there. Agent writes sync to the board. Task
   changes show their source in the task's history or comments. Agents can follow workspace
   changes with a cursor-based feed.
+- Outbound webhooks that wake an external agent when a workspace or project changes. Each
+  sends a small signed notice and the agent reads the change from the MCP feed. A user
+  creates them in Settings; they run no rules and change nothing in Throw.
 
 ### Out of scope
 
@@ -81,7 +85,7 @@ integrations.
 | Attachments, images in descriptions | First follow-up after launch. |
 | List view | The board is the only layout. |
 | Filtering by tag across projects | Tags are per project. |
-| Automation inside Throw | Scheduled jobs and rules that change tasks are out of scope. |
+| Automation inside Throw | Scheduled jobs and rules that change tasks are out of scope. Webhooks only notify. |
 | Other integrations, import, export | Out of scope for the first version. |
 | Task relations (blocks, duplicate of) | Later. |
 | Reports (cycle time, burndown) | Later; the activity log makes them possible. |
@@ -666,7 +670,8 @@ dock rather than opening as a page. Desktop has no drawer. The rules are in
 - `/settings` redirects to `/settings/general`. Settings has Catch's pages: General
   (theme, the app icon on dev and preview builds, and board), Account (name, password, the server on Android, signing out), Update,
   and Backups for the server's admin at `/settings/admin/backups`. Throw adds MCP tokens
-  at `/settings/mcp` for creating and revoking the account's workspace tokens. Wide, the
+  at `/settings/mcp` for creating and revoking the account's workspace tokens, and Webhooks
+  at `/settings/webhooks` for the account's outbound webhooks. Wide, the
   pages are listed beside the open one; on a phone the dock picks between them. Changing the
   password signs the account's other devices out; they keep their unsaved changes until
   the same account signs in again (ADR 0002).
