@@ -55,12 +55,14 @@ updated package. Reference PNGs never supply production artwork.
 
 ## Web and PWA
 
-Vite's existing `THROW_CHANNEL` selects stable root paths, `/preview/` or `/dev/`; unset
-means dev and unsupported values fail through the existing channel parser. Channel paths
-keep browser caches separate. PWA names, launch URL, display mode, browser bar colors,
-manifest background color, build metadata and distribution rules are unchanged. The
-manifest theme color uses the approved jade primary action fill.
-All generated public artwork is precached by the existing service worker.
+Vite's existing `THROW_CHANNEL` selects stable root paths, `/preview/` or `/dev/` for the
+default favicons, Apple touch icon and install manifest; unset means dev and unsupported
+values fail through the existing channel parser. Channel paths keep browser caches
+separate. Every build also emits `manifest-stable.webmanifest`, `manifest-preview.webmanifest`
+and `manifest-dev.webmanifest` for the [app icon switcher](#app-icon-switcher); they differ
+only in icon paths and share the app id `/`, launch URL, display mode, browser bar colors
+and background color. The manifest theme color uses the approved jade primary action fill.
+All generated public artwork and the manifests are precached by the existing service worker.
 
 | Surface | Mechanical source |
 | --- | --- |
@@ -89,31 +91,57 @@ SVGs also work directly in Capacitor's WebView. Application typography is unchan
 the bundled Manrope font is retained only as source provenance. The tagline is available
 in the sources but is not added to these compact functional surfaces.
 
-Catch and its active PR #112 were inspected read-only. That PR's optional app-icon picker,
-native launcher aliases and selectable manifests are a separate feature; Throw keeps its
-existing build-based channel selection and adds no preference setting.
+## App icon switcher
+
+Settings > General has Catch's App icon section (`components/AppIconPicker`,
+`lib/appIcon.ts`) on dev and preview builds: the chosen icon's preview above a text-only
+segmented control. Each build starts with its own channel's icon, unlike Catch, whose
+released builds default to stable. A build offers its own icon and those of the channels
+released before it: stable none (no section), preview Stable and Preview, dev all three.
+The choice is device-local (`throw-app-icon`); a stored choice the build does not offer is
+ignored. The channel is the installed Android app's once its version is known, otherwise
+the web build's `THROW_CHANNEL`.
+
+On the web the choice repoints the favicons, Apple touch icon and manifest link; an inline
+script in `index.html` restores it before the app starts, offline too. The preview is the
+manifest's 512 px PWA PNG. Installed web apps may ask to approve the new icon, and browser
+support varies. On Android, `AppIconsPlugin` enables one of the `StableIcon`, `PreviewIcon`
+and `DevIcon` launcher aliases of MainActivity, which stays enabled for other intents and
+existing shortcuts. The flavor's `default_*_icon` booleans enable its own alias in the
+manifest, and the plugin refuses icons the build does not offer. Its preview renders the
+alias's packaged adaptive drawable at 256 px with the platform mask. Splash screens, Settings
+> Update's channel artwork and in-app branding always identify the actual build.
 
 ## Android resources
 
-`apps/web/android/app/src/` is the live native output tree. The platform generator writes
-stable artwork to `main/res` and preview/dev artwork to their channel source sets. Native
-identity is `org.iloni.throwtasks` (Throw), `.preview` (Throw Preview), `.dev` (Throw Dev).
+`apps/web/android/app/src/` is the live native output tree. Every flavor ships every
+channel's launcher artwork, so the [app icon switcher](#app-icon-switcher) can choose any
+of them: the platform generator writes stable launcher resources to `main/res` under their
+plain names (`ic_launcher`, `ic_launcher_background`, `ic_launcher_foreground`) and
+preview/dev ones beside them with `_preview` and `_dev` suffixes. Flavor source sets carry
+no launcher overlays; the generator removes stale ones and its check refuses them. System
+splash PNGs stay in each channel's source set. Native identity is `org.iloni.throwtasks`
+(Throw), `.preview` (Throw Preview), `.dev` (Throw Dev).
 
 - Each source set has mdpi, hdpi, xhdpi, xxhdpi and xxxhdpi PNGs.
 - Legacy icons use the small source for their 48 dp display size at every density.
 - Adaptive layers map the complete supplied 1024 canvas to 108 dp (108/162/216/324/432 px).
   The supplied foreground transform is preserved with no extra inset or rounded mask.
-- Shared adaptive XML is in `mipmap-anydpi-v26`; Android 13's `mipmap-anydpi-v33` also
-  references the shared alpha-only monochrome PNG. Android applies masking and tinting.
-- The launcher and round launcher both use `@mipmap/ic_launcher`, resolved by source set.
+- Each channel's adaptive XML (`ic_launcher`, `ic_launcher_preview`, `ic_launcher_dev` in
+  `mipmap-anydpi-v26`) pairs that channel's background with its own foreground: unlike
+  Catch's shared note, Throw's ribbons and project accent take the channel's color.
+  Android 13's `mipmap-anydpi-v33` also references the shared alpha-only monochrome PNG.
+  Android applies masking and tinting.
+- Each launcher alias uses its channel's icon for both icon and round icon; the
+  application icon (app info, recents) is the installed flavor's, set by the preview and
+  dev manifests.
 - System splash PNGs use the primary channel icon alone, rendered at the 288 dp slot's
   density sizes without a wordmark, on warm light/dark theme backgrounds. The launch theme
   wires `windowSplashScreenAnimatedIcon` to `@drawable/splash`.
 
 Sync the matching web channel before each native build (`THROW_CHANNEL=preview pnpm
 --filter @throw/web android:sync`, then `assemblePreviewDebug`). Do not edit generated
-resources. Release signing/distribution is documented in [Releases](releases.md); selectable launcher
-icons remain deferred.
+resources. Release signing/distribution is documented in [Releases](releases.md).
 Raster/alpha tests verify favicon frames, opaque maskable surfaces, adaptive safe zones
 and monochrome knockouts; APK and physical-device validation are documented separately
 in [Android validation](android-validation.md).

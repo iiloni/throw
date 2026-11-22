@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
@@ -125,14 +125,17 @@ for (const channel of ['stable', 'preview', 'dev']) {
   for (const [density, scale] of densities) {
     // Android's icon-only system splash slot is 288 dp without a separate icon background.
     await output(`${native}/drawable-${density}/splash.png`, await render(primary, 288 * scale));
-    const mipmap = `${native}/mipmap-${density}`;
+    // Every flavor ships every channel's launcher artwork under its own name, so the app
+    // icon switcher can select any of them (see docs/branding.md).
+    const mipmap = `${nativeRoot}/main/res/mipmap-${density}`;
+    const suffix = channel === 'stable' ? '' : `_${channel}`;
     // The legacy launcher displays a 48 dp icon at every density: always small-tier.
-    await output(`${mipmap}/ic_launcher.png`, await render(small, 48 * scale));
+    await output(`${mipmap}/ic_launcher${suffix}.png`, await render(small, 48 * scale));
     // The sources already contain their safe-zone transform. Map the entire canvas to
     // 108 dp; AdaptiveIconDrawable applies its own mask and viewport.
     for (const layer of ['foreground', 'background']) {
       await output(
-        `${mipmap}/ic_launcher_${layer}.png`,
+        `${mipmap}/ic_launcher_${layer}${suffix}.png`,
         await render(`${channel}/throw-adaptive-${layer}-${channel}.svg`, 108 * scale),
       );
     }
@@ -141,6 +144,15 @@ for (const channel of ['stable', 'preview', 'dev']) {
         `${mipmap}/ic_launcher_monochrome.png`,
         await render('shared/throw-adaptive-monochrome.svg', 108 * scale),
       );
+    } else {
+      // A flavor overlay named ic_launcher* would replace the stable choice in that flavor.
+      const overlay = resolve(root, `${native}/mipmap-${density}`);
+      const exists = await access(overlay).then(
+        () => true,
+        () => false,
+      );
+      if (check) assert(!exists, `Stale launcher overlay: ${native}/mipmap-${density}`);
+      else await rm(overlay, { recursive: true, force: true });
     }
   }
 }
@@ -152,16 +164,21 @@ for (const ink of ['dark', 'light']) {
   );
   await copy(`shared/throw-mark-mono-${ink}.svg`, `apps/web/public/throw-mark-mono-${ink}.svg`);
 }
-for (const version of [26, 33]) {
-  await output(
-    `${nativeRoot}/main/res/mipmap-anydpi-v${version}/ic_launcher.xml`,
-    `<?xml version="1.0" encoding="utf-8"?>
+// Each channel's adaptive icon pairs its own background with its own foreground: the
+// ribbons and project accent change color with the channel too.
+for (const channel of ['stable', 'preview', 'dev']) {
+  const suffix = channel === 'stable' ? '' : `_${channel}`;
+  for (const version of [26, 33]) {
+    await output(
+      `${nativeRoot}/main/res/mipmap-anydpi-v${version}/ic_launcher${suffix}.xml`,
+      `<?xml version="1.0" encoding="utf-8"?>
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@mipmap/ic_launcher_background" />
-    <foreground android:drawable="@mipmap/ic_launcher_foreground" />${version === 33 ? '\n    <monochrome android:drawable="@mipmap/ic_launcher_monochrome" />' : ''}
+    <background android:drawable="@mipmap/ic_launcher_background${suffix}" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground${suffix}" />${version === 33 ? '\n    <monochrome android:drawable="@mipmap/ic_launcher_monochrome" />' : ''}
 </adaptive-icon>
 `,
-  );
+    );
+  }
 }
 console.log(
   `${check ? 'Verified' : 'Generated'} ${count} platform assets with sharp ${sharp.versions.sharp}, librsvg ${sharp.versions.rsvg}.`,

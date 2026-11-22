@@ -19,6 +19,8 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Robolectric reads the merged manifest and launcher resources (AppIconsTest).
+    testOptions { unitTests.includeAndroidResources = true }
     flavorDimensions += 'channel'
     productFlavors {
         // Separate installs protect each channel's accounts, SQLite data and queued writes.
@@ -67,6 +69,8 @@ dependencies {
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
     implementation project(':capacitor-cordova-android-plugins')
+    testImplementation "junit:junit:$junitVersion"
+    testImplementation "org.robolectric:robolectric:4.16.1"
 }
 
 apply from: 'capacitor.build.gradle'

@@ -18,14 +18,46 @@
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
-            android:exported="true">
+            android:exported="true" />
 
+        <!-- The launcher entry is whichever alias the app icon switcher enabled; MainActivity
+             stays enabled for existing shortcuts and other intents. -->
+        <activity-alias
+            android:name=".StableIcon"
+            android:targetActivity=".MainActivity"
+            android:enabled="@bool/default_stable_icon"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-
-        </activity>
+        </activity-alias>
+        <activity-alias
+            android:name=".PreviewIcon"
+            android:targetActivity=".MainActivity"
+            android:enabled="@bool/default_preview_icon"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_preview"
+            android:roundIcon="@mipmap/ic_launcher_preview">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".DevIcon"
+            android:targetActivity=".MainActivity"
+            android:enabled="@bool/default_dev_icon"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_dev"
+            android:roundIcon="@mipmap/ic_launcher_dev">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <provider
             android:name="androidx.core.content.FileProvider"

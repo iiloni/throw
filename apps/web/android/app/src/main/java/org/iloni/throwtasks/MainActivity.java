@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(HapticFeedbackPlugin.class);
         registerPlugin(KeyboardInsetsPlugin.class);
         registerPlugin(AppUpdatesPlugin.class);
+        registerPlugin(AppIconsPlugin.class);
         super.onCreate(savedInstanceState);
         // Nested CSS scrollers own the page's scrollbars.
         getBridge().getWebView().setVerticalScrollBarEnabled(false);

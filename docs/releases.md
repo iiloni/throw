@@ -18,7 +18,7 @@ suffix, no leading zeroes or build metadata. Preview advances independently of s
 Backports never move a channel alias backwards. A preview is promoted by tagging its exact
 commit without the suffix, then rebuilding the stable image and APK. Never move or reuse
 a published tag. Build-only `THROW_CHANNEL` defaults to dev; released artwork follows Throw's
-[branding](branding.md), with no port of Catch's optional icon picker.
+[branding](branding.md), including the app icon switcher on dev and preview builds.
 
 Android's version name is the tag without `v`. Its version code is **1,000,000,000 plus this
 repository's Release workflow run number**, restricted to run numbers 1–99,999,999. This

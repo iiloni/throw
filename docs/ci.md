@@ -281,7 +281,8 @@ or through `merge on pass` before merging.
 ## Native Android build
 
 For code changes, `android build` syncs and compiles dev, stable and preview debug APKs
-on one runner with JDK 21 and SDK 36. It uses Gradle caching, no emulator or signing secrets.
+on one runner with JDK 21 and SDK 36, and runs each flavor's Robolectric unit tests
+(`test<Flavor>DebugUnitTest`, such as `AppIconsTest` for the launcher aliases). It uses Gradle caching, no emulator or signing secrets.
 `validation` requires this job as well as `check` and the requested E2E jobs. Documentation
 changes skip native builds. The E2E `android` project still means a Chromium phone viewport,
 not a physical device or emulator.
