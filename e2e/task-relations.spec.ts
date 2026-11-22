@@ -315,11 +315,11 @@ test('a task links another project’s task as its blocker, which shows on its c
 
   await controls(page).getByRole('button', { name: 'Link a task', exact: true }).click();
   await page.getByRole('radio', { name: 'Blocked by', exact: true }).click();
-  await page.getByRole('searchbox', { name: 'Find a task' }).fill('OPS-1');
-  const results = page.getByRole('list', { name: 'Matching tasks' });
-  await expect(results.getByRole('button', { name: /OPS-1/ })).toBeVisible();
+  await page.getByRole('combobox', { name: 'Find a task' }).fill('OPS-1');
+  const results = page.getByRole('listbox', { name: 'Tasks to link' });
+  await expect(results.getByRole('option', { name: /OPS-1/ })).toBeVisible();
   await page.screenshot({ path: test.info().outputPath('relation-picker.png') });
-  await results.getByRole('button', { name: /OPS-1/ }).click();
+  await results.getByRole('option', { name: /OPS-1/ }).click();
   await expect(results).toHaveCount(0);
 
   const relations = pane.getByRole('region', { name: 'Relations' });

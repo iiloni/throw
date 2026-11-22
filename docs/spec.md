@@ -221,12 +221,19 @@ one (2026-11-22). A link is one of three kinds, and each task sees it from its o
   Relates to), empty groups left out. Each row shows the other task's status, identifier
   and title, struck through when it is closed or in the trash, and its project's name when
   it is in another project. Tapping a row opens that task, over this one on the same board
-  so Back returns, or on its own project's board. Each row has a remove button, always
-  shown since a touch screen has no hover.
-- The dock's link control opens a picker: the kind (Blocks, Blocked by, Duplicate of,
-  Relates to), then a search of the workspace's tasks out of the trash by identifier or
-  title. “Blocked by” is stored as the other task blocking this one. Tasks already linked
-  that way, or whose reverse is linked, are shown but cannot be picked.
+  so Back returns, or on its own project's board. On a phone the task grows out of its row
+  and dissolves back into it, as a subtask does from its card. Each row has a remove
+  button, always shown since a touch screen has no hover.
+- The dock's link control opens a picker. The kind comes first, as one segmented control
+  (Blocked by, Blocks, Duplicate of, Relates to) with a sentence below saying which way it
+  reads (“THR-21 waits until the task you pick is done.”). Below it, before anything is
+  typed, are a few open tasks of the task's own project that are not linked to it yet, work
+  in progress first; typing searches the workspace's tasks out of the trash by identifier
+  or title, in any project. One tap (or Enter, with the arrows to move) links a task and
+  closes the picker. “Blocked by” is stored as the other task blocking this one. A task
+  already linked shows how; one linked that way, or whose reverse is linked, cannot be
+  picked. With a keyboard at hand the search takes focus at once; a touch screen keeps its
+  keyboard down until the field is tapped, so the suggestions stay in view.
 - A card whose blocker is still open (not closed, not in the trash, in any project) shows a
   small blocked mark beside its identifier, named “Blocked by APP-4” or “Blocked by 2
   tasks”. It goes once every blocker closes or is trashed. Closed cards do not show it.

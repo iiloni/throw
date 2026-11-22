@@ -11,6 +11,11 @@ export type TaskRect = {
   showStatus: boolean;
   /** Whether that status is a control (a subtask's, in its parent), shaped as a button is. */
   statusControl: boolean;
+  /**
+   * A row that stands for the task without being its card, such as a related task in the pane:
+   * the screen dissolves out of and back into it rather than wearing a card's face.
+   */
+  row: boolean;
 };
 const origins = new Map<string, TaskRect>();
 const hidden = createStore<ReadonlySet<string>>(new Set());
@@ -20,14 +25,17 @@ const landing = createStore<ReadonlySet<string>>(new Set());
 const surfaces = createStore(0);
 
 /**
- * The card a task leaves from or lands in. Prefer a subtask card in the open pane over a
- * second copy on the board behind it. A card in a drawer that is still rising counts where
- * the drawer will rest, so a task closing into the reopening backlog finds its card.
+ * The card a task leaves from or lands in. Prefer a subtask card or a relation row
+ * (`data-task-origin`) in the open pane over a second copy on the board behind it. A card in a
+ * drawer that is still rising counts where the drawer will rest, so a task closing into the
+ * reopening backlog finds its card.
  */
 export function findTaskCard(taskId: string): HTMLElement | null {
-  const cards = document.querySelectorAll<HTMLElement>('[data-card-id]:not([data-overlay])');
+  const cards = document.querySelectorAll<HTMLElement>(
+    '[data-card-id]:not([data-overlay]), [data-task-origin]',
+  );
   for (const card of Array.from(cards).reverse()) {
-    if (card.dataset.cardId !== taskId) continue;
+    if ((card.dataset.cardId ?? card.dataset.taskOrigin) !== taskId) continue;
     const box = card.getBoundingClientRect();
     const top = box.top + drawerTravel(card);
     if (
@@ -55,6 +63,7 @@ export function taskCardRect(card: HTMLElement): TaskRect {
     radius: Number.parseFloat(getComputedStyle(card).borderTopLeftRadius) || 16,
     showStatus: card.dataset.showStatus !== undefined,
     statusControl: card.dataset.statusControl !== undefined,
+    row: card.dataset.taskOrigin !== undefined,
   };
 }
 

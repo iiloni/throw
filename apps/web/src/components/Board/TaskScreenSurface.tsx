@@ -30,6 +30,8 @@ const lerp = (from: number, to: number, progress: number) => from + (to - from) 
 const LAND_EARLY = 0.25;
 /** A card's border width: its face sits inside it. */
 const CARD_BORDER = 1;
+/** The share of the way a screen takes to appear out of a row, or to dissolve into one. */
+const ROW_FADE = 0.3;
 
 /**
  * Catch's card ⇄ note container transform: resize the clipping box, never its text. A subtask
@@ -90,8 +92,16 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
       (1 - (Math.abs(dragY.get()) / MAX_DRAG) * 0.08) *
       (card.get() || reduced ? 1 : 0.94 + 0.06 * fade.get()),
   );
-  const opacity = useTransform(() => (card.get() ? 1 : fade.get()));
-  const faceOpacity = useTransform(() => (card.get() ? Math.max(0, 1 - progress.get() / 0.35) : 0));
+  // Out of a row that is not a card, the screen fades in as it leaves it and out as it lands,
+  // with the row showing through, since it has no card face to become.
+  const opacity = useTransform(() => {
+    const rect = card.get();
+    if (!rect) return fade.get();
+    return rect.row ? Math.min(1, progress.get() / ROW_FADE) : 1;
+  });
+  const faceOpacity = useTransform(() =>
+    card.get() && !card.get()!.row ? Math.max(0, 1 - progress.get() / 0.35) : 0,
+  );
   const textOpacity = useTransform(() =>
     card.get()
       ? Math.max(0, Math.min(1, (progress.get() - 0.25) / 0.45))

@@ -144,20 +144,44 @@ describe('the task view', () => {
     const onPicked = vi.fn();
     render(<RelationPicker task={me} onPicked={onPicked} />);
     fireEvent.click(screen.getByRole('radio', { name: 'Blocks' }));
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Find a task' }), {
+    expect(screen.getByText('The task you pick waits until APP-1 is done.')).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Find a task' }), {
       target: { value: 'task' },
     });
-    const results = screen.getByRole('list', { name: 'Matching tasks' });
+    const results = screen.getByRole('listbox', { name: 'Tasks to link' });
     // Trashed tasks are not offered, nor the task itself.
     expect(within(results).queryByText('Task 4')).not.toBeInTheDocument();
     expect(within(results).queryByText('Task 1')).not.toBeInTheDocument();
-    // OPS-7 already blocks this task, so the reverse cannot be added.
-    expect(within(results).getByRole('button', { name: /OPS-7/ })).toBeDisabled();
+    // OPS-7 already blocks this task, so the reverse cannot be added; the row says how they link.
+    const ops = within(results).getByRole('option', { name: /OPS-7/ });
+    expect(ops).toBeDisabled();
+    expect(within(ops).getByText('Blocked by')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('radio', { name: 'Relates to' }));
-    fireEvent.click(within(results).getByRole('button', { name: /OPS-7/ }));
+    fireEvent.click(within(results).getByRole('option', { name: /OPS-7/ }));
     expect(fake.add).toHaveBeenCalledWith('me', 'relates_to', 'other-project');
     expect(onPicked).toHaveBeenCalled();
     fireEvent.click(screen.getByRole('radio', { name: 'Blocked by' }));
-    expect(within(results).getByRole('button', { name: /APP-2/ })).toBeDisabled();
+    expect(within(results).getByRole('option', { name: /APP-2/ })).toBeDisabled();
+  });
+
+  it('suggests open tasks of the project that are not linked yet, and picks from the keyboard', () => {
+    fake.tasks.push(
+      task('started', 5),
+      task('newer', 6, { createdAt: '2026-11-23T00:00:00.000Z' }),
+    );
+    const onPicked = vi.fn();
+    render(<RelationPicker task={me} onPicked={onPicked} />);
+    const suggestions = screen.getByRole('listbox', { name: 'Tasks to link' });
+    // Linked, closed, trashed and other projects' tasks wait for a search.
+    expect(within(suggestions).getAllByRole('option')).toHaveLength(2);
+    expect(within(suggestions).getAllByRole('option')[0]).toHaveTextContent('Task 6');
+    const field = screen.getByRole('combobox', { name: 'Find a task' });
+    fireEvent.keyDown(field, { key: 'ArrowDown' });
+    expect(field.getAttribute('aria-activedescendant')).toBe(
+      within(suggestions).getAllByRole('option')[1]!.id,
+    );
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(fake.add).toHaveBeenCalledWith('me', 'blocked_by', 'started');
+    expect(onPicked).toHaveBeenCalled();
   });
 });
