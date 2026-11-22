@@ -3,7 +3,7 @@ import { type Browser, expect, type Locator, type Page, test } from '@playwright
 import { APP_LOAD_TIMEOUT, shapeRows, signUp, waitForCachedProject } from './helpers';
 import { newTag } from './tag-helpers';
 
-async function fixture(page: Page) {
+async function fixture(page: Page, { followWorkspaceHome = false } = {}) {
   const account = await signUp(page);
   const [workspace] = await shapeRows(page.request, 'workspaces', account.headers);
   const workspaceId = String(workspace?.id);
@@ -61,7 +61,8 @@ async function fixture(page: Page) {
     ).status(),
   ).toBe(201);
   const path = `/w/${workspaceId}/p/${projectId}?view=board`;
-  await page.goto(path);
+  if (followWorkspaceHome) await expect(page).toHaveURL(path, { timeout: APP_LOAD_TIMEOUT });
+  else await page.goto(path);
   const card = page.getByRole('article', { name: 'TASK-1 Write the launch plan', exact: true });
   await expect(card).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
   await card.click();
@@ -1214,7 +1215,7 @@ test('description code blocks dedent pasted code, highlight it and export the so
   if (browserName === 'chromium') {
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   }
-  const { pane } = await fixture(page);
+  const { pane } = await fixture(page, { followWorkspaceHome: true });
   const editor = pane
     .getByRole('region', { name: 'Description', exact: true })
     .locator('.bn-editor');
@@ -1230,9 +1231,10 @@ test('description code blocks dedent pasted code, highlight it and export the so
   await code.evaluate((node, value) => {
     const clipboardData = new DataTransfer();
     clipboardData.setData('text/plain', value);
-    node.dispatchEvent(
-      new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }),
-    );
+    // Firefox ignores constructor-supplied clipboard data on synthetic paste events.
+    const paste = new ClipboardEvent('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(paste, 'clipboardData', { value: clipboardData });
+    node.dispatchEvent(paste);
   }, '    def greet(name):\r\n        print("Hello", name)');
   await expect(code).toHaveJSProperty('textContent', source);
   const python = block.getByRole('button', { name: 'Code language: Python', exact: true });
