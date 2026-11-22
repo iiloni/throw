@@ -51,7 +51,8 @@ export async function reusablePrRun(
     const { jobs } = jobsSchema.parse(await readJobs(run.id));
     const check = jobs.find((job) => job.name === 'check');
     const recorded = check?.steps.find((step) => step.name === marker);
-    if (!recorded) continue;
+    // GitHub also lists the step when a label run did not request full E2E.
+    if (!recorded || recorded.conclusion === 'skipped') continue;
 
     // A newer attempt to test this snapshot takes precedence over an older pass.
     // Draft validation can fail for lack of approval even when every test job passed.

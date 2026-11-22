@@ -78,7 +78,7 @@ test('failed, canceled, skipped or missing jobs cannot supply evidence', async (
   }
 });
 
-test('ignore other workflows, current runs, and label runs without verification jobs', async () => {
+test('ignore other workflows, current runs, and label runs that did not request E2E', async () => {
   const response = {
     workflow_runs: [
       run(25),
@@ -87,16 +87,18 @@ test('ignore other workflows, current runs, and label runs without verification 
       run(45, { event: 'push' }),
       run(40, { path: '.github/workflows/other.yml' }),
       run(35, { status: 'in_progress' }),
+      run(32),
       run(30),
     ],
   };
   const read: number[] = [];
   const reused = await reusablePrRun(request, response, async (id) => {
     read.push(id);
+    if (id === 32) return { jobs: [{ ...result('check'), steps: [result(marker, 'skipped')] }] };
     return { jobs: id === 30 ? [] : fullJobs() };
   });
   assert.equal(reused, 25);
-  assert.deepEqual(read, [30, 25]);
+  assert.deepEqual(read, [32, 30, 25]);
 });
 
 test('a later canceled or failing test run supersedes an earlier pass for the same snapshot', async () => {
