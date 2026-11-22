@@ -1,16 +1,16 @@
 import { zValidator } from '@hono/zod-validator';
 import { createProjectSchema, updateProjectSchema } from '@throw/shared';
-import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { db } from '../db/client';
-import { projects } from '../db/schema';
-import { createProject, StarterStatusIdTaken, updateProject } from '../lib/projectWrites';
+import {
+  createProject,
+  deleteProject,
+  StarterStatusIdTaken,
+  updateProject,
+} from '../lib/projectWrites';
 import { requireUser } from '../lib/requireUser';
-import { lockTagTree } from '../lib/tagTree';
-import { currentTxid } from '../lib/txid';
-import { memberWorkspaces } from '../lib/workspaces';
 
 const idParam = zValidator('param', z.object({ id: z.uuid() }));
 
@@ -44,22 +44,9 @@ export const projectRoutes = new Hono<AppEnv>()
    * trash, restored on another device, is left alone.
    */
   .delete('/:id', idParam, async (c) => {
-    const userId = c.get('user')!.id;
+    const actor = { userId: c.get('user')!.id };
     const { id } = c.req.valid('param');
-    const txid = await db.transaction(async (tx) => {
-      await lockTagTree(tx, id);
-      const deleted = await tx
-        .delete(projects)
-        .where(
-          and(
-            eq(projects.id, id),
-            inArray(projects.workspaceId, memberWorkspaces(tx, userId)),
-            isNotNull(projects.deletedAt),
-          ),
-        )
-        .returning({ id: projects.id });
-      return deleted.length === 0 ? null : currentTxid(tx);
-    });
+    const txid = await db.transaction((tx) => deleteProject(tx, actor, id));
     // Already gone, perhaps purged by an earlier try of this same queued write.
     return c.json({ txid });
   });

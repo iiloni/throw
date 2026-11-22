@@ -10,6 +10,10 @@ initiating admin's session is retained if their account survives the restore.
 
 Restore validates first, loads/migrates a scratch database, then truncates/refills existing
 live tables atomically. Their Electric identities survive and truncation causes refetch.
+MCP tokens and their replay records are excluded from restored data. The MCP change feed
+retains restored history, re-stamps its transaction IDs in the live cluster, and invalidates
+pre-restore cursors. See [ADR 0014](0014-mcp-server.md).
+
 API requests pause with 503/Retry-After except health; queued writes retry. Uploaded SQL is
 loaded without superuser host access. A live schema or archive from unknown newer migrations
 is refused. A pre-restore backup protects the current data.
