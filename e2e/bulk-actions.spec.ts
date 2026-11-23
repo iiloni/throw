@@ -73,6 +73,9 @@ test.describe('desktop', () => {
     await expect
       .poll(async () => (await rows(page, board.headers, ids)).map((row) => row?.primary_tag_id))
       .toEqual([fragile.id, fragile.id]);
+    await expect(
+      bar.getByRole('button', { name: 'Change tags' }).locator('svg'),
+    ).not.toHaveAttribute('data-color');
     await tags.getByRole('tab', { name: 'Secondary' }).click();
     await tags.getByRole('checkbox', { name: 'Spare', exact: true }).check();
     await expect.poll(() => secondaryTags(page, board.headers, spare.id)).toEqual([...ids].sort());

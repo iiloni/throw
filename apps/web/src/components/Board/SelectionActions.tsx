@@ -12,7 +12,6 @@ import {
   statusById,
   type Task,
   targetCategory,
-  taskColor,
 } from './model';
 import { CATEGORY_NAMES } from './StatusMenu';
 import { StatusTile } from './StatusTile';
@@ -137,6 +136,15 @@ export function StatusTargets({
   );
 }
 
+// One face however many cards are selected or what they share, so the controls do not shift
+// as the selection grows or shrinks.
+const icons: Record<SelectionTab, ReactNode> = {
+  status: <CircleDashed />,
+  priority: <Flag />,
+  size: <Scaling />,
+  tags: <Tag />,
+};
+
 /**
  * The selection's controls, as an open task's dock draws its own: status, priority, size and
  * tags open their pickers, and the trash acts at once.
@@ -152,20 +160,7 @@ export function SelectionControls({
   controlProps(tab: SelectionTab): ControlProps;
   tooltips: boolean;
 }) {
-  const state = board.use();
   const content = useContext(SelectionContentContext);
-  const { project } = current(state);
-  const selected = selectedTasks(state);
-  const own = selectionProject(project, selected);
-  // Only the tags control tints with a shared color; the others keep one face however many
-  // cards are selected, so the bar does not shift as the selection grows or shrinks.
-  const color = shared(selected.map((task) => taskColor(own ?? project, task)));
-  const icons: Record<SelectionTab, ReactNode> = {
-    status: <CircleDashed />,
-    priority: <Flag />,
-    size: <Scaling />,
-    tags: <Tag data-color={color ?? undefined} className={color ? 'text-tint-accent' : ''} />,
-  };
   return (
     <div className="grid h-full w-full auto-cols-fr grid-flow-col gap-1 p-1">
       {tabs.map((tab) => (
