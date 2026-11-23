@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { timestampSchema } from './sync';
+import { taskRelationRoleSchema } from './taskRelations';
 import { taskFieldSchema } from './tasks';
 
 /**
@@ -14,11 +15,18 @@ import { taskFieldSchema } from './tasks';
  *
  * Fields can be added to the log without a schema change (docs/data-model.md, "Activity
  * entry"), so a device must expect items whose field it does not know.
+ *
+ * A `relations` item records one relation added (`previous` null, `requested` the other task's
+ * id) or removed (the reverse), with `relation` saying how this task saw it and the names
+ * holding the other task's identifier at the time. It is always applied.
  */
 export const activityChangeSchema = z.object({
-  field: taskFieldSchema.or(z.literal('position')),
+  field: taskFieldSchema.or(z.enum(['position', 'relations'])),
   /** Identifies one independent secondary-tag operation. */
   tagId: z.uuid().optional(),
+  /** The relation a `relations` item added or removed. */
+  relationId: z.uuid().optional(),
+  relation: taskRelationRoleSchema.optional(),
   previous: z.unknown(),
   requested: z.unknown(),
   previousName: z.string().nullable().optional(),

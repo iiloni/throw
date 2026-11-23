@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import { snakeCamelMapper } from '@electric-sql/client';
 import {
   type PersistedCollectionPersistence,
@@ -33,8 +34,10 @@ import {
   type Tag,
   type TagWriteResponse,
   type Task,
+  type TaskRelation,
   type TaskTag,
   tagSchema,
+  taskRelationSchema,
   taskSchema,
   taskTagKey,
   taskTagSchema,
@@ -42,6 +45,7 @@ import {
   updateWorkspaceSchema,
   workspaceSchema,
 } from '@throw/shared';
+import { useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
 import { uuidv7 } from 'uuidv7';
 import { z } from 'zod';
@@ -79,6 +83,7 @@ import {
   statusUpdateRequest,
   tagCreateRequest,
   taskCreateFromWrite,
+  taskRelationCreateRequest,
   taskUpdateRequest,
 } from './writeRequests';
 
@@ -100,6 +105,23 @@ const memoryOnly: PersistedCollectionPersistence = {
 };
 const persistence = database?.persistence ?? memoryOnly;
 
+const trackLocalRows = database !== null && Capacitor.getPlatform() === 'android';
+const localRowsReady = new Set<string>();
+const localRowsListeners = new Set<() => void>();
+
+function subscribeToLocalRows(listener: () => void) {
+  localRowsListeners.add(listener);
+  return () => localRowsListeners.delete(listener);
+}
+
+/** For cold start, wait for SQLite even if the device was already offline or the table is empty. */
+export function useLocalRowsReady(...collections: string[]) {
+  return useSyncExternalStore(
+    subscribeToLocalRows,
+    () => !trackLocalRows || collections.every((id) => localRowsReady.has(id)),
+  );
+}
+
 /**
  * Adds the database to a synced collection's options. The wrapper swaps in a `sync` that
  * serves rows from the database first and saves synced changes to it; the rest of the
@@ -110,11 +132,37 @@ const persistence = database?.persistence ?? memoryOnly;
  * collection and sync it again, rather than reading rows of the old shape.
  */
 function persisted<TOptions extends object>(options: TOptions, schemaVersion: number): TOptions {
-  return persistedCollectionOptions({
+  const wrapped = persistedCollectionOptions({
     ...(options as PersistedSyncWrappedOptions<object, string | number>),
     persistence,
     schemaVersion,
-  }) as unknown as TOptions;
+  });
+  if (trackLocalRows) {
+    const sync = wrapped.sync.sync;
+    // Eager persistence publishes its baseline in a commit, including for empty tables.
+    // The collection's normal ready state also waits for Electric to catch up.
+    wrapped.sync = {
+      ...wrapped.sync,
+      sync: (params) => {
+        const id = params.collection.id;
+        const ready = () => {
+          if (localRowsReady.has(id)) return;
+          localRowsReady.add(id);
+          for (const listener of localRowsListeners) listener();
+        };
+        return sync({
+          ...params,
+          commit: (signal) => {
+            const committed = params.commit(signal);
+            if (committed === true) ready();
+            else void committed.then(ready, () => {});
+            return committed;
+          },
+        });
+      },
+    };
+  }
+  return wrapped as unknown as TOptions;
 }
 
 const shapeOptions = (shape: string) => ({
@@ -218,6 +266,20 @@ export const taskTagsCollection = createCollection(
   ),
 );
 
+/** Links between tasks, across the projects of a workspace. Always synced for board cards. */
+export const taskRelationsCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      ...alwaysSynced,
+      id: 'task-relations',
+      schema: taskRelationSchema,
+      getKey: (relation) => relation.id,
+      shapeOptions: shapeOptions('task-relations'),
+    }),
+    1,
+  ),
+);
+
 /**
  * The tasks' activity log (ADR 0006). The server writes every entry; devices only read it, so
  * it is not writable. It always syncs because a task's timeline reads offline.
@@ -257,6 +319,7 @@ const writableCollections = {
   comments: commentsCollection,
   tags: tagsCollection,
   taskTags: taskTagsCollection,
+  taskRelations: taskRelationsCollection,
 };
 
 type WritableCollection = (typeof writableCollections)[keyof typeof writableCollections];
@@ -549,6 +612,20 @@ function send(
       }
     }
   }
+  if (mutation.collection.id === taskRelationsCollection.id) {
+    switch (mutation.type) {
+      case 'insert':
+        return sending(
+          api.createTaskRelation(taskRelationCreateRequest(mutation.modified as TaskRelation)),
+          taskRelationsCollection,
+        );
+      case 'update':
+        // A relation is replaced, never edited.
+        return null;
+      case 'delete':
+        return sending(api.deleteTaskRelation(key), taskRelationsCollection);
+    }
+  }
   if (mutation.collection.id === commentsCollection.id) {
     switch (mutation.type) {
       case 'insert':
@@ -795,6 +872,16 @@ export function useTaskTags(taskId: string) {
     [taskId],
   );
   return { taskTags: data ?? emptyTaskTags, isLoading };
+}
+
+const emptyRelations: TaskRelation[] = [];
+
+/** Every task relation in the user's workspaces, for board cards and the task view. */
+export function useTaskRelations() {
+  const { data = emptyRelations, isLoading } = useLiveQuery((q) =>
+    q.from({ relation: taskRelationsCollection }),
+  );
+  return { relations: useSteadyRows(data), isLoading };
 }
 
 /** A reload must wait for in-flight writes to reach durable storage or the server. */

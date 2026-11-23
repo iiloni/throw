@@ -1,6 +1,11 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { trackDrawerTravel } from '@/components/Drawer/travel';
-import { measureTaskCard, rememberTaskOrigin, takeTaskOrigin } from './taskTransition';
+import {
+  findTaskCard,
+  measureTaskCard,
+  rememberTaskOrigin,
+  takeTaskOrigin,
+} from './taskTransition';
 
 afterEach(() => document.body.replaceChildren());
 function card(x: number, y: number, width = 240) {
@@ -66,4 +71,40 @@ it('finds a card in a drawer still rising to it, where the drawer is carrying it
   expect(measureTaskCard('task')).toMatchObject({ x: 20, y: innerHeight + 40 });
   untrack();
   expect(measureTaskCard('task')).toBeNull();
+});
+
+it('remembers the exact origin element when a task is both a subtask card and a relation row', () => {
+  const subtask = card(20, 120, 300);
+  const row = document.createElement('li');
+  row.dataset.taskOrigin = 'task';
+  row.style.borderRadius = '12px';
+  row.getBoundingClientRect = () => ({
+    x: 20,
+    y: 420,
+    left: 20,
+    top: 420,
+    right: 320,
+    bottom: 464,
+    width: 300,
+    height: 44,
+    toJSON: () => {},
+  });
+  document.body.append(row);
+
+  // Tapping the subtask card keeps the card as origin even though the relation row follows it.
+  rememberTaskOrigin('task', subtask);
+  expect(takeTaskOrigin('task')).toMatchObject({
+    y: 120,
+    height: 100,
+    row: false,
+    element: subtask,
+  });
+
+  // Tapping the relation row keeps the row as origin.
+  rememberTaskOrigin('task', row);
+  expect(takeTaskOrigin('task')).toMatchObject({ y: 420, height: 44, row: true, element: row });
+
+  // Filtering by kind keeps card landings on cards and row lookups on rows.
+  expect(findTaskCard('task', 'card')).toBe(subtask);
+  expect(findTaskCard('task', 'row')).toBe(row);
 });

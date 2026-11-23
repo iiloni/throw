@@ -5,14 +5,24 @@ import { ShellMenu } from '@/components/AppShell/ShellMenu';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { type TaskPanel, taskDrawerContent } from '@/components/TaskDetails/TaskControls';
 import { TaskDetails } from '@/components/TaskDetails/TaskDetails';
-import { useActivity, useAllTags, useAllTaskTags, useStatuses, useTasks } from '@/lib/collections';
+import { useBlockersByTask } from '@/components/TaskRelations/TaskRelations';
+import {
+  useActivity,
+  useAllTags,
+  useAllTaskTags,
+  useLocalRowsReady,
+  useStatuses,
+  useTasks,
+} from '@/lib/collections';
+import { useLaunchScreenReady } from '@/lib/launchScreen';
 import { useDesktop } from '@/lib/media';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { BoardAnnouncer } from './BoardAnnouncer';
+import { TaskBlockersContext } from './blockers';
 import { taskScreens, taskWrites, useBoardBoundary } from './boundary';
 import { DragOverlay } from './DragOverlay';
 import { secondaryTagsByTask, updatedAtByTask, workspaceBoardData } from './selection';
-import { board } from './state';
+import { board, canOpenTask } from './state';
 import { TaskScreen } from './TaskView';
 import { TaskContentContext } from './taskContent';
 import { useTaskUrl } from './taskUrl';
@@ -58,6 +68,7 @@ export function WorkspaceBoard({
   const activity = useActivity();
   const updates = useMemo(() => updatedAtByTask(activity), [activity]);
   const phone = !useDesktop();
+  const blockers = useBlockersByTask();
   const state = board.use();
   const data = useMemo(
     () => workspaceBoardData(workspaceId, projects, statuses, tasks, tags, secondaryTags, updates),
@@ -72,6 +83,23 @@ export function WorkspaceBoard({
   // Whether the board holds this page's data, and whether its tasks have caught up.
   const ready = state.projectId === data.project.id && state.actions !== null && !awaitingTasks;
   useTaskUrl(task, ready, !loadingTasks);
+  const localReady = useLocalRowsReady(
+    'workspaces',
+    'projects',
+    'statuses',
+    'tasks',
+    'tags',
+    'task-tags',
+    'task-relations',
+  );
+  const linkedTask = task && canOpenTask(task, data);
+  useLaunchScreenReady(
+    localReady &&
+      !awaiting &&
+      state.projectId === data.project.id &&
+      state.actions !== null &&
+      (!linkedTask || state.openTaskId === task),
+  );
   if (awaiting || state.projectId !== data.project.id || state.actions === null)
     return (
       <p role="status" className="p-6 text-muted-foreground">
@@ -121,31 +149,33 @@ export function WorkspaceBoard({
   };
   return (
     <TaskContentContext.Provider value={taskContent}>
-      <div className="relative h-full" aria-busy={awaitingTasks}>
-        {!phone && <h1 className="sr-only">All projects</h1>}
-        {phone ? (
-          <WorkspacePhoneBoard
-            title={
-              <h1 aria-label="All projects" className="min-w-0">
-                <ShellMenu phone titleClassName="text-[1.75rem]" />
-              </h1>
-            }
-            syncIndicator={<SyncIndicator />}
-            onSearch={onSearch}
-            onCreate={onCreate}
-          />
-        ) : (
-          <WorkspaceDesktopBoard />
-        )}
-        <AnimatePresence>
-          {phone &&
-            screens.map((task) => (
-              <TaskScreen key={task.id} task={task} covered={task !== openTask} />
-            ))}
-        </AnimatePresence>
-        <DragOverlay />
-        <BoardAnnouncer />
-      </div>
+      <TaskBlockersContext.Provider value={blockers}>
+        <div className="relative h-full" aria-busy={awaitingTasks}>
+          {!phone && <h1 className="sr-only">All projects</h1>}
+          {phone ? (
+            <WorkspacePhoneBoard
+              title={
+                <h1 aria-label="All projects" className="min-w-0">
+                  <ShellMenu phone titleClassName="text-[1.75rem]" />
+                </h1>
+              }
+              syncIndicator={<SyncIndicator />}
+              onSearch={onSearch}
+              onCreate={onCreate}
+            />
+          ) : (
+            <WorkspaceDesktopBoard />
+          )}
+          <AnimatePresence>
+            {phone &&
+              screens.map((task) => (
+                <TaskScreen key={task.id} task={task} covered={task !== openTask} />
+              ))}
+          </AnimatePresence>
+          <DragOverlay />
+          <BoardAnnouncer />
+        </div>
+      </TaskBlockersContext.Provider>
     </TaskContentContext.Provider>
   );
 }

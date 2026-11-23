@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="splashBackground">#F7F6F2</color>
+    <!-- sRGB equivalent of the web app canvas in styles.css. -->
+    <color name="splashBackground">#F6F3ED</color>
+    <color name="splashGlowStable">#20AE96</color>
+    <color name="splashGlowPreview">#9368DE</color>
+    <color name="splashGlowDev">#478AD9</color>
 </resources>

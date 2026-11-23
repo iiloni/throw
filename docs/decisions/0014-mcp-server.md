@@ -94,12 +94,14 @@ project key changes. Key resolution follows [ADR 0007](0007-task-identifiers.md)
 | `update_tag` | Rename a tag, edit its appearance or change its parent. |
 | `move_tag` | Place a tag before or after a sibling under the same parent. |
 | `list_tasks` | List tasks or search their titles, descriptions and current keys. Filter by project, status or category, priority, size, tag, parent and trash state. Exclude effectively trashed tasks by default. |
-| `get_task` | Read a task and its subtasks, comments and history, with cursors for those sections. |
+| `get_task` | Read a task, its relations and whether an open task blocks it, and its subtasks, comments and history, with cursors for those sections. |
 | `create_task` | Create a task in a project or create a subtask by supplying its parent. |
 | `update_task` | Edit the title, description, priority or size, or trash or restore the task. |
 | `move_task` | Change status or place a task relative to an existing neighbor in the destination lane. The server computes the position with the existing fractional ordering. |
 | `add_comment` | Post a comment on a task. |
 | `set_task_tags` | Set or clear the primary tag and add or remove individual secondary tags. |
+| `add_task_relation` | Link a task to another in the workspace: `blocks`, `blocked_by`, `duplicates`, `duplicated_by` or `relates_to`. |
+| `remove_task_relation` | Remove a relation by id, or by the task, relation and other task. |
 
 Task reads include nullable `size`. The fixed values 1–5 mean XS, S, M, L and XL.
 Omit size on create to leave it unset. Updates supply `{ before, after }` and use null
@@ -108,8 +110,19 @@ to include all sizes. Size changes and refusals use the same task history and ch
 
 Users can configure projects, statuses and tags in Throw or through MCP. Structure writes
 cover active projects and their statuses and tags. Trashing, restoring or deleting board
-structure is outside the tool surface, as are permanent removal and task relations such
-as `blocks` and `depends on`. Primary and secondary are task assignment roles. A tag may
+structure is outside the tool surface, as is permanent removal.
+
+Task relations (added 2026-11-22) take task UUIDs or keys and a role as the named task sees
+it, which the server stores as one row: `blocked_by` is the other task blocking. Adding
+derives the relation id from the operation ID, so a retry answers as the first call did,
+and a link that already exists under another id answers `outcome: "existing"`. The reverse
+of a directed relation is refused with a message that says to remove it first. Removing is
+idempotent and answers `outcome: "absent"` once the relation is gone. Both write the
+relation items described in the data model to both tasks' history, which
+`list_changes` returns with `relationId` and `relation`, and queue `task.updated` webhooks.
+`get_task` lists each relation with the other task's key, title, category and trash state,
+and `blocked` says whether an open blocker remains. Relations are informational and never
+stop a move. Primary and secondary are task assignment roles. A tag may
 hold either or both roles.
 
 ## Shared writes and conflicts

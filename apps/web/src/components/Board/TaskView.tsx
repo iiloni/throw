@@ -262,7 +262,7 @@ export function TaskPane({ task }: { task: Task }) {
     >
       {content ? (
         <AnimatePresence initial={false} custom={direction}>
-          <PaneStepLayer key={task.id} direction={direction}>
+          <PaneStepLayer key={task.id} direction={direction} panePresent={present}>
             {content.body(task.id)}
           </PaneStepLayer>
         </AnimatePresence>
@@ -304,9 +304,19 @@ const paneStep = {
         },
 };
 
-/** One task's page in the pane; a leaving page is out of reach while it goes. */
-function PaneStepLayer({ direction, children }: { direction: PaneStep; children: ReactNode }) {
+/** One task's page in the pane; a leaving page is out of reach and keeps its last view while it goes. */
+function PaneStepLayer({
+  direction,
+  panePresent,
+  children,
+}: {
+  direction: PaneStep;
+  panePresent: boolean;
+  children: ReactNode;
+}) {
   const present = useIsPresent();
+  const last = useRef(children);
+  if (present && panePresent && children) last.current = children;
   return (
     <motion.div
       className="col-start-1 row-start-1 flex min-h-0 min-w-0 flex-col"
@@ -318,7 +328,7 @@ function PaneStepLayer({ direction, children }: { direction: PaneStep; children:
       inert={!present}
       aria-hidden={!present || undefined}
     >
-      {children}
+      {last.current}
     </motion.div>
   );
 }

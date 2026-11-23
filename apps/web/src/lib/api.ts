@@ -5,6 +5,7 @@ import type {
   CreateStatus,
   CreateTag,
   CreateTask,
+  CreateTaskRelation,
   CreateWebhook,
   CreateWorkspace,
   ReleasesResponse,
@@ -162,6 +163,10 @@ export const api = {
   updateTask: (id: string, body: UpdateTask) =>
     writeTask<UpdateTaskResponse>(`/tasks/${id}`, 'PATCH', body, body.changes.size !== undefined),
   purgeTask: (id: string) => request<TxidResponse>(`/tasks/${id}`, { method: 'DELETE' }),
+  createTaskRelation: (body: CreateTaskRelation) =>
+    request<TxidResponse>('/task-relations', { method: 'POST', body: JSON.stringify(body) }),
+  deleteTaskRelation: (id: string) =>
+    request<TxidResponse>(`/task-relations/${id}`, { method: 'DELETE' }),
   createComment: (body: CreateComment) =>
     request<TxidResponse>('/comments', { method: 'POST', body: JSON.stringify(body) }),
   updateComment: (id: string, body: UpdateComment) =>

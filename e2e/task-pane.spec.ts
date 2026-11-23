@@ -3,7 +3,7 @@ import { type Browser, expect, type Locator, type Page, test } from '@playwright
 import { APP_LOAD_TIMEOUT, shapeRows, signUp, waitForCachedProject } from './helpers';
 import { newTag } from './tag-helpers';
 
-async function fixture(page: Page) {
+async function fixture(page: Page, { followWorkspaceHome = false } = {}) {
   const account = await signUp(page);
   const [workspace] = await shapeRows(page.request, 'workspaces', account.headers);
   const workspaceId = String(workspace?.id);
@@ -61,7 +61,8 @@ async function fixture(page: Page) {
     ).status(),
   ).toBe(201);
   const path = `/w/${workspaceId}/p/${projectId}?view=board`;
-  await page.goto(path);
+  if (followWorkspaceHome) await expect(page).toHaveURL(path, { timeout: APP_LOAD_TIMEOUT });
+  else await page.goto(path);
   const card = page.getByRole('article', { name: 'TASK-1 Write the launch plan', exact: true });
   await expect(card).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
   await card.click();
@@ -233,9 +234,19 @@ test('task fields, actions, subtasks and task links work in the split pane and p
     controls(page).getByRole('button', { name: 'Status: backlog. Change', exact: true }),
   ).toBeVisible();
   await pane.getByRole('button', { name: 'Move to trash' }).click();
-  await expect(pane).toContainText('This task is in the trash.');
-  await pane.getByRole('button', { name: 'Restore task' }).click();
-  await expect(pane).not.toContainText('This task is in the trash.');
+  await expect(pane).toHaveCount(0);
+  await expect(page.locator('[data-task-screen]')).toHaveCount(0);
+  const trashToast = page.locator('[data-sonner-toast]', { hasText: 'TASK-1 moved to the trash' });
+  await expect(trashToast).toBeVisible();
+  await trashToast.getByRole('button', { name: 'Undo', exact: true }).click();
+  if (isMobile) await backlog.click();
+  const restoredCard = page.getByRole('article', {
+    name: 'TASK-1 A plan ready to share',
+    exact: true,
+  });
+  await expect(restoredCard).toBeVisible();
+  await restoredCard.click();
+  await expect(pane).toBeVisible();
 
   // HTTP on a LAN and denied clipboard permission both need a selectable fallback.
   await page.evaluate(() =>
@@ -1202,4 +1213,176 @@ test('task size stays unavailable on older servers while other task edits sync',
   await expect
     .poll(async () => (await taskRow(page, account))?.title)
     .toBe('Edited on the preview server');
+});
+
+test('description code blocks dedent pasted code, highlight it and export the source', async ({
+  page,
+  isMobile,
+  browser,
+  browserName,
+}, testInfo) => {
+  testInfo.annotations.push({ type: 'browser version', description: browser.version() });
+  if (browserName === 'chromium') {
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  }
+  const { pane } = await fixture(page, { followWorkspaceHome: true });
+  const editor = pane
+    .getByRole('region', { name: 'Description', exact: true })
+    .locator('.bn-editor');
+  await editor.click();
+  await page.keyboard.type('``` ');
+  const block = editor.locator('[data-content-type="codeBlock"]');
+  const code = block.locator('pre > code');
+  await expect(block.getByRole('button', { name: 'Code language: Plain text' })).toBeVisible();
+
+  // The dev server has no service worker. Allow locally bundled modules while the API is offline.
+  await page.route('**/api/**', (route) => route.abort());
+  const source = 'def greet(name):\n    print("Hello", name)';
+  await code.evaluate((node, value) => {
+    const clipboardData = new DataTransfer();
+    clipboardData.setData('text/plain', value);
+    // Firefox ignores constructor-supplied clipboard data on synthetic paste events.
+    const paste = new ClipboardEvent('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(paste, 'clipboardData', { value: clipboardData });
+    node.dispatchEvent(paste);
+  }, '    def greet(name):\r\n        print("Hello", name)');
+  await expect(code).toHaveJSProperty('textContent', source);
+  const python = block.getByRole('button', { name: 'Code language: Python', exact: true });
+  await expect(python).toBeVisible();
+  const keyword = code.locator('span[style*="--code-token-keyword"]').filter({ hasText: 'def' });
+  await expect(keyword).toBeVisible();
+  const light = await keyword.evaluate((node) => getComputedStyle(node).color);
+  await page.evaluate(() => {
+    document.documentElement.style.colorScheme = 'dark';
+  });
+  await expect.poll(() => keyword.evaluate((node) => getComputedStyle(node).color)).not.toBe(light);
+
+  if (isMobile) {
+    await python.locator('.code-language-icon').tap();
+  } else {
+    await python.focus();
+  }
+  const copy = block.getByRole('button', { name: 'Copy snippet', exact: true });
+  await expect(copy).toBeVisible();
+  await expect
+    .poll(() =>
+      copy.locator('svg').evaluate((node) => {
+        const rect = node.getBoundingClientRect();
+        return [Math.round(rect.width), Math.round(rect.height)];
+      }),
+    )
+    .toEqual([16, 16]);
+  if (isMobile) await copy.tap();
+  else await copy.press('Enter');
+  await expect(page.getByText('Snippet copied', { exact: true })).toBeVisible();
+  if (browserName === 'chromium') {
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(source);
+  }
+  const download = page.waitForEvent('download');
+  await block.getByRole('button', { name: 'Download snippet', exact: true }).click();
+  const snippet = await download;
+  expect(snippet.suggestedFilename()).toBe('snippet.py');
+  const chunks: Buffer[] = [];
+  for await (const chunk of await snippet.createReadStream()) chunks.push(chunk);
+  expect(Buffer.concat(chunks).toString('utf8')).toBe(source);
+
+  if (isMobile) await python.locator('.code-language-icon').tap();
+  else await python.press('Enter');
+  await page.getByRole('combobox', { name: 'Search languages' }).fill('ts');
+  await page.getByRole('option', { name: 'TypeScript', exact: true }).click();
+  await expect(
+    block.getByRole('button', { name: 'Code language: TypeScript', exact: true }),
+  ).toBeVisible();
+  await expect(code).toHaveJSProperty('textContent', source);
+
+  // Inline code uses Catch's rounded tinted chip styling.
+  await editor.locator('.bn-trailing-block').click();
+  await page.keyboard.type('Use `inline_code` here');
+  const inlineCode = editor.locator('.bn-inline-content code', { hasText: 'inline_code' });
+  await expect(inlineCode).toBeVisible();
+  const inlineStyle = await inlineCode.evaluate((node) => {
+    const s = getComputedStyle(node);
+    return { bg: s.backgroundColor, radius: Number.parseFloat(s.borderTopLeftRadius) };
+  });
+  expect(inlineStyle.bg).not.toBe('rgba(0, 0, 0, 0)');
+  expect(inlineStyle.radius).toBeGreaterThan(2);
+});
+
+test('trashing a task or subtask closes the task view with an Undo toast', async ({
+  page,
+  isMobile,
+}) => {
+  const { headers, workspaceId, projectId, taskId, status, pane } = await fixture(page);
+  const subtaskId = randomUUID();
+  expect(
+    (
+      await page.request.post('/api/tasks', {
+        headers,
+        data: {
+          id: subtaskId,
+          projectId,
+          title: 'Trim the rollout checklist',
+          statusId: status('active'),
+          priority: 3,
+          position: 'a0',
+          parentId: taskId,
+          description: null,
+          descriptionVersion: null,
+        },
+      })
+    ).status(),
+  ).toBe(201);
+
+  // 1. Trashing a subtask opened from its parent returns to the parent and Undo restores it.
+  const subtaskCard = pane.getByRole('article', {
+    name: /^TASK-\d+ Trim the rollout checklist$/,
+  });
+  await expect(subtaskCard).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
+  await subtaskCard.click();
+  await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue(
+    'Trim the rollout checklist',
+  );
+  if (isMobile) await expect(page.getByLabel('Task beneath', { exact: true })).toHaveCount(1);
+  await pane.getByRole('button', { name: 'Move to trash' }).click();
+  await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue(
+    'Write the launch plan',
+  );
+  await expect(page.locator('[data-task-screen]')).toHaveCount(isMobile ? 1 : 0);
+  await expect(subtaskCard).toHaveCount(0);
+  const subtaskToast = page.locator('[data-sonner-toast]', {
+    hasText: 'TASK-2 moved to the trash',
+  });
+  await expect(subtaskToast).toBeVisible();
+  await subtaskToast.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(subtaskCard).toBeVisible();
+
+  // 2. Trashing a subtask opened directly by URL returns to the board.
+  await page.goto(`/w/${workspaceId}/p/${projectId}?view=board&task=${subtaskId}`);
+  await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue(
+    'Trim the rollout checklist',
+    { timeout: APP_LOAD_TIMEOUT },
+  );
+  await pane.getByRole('button', { name: 'Move to trash' }).click();
+  await expect(pane).toHaveCount(0);
+  await expect(page.locator('[data-task-screen]')).toHaveCount(0);
+
+  // 3. Opening a trashed task directly still allows restoring it from the toolbar.
+  await page.goto(`/w/${workspaceId}/p/${projectId}?view=board&task=${subtaskId}`);
+  await expect(pane).toContainText('This task is in the trash.', { timeout: APP_LOAD_TIMEOUT });
+  await pane.getByRole('button', { name: 'Restore task' }).click();
+  await expect(pane).not.toContainText('This task is in the trash.');
+  await closeTask(pane);
+
+  // 4. Trashing a top-level task closes the view, removes the card, and Undo brings it back.
+  const topCard = page.getByRole('article', { name: 'TASK-1 Write the launch plan', exact: true });
+  await topCard.click();
+  await expect(pane).toBeVisible();
+  await pane.getByRole('button', { name: 'Move to trash' }).click();
+  await expect(pane).toHaveCount(0);
+  await expect(page.locator('[data-task-screen]')).toHaveCount(0);
+  await expect(topCard).toHaveCount(0);
+  const topToast = page.locator('[data-sonner-toast]', { hasText: 'TASK-1 moved to the trash' });
+  await expect(topToast).toBeVisible();
+  await topToast.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(topCard).toBeVisible();
 });

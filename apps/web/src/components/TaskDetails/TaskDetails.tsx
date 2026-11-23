@@ -10,11 +10,14 @@ import {
 } from '@throw/shared';
 import { ChevronLeft, ChevronRight, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { ShellContext } from '@/components/AppShell/shell';
 import { StatusGlyph } from '@/components/Board/glyphs';
 import { type Task as BoardTask, projectOf } from '@/components/Board/model';
 import { StatusMenu } from '@/components/Board/StatusMenu';
 import {
   board,
+  canOpenTask,
   current,
   leaveTask,
   openNewSubtask,
@@ -25,6 +28,7 @@ import { CARD_STATUS_CONTROL, TaskCard } from '@/components/Board/TaskCard';
 import { cardSurface, TaskTitle } from '@/components/Board/TaskView';
 import { TaskPaneWidthContext, TaskScrollContext } from '@/components/Board/taskMotionContext';
 import { IconButton } from '@/components/IconButton/IconButton';
+import { TaskRelations, useRelationGroups } from '@/components/TaskRelations/TaskRelations';
 import { TaskTags } from '@/components/TaskTags/TaskTags';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useTags, useTaskTags } from '@/lib/collections';
@@ -121,13 +125,32 @@ export function TaskDetails({
   const hasTags = [task.primaryTagId, ...secondaryTagIds].some(
     (id) => id !== null && tags.some((tag) => tag.id === id),
   );
+  const shell = useContext(ShellContext);
+  const { groups: relationGroups, isLoading: relationsLoading } = useRelationGroups(task);
   const column = useTaskColumn({
     paneWidth: phone ? null : paneWidth,
-    hasExtras: hasTags || (task.parentId === null && children.length > 0),
-    ready: !tagsLoading && !taskTagsLoading,
+    hasExtras:
+      hasTags || (task.parentId === null && children.length > 0) || relationGroups.length > 0,
+    ready: !tagsLoading && !taskTagsLoading && !relationsLoading,
   });
   const tagRow = (
     <TaskTags tags={tags} primaryTagId={task.primaryTagId} secondaryTagIds={secondaryTagIds} />
+  );
+  /**
+   * A related task on this board opens over this one, so Back returns here as it does from a
+   * subtask. One in another project opens on its own board.
+   */
+  function openRelated(other: Task, origin?: HTMLElement | null) {
+    if (canOpenTask(other.id)) openSubtask(other.id, origin);
+    else shell?.openTask(other.projectId, other.id);
+  }
+  const linkCount = relationGroups.reduce((sum, group) => sum + group.items.length, 0);
+  const hasOpenBlocker = relationGroups.some(
+    (group) =>
+      group.role === 'blocked_by' && group.items.some((item) => !item.closed && !item.trashed),
+  );
+  const relations = (className?: string) => (
+    <TaskRelations task={task} groups={relationGroups} onOpen={openRelated} className={className} />
   );
   /** The subtasks with their slot to add one, inline below the description or in the column. */
   const subtasks = (className?: string, wrapList: (list: ReactNode) => ReactNode = (l) => l) => (
@@ -147,7 +170,7 @@ export function TaskDetails({
                   secondaryTagIds: boardTasks.get(child.id)?.secondaryTagIds ?? [],
                 }}
                 showStatus
-                onOpen={() => openSubtask(child.id)}
+                onOpen={(origin) => openSubtask(child.id, origin)}
                 statusControl={
                   childStatus && (
                     <StatusMenu
@@ -248,6 +271,13 @@ export function TaskDetails({
               },
             }}
             onRecoverDescription={(entry) => setRecovery({ ...entry })}
+            links={{
+              inTabs: !column.fits,
+              mounted: column.inlineMounted,
+              count: linkCount,
+              blocked: hasOpenBlocker,
+              content: relations(),
+            }}
           />
         </div>
       </ScrollAreaViewport>
@@ -323,8 +353,24 @@ export function TaskDetails({
                 restoreTask(task.id);
                 haptics.success();
               } else {
-                trashTask(task.id);
+                const id = task.id;
+                const label = taskIdentifier(project, task);
+                trashTask(id);
                 haptics.warning();
+                leaveTask();
+                toast(label ? `${label} moved to the trash` : 'Task moved to the trash', {
+                  action: {
+                    label: 'Undo',
+                    onClick: () => {
+                      try {
+                        restoreTask(id);
+                        haptics.success();
+                      } catch {
+                        // The task may have been purged meanwhile.
+                      }
+                    },
+                  },
+                });
               }
             }}
           >
@@ -338,6 +384,7 @@ export function TaskDetails({
         <TaskColumnFrame layout={column} card={card}>
           {tagRow}
           {task.parentId === null && subtasks()}
+          {relations()}
         </TaskColumnFrame>
       )}
       {!phone && <TaskDrawer task={task} statuses={statuses} />}

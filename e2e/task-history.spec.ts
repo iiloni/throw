@@ -628,17 +628,26 @@ test('a sideways swipe turns between comments and history on a phone', async ({
   await expect(f.history.getByRole('button', { name: 'Resume comment draft' })).toHaveCount(0);
   await expect(f.history.locator('button', { hasText: 'Write a comment…' })).toHaveCount(1);
 
-  // A short, slow drag springs back; there is nothing further to the left.
+  // A short, slow drag springs back; swiping left again reaches Links, and nothing lies past it.
   await swipe(0.3, 0.45, { frames: 30, on: historyPanel });
   await expect(historyTab).toHaveAttribute('aria-selected', 'true');
+  const linksTab = f.history.getByRole('tab', { name: /^Links/ });
+  const linksPanel = f.history.getByRole('tabpanel', { name: /^Links/ });
   await swipe(0.8, 0.1, { on: historyPanel });
-  await expect(historyTab).toHaveAttribute('aria-selected', 'true');
-  await expect.poll(() => shift(historyPanel.locator('..'))).toBe(0);
+  await expect(linksTab).toHaveAttribute('aria-selected', 'true');
+  await expect(linksPanel).toBeVisible();
+  await swipe(0.8, 0.1, { on: linksPanel });
+  await expect(linksTab).toHaveAttribute('aria-selected', 'true');
+  await expect.poll(() => shift(linksPanel.locator('..'))).toBe(0);
   await expect
-    .poll(async () => (await pill.boundingBox())!.x - (await historyTab.boundingBox())!.x)
+    .poll(async () => (await pill.boundingBox())!.x - (await linksTab.boundingBox())!.x)
     .toBeCloseTo(0, 0);
 
-  // A quick flick goes back to Comments.
+  // Quick flicks go back through History to Comments.
+  await swipe(0.3, 0.55, { frames: 4, gap: 8, on: linksPanel });
+  await expect(historyTab).toHaveAttribute('aria-selected', 'true');
+  await expect(historyPanel).toBeVisible();
+  await expect.poll(() => shift(historyPanel.locator('..'))).toBe(0);
   await swipe(0.3, 0.55, { frames: 4, gap: 8, on: historyPanel });
   await expect(commentsTab).toHaveAttribute('aria-selected', 'true');
   await expect(comments).toBeVisible();

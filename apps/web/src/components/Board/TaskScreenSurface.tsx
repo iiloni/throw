@@ -17,6 +17,7 @@ import { TaskContentContext } from './taskContent';
 import { TaskEditorReadyContext, TaskScrollContext } from './taskMotionContext';
 import {
   findTaskCard,
+  isVisibleOrigin,
   landTaskCard,
   setTaskCardHidden,
   showTaskSurface,
@@ -30,6 +31,12 @@ const lerp = (from: number, to: number, progress: number) => from + (to - from) 
 const LAND_EARLY = 0.25;
 /** A card's border width: its face sits inside it. */
 const CARD_BORDER = 1;
+/**
+ * When a screen closing into a relation row begins dissolving into it (seconds): held until the
+ * surface has nearly reached the ribbon's height so it settles onto the row rather than fading
+ * out in mid-air.
+ */
+const ROW_DISSOLVE_DELAY = 0.35;
 
 /**
  * Catch's card ⇄ note container transform: resize the clipping box, never its text. A subtask
@@ -53,16 +60,19 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
   const progress = useMotionValue(reduced ? 1 : 0);
   // With reduced motion the screen fades in and out in place, without moving.
   const fade = useMotionValue(origin ? 1 : 0);
+  // A screen growing out of or settling into a relation row fades on its own timer rather than
+  // with `progress`, because `EASE_EMPHASIZED` spends most of a collapse near zero progress.
+  const rowFade = useMotionValue(origin?.row ? 0 : 1);
   const dragY = useMotionValue(0);
   const [settled, setSettled] = useState(!!reduced);
   const screen = useRef<HTMLElement>(null);
   const opener = useRef(
     document.activeElement instanceof HTMLElement ? document.activeElement : null,
   );
-  // A task discarded as it closes (a new subtask left empty) keeps its last page while it goes.
+  // A task discarded or trashed as it closes keeps its last page while it goes.
   const page = content.body(task.id);
   const lastPage = useRef(page);
-  if (page) lastPage.current = page;
+  if (isPresent && page) lastPage.current = page;
   const close = () => {
     if (board.get().openTaskId === task.id) leaveTask();
   };
@@ -90,15 +100,24 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
       (1 - (Math.abs(dragY.get()) / MAX_DRAG) * 0.08) *
       (card.get() || reduced ? 1 : 0.94 + 0.06 * fade.get()),
   );
-  const opacity = useTransform(() => (card.get() ? 1 : fade.get()));
-  const faceOpacity = useTransform(() => (card.get() ? Math.max(0, 1 - progress.get() / 0.35) : 0));
-  const textOpacity = useTransform(() =>
-    card.get()
-      ? Math.max(0, Math.min(1, (progress.get() - 0.25) / 0.45))
-      : reduced
-        ? 1
-        : fade.get(),
-  );
+  // Out of a row that is not a card, the screen fades in as it leaves it and dissolves once it
+  // settles onto it, since it has no card face to become.
+  const opacity = useTransform(() => {
+    const rect = card.get();
+    if (!rect) return fade.get();
+    return rect.row ? rowFade.get() : 1;
+  });
+  const edgeOpacity = useTransform(() => (card.get() ? Math.max(0, 1 - progress.get() / 0.35) : 0));
+  const faceOpacity = useTransform(() => (card.get()?.row ? 0 : edgeOpacity.get()));
+  const textOpacity = useTransform(() => {
+    const rect = card.get();
+    if (!rect) return reduced ? 1 : fade.get();
+    // A relation row has no card face to trade into, so the page stays visible further into
+    // the shrink before the pill settles on the ribbon.
+    return rect.row
+      ? Math.max(0, Math.min(1, (progress.get() - 0.08) / 0.37))
+      : Math.max(0, Math.min(1, (progress.get() - 0.25) / 0.45));
+  });
   const backdrop = useTransform(() => progress.get() * 0.35 * (reduced ? fade.get() : 1));
   const pageWidth = useTransform(() => viewport.get().width);
   const pageHeight = useTransform(() => viewport.get().height);
@@ -106,9 +125,10 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
     () => (card.get()?.width ?? viewport.get().width) - 2 * CARD_BORDER,
   );
   // The card's own edge, which it is hidden with while the task is out of it. Without it, a
-  // card landing in the backlog's glass drawer would read as part of the drawer until shown.
+  // card landing in the backlog's glass drawer would read as part of the drawer until shown,
+  // and an untinted task closing into a relation row would blend into the card beneath.
   const boxShadow = useTransform(
-    () => `0 1px 2px oklch(0 0 0 / ${(0.06 * faceOpacity.get()).toFixed(3)})`,
+    () => `0 1px 2px oklch(0 0 0 / ${(0.06 * edgeOpacity.get()).toFixed(3)})`,
   );
 
   useEffect(() => {
@@ -133,29 +153,42 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
         stopSteady(fade);
       };
     }
-    if (isPresent && origin) setTaskCardHidden(task.id, true);
+    if (isPresent && origin && !origin.row) setTaskCardHidden(task.id, true);
     let landing = 0;
+    const originElement = origin?.element ?? null;
+    const openedFromRow = origin?.row ?? false;
+    // Land back on the exact opener element when it is still in view, so a task that appears
+    // as both a subtask card and a blocker row never crosses between the two.
+    const findLanding = () => {
+      if (originElement && isVisibleOrigin(originElement)) return originElement;
+      if (openedFromRow) return null;
+      return findTaskCard(task.id, 'card');
+    };
     // The card is followed every frame: the backlog's drawer is still rising to it, and the
     // list it is in may scroll.
     let target: HTMLElement | null = null;
     const follow = () => {
-      if (!target?.isConnected) target = findTaskCard(task.id);
+      if (!target || !isVisibleOrigin(target)) target = findLanding();
       if (target) card.set(taskCardRect(target));
     };
     const cancel = afterPaint(() => {
       if (!isPresent) {
         // Trash and status changes have had a paint to remove or reposition the landing card.
-        target = findTaskCard(task.id);
+        target = findLanding();
         const rect = target && taskCardRect(target);
         card.set(rect);
         if (rect) {
-          setFace({ showStatus: rect.showStatus, statusControl: rect.statusControl });
-          setTaskCardHidden(task.id, true);
+          if (!rect.row) {
+            setFace({ showStatus: rect.showStatus, statusControl: rect.statusControl });
+            setTaskCardHidden(task.id, true);
+            landing = window.setTimeout(
+              () => landTaskCard(task.id),
+              (curves.collapse.duration - LAND_EARLY) * 1000,
+            );
+          }
           frame.read(follow, true);
-          landing = window.setTimeout(
-            () => landTaskCard(task.id),
-            (curves.collapse.duration - LAND_EARLY) * 1000,
-          );
+        } else {
+          setTaskCardHidden(task.id, false);
         }
       }
       const curve = isPresent ? curves.expand : curves.collapse;
@@ -163,7 +196,18 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
         animateSteady(progress, isPresent ? 1 : 0, curve),
         animateSteady(dragY, 0, curve),
       ];
-      if (!card.get()) animations.push(animateSteady(fade, isPresent ? 1 : 0, curve));
+      const rect = card.get();
+      if (!rect) animations.push(animateSteady(fade, isPresent ? 1 : 0, curve));
+      else if (rect.row) {
+        animations.push(
+          animateSteady(
+            rowFade,
+            isPresent ? 1 : 0,
+            curves.fade,
+            isPresent ? 0 : ROW_DISSOLVE_DELAY * 1000,
+          ),
+        );
+      } else rowFade.jump(1);
       void Promise.all(animations).then(() => {
         if (!active) return;
         if (isPresent) setSettled(true);
@@ -181,9 +225,10 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
       window.clearTimeout(landing);
       stopSteady(progress);
       stopSteady(fade);
+      stopSteady(rowFade);
       stopSteady(dragY);
     };
-  }, [isPresent, reduced, origin, task.id, card, progress, dragY, fade, safeToRemove]);
+  }, [isPresent, reduced, origin, task.id, card, progress, dragY, fade, rowFade, safeToRemove]);
 
   useEffect(() => () => setTaskCardHidden(task.id, false), [task.id]);
   useEffect(showTaskSurface, []);
@@ -278,7 +323,7 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
               aria-hidden
               data-task-edge=""
               className="pointer-events-none absolute inset-0 rounded-[inherit] border border-border"
-              style={{ opacity: faceOpacity }}
+              style={{ opacity: edgeOpacity }}
             />
           )}
         </motion.div>

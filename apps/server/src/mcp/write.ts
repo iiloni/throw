@@ -1,17 +1,33 @@
 import {
+  createTaskRelationSchema,
   createTaskSchema,
   hasCommentText,
   type McpInput,
   type McpOutput,
   positionBetween,
+  relationConflictMessage,
+  relationFromRole,
   type TaskChanges,
 } from '@throw/shared';
 import { uuidv7 } from 'uuidv7';
 import { createComment } from '../lib/commentWrites';
 import type { McpActor } from '../lib/mcpTokens';
+import {
+  createTaskRelation,
+  deleteTaskRelation,
+  findTaskRelation,
+} from '../lib/taskRelationWrites';
 import { createTask, updateTask } from '../lib/taskWrites';
 import { markdownToBlocks } from './markdown';
-import { exposeChanges, findTask, requireProject, requireTask, ToolError } from './read';
+import {
+  exposeChanges,
+  findTask,
+  relationTargetOf,
+  requireProject,
+  requireTask,
+  ToolError,
+  taskRelationsOf,
+} from './read';
 
 import { writeId } from './writeId';
 
@@ -129,4 +145,68 @@ export async function addCommentTool(
   if (result === 'not-found') throw new ToolError('Task not found.');
   if (result === 'taken') throw new ToolError('That operation ID is already in use.');
   return { task, commentId, operationId };
+}
+
+async function relationOf(actor: McpActor, task: { id: string }, relationId: string) {
+  const { relations } = await taskRelationsOf(actor, task.id);
+  const relation = relations.find((row) => row.id === relationId);
+  if (!relation) throw new ToolError('Relation not found.');
+  return relation;
+}
+
+export async function addTaskRelationTool(
+  actor: McpActor,
+  input: McpInput<'add_task_relation'>,
+): Promise<McpOutput<'add_task_relation'>> {
+  const operationId = input.operationId ?? uuidv7();
+  const [task, other] = await Promise.all([
+    requireTask(actor, input.task),
+    requireTask(actor, input.other),
+  ]);
+  if (task.id === other.id) throw new ToolError(relationConflictMessage.self);
+  const id = writeId(actor, operationId, 'relation');
+  const result = await createTaskRelation(
+    actor,
+    createTaskRelationSchema.parse({ id, ...relationFromRole(task.id, input.relation, other.id) }),
+  );
+  if (result === 'not-found') throw new ToolError('Task not found.');
+  if (result === 'other-workspace') throw new ToolError('Related tasks must share a workspace.');
+  if (result === 'taken') throw new ToolError('That operation ID is already in use.');
+  if (result === 'reverse')
+    throw new ToolError(
+      `${relationConflictMessage.reverse}. Remove it first if this direction is the right one.`,
+    );
+  const relation =
+    'removed' in result && result.removed
+      ? {
+          id: result.relation.id,
+          relation: input.relation,
+          task: await relationTargetOf(actor, other.id),
+        }
+      : await relationOf(actor, task, result.relation.id);
+  return {
+    operationId,
+    outcome: result.relation.id === id ? 'added' : 'existing',
+    relation,
+  };
+}
+
+export async function removeTaskRelationTool(
+  actor: McpActor,
+  input: McpInput<'remove_task_relation'>,
+): Promise<McpOutput<'remove_task_relation'>> {
+  const operationId = input.operationId ?? uuidv7();
+  let relationId = input.relationId ?? null;
+  if (!relationId) {
+    const [task, other] = await Promise.all([
+      requireTask(actor, input.task!),
+      requireTask(actor, input.other!),
+    ]);
+    relationId = await findTaskRelation(
+      actor,
+      relationFromRole(task.id, input.relation!, other.id),
+    );
+  }
+  const txid = relationId ? await deleteTaskRelation(actor, relationId) : null;
+  return { operationId, outcome: txid === null ? 'absent' : 'removed', relationId };
 }

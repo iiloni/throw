@@ -97,7 +97,13 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
               exit={{ height: 0, opacity: 0 }}
               transition={reduced ? { duration: 0 } : springs.smooth}
             >
-              <div className="max-h-[min(55dvh,28rem)] shrink-0 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
+              <div
+                className={
+                  panel === 'relations'
+                    ? 'flex max-h-[min(55dvh,28rem)] shrink-0 flex-col overflow-hidden'
+                    : 'max-h-[min(55dvh,28rem)] shrink-0 overflow-y-auto overscroll-contain [scrollbar-width:thin]'
+                }
+              >
                 <TaskPanelContent
                   panel={panel}
                   task={task}

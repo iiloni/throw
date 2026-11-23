@@ -119,11 +119,11 @@ channel's launcher artwork, so the [app icon switcher](#app-icon-switcher) can c
 of them: the platform generator writes stable launcher resources to `main/res` under their
 plain names (`ic_launcher`, `ic_launcher_background`, `ic_launcher_foreground`) and
 preview/dev ones beside them with `_preview` and `_dev` suffixes. Flavor source sets carry
-no launcher overlays; the generator removes stale ones and its check refuses them. System
-splash PNGs stay in each channel's source set. Native identity is `org.iloni.throwtasks`
+no launcher overlays; the generator removes stale ones and its check refuses them. Splash PNGs
+also live in `main/res` with channel suffixes. Native identity is `org.iloni.throwtasks`
 (Throw), `.preview` (Throw Preview), `.dev` (Throw Dev).
 
-- Each source set has mdpi, hdpi, xhdpi, xxhdpi and xxxhdpi PNGs.
+- The shared resources include mdpi, hdpi, xhdpi, xxhdpi and xxxhdpi PNGs.
 - Legacy icons use the small source for their 48 dp display size at every density.
 - Adaptive layers map the complete supplied 1024 canvas to 108 dp (108/162/216/324/432 px).
   The supplied foreground transform is preserved with no extra inset or rounded mask.
@@ -135,9 +135,9 @@ splash PNGs stay in each channel's source set. Native identity is `org.iloni.thr
 - Each launcher alias uses its channel's icon for both icon and round icon; the
   application icon (app info, recents) is the installed flavor's, set by the preview and
   dev manifests.
-- System splash PNGs use the primary channel icon alone, rendered at the 288 dp slot's
-  density sizes without a wordmark, on warm light/dark theme backgrounds. The launch theme
-  wires `windowSplashScreenAnimatedIcon` to `@drawable/splash`.
+- On Android 12 and later, the system splash uses the launched alias's adaptive icon.
+  On older versions, Throw selects the corresponding primary icon PNG for the 288 dp
+  AndroidX splash slot. Each icon has a glow in its own channel color.
 
 Sync the matching web channel before each native build (`THROW_CHANNEL=preview pnpm
 --filter @throw/web android:sync`, then `assemblePreviewDebug`). Do not edit generated

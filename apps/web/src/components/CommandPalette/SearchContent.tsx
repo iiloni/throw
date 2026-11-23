@@ -269,7 +269,8 @@ export function useSearch({
   };
 }
 
-function Highlighted({ segments }: { segments: Segment[] }) {
+/** Search matches marked in text, as search results show them. */
+export function Highlighted({ segments }: { segments: Segment[] }) {
   return segments.map((segment, index) =>
     segment.match ? (
       // biome-ignore lint/suspicious/noArrayIndexKey: segments are positional

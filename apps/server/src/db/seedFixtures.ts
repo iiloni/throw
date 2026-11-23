@@ -6,12 +6,24 @@ import {
   isClosedCategory,
   type Priority,
   positionsBetween,
+  relationConflict,
+  relationFromRole,
+  relationRole,
   type Size,
   type StatusCategory,
   type TagIconName,
+  type TaskRelationRole,
 } from '@throw/shared';
 import { uuidv7 } from 'uuidv7';
-import type { commentActivity, comments, tags, taskActivity, tasks, taskTags } from './schema';
+import type {
+  commentActivity,
+  comments,
+  tags,
+  taskActivity,
+  taskRelations,
+  tasks,
+  taskTags,
+} from './schema';
 
 /**
  * The demo profile's sample content, kept free of the database so a unit test can check every
@@ -264,6 +276,8 @@ export type ProjectFixtures = {
   activity: (typeof taskActivity.$inferInsert)[];
   comments: (typeof comments.$inferInsert)[];
   commentActivity: (typeof commentActivity.$inferInsert)[];
+  /** Task ids by their spec's `ref`, for relations to name. */
+  refs: Map<string, string>;
 };
 
 export function buildProjectFixtures(input: {
@@ -303,6 +317,7 @@ export function buildProjectFixtures(input: {
     activity: [],
     comments: [],
     commentActivity: [],
+    refs: idByRef,
   };
 
   input.tasks.forEach((spec, index) => {
@@ -540,6 +555,20 @@ export const THROW_EXTRA_STATUSES: [string, StatusCategory][] = [
 const OFFLINE = 'offline';
 const LONG = 'long';
 const GUIDE = 'guide';
+const UNSENT = 'unsent';
+const TRAY = 'tray';
+const RELEASE = 'release';
+const TRAY_REVIEW = 'tray-review';
+const KEYS = 'keys';
+const TRAY_COPY = 'tray-copy';
+const TWO_FINGERS = 'two-fingers';
+
+/** Refs for the tasks listed by title alone. */
+const LISTED_REFS: Record<string, string> = {
+  'Make the tray easy to reach': TRAY,
+  'Write the self-hosting guide': GUIDE,
+  'Prepare the next release': RELEASE,
+};
 
 export const THROW_TASKS: TaskSpec[] = [
   {
@@ -577,6 +606,7 @@ export const THROW_TASKS: TaskSpec[] = [
     tags: ['Sync'],
   },
   {
+    ref: UNSENT,
     title: 'Keep unsent changes across a reload',
     status: 'Backlog',
     parent: OFFLINE,
@@ -626,13 +656,13 @@ export const THROW_TASKS: TaskSpec[] = [
       size,
       ...(tag ? { tag } : {}),
       tags: [...tags],
+      ...(LISTED_REFS[title] ? { ref: LISTED_REFS[title] } : {}),
       ...(title === 'Status filters in the backlog' ? { description: DESCRIPTIONS.filters } : {}),
-      ...(title === 'Write the self-hosting guide'
-        ? { ref: GUIDE, description: DESCRIPTIONS.guide }
-        : {}),
+      ...(title === 'Write the self-hosting guide' ? { description: DESCRIPTIONS.guide } : {}),
     }),
   ),
   {
+    ref: TRAY_REVIEW,
     title: 'Review the phone tray',
     status: 'In review',
     priority: 2,
@@ -659,7 +689,14 @@ export const THROW_TASKS: TaskSpec[] = [
   },
   { title: 'Bring notes across from Catch', status: 'Ideas', priority: 4 },
   { title: 'Explore milestones', status: 'Ideas', priority: 5, size: 5, tag: 'Feature' },
-  { title: 'Make project keys readable', status: 'Done', size: 2, tag: 'Polish', closedDaysAgo: 1 },
+  {
+    ref: KEYS,
+    title: 'Make project keys readable',
+    status: 'Done',
+    size: 2,
+    tag: 'Polish',
+    closedDaysAgo: 1,
+  },
   {
     title: 'Ship the responsive shell',
     status: 'Released',
@@ -683,8 +720,15 @@ export const THROW_TASKS: TaskSpec[] = [
     size: 5,
     closedDaysAgo: 2,
   },
-  { title: 'Second copy of the tray idea', status: 'Duplicate', tag: 'Mobile', closedDaysAgo: 8 },
   {
+    ref: TRAY_COPY,
+    title: 'Second copy of the tray idea',
+    status: 'Duplicate',
+    tag: 'Mobile',
+    closedDaysAgo: 8,
+  },
+  {
+    ref: TWO_FINGERS,
     title: 'Drag cards with two fingers',
     status: 'Backlog',
     size: 3,
@@ -706,6 +750,8 @@ export const THROW_COMMENTS: CommentSpec[] = [
 
 const VAN = 'van';
 const KITCHEN = 'kitchen';
+const COUNCIL = 'council';
+const POST = 'post';
 
 export const HOUSE_TASKS: TaskSpec[] = [
   {
@@ -742,8 +788,9 @@ export const HOUSE_TASKS: TaskSpec[] = [
     size: 1,
     tag: 'Packing',
   },
-  { title: 'Redirect the post', status: 'Backlog', size: 1, tag: 'Admin' },
+  { ref: POST, title: 'Redirect the post', status: 'Backlog', size: 1, tag: 'Admin' },
   {
+    ref: COUNCIL,
     title: 'Tell the council about the move',
     status: 'Backlog',
     size: 2,
@@ -769,3 +816,90 @@ export const HOUSE_COMMENTS: CommentSpec[] = [
 /** Older tasks first, so numbers follow creation. */
 export const THROW_CREATED_DAYS_AGO = (index: number) => 45 - index * 0.75;
 export const HOUSE_CREATED_DAYS_AGO = (index: number) => 18 - index * 1.2;
+
+// ---------------------------------------------------------------------------------------------
+// Relations, made once both projects exist so they can cross between them.
+
+export type TaskRef = { project: string; ref: string };
+export type RelationSpec = {
+  task: TaskRef;
+  relation: TaskRelationRole;
+  other: TaskRef;
+  daysAgo: number;
+};
+export type SeededTask = { id: string; projectId: string; identifier: string; createdAt: Date };
+
+const throwTask = (ref: string): TaskRef => ({ project: 'Throw', ref });
+const houseTask = (ref: string): TaskRef => ({ project: 'House move', ref });
+
+/**
+ * The next release waits on open work in both projects (and on one finished task, which no
+ * longer counts), the van waits on the council, and the tray ideas point at each other.
+ */
+export const DEMO_RELATIONS: RelationSpec[] = [
+  { task: throwTask(TRAY_COPY), relation: 'duplicates', other: throwTask(TRAY), daysAgo: 8 },
+  { task: throwTask(TWO_FINGERS), relation: 'relates_to', other: throwTask(TRAY), daysAgo: 5 },
+  { task: throwTask(UNSENT), relation: 'blocks', other: throwTask(OFFLINE), daysAgo: 4.5 },
+  { task: throwTask(RELEASE), relation: 'blocked_by', other: throwTask(KEYS), daysAgo: 4 },
+  { task: throwTask(RELEASE), relation: 'blocked_by', other: throwTask(GUIDE), daysAgo: 3 },
+  { task: throwTask(TRAY_REVIEW), relation: 'relates_to', other: throwTask(TRAY), daysAgo: 2.5 },
+  { task: throwTask(RELEASE), relation: 'blocked_by', other: throwTask(TRAY_REVIEW), daysAgo: 2 },
+  { task: throwTask(RELEASE), relation: 'blocked_by', other: houseTask(VAN), daysAgo: 1 },
+  { task: houseTask(VAN), relation: 'blocked_by', other: houseTask(COUNCIL), daysAgo: 0.7 },
+  { task: houseTask(POST), relation: 'relates_to', other: houseTask(COUNCIL), daysAgo: 0.6 },
+];
+
+/** Relation rows and the entry each end's history records, as `taskRelationWrites` does. */
+export function buildRelationFixtures(input: {
+  workspaceId: string;
+  userId: string;
+  now: Date;
+  task: (ref: TaskRef) => SeededTask;
+  relations: RelationSpec[];
+}) {
+  const { workspaceId, userId, now } = input;
+  const rows: (typeof taskRelations.$inferInsert & { createdAt: Date })[] = [];
+  const activity: (typeof taskActivity.$inferInsert)[] = [];
+  for (const spec of [...input.relations].sort((a, b) => b.daysAgo - a.daysAgo)) {
+    const task = input.task(spec.task);
+    const other = input.task(spec.other);
+    const pair = relationFromRole(task.id, spec.relation, other.id);
+    const conflict = relationConflict(rows, pair);
+    if (conflict)
+      throw new Error(`${task.identifier} ${spec.relation} ${other.identifier}: ${conflict}`);
+    const createdAt = new Date(now.getTime() - spec.daysAgo * DAY);
+    if (createdAt <= task.createdAt || createdAt <= other.createdAt)
+      throw new Error(`${task.identifier} is linked to ${other.identifier} before both exist`);
+    const row = { id: uuidv7(), workspaceId, ...pair, createdAt };
+    rows.push(row);
+    const [source, target] = row.sourceTaskId === task.id ? [task, other] : [other, task];
+    for (const [end, far] of [
+      [source, target],
+      [target, source],
+    ] as const) {
+      activity.push({
+        id: uuidv7(),
+        workspaceId,
+        projectId: end.projectId,
+        taskId: end.id,
+        userId,
+        kind: 'updated',
+        changes: [
+          {
+            field: 'relations',
+            relationId: row.id,
+            relation: relationRole(row, end.id)!.role,
+            previous: null,
+            requested: far.id,
+            previousName: null,
+            requestedName: far.identifier,
+            applied: true,
+          },
+        ],
+        createdAt,
+        feedOrder: BigInt(activity.length),
+      });
+    }
+  }
+  return { relations: rows, activity };
+}

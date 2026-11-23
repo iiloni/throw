@@ -3,9 +3,11 @@ import {
   type CreateComment,
   type CreateProject,
   type CreateTask,
+  type CreateTaskRelation,
   createCommentSchema,
   createProjectSchema,
   createTagSchema,
+  createTaskRelationSchema,
   createTaskSchema,
   deriveProjectKey,
   type Project,
@@ -15,6 +17,7 @@ import {
   type Tag,
   type Task,
   type TaskChanges,
+  type TaskRelation,
   taskTagSchema,
   type UpdateComment,
   type UpdateProject,
@@ -234,4 +237,14 @@ export function changeIdFor(idempotencyKey: string, taskId: string) {
 export function tagCreateRequest(tag: Tag) {
   const { workspaceId: _workspaceId, position: _position, ...body } = tag;
   return createTagSchema.parse(body);
+}
+
+/** The server sets the workspace from the tasks and stamps the time. */
+export function taskRelationCreateRequest(relation: TaskRelation): CreateTaskRelation {
+  return createTaskRelationSchema.parse({
+    id: relation.id,
+    sourceTaskId: relation.sourceTaskId,
+    targetTaskId: relation.targetTaskId,
+    kind: relation.kind,
+  });
 }

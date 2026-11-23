@@ -309,7 +309,7 @@ function CaptureControls({
         }
         // Opening a picker moves focus off the title, which puts the keyboard away.
         onOpen={(next) => {
-          if (next !== 'more' && next !== 'size') onPanel(next);
+          if (next !== 'more' && next !== 'size' && next !== 'relations') onPanel(next);
         }}
         controlProps={(next) => ({ 'aria-expanded': next === panel })}
         tooltips={false}

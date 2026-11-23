@@ -203,7 +203,11 @@ export function AppShell() {
     const here = crossBoard ? `workspace:${workspace?.id}` : pendingTask?.projectId;
     if (!pendingTask || boardState.projectId !== here || !boardState.actions) return;
     if (
-      !boardState.boards.some((data) => data.tasks.some((task) => task.id === pendingTask.taskId))
+      !boardState.boards.some(
+        (data) =>
+          data.tasks.some((task) => task.id === pendingTask.taskId) ||
+          data.hiddenTasks?.some((task) => task.id === pendingTask.taskId),
+      )
     )
       return;
     update({

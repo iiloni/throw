@@ -230,7 +230,10 @@ export function initialBoard(boards: BoardData[] = []): BoardState {
 
 export const board = createStore<BoardState>(initialBoard());
 
-export function update(change: Partial<BoardState> | ((state: BoardState) => Partial<BoardState>)) {
+export function update(
+  change: Partial<BoardState> | ((state: BoardState) => Partial<BoardState>),
+  origin?: HTMLElement | null,
+) {
   const state = board.get();
   const next = typeof change === 'function' ? change(state) : change;
   if (
@@ -243,7 +246,7 @@ export function update(change: Partial<BoardState> | ((state: BoardState) => Par
   const moving = 'openTaskId' in next && next.openTaskId !== state.openTaskId;
   // Returning down the trail finds its task where it was left, so only a new opening grows.
   if (moving && next.openTaskId && !isDesktop() && !state.taskTrail.includes(next.openTaskId))
-    rememberTaskOrigin(next.openTaskId);
+    rememberTaskOrigin(next.openTaskId, origin);
   // Opening a task any other way starts a new trail.
   board.set({ ...state, ...(moving && !('taskTrail' in next) ? { taskTrail: [] } : {}), ...next });
   if (moving && next.openTaskId) expandColumnOf(board.get(), next.openTaskId);
@@ -254,12 +257,21 @@ export function update(change: Partial<BoardState> | ((state: BoardState) => Par
   }
 }
 
-/** A subtask opened from its parent's pane goes back to that pane when it is left. */
-export function openSubtask(taskId: string) {
-  update((state) => ({
-    openTaskId: taskId,
-    taskTrail: state.openTaskId ? [...state.taskTrail, state.openTaskId] : [],
-  }));
+/**
+ * A subtask or related task opened from a pane goes back to that pane when left. Following a
+ * relation back to a task already earlier in the trail unwinds to it instead of stacking a
+ * duplicate screen key.
+ */
+export function openSubtask(taskId: string, origin?: HTMLElement | null) {
+  update((state) => {
+    if (state.openTaskId === taskId) return {};
+    const at = state.taskTrail.indexOf(taskId);
+    if (at >= 0) return { openTaskId: taskId, taskTrail: state.taskTrail.slice(0, at) };
+    return {
+      openTaskId: taskId,
+      taskTrail: state.openTaskId ? [...state.taskTrail, state.openTaskId] : [],
+    };
+  }, origin);
 }
 
 /** A subtask just added from its parent's pane, until the board has its row to open. */

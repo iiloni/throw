@@ -38,6 +38,37 @@ final class AppIcons {
         return new ComponentName(context.getPackageName(), "org.iloni.throwtasks." + ALIASES[index]);
     }
 
+    /** The system splash on Android 12+ inherits the icon of the launched component. */
+    static int launchIndex(Context context, ComponentName launched) {
+        int fallback = defaultIndex(context);
+        for (int i = 0; i <= fallback; i++) {
+            if (component(context, i).equals(launched)) return i;
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            PackageManager manager = context.getPackageManager();
+            for (int i = 0; i <= fallback; i++) {
+                if (enabled(manager.getComponentEnabledSetting(component(context, i)), i == fallback)) return i;
+            }
+        }
+        return fallback;
+    }
+
+    static int compatSplashIcon(int index) {
+        return switch (index) {
+            case 2 -> R.style.SplashIcon_Dev;
+            case 1 -> R.style.SplashIcon_Preview;
+            default -> R.style.SplashIcon_Stable;
+        };
+    }
+
+    static int glowColor(Context context, int index) {
+        return context.getColor(switch (index) {
+            case 2 -> R.color.splashGlowDev;
+            case 1 -> R.color.splashGlowPreview;
+            default -> R.color.splashGlowStable;
+        });
+    }
+
     static String preview(Context context, String icon) throws PackageManager.NameNotFoundException {
         PackageManager manager = context.getPackageManager();
         // Loading the alias also works while disabled and preserves the platform's adaptive mask.
