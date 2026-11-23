@@ -234,9 +234,19 @@ test('task fields, actions, subtasks and task links work in the split pane and p
     controls(page).getByRole('button', { name: 'Status: backlog. Change', exact: true }),
   ).toBeVisible();
   await pane.getByRole('button', { name: 'Move to trash' }).click();
-  await expect(pane).toContainText('This task is in the trash.');
-  await pane.getByRole('button', { name: 'Restore task' }).click();
-  await expect(pane).not.toContainText('This task is in the trash.');
+  await expect(pane).toHaveCount(0);
+  await expect(page.locator('[data-task-screen]')).toHaveCount(0);
+  const trashToast = page.locator('[data-sonner-toast]', { hasText: 'TASK-1 moved to the trash' });
+  await expect(trashToast).toBeVisible();
+  await trashToast.getByRole('button', { name: 'Undo', exact: true }).click();
+  if (isMobile) await backlog.click();
+  const restoredCard = page.getByRole('article', {
+    name: 'TASK-1 A plan ready to share',
+    exact: true,
+  });
+  await expect(restoredCard).toBeVisible();
+  await restoredCard.click();
+  await expect(pane).toBeVisible();
 
   // HTTP on a LAN and denied clipboard permission both need a selectable fallback.
   await page.evaluate(() =>
@@ -1296,4 +1306,83 @@ test('description code blocks dedent pasted code, highlight it and export the so
   });
   expect(inlineStyle.bg).not.toBe('rgba(0, 0, 0, 0)');
   expect(inlineStyle.radius).toBeGreaterThan(2);
+});
+
+test('trashing a task or subtask closes the task view with an Undo toast', async ({
+  page,
+  isMobile,
+}) => {
+  const { headers, workspaceId, projectId, taskId, status, pane } = await fixture(page);
+  const subtaskId = randomUUID();
+  expect(
+    (
+      await page.request.post('/api/tasks', {
+        headers,
+        data: {
+          id: subtaskId,
+          projectId,
+          title: 'Trim the rollout checklist',
+          statusId: status('active'),
+          priority: 3,
+          position: 'a0',
+          parentId: taskId,
+          description: null,
+          descriptionVersion: null,
+        },
+      })
+    ).status(),
+  ).toBe(201);
+
+  // 1. Trashing a subtask opened from its parent returns to the parent and Undo restores it.
+  const subtaskCard = pane.getByRole('article', {
+    name: /^TASK-\d+ Trim the rollout checklist$/,
+  });
+  await expect(subtaskCard).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
+  await subtaskCard.click();
+  await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue(
+    'Trim the rollout checklist',
+  );
+  if (isMobile) await expect(page.getByLabel('Task beneath', { exact: true })).toHaveCount(1);
+  await pane.getByRole('button', { name: 'Move to trash' }).click();
+  await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue(
+    'Write the launch plan',
+  );
+  await expect(page.locator('[data-task-screen]')).toHaveCount(isMobile ? 1 : 0);
+  await expect(subtaskCard).toHaveCount(0);
+  const subtaskToast = page.locator('[data-sonner-toast]', {
+    hasText: 'TASK-2 moved to the trash',
+  });
+  await expect(subtaskToast).toBeVisible();
+  await subtaskToast.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(subtaskCard).toBeVisible();
+
+  // 2. Trashing a subtask opened directly by URL returns to the board.
+  await page.goto(`/w/${workspaceId}/p/${projectId}?view=board&task=${subtaskId}`);
+  await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue(
+    'Trim the rollout checklist',
+    { timeout: APP_LOAD_TIMEOUT },
+  );
+  await pane.getByRole('button', { name: 'Move to trash' }).click();
+  await expect(pane).toHaveCount(0);
+  await expect(page.locator('[data-task-screen]')).toHaveCount(0);
+
+  // 3. Opening a trashed task directly still allows restoring it from the toolbar.
+  await page.goto(`/w/${workspaceId}/p/${projectId}?view=board&task=${subtaskId}`);
+  await expect(pane).toContainText('This task is in the trash.', { timeout: APP_LOAD_TIMEOUT });
+  await pane.getByRole('button', { name: 'Restore task' }).click();
+  await expect(pane).not.toContainText('This task is in the trash.');
+  await closeTask(pane);
+
+  // 4. Trashing a top-level task closes the view, removes the card, and Undo brings it back.
+  const topCard = page.getByRole('article', { name: 'TASK-1 Write the launch plan', exact: true });
+  await topCard.click();
+  await expect(pane).toBeVisible();
+  await pane.getByRole('button', { name: 'Move to trash' }).click();
+  await expect(pane).toHaveCount(0);
+  await expect(page.locator('[data-task-screen]')).toHaveCount(0);
+  await expect(topCard).toHaveCount(0);
+  const topToast = page.locator('[data-sonner-toast]', { hasText: 'TASK-1 moved to the trash' });
+  await expect(topToast).toBeVisible();
+  await topToast.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(topCard).toBeVisible();
 });

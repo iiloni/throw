@@ -10,6 +10,7 @@ import {
 } from '@throw/shared';
 import { ChevronLeft, ChevronRight, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { ShellContext } from '@/components/AppShell/shell';
 import { StatusGlyph } from '@/components/Board/glyphs';
 import { type Task as BoardTask, projectOf } from '@/components/Board/model';
@@ -352,8 +353,24 @@ export function TaskDetails({
                 restoreTask(task.id);
                 haptics.success();
               } else {
-                trashTask(task.id);
+                const id = task.id;
+                const label = taskIdentifier(project, task);
+                trashTask(id);
                 haptics.warning();
+                leaveTask();
+                toast(label ? `${label} moved to the trash` : 'Task moved to the trash', {
+                  action: {
+                    label: 'Undo',
+                    onClick: () => {
+                      try {
+                        restoreTask(id);
+                        haptics.success();
+                      } catch {
+                        // The task may have been purged meanwhile.
+                      }
+                    },
+                  },
+                });
               }
             }}
           >
