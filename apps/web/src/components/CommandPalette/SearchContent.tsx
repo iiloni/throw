@@ -25,7 +25,7 @@ import {
   useBoardSettings,
 } from '@/components/Board/state';
 import { ActiveFilters, BoardFilters } from '@/components/BoardSearch/BoardFilters';
-import { FilterCard } from '@/components/BoardSearch/FilterCard';
+import { FilterCard, keepFocus } from '@/components/BoardSearch/FilterCard';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { Hint } from '@/components/Hint/Hint';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
@@ -556,7 +556,12 @@ export function SearchResults({ search }: { search: SearchState }) {
   const { scope, title, results, projects, actions, destination, backlog } = search;
   return (
     <>
-      {search.onBoard && <ActiveFilters state={search.onBoard} className="pb-4 empty:hidden" />}
+      {search.onBoard && (
+        // Removing a chip leaves the keyboard as it was, as the filter card does.
+        <div {...keepFocus}>
+          <ActiveFilters state={search.onBoard} className="pb-4 empty:hidden" />
+        </div>
+      )}
       {/* In place, fading in on the chip itself (a fading parent would cut its blur off from
           what is behind it): growing its height would re-lay out every result each frame. */}
       {scope && !search.onBoard && (
@@ -690,8 +695,10 @@ export function PhoneSearchContent({
       <div className="relative flex min-h-0 flex-1 flex-col [container-type:size]">
         <ScrollArea edges className="flex-1 [--scrollbar-inset:0.5rem]">
           <ScrollAreaViewport ref={search.list}>
-            {/* Few results sit by the field; more scroll from the best one down. */}
-            <div className="mt-auto px-4 pt-2 pb-3">
+            {/* Few results sit by the field; more scroll from the best one down. The drawer is
+                glass already: chips drawn on it skip a blur of their own, which every frame of
+                the results moving would have redrawn. */}
+            <div className="mt-auto px-4 pt-2 pb-3 [&_.glass-badge]:[backdrop-filter:none]">
               <SearchResults search={search} />
             </div>
           </ScrollAreaViewport>
@@ -704,7 +711,8 @@ export function PhoneSearchContent({
               // The board's filter sections fit what is left above their tabs.
               <FilterCard
                 key="filters"
-                className="glass-thick flex max-h-[calc(100cqh-1.5rem)] flex-col overflow-hidden rounded-[var(--dock-radius)] shadow-[0_10px_30px_-10px_var(--glass-shadow)] [--board-filter-view-max:min(24rem,calc(100cqh-6.75rem))]"
+                solid
+                className="flex max-h-[calc(100cqh-1.5rem)] flex-col overflow-hidden rounded-[var(--dock-radius)] shadow-[0_10px_30px_-10px_var(--glass-shadow)] [--board-filter-view-max:min(24rem,calc(100cqh-6.75rem))]"
               >
                 <ScrollArea
                   edges

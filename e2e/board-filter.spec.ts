@@ -453,13 +453,25 @@ test.describe('phone', () => {
   }) => {
     const board = await sizedBoard(page);
     await page.getByRole('button', { name: 'Search', exact: true }).click();
+    const field = page.getByRole('combobox', { name: /^Search tasks/ });
+    await expect(field).toBeFocused();
     await page.getByRole('button', { name: 'Filter and sort', exact: true }).click();
+    // Choosing filters leaves the keyboard as it was: the field keeps focus, even through a
+    // tag's label, which would otherwise focus its checkbox.
+    const work = page.getByRole('checkbox', { name: 'Work', exact: true });
+    await page.locator('label', { has: work }).getByText('Work', { exact: true }).click();
+    await expect(work).toBeChecked();
+    await expect(field).toBeFocused();
+    await work.click();
+    await expect(work).not.toBeChecked();
+    await expect(field).toBeFocused();
     await section(page, 'Size');
     await page.getByRole('button', { name: /^Size L,/ }).click();
     await page.getByRole('button', { name: /^Size XL,/ }).click();
     await section(page, 'Sort');
     await page.getByRole('button', { name: 'Size', exact: true }).click();
     await page.getByRole('button', { name: 'Largest', exact: true }).click();
+    await expect(field).toBeFocused();
     // With nothing typed, the results list what the board behind now shows, in its order.
     await expect(page.getByText('2 tasks on the board', { exact: true })).toBeVisible();
     await expect(page.getByRole('option', { name: /Low priority|Later position/ })).toHaveText([

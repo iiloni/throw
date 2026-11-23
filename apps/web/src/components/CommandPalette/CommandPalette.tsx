@@ -203,7 +203,7 @@ function ScopePanel({ search }: { search: SearchState }) {
         {search.filtersOpen && (
           <FilterCard
             key="filters"
-            className="glass-thick mb-3 flex max-h-[50dvh] flex-col overflow-hidden rounded-[var(--dock-radius)]"
+            className="mb-3 flex max-h-[50dvh] flex-col overflow-hidden rounded-[var(--dock-radius)]"
           >
             <ScrollArea edges className="flex min-h-0 flex-1 flex-col [--scrollbar-inset:0.75rem]">
               <ScrollAreaViewport className="h-auto w-full min-h-0 flex-1">

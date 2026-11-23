@@ -258,7 +258,7 @@ function FilterPanel({ open }: { open: boolean }) {
       {open && (
         <FilterCard
           key="filters"
-          className="glass-thick mb-3 rounded-[var(--dock-radius)] shadow-[0_10px_30px_-10px_var(--glass-shadow)]"
+          className="mb-3 rounded-[var(--dock-radius)] shadow-[0_10px_30px_-10px_var(--glass-shadow)]"
         >
           <section
             id="board-filter-panel"
