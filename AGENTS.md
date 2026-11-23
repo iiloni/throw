@@ -62,7 +62,11 @@ search bar (`components/BoardSearch`, docked as a sidebar on wide boards) or the
 search; Ctrl/⌘K opens the palette only away from boards. A sorted list is `data-drop-send`:
 drops there send. The Updated sort reads each task's activity log (`updatedAtByTask`).
 Cards move on both boards by drag, keyboard,
-phone long press and the move drawer (ADR 0008).
+phone long press and the move drawer (ADR 0008). A selection (Ctrl/⌘/Shift click or right
+click on desktop, long press on a phone) is edited together through `Board/SelectionActions.tsx`:
+the desktop `SelectionBar` and the phone `MovePanel` share its controls, and the boundaries
+supply the priority, size, tag and trash panels (`components/BulkActions`) through
+`SelectionContentContext`, so the prototype only moves.
 Settings (`/settings/*`) and project settings (`/w/:workspaceId/p/:projectId/settings`,
 with project trash beside it at `/trash`) share Catch's `SettingsLayout`: pages listed
 beside the open one on wide screens, and a dock page picker on phones

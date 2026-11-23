@@ -3,10 +3,21 @@ import {
   AnimatePresence,
   motion,
   frame as motionFrame,
+  useIsPresent,
   useMotionValueEvent,
+  useReducedMotion,
   useTransform,
 } from 'motion/react';
-import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { flushSync } from 'react-dom';
 import {
   BoardSearch,
@@ -16,7 +27,6 @@ import {
 } from '@/components/BoardSearch/BoardSearch';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
-import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { springs } from '@/lib/motion';
@@ -27,6 +37,14 @@ import { CardList } from './CardList';
 import { drag, makingWay } from './drag';
 import type { Status } from './model';
 import {
+  SelectionControls,
+  type SelectionTab,
+  SelectionTabContent,
+  selectedTasks,
+  selectionTabs,
+  selectionTabTitle,
+} from './SelectionActions';
+import {
   type RailGeometry,
   railGeometry,
   SideZone,
@@ -34,7 +52,6 @@ import {
   useRailSpring,
   ZONE_GAP,
 } from './SideZone';
-import { StatusMenu } from './StatusMenu';
 import { StatusTile } from './StatusTile';
 import {
   type BoardState,
@@ -44,7 +61,6 @@ import {
   current,
   railResize,
   selectProject,
-  sendTasks,
   setSubtasksAsCards,
   setTaskPaneWidth,
   taskPaneResize,
@@ -55,6 +71,7 @@ import {
   useTaskPaneWidth,
 } from './state';
 import { PANE_MIN, SplitHandle, TaskPane } from './TaskView';
+import { SelectionContentContext } from './taskContent';
 import { TaskPaneWidthContext } from './taskMotionContext';
 
 const HANDLE_WIDTH = 24;
@@ -327,26 +344,13 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
               <span aria-hidden className="pointer-events-none flex-1" />
               {!closedBound && closedRail}
               {!docked && <BoardSearch />}
+              <SelectionBar />
             </div>
 
             <OpenTaskPane frameWidth={frameWidth} />
           </div>
         </div>
       </div>
-
-      <SelectionBar>
-        <StatusMenu
-          project={project}
-          onSelect={(statusId) => {
-            sendTasks(state.selection, statusId);
-            update({ selection: [] });
-          }}
-        >
-          <Button size="sm" className="rounded-xl">
-            Move to
-          </Button>
-        </StatusMenu>
-      </SelectionBar>
     </div>
   );
 }
@@ -477,33 +481,149 @@ export function OpenTaskPane({ frameWidth }: { frameWidth: number }) {
   );
 }
 
-/** What can be done with the cards selected on desktop, floating at the foot of the board. */
-export function SelectionBar({ children }: { children: ReactNode }) {
+/**
+ * What can be done with the cards selected on desktop, floating at the foot of the board over
+ * the columns, and above the search bar while it floats there too. Its controls are an open
+ * task's dock: status, priority, size and tags grow their pickers upward out of it.
+ */
+export function SelectionBar() {
   const state = board.use();
   const held = drag.use();
+  const reduced = useReducedMotion();
+  const shown = state.selection.length > 0 && held?.phase !== 'dragging';
   return (
     <AnimatePresence>
-      {state.selection.length > 0 && held?.phase !== 'dragging' && (
+      {shown && (
         <motion.div
-          className={cn(
-            'glass-thick -translate-x-1/2 fixed left-1/2 z-30 flex h-12 items-center gap-1 rounded-2xl pr-1.5 pl-4',
-            // Above the search bar while it is open, which holds the same place.
-            state.searching ? 'bottom-[calc(var(--board-search-space,0px)+1.25rem)]' : 'bottom-5',
-          )}
-          initial={{ y: 24, opacity: 0 }}
+          key="selection"
+          className="pointer-events-none absolute inset-x-0 bottom-[calc(var(--board-search-space,0px)+max(1.25rem,calc(var(--safe-bottom)+0.75rem)))] z-30 flex justify-center px-6"
+          initial={{ y: reduced ? 0 : 24, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 24, opacity: 0 }}
-          transition={springs.snappy}
+          exit={{ y: reduced ? 0 : 24, opacity: 0 }}
+          transition={reduced ? { duration: 0 } : springs.snappy}
         >
-          <span className="pr-2 font-medium text-sm tabular-nums">
-            {state.selection.length} selected
-          </span>
-          {children}
-          <IconButton label="Clear selection" onClick={() => update({ selection: [] })}>
-            <X />
-          </IconButton>
+          <SelectionDock reduced={!!reduced} />
         </motion.div>
       )}
     </AnimatePresence>
+  );
+}
+
+function SelectionDock({ reduced }: { reduced: boolean }) {
+  const state = board.use();
+  const content = useContext(SelectionContentContext);
+  const { project } = current(state);
+  const [chosen, setChosen] = useState<SelectionTab | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLElement | null>(null);
+  const id = useId();
+  const tabs = selectionTabs(project, selectedTasks(state), content);
+  // Tags close once the selection spans projects.
+  const tab = chosen && tabs.includes(chosen) ? chosen : null;
+  const collapse = useCallback(() => {
+    setChosen(null);
+    if (trigger.current?.isConnected) trigger.current.focus({ preventScroll: true });
+  }, []);
+  useEffect(() => {
+    if (!tab) return;
+    // As an open task's dock: Escape and a press elsewhere close the picker, keeping the
+    // selection, which the next Escape lets go.
+    function dismissOnEscape(event: KeyboardEvent) {
+      if (event.key !== 'Escape' || document.querySelector('[role="dialog"]')) return;
+      event.preventDefault();
+      event.stopPropagation();
+      collapse();
+    }
+    function outside(event: PointerEvent) {
+      if (event.target instanceof Node && !root.current?.contains(event.target)) setChosen(null);
+    }
+    document.addEventListener('keydown', dismissOnEscape, true);
+    document.addEventListener('pointerdown', outside, true);
+    return () => {
+      document.removeEventListener('keydown', dismissOnEscape, true);
+      document.removeEventListener('pointerdown', outside, true);
+    };
+  }, [tab, collapse]);
+  return (
+    <div
+      ref={root}
+      className="glass-thick pointer-events-auto flex w-full max-w-md flex-col overflow-hidden rounded-[var(--dock-radius)]"
+    >
+      {/* After the panel in the flow, so Tab reaches the panel from the control that opened it. */}
+      <div className="order-last flex h-[var(--dock-height)] items-center gap-1 pr-1.5 pl-4">
+        <span className="shrink-0 pr-1 font-medium text-sm tabular-nums">
+          {state.selection.length} selected
+        </span>
+        <div role="toolbar" aria-label="Selected tasks" className="h-full min-w-0 flex-1">
+          <SelectionControls
+            tabs={tabs}
+            tooltips
+            onOpen={(next, element) => {
+              trigger.current = element;
+              setChosen(next === tab ? null : next);
+            }}
+            controlProps={(name) => ({
+              'aria-expanded': name === tab,
+              'aria-controls': `${id}-${name}`,
+            })}
+          />
+        </div>
+        <IconButton label="Clear selection" onClick={() => update({ selection: [] })}>
+          <X />
+        </IconButton>
+      </div>
+      <AnimatePresence initial={false}>
+        {tab && (
+          <SelectionPanelFrame
+            key={tab}
+            id={`${id}-${tab}`}
+            label={selectionTabTitle[tab]}
+            reduced={reduced}
+          >
+            <div
+              className={cn(
+                'px-2 pt-2 [--tags-max:min(55dvh,28rem)]',
+                tab === 'tags'
+                  ? 'flex max-h-[min(55dvh,28rem)] flex-col overflow-hidden'
+                  : 'max-h-[min(55dvh,28rem)] overflow-y-auto overscroll-contain [scrollbar-width:thin]',
+                tab === 'status' && 'px-3 pb-2',
+              )}
+            >
+              <SelectionTabContent tab={tab} onDone={collapse} />
+            </div>
+          </SelectionPanelFrame>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/** A picker growing out of the selection's dock. A leaving one is inert. */
+function SelectionPanelFrame({
+  id,
+  label,
+  reduced,
+  children,
+}: {
+  id: string;
+  label: string;
+  reduced: boolean;
+  children: ReactNode;
+}) {
+  const isPresent = useIsPresent();
+  return (
+    <motion.div
+      id={id}
+      role="region"
+      aria-label={label}
+      inert={!isPresent}
+      className="flex flex-col justify-end overflow-hidden [&>*]:shrink-0"
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: 'auto', opacity: 1 }}
+      exit={{ height: 0, opacity: 0 }}
+      transition={reduced ? { duration: 0 } : springs.smooth}
+    >
+      {children}
+    </motion.div>
   );
 }

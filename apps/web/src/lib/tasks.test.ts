@@ -349,3 +349,47 @@ describe('offline tag actions', () => {
     expect(taskTagsCollection.has(taskTagKey({ taskId, tagId: other }))).toBe(true);
   });
 });
+
+describe('editing a selection of tasks', () => {
+  it('writes each task on its own and skips one that is gone', () => {
+    const a = tasks.createTask(projectId, { title: 'A' });
+    const b = tasks.createTask(projectId, { title: 'B', priority: 1 });
+    const count = fake.written.length;
+    expect(tasks.updateTasks([a, 'missing', b], { priority: 2, size: 3 })).toEqual([a, b]);
+    expect(fake.written).toHaveLength(count + 2);
+    expect(tasksCollection.get(a)).toMatchObject({ priority: 2, size: 3 });
+    expect(tasksCollection.get(b)).toMatchObject({ priority: 2, size: 3 });
+  });
+
+  it('trashes only what is not in the trash yet, and restores exactly those', () => {
+    const a = tasks.createTask(projectId, { title: 'A' });
+    const b = tasks.createTask(projectId, { title: 'B' });
+    tasks.trashTask(b);
+    const trashed = tasks.trashTasks([a, b, 'missing']);
+    expect(trashed).toEqual([a]);
+    expect(tasksCollection.get(a)?.deletedAt).toEqual(expect.any(String));
+    expect(tasks.restoreTasks(trashed)).toEqual([a]);
+    expect(tasksCollection.get(a)?.deletedAt).toBeNull();
+    expect(tasksCollection.get(b)?.deletedAt).toEqual(expect.any(String));
+  });
+
+  it('sets a primary tag on several tasks and toggles a secondary tag on all of them', async () => {
+    const { taskTagsCollection } = await import('./collections');
+    const { taskTagKey } = await import('@throw/shared');
+    const tag = tags.createTag(projectId, { name: 'Fragile', color: 'red' });
+    const a = tasks.createTask(projectId, { title: 'A' });
+    const b = tasks.createTask(projectId, { title: 'B', secondaryTagIds: [tag] });
+    expect(tags.setPrimaryTags([a, b], tag)).toEqual([a, b]);
+    expect([a, b].map((id) => tasksCollection.get(id)?.primaryTagId)).toEqual([tag, tag]);
+    tags.setSecondaryTags([a, b], tag, true);
+    expect(
+      [a, b].map((taskId) => taskTagsCollection.has(taskTagKey({ taskId, tagId: tag }))),
+    ).toEqual([true, true]);
+    tags.setSecondaryTags([a, b], tag, false);
+    expect(
+      [a, b].map((taskId) => taskTagsCollection.has(taskTagKey({ taskId, tagId: tag }))),
+    ).toEqual([false, false]);
+    expect(tags.setPrimaryTags([a, b], null)).toEqual([a, b]);
+    expect(tasksCollection.get(a)?.primaryTagId).toBeNull();
+  });
+});

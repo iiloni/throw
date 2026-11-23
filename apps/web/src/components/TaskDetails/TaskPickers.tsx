@@ -162,7 +162,8 @@ export function PriorityOptions({
   project,
   onChange,
 }: {
-  value: Priority;
+  /** Null when the tasks it picks for do not share one. */
+  value: Priority | null;
   project: Project;
   onChange(priority: Priority): void;
 }) {
@@ -193,15 +194,33 @@ export function PriorityOptions({
 }
 
 export function SizePicker({ task, onPicked }: { task: Task; onPicked(): void }) {
-  const name = useId();
   const current = task.size ?? null;
-  const pick = (size: Size | null) => {
-    if (size !== current) {
-      haptics.selection();
-      updateTask(task.id, { size });
-    }
-    onPicked();
-  };
+  return (
+    <SizeOptions
+      value={current}
+      onChange={(size) => {
+        if (size !== current) {
+          haptics.selection();
+          updateTask(task.id, { size });
+        }
+        onPicked();
+      }}
+    />
+  );
+}
+
+/**
+ * The size grid on its own. Picking the size already chosen clears it; `undefined` stands for
+ * tasks that do not share one, so nothing is marked.
+ */
+export function SizeOptions({
+  value,
+  onChange,
+}: {
+  value: Size | null | undefined;
+  onChange(size: Size | null): void;
+}) {
+  const name = useId();
   return (
     <div role="radiogroup" aria-label="Size" className="grid grid-cols-3 gap-2 p-2">
       {([...SIZES, null] as const).map((size) => (
@@ -210,12 +229,12 @@ export function SizePicker({ task, onPicked }: { task: Task; onPicked(): void })
             className={radio}
             type="radio"
             name={name}
-            checked={current === size}
-            onChange={() => pick(size)}
-            onClick={() => current === size && pick(null)}
+            checked={value === size}
+            onChange={() => onChange(size)}
+            onClick={() => value === size && onChange(null)}
           />
           {size === null ? 'None' : sizeLabel(size)}
-          <Picked checked={current === size} />
+          <Picked checked={value === size} />
         </label>
       ))}
     </div>

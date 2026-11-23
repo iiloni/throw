@@ -187,6 +187,8 @@ export function TaskCard({
   // Where a list cannot close up around a held card, its place stays, faded.
   const away = !overlay && dragState?.phase === 'dragging' && dragState.ids.includes(task.id);
   const ref = useRef<HTMLElement>(null);
+  /** The pointer that last pressed the card, which tells a right click from a held finger. */
+  const pressedBy = useRef<string | null>(null);
 
   // A carried card is remounted when it changes column; focus has to follow it.
   useEffect(() => {
@@ -208,6 +210,28 @@ export function TaskCard({
     } else {
       update({ openTaskId: open ? null : task.id }, ref.current);
     }
+  }
+
+  /**
+   * As in Catch, a right click is the mouse's long press: it selects the card, or lets it go,
+   * in place of the browser's menu. A held finger also asks for a menu, which its long press
+   * has already answered; a field inside the card keeps its own menu.
+   */
+  function onContextMenu(event: MouseEvent<HTMLElement>) {
+    if (dragState || isPrimed()) {
+      event.preventDefault();
+      return;
+    }
+    if (pressedBy.current === 'touch' || pressedBy.current === 'pen') return;
+    if (event.target instanceof Node && !event.currentTarget.contains(event.target)) return;
+    if (
+      event.target instanceof Element &&
+      event.target.closest('input, textarea, select, [contenteditable="true"], [data-no-drag]')
+    )
+      return;
+    event.preventDefault();
+    haptics.selection();
+    toggleSelected(task.id);
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
@@ -254,12 +278,17 @@ export function TaskCard({
       aria-roledescription="Task card"
       aria-describedby={overlay || onOpen ? undefined : CARD_HELP_ID}
       aria-current={open ? 'true' : undefined}
-      onPointerDown={overlay || onOpen ? undefined : (event) => pressCard(event, task.id)}
+      onPointerDown={
+        overlay || onOpen
+          ? undefined
+          : (event) => {
+              pressedBy.current = event.pointerType;
+              pressCard(event, task.id);
+            }
+      }
       onClick={onClick}
       onKeyDown={overlay ? undefined : onKeyDown}
-      onContextMenu={(event) => {
-        if (dragState || isPrimed()) event.preventDefault();
-      }}
+      onContextMenu={overlay || onOpen ? undefined : onContextMenu}
       whileTap={overlay || carried ? undefined : { scale: 0.97 }}
       animate={{ scale: carried ? 1.03 : 1 }}
       transition={springs.snappy}

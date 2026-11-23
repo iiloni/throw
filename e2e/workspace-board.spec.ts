@@ -107,7 +107,14 @@ test.describe('desktop', () => {
     await card(page, 'Bake bread').click({ modifiers: ['ControlOrMeta'] });
     await card(page, 'Prune roses').click({ modifiers: ['ControlOrMeta'] });
     await expect(page.getByText('2 selected')).toBeVisible();
-    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await page
+      .getByRole('toolbar', { name: 'Selected tasks' })
+      .getByRole('button', { name: 'Change status' })
+      .click();
+    await page
+      .getByRole('region', { name: 'Status', exact: true })
+      .locator('[data-drop-status="category:done"]')
+      .click();
     await expect
       .poll(async () => [
         (await taskRow(page, board.headers, board.ids['Bake bread']!))?.status_id,
