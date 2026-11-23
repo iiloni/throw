@@ -1,6 +1,6 @@
 import { sizeLabel, type Tag, taskTagColor } from '@throw/shared';
 import { Plus, Search, SearchX, SlidersHorizontal, Tag as TagGlyph, X } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
   type KeyboardEvent,
   type RefObject,
@@ -511,6 +511,47 @@ function ResultCard({ search, row }: { search: SearchState; row: SearchState['re
   );
 }
 
+/**
+ * How many of the first results move as Catch's do. A change of words scrolls the list back to
+ * its best match, so these are the cards in view; the rest change in place, out of sight.
+ */
+const MOVING_RESULTS = 10;
+
+/**
+ * The results as Catch's search lists them: a card rises in, a card leaving shrinks away, and
+ * the rest slide to their new places. Only the cards in view move, and they are measured only
+ * when the order changes: a layout animation measures every card on each render, and the
+ * active card follows the pointer, so moving every card cost more than the cards in view.
+ */
+function ResultList({ search }: { search: SearchState }) {
+  const reduced = useReducedMotion();
+  const { results } = search;
+  const order = results.map((row) => row.task.id).join(' ');
+  return (
+    // Positioned, so a card leaving is held in place as the others close the gap.
+    <ul className="relative flex flex-col gap-2">
+      <AnimatePresence initial={false} mode="popLayout">
+        {results.map((row, index) => {
+          const moving = !reduced && index < MOVING_RESULTS;
+          return (
+            <motion.li
+              key={row.task.id}
+              layout={moving && 'position'}
+              layoutDependency={order}
+              initial={moving ? { opacity: 0, y: 8 } : false}
+              animate={{ opacity: 1, y: 0 }}
+              exit={moving ? { opacity: 0, scale: 0.97 } : undefined}
+              transition={springs.smooth}
+            >
+              <ResultCard search={search} row={row} />
+            </motion.li>
+          );
+        })}
+      </AnimatePresence>
+    </ul>
+  );
+}
+
 export function SearchResults({ search }: { search: SearchState }) {
   const { scope, title, results, projects, actions, destination, backlog } = search;
   return (
@@ -555,22 +596,7 @@ export function SearchResults({ search }: { search: SearchState }) {
                 : `${results.length} ${results.length === 1 ? 'task' : 'tasks'}`}
               {search.browsing && ' on the board'}
             </p>
-            {/* Each keystroke lays the list out once, in place: cards that stay keep their
-                element, one that goes leaves at once, and one that arrives only fades in.
-                Moving every card (and holding the ones leaving out of the flow) re-measured the
-                whole list on each change, and shifted the stack as the drawer anchored it. */}
-            <ul className="flex flex-col gap-2">
-              {results.map((row) => (
-                <motion.li
-                  key={row.task.id}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={curves.fade}
-                >
-                  <ResultCard search={search} row={row} />
-                </motion.li>
-              ))}
-            </ul>
+            <ResultList search={search} />
           </section>
         ) : (
           projects.length === 0 && (
