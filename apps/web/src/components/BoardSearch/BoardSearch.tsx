@@ -27,10 +27,11 @@ import {
 import { Hint } from '@/components/Hint/Hint';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { haptics } from '@/lib/haptics';
-import { curves, springs } from '@/lib/motion';
+import { springs } from '@/lib/motion';
 import { createTask } from '@/lib/tasks';
 import { cn } from '@/lib/utils';
 import { ActiveFilters, BoardFilters, hasChips, QuickFilters } from './BoardFilters';
+import { FilterCard } from './FilterCard';
 
 /** Room the open bar takes at the foot of the board, so a column's last card can scroll clear. */
 export const SEARCH_SPACE = 'var(--board-search-space, 0.25rem)';
@@ -143,19 +144,25 @@ export function BoardSearch() {
             onKeyDown={onKeyDown}
             className="flex w-full max-w-xl flex-col items-stretch"
           >
-            <FilterPanel open={panel} />
-            <Chips />
-            {capture.error && (
-              <p
-                role="alert"
-                className="glass pointer-events-auto mb-3 rounded-[1.25rem] px-4 py-2.5 text-destructive text-sm"
-              >
-                {capture.error}
-              </p>
-            )}
-            <div className="pointer-events-auto flex items-end gap-3">
-              <SearchField onClose={dismiss} onCapture={capture.create} />
-              <FilterButton open={panel} onToggle={() => setPanel(!panel)} />
+            <div className="relative">
+              {/* Over the board, outside the bar's measured height: the columns' end room
+                  stays as it is while the card opens. */}
+              <div className="absolute inset-x-0 bottom-full">
+                <FilterPanel open={panel} />
+              </div>
+              <Chips />
+              {capture.error && (
+                <p
+                  role="alert"
+                  className="glass pointer-events-auto mb-3 rounded-[1.25rem] px-4 py-2.5 text-destructive text-sm"
+                >
+                  {capture.error}
+                </p>
+              )}
+              <div className="pointer-events-auto flex items-end gap-3">
+                <SearchField onClose={dismiss} onCapture={capture.create} />
+                <FilterButton open={panel} onToggle={() => setPanel(!panel)} />
+              </div>
             </div>
           </search>
         </motion.div>
@@ -246,28 +253,21 @@ export function BoardSearchSidebar() {
 
 /** Catch's filter panel: glass rising above the field. */
 function FilterPanel({ open }: { open: boolean }) {
-  const reduced = useReducedMotion();
   return (
     <AnimatePresence initial={false}>
       {open && (
-        <motion.div
+        <FilterCard
           key="filters"
-          // Opens from its foot, the tabs first, as Catch's card does.
-          className="pointer-events-auto flex shrink-0 flex-col justify-end overflow-hidden [&>*]:shrink-0"
-          initial={{ height: 0 }}
-          animate={{ height: 'auto' }}
-          exit={{ height: 0, transition: reduced ? { duration: 0 } : curves.fold }}
-          // No bounce: the card clips, so dipping below its height would cut off its top.
-          transition={reduced ? { duration: 0 } : springs.pane}
+          className="mb-3 rounded-[var(--dock-radius)] shadow-[0_10px_30px_-10px_var(--glass-shadow)]"
         >
           <section
             id="board-filter-panel"
             aria-label="Filters and sort"
-            className="glass-thick mb-3 rounded-[var(--dock-radius)] p-3 shadow-[0_10px_30px_-10px_var(--glass-shadow)] [--board-filter-view-max:min(26rem,calc(100dvh-var(--dock-height)-15rem))]"
+            className="p-3 [--board-filter-view-max:min(26rem,calc(100dvh-var(--dock-height)-15rem))]"
           >
             <BoardFilters />
           </section>
-        </motion.div>
+        </FilterCard>
       )}
     </AnimatePresence>
   );
