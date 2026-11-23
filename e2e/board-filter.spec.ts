@@ -496,6 +496,11 @@ test.describe('phone', () => {
     await touch.press(card(page, 'Later position'));
     await touch.lift();
     await expect(page.getByText('1 selected')).toBeVisible();
+    await touch.tap(
+      page
+        .getByRole('toolbar', { name: 'Selected tasks' })
+        .getByRole('button', { name: 'Change status' }),
+    );
     await touch.tap(page.locator(`[data-drop-status="${board.status('Review')}"]`));
     await expect
       .poll(async () => {

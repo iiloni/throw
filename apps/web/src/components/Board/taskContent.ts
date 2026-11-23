@@ -14,3 +14,21 @@ export const TaskContentContext = createContext<{
   /** Set while a task is open on a phone; the board's drawer shows it in place of its own. */
   drawer?: TaskDrawerContent | null;
 } | null>(null);
+
+/** A selection's panels beyond moving it, which the boundary fills with real data. */
+export type SelectionPanel = 'priority' | 'size' | 'tags';
+
+/**
+ * What a board's selection can do besides move: the real boards' boundaries supply pickers and
+ * the trash, and the mock prototype, which has none, only moves.
+ */
+export type SelectionContent = {
+  /** Size is offered only while the server keeps it. */
+  sizes: boolean;
+  /** A picker for the selected tasks. Tags are offered only for tasks of one project. */
+  panel(panel: SelectionPanel, taskIds: string[], onDone: () => void): ReactNode;
+  /** Moves the tasks to the trash, with a way to undo it. */
+  trash(taskIds: string[]): void;
+};
+
+export const SelectionContentContext = createContext<SelectionContent | null>(null);

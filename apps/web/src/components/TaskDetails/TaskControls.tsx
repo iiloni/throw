@@ -8,19 +8,14 @@ import {
 } from '@throw/shared';
 import { Flag, MoreHorizontal, Scaling, Tag } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import {
-  type ButtonHTMLAttributes,
-  type KeyboardEventHandler,
-  type ReactNode,
-  useEffect,
-} from 'react';
+import { type KeyboardEventHandler, type ReactNode, useEffect } from 'react';
 import { PriorityGlyph, StatusGlyph } from '@/components/Board/glyphs';
 import { type Project, priorityName } from '@/components/Board/model';
 import { leaveTask } from '@/components/Board/state';
 import type { TaskDrawerContent } from '@/components/Board/taskContent';
 import { touchEditor } from '@/components/DescriptionEditor/editorControls';
+import { type ControlProps, DockControl } from '@/components/DockControl/DockControl';
 import { FormattingBar } from '@/components/FormattingBar/FormattingBar';
-import { Hint } from '@/components/Hint/Hint';
 import { RelationPicker } from '@/components/TaskRelations/TaskRelations';
 import { useTags, useTaskTags } from '@/lib/collections';
 import { useTaskSizeSupport } from '@/lib/compatibility';
@@ -74,50 +69,6 @@ export function useOpenTaskPanel(
     return () => window.removeEventListener(OPEN_PANEL_EVENT, listener);
   }, [taskId, onRequest]);
 }
-
-// As Catch's note toolbar: inset in the dock so their corners follow its corners, and only
-// the one whose panel is open takes a surface.
-const control =
-  'relative flex size-full items-center justify-center rounded-[calc(var(--dock-radius)-0.25rem)] text-foreground/80 outline-none transition-colors duration-200 hover:bg-foreground/[0.05] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/70 aria-expanded:bg-foreground/[0.08] aria-expanded:text-foreground aria-expanded:shadow-[inset_0_1px_0_var(--glass-highlight)] [&_svg]:size-6! [&_svg]:shrink-0';
-
-/** One of the dock's controls, pressed in on Catch's toolbar spring. */
-function DockControl({
-  label,
-  tooltip,
-  onOpen,
-  children,
-  ...props
-}: ControlProps & {
-  label: string;
-  tooltip: boolean;
-  onOpen(element: HTMLButtonElement): void;
-  children: ReactNode;
-}) {
-  return (
-    <Hint label={label} disabled={!tooltip}>
-      <motion.button
-        type="button"
-        aria-label={label}
-        className={control}
-        whileTap={{ scale: 0.88 }}
-        transition={springs.snappy}
-        {...props}
-        onClick={(event) => {
-          // A dock over a clickable card keeps the tap to itself.
-          event.stopPropagation();
-          onOpen(event.currentTarget);
-        }}
-      >
-        {children}
-      </motion.button>
-    </Hint>
-  );
-}
-
-type ControlProps = Pick<
-  ButtonHTMLAttributes<HTMLButtonElement>,
-  'aria-expanded' | 'aria-controls'
->;
 
 function tagSummary(tags: { primary: string | null; secondary: string[] }) {
   const names = [

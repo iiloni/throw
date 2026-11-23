@@ -19,27 +19,26 @@ import { boardDrawerPage } from '@/components/ManagementSurface/ManagementSurfac
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
-import { feelStatusChange, haptics } from '@/lib/haptics';
+import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { BoardSettingsContent } from './BoardSettingsPanel';
 import { CardList } from './CardList';
 import { drag, holding, makingWay, pageStride } from './drag';
 import { StatusGlyph } from './glyphs';
+import { isClosed, type Status, type Task } from './model';
 import {
-  byCategory,
-  CATEGORIES,
-  categoryTarget,
-  isClosed,
-  type Project,
-  projectOf,
-  type Status,
-  type Task,
-  targetCategory,
-} from './model';
+  moveTargets,
+  SelectionControls,
+  type SelectionTab,
+  SelectionTabContent,
+  StatusTargets,
+  selectedTasks,
+  selectionTabs,
+  selectionTabTitle,
+  sendSelection,
+} from './SelectionActions';
 import { StatusFilter, zoneStatuses } from './SideZone';
-import { CATEGORY_NAMES } from './StatusMenu';
-import { StatusTile } from './StatusTile';
 import {
   board,
   countIn,
@@ -48,11 +47,10 @@ import {
   listTasks,
   narrowed,
   selectProject,
-  sendTasks,
   update,
 } from './state';
 import { TaskCard } from './TaskCard';
-import { TaskContentContext } from './taskContent';
+import { SelectionContentContext, TaskContentContext } from './taskContent';
 import { useTaskSurfaceShown } from './taskTransition';
 import { usePagerPage } from './usePagerPage';
 
@@ -671,87 +669,90 @@ function CardStack({ count }: { count: number }) {
 /**
  * Where a held card is sent anywhere, wherever it came from: the drawer's header, which opens
  * into a grid of every status when the card is brought onto it and closes when it leaves.
- * With cards selected it is open, and tapping a status moves them (ADR 0009).
+ * With cards selected it holds the selection's controls, as an open task's dock does: Status
+ * opens the grid, where tapping a status moves them (ADR 0009), and the others their pickers.
  */
 export function MovePanel({ pick }: { pick: boolean }) {
   const state = board.use();
   const held = drag.use();
+  const content = useContext(SelectionContentContext);
   const { project, tasks } = current(state);
-  const selected = state.selection.length;
+  const [chosen, setChosen] = useState<SelectionTab | null>(null);
+  const selected = selectedTasks(state);
   const moving = held?.ids ?? state.selection;
   const statuses = moveTargets(
     project,
     tasks.filter((task) => moving.includes(task.id)),
   );
+  const tabs = selectionTabs(project, selected, content);
+  if (chosen && !tabs.includes(chosen)) setChosen(null);
+  // A selection opens on its controls alone, as an open task's dock does, until one is tapped;
+  // a tab the selection no longer allows, such as tags once it spans projects, closes and stays
+  // closed when the selection narrows again. Without
+  // the boundary's controls (the prototype) the move grid is all there is, so it stays open.
+  const tab: SelectionTab | null = !pick
+    ? 'status'
+    : !content
+      ? 'status'
+      : chosen && tabs.includes(chosen)
+        ? chosen
+        : null;
   const open = pick || (held?.phase === 'dragging' && held.over);
-  const send = (statusId: string) => {
-    sendTasks(state.selection, statusId);
-    update({ selection: [] });
-    // As every status change is felt: finishing lands as success, anything else as a choice.
-    const category =
-      targetCategory(statusId) ??
-      project.statuses.find((status) => status.id === statusId)?.category;
-    if (category) feelStatusChange(category);
-  };
   return (
     <motion.div
       key="move"
+      // The drawer springs to a new view and follows a view's own height changes (Drawer).
+      data-move-view={pick ? (tab ?? 'controls') : undefined}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.16 }}
     >
       {pick && (
         <div className="flex h-11 items-center pr-0.5 pl-2">
-          <span className="flex-1 font-medium text-sm tabular-nums">{selected} selected</span>
+          <span className="flex-1 font-medium text-sm tabular-nums">
+            {state.selection.length} selected
+          </span>
           <IconButton label="Clear selection" onClick={() => update({ selection: [] })}>
             <X />
           </IconButton>
         </div>
       )}
-      {open ? (
-        <div className="space-y-2.5 pt-1">
-          {byCategory(statuses).map((group) => (
-            <section key={group.name}>
-              <h3 className="px-1 pb-1.5 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
-                {group.name}
-              </h3>
-              <div className="grid grid-cols-3 gap-2">
-                {group.statuses.map((status) => (
-                  <StatusTile
-                    key={status.id}
-                    status={status}
-                    shape="row"
-                    onPick={pick ? () => send(status.id) : undefined}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
+      {pick && content && (
+        <div role="toolbar" aria-label="Selected tasks" className="-mx-1 h-[var(--dock-height)]">
+          <SelectionControls
+            tabs={tabs}
+            onOpen={(next) => setChosen(next === tab ? null : next)}
+            controlProps={(name) => ({ 'aria-expanded': name === tab })}
+            tooltips={false}
+          />
         </div>
-      ) : (
+      )}
+      {!open ? (
         <p className="flex h-10 items-center justify-center font-medium text-muted-foreground text-xs">
           Move to a status
         </p>
-      )}
+      ) : tab === 'status' ? (
+        <div className={cn(pick && content && 'mt-1.5')}>
+          <StatusTargets
+            statuses={statuses}
+            onPick={pick ? (statusId) => sendSelection(statusId) : undefined}
+          />
+        </div>
+      ) : tab ? (
+        <section
+          aria-label={selectionTabTitle[tab]}
+          className={cn(
+            '-mx-2 mt-1.5 [--tags-max:min(24rem,48dvh)]',
+            tab === 'tags'
+              ? 'flex max-h-[min(24rem,48dvh)] flex-col overflow-hidden'
+              : 'max-h-[min(24rem,48dvh)] overflow-y-auto overscroll-contain',
+          )}
+        >
+          <SelectionTabContent tab={tab} onDone={() => setChosen(null)} />
+        </section>
+      ) : null}
     </motion.div>
   );
-}
-
-/**
- * The statuses cards can be sent to: their project's. On the workspace board, cards from
- * several projects share no status, so they are sent to a category, and each lands in its
- * own project's default status there.
- */
-export function moveTargets(project: Project, moving: Task[]): Status[] {
-  if (!project.members) return project.statuses;
-  const owners = new Set(moving.map((task) => task.projectId));
-  if (owners.size === 1) return projectOf(project, moving[0]!).statuses;
-  return CATEGORIES.map((category) => ({
-    id: categoryTarget(category),
-    name: CATEGORY_NAMES[category],
-    category,
-    isDefault: true,
-  }));
 }
 
 /** Closed tasks by when they were closed, newest first. */

@@ -5,12 +5,11 @@ import {
   SEARCH_SIDEBAR_MIN,
   SEARCH_SPACE,
 } from '@/components/BoardSearch/BoardSearch';
-import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { BoardColumn, ColumnHeader } from './BoardColumn';
 import { OpenTaskPane, SelectionBar, useWidth } from './DesktopBoard';
 import { drag, makingWay } from './drag';
-import { PriorityIcon, StatusGlyph } from './glyphs';
+import { PriorityIcon } from './glyphs';
 import {
   CATEGORIES,
   type Category,
@@ -19,7 +18,6 @@ import {
   projectOf,
   statusById,
 } from './model';
-import { moveTargets } from './PhoneBoard';
 import { CATEGORY_NAMES } from './StatusMenu';
 import { StatusTile } from './StatusTile';
 import {
@@ -29,8 +27,6 @@ import {
   current,
   type ListId,
   listTasks,
-  sendTasks,
-  update,
   useBoardSettings,
   useCollapsedColumns,
 } from './state';
@@ -47,10 +43,9 @@ export function foldableCategory(category: string): 'done' | 'cancelled' | null 
  */
 export function WorkspaceDesktopBoard() {
   const state = board.use();
-  const { project, tasks } = current(state);
+  const { project } = current(state);
   const [frame, frameWidth] = useWidth();
   const { isCollapsed, setCollapsed } = useCollapsedColumns(project);
-  const selected = tasks.filter((task) => state.selection.includes(task.id));
   const docked = frameWidth >= SEARCH_SIDEBAR_MIN;
   return (
     <div className="flex h-full overflow-hidden">
@@ -89,26 +84,10 @@ export function WorkspaceDesktopBoard() {
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
           {!docked && <BoardSearch />}
+          <SelectionBar />
         </div>
         <OpenTaskPane frameWidth={frameWidth} />
       </div>
-      <SelectionBar>
-        {moveTargets(project, selected).map((status) => (
-          <Button
-            key={status.id}
-            size="sm"
-            variant="ghost"
-            className="rounded-xl"
-            onClick={() => {
-              sendTasks(state.selection, status.id);
-              update({ selection: [] });
-            }}
-          >
-            <StatusGlyph category={status.category} />
-            {status.name}
-          </Button>
-        ))}
-      </SelectionBar>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { AnimatePresence } from 'motion/react';
 import { useMemo, useState } from 'react';
 import { ShellMenu } from '@/components/AppShell/ShellMenu';
 import { useShell } from '@/components/AppShell/shell';
+import { useSelectionContent } from '@/components/BulkActions/BulkActions';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { type TaskPanel, taskDrawerContent } from '@/components/TaskDetails/TaskControls';
 import { TaskDetails } from '@/components/TaskDetails/TaskDetails';
@@ -28,7 +29,7 @@ import { PhoneBoard } from './PhoneBoard';
 import { projectBoardData, secondaryTagsByTask, updatedAtByTask } from './selection';
 import { board, canOpenTask } from './state';
 import { TaskScreen } from './TaskView';
-import { TaskContentContext } from './taskContent';
+import { SelectionContentContext, TaskContentContext } from './taskContent';
 import { useTaskUrl } from './taskUrl';
 
 /** Only this boundary knows collections and writes; the prototype shares the whole board. */
@@ -50,6 +51,7 @@ export function ProjectBoard({
   const updates = useMemo(() => updatedAtByTask(activity), [activity]);
   const phone = !useDesktop();
   const blockers = useBlockersByTask();
+  const selectionContent = useSelectionContent();
   const state = board.use();
   const data = useMemo(
     () => projectBoardData(project, statuses, tasks, tags, secondaryTags, updates),
@@ -131,39 +133,41 @@ export function ProjectBoard({
   return (
     <TaskContentContext.Provider value={taskContent}>
       <TaskBlockersContext.Provider value={blockers}>
-        <div className="relative h-full" aria-busy={awaitingTasks}>
-          {!phone && <h1 className="sr-only">{project.name}</h1>}
-          {phone ? (
-            <PhoneBoard
-              projectMenu={
-                <h1 aria-label={project.name} className="min-w-0">
-                  <ShellMenu phone titleClassName="text-[1.75rem]" />
-                </h1>
-              }
-              syncIndicator={<SyncIndicator />}
-              onBacklogChange={(open) =>
-                shell.selectProject(
-                  project.workspaceId,
-                  project.id,
-                  open ? 'backlog' : 'board',
-                  true,
-                )
-              }
-              initialBacklog={shell.view === 'backlog'}
-              palette
-            />
-          ) : (
-            <DesktopBoard />
-          )}
-          <AnimatePresence>
-            {phone &&
-              screens.map((task) => (
-                <TaskScreen key={task.id} task={task} covered={task !== openTask} />
-              ))}
-          </AnimatePresence>
-          <DragOverlay />
-          <BoardAnnouncer />
-        </div>
+        <SelectionContentContext.Provider value={selectionContent}>
+          <div className="relative h-full" aria-busy={awaitingTasks}>
+            {!phone && <h1 className="sr-only">{project.name}</h1>}
+            {phone ? (
+              <PhoneBoard
+                projectMenu={
+                  <h1 aria-label={project.name} className="min-w-0">
+                    <ShellMenu phone titleClassName="text-[1.75rem]" />
+                  </h1>
+                }
+                syncIndicator={<SyncIndicator />}
+                onBacklogChange={(open) =>
+                  shell.selectProject(
+                    project.workspaceId,
+                    project.id,
+                    open ? 'backlog' : 'board',
+                    true,
+                  )
+                }
+                initialBacklog={shell.view === 'backlog'}
+                palette
+              />
+            ) : (
+              <DesktopBoard />
+            )}
+            <AnimatePresence>
+              {phone &&
+                screens.map((task) => (
+                  <TaskScreen key={task.id} task={task} covered={task !== openTask} />
+                ))}
+            </AnimatePresence>
+            <DragOverlay />
+            <BoardAnnouncer />
+          </div>
+        </SelectionContentContext.Provider>
       </TaskBlockersContext.Provider>
     </TaskContentContext.Provider>
   );

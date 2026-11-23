@@ -456,8 +456,22 @@ column does not change under it. A card another device moved to another status, 
 or parent in the meantime is not moved, and the board says so; a refused move settles back
 where the server has it.
 
-On desktop, a click with Ctrl, Cmd or Shift selects cards, and a bar offers to move the
-selection to a status.
+On desktop, a click with Ctrl, Cmd or Shift selects cards, and so does a right click, which
+also lets a selected card go, in place of the browser's menu (as in Catch). A phone selects by
+long press. A selection is changed together (2026-11-23): its controls are an open task's dock
+(status, priority, size when the server keeps it, tags, and the trash), floating at the foot
+of the desktop board above the search bar and in the phone drawer. Status, priority, size and
+tags open their pickers when tapped, and the trash acts at once; selecting opens no picker, so
+the phone's move grid waits for Status.
+
+- Status moves every card, as a drop on a status does, and lets the selection go.
+- Priority and size apply to every card and keep the selection, so another change can follow.
+- Tags belong to a project, so they are offered only while every selected card is of one
+  project that has tags. A color sets every card's primary tag; a secondary tag is checked
+  when every card has it, and checking or unchecking it applies to all. The selection stays.
+- The trash takes every card, lets the selection go and offers one Undo that restores them all.
+
+Each card is written on its own, so one deleted elsewhere meanwhile leaves the others changed.
 
 ### Search, filters and sorting
 
@@ -579,6 +593,7 @@ view, so it reads and moves the same way.
   dropzones. Dropping on the column itself, or moving a selection that spans projects, uses
   each project's default status for the category; a card already in that category stays
   where it is. A folded column stays a strip under a held card and takes it the same way.
+  A selection spanning projects can change priority, size and the trash together, but not tags.
 - Moving a card here changes its status only. Priority and order belong to the project
   board, where cards can be placed between others; keyboard carry still moves a card between
   priority bands, as on the project board **(decision, 2026-11-18)**.

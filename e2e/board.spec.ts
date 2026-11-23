@@ -483,7 +483,7 @@ test('loading resolves to an empty board and long columns scroll within the boar
   testInfo.annotations.push({ type: 'browser version', description: browser.version() });
 });
 
-test('desktop selection sends tasks through the status menu while retaining their priority and order', async ({
+test('desktop selection sends tasks through the selection bar while retaining their priority and order', async ({
   page,
   isMobile,
 }) => {
@@ -494,8 +494,14 @@ test('desktop selection sends tasks through the status menu while retaining thei
       .getByRole('article', { name: new RegExp(`${title}$`) })
       .click({ modifiers: ['Control'] });
   await expect(page.getByText('2 selected', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Move to', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Review', exact: true }).click();
+  await page
+    .getByRole('toolbar', { name: 'Selected tasks' })
+    .getByRole('button', { name: 'Change status' })
+    .click();
+  await page
+    .getByRole('region', { name: 'Status', exact: true })
+    .locator(`[data-drop-status="${account.status('Review')}"]`)
+    .click();
   await expect
     .poll(() => cardIds(page, 'Review'))
     .toEqual(

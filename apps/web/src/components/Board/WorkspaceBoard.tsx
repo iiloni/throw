@@ -2,6 +2,7 @@ import type { Project as ProjectRow } from '@throw/shared';
 import { AnimatePresence } from 'motion/react';
 import { useMemo, useRef, useState } from 'react';
 import { ShellMenu } from '@/components/AppShell/ShellMenu';
+import { useSelectionContent } from '@/components/BulkActions/BulkActions';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { type TaskPanel, taskDrawerContent } from '@/components/TaskDetails/TaskControls';
 import { TaskDetails } from '@/components/TaskDetails/TaskDetails';
@@ -24,7 +25,7 @@ import { DragOverlay } from './DragOverlay';
 import { secondaryTagsByTask, updatedAtByTask, workspaceBoardData } from './selection';
 import { board, canOpenTask } from './state';
 import { TaskScreen } from './TaskView';
-import { TaskContentContext } from './taskContent';
+import { SelectionContentContext, TaskContentContext } from './taskContent';
 import { useTaskUrl } from './taskUrl';
 import { WorkspaceDesktopBoard } from './WorkspaceDesktopBoard';
 import { WorkspacePhoneBoard } from './WorkspacePhoneBoard';
@@ -69,6 +70,7 @@ export function WorkspaceBoard({
   const updates = useMemo(() => updatedAtByTask(activity), [activity]);
   const phone = !useDesktop();
   const blockers = useBlockersByTask();
+  const selectionContent = useSelectionContent();
   const state = board.use();
   const data = useMemo(
     () => workspaceBoardData(workspaceId, projects, statuses, tasks, tags, secondaryTags, updates),
@@ -150,31 +152,33 @@ export function WorkspaceBoard({
   return (
     <TaskContentContext.Provider value={taskContent}>
       <TaskBlockersContext.Provider value={blockers}>
-        <div className="relative h-full" aria-busy={awaitingTasks}>
-          {!phone && <h1 className="sr-only">All projects</h1>}
-          {phone ? (
-            <WorkspacePhoneBoard
-              title={
-                <h1 aria-label="All projects" className="min-w-0">
-                  <ShellMenu phone titleClassName="text-[1.75rem]" />
-                </h1>
-              }
-              syncIndicator={<SyncIndicator />}
-              onSearch={onSearch}
-              onCreate={onCreate}
-            />
-          ) : (
-            <WorkspaceDesktopBoard />
-          )}
-          <AnimatePresence>
-            {phone &&
-              screens.map((task) => (
-                <TaskScreen key={task.id} task={task} covered={task !== openTask} />
-              ))}
-          </AnimatePresence>
-          <DragOverlay />
-          <BoardAnnouncer />
-        </div>
+        <SelectionContentContext.Provider value={selectionContent}>
+          <div className="relative h-full" aria-busy={awaitingTasks}>
+            {!phone && <h1 className="sr-only">All projects</h1>}
+            {phone ? (
+              <WorkspacePhoneBoard
+                title={
+                  <h1 aria-label="All projects" className="min-w-0">
+                    <ShellMenu phone titleClassName="text-[1.75rem]" />
+                  </h1>
+                }
+                syncIndicator={<SyncIndicator />}
+                onSearch={onSearch}
+                onCreate={onCreate}
+              />
+            ) : (
+              <WorkspaceDesktopBoard />
+            )}
+            <AnimatePresence>
+              {phone &&
+                screens.map((task) => (
+                  <TaskScreen key={task.id} task={task} covered={task !== openTask} />
+                ))}
+            </AnimatePresence>
+            <DragOverlay />
+            <BoardAnnouncer />
+          </div>
+        </SelectionContentContext.Provider>
       </TaskBlockersContext.Provider>
     </TaskContentContext.Provider>
   );

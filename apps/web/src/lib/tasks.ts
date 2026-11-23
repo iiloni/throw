@@ -220,6 +220,24 @@ export function updateTask(id: string, edit: TaskEdit) {
 }
 
 /**
+ * Applies one edit to several tasks, as a selection on the board does. Each task is its own
+ * write, so one that went meanwhile (purged on another device) leaves the others changed.
+ * Returns the ids that were changed or already held the values.
+ */
+export function updateTasks(ids: readonly string[], edit: TaskEdit) {
+  return ids.filter((id) => attempt(() => updateTask(id, edit)));
+}
+
+function attempt(change: () => void) {
+  try {
+    change();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Places a task: a drop on the board sets its status, priority and position in one write
  * (ADR 0008). The position applies only if the task is still in that status and priority.
  */
@@ -283,6 +301,25 @@ export function restoreTask(id: string) {
       task.deletedAt = null;
     }),
   );
+}
+
+/**
+ * Sends several tasks to the trash, each in its own write. Returns the ids it trashed, leaving
+ * out any already there or gone, so an undo restores exactly those.
+ */
+export function trashTasks(ids: readonly string[]) {
+  return ids.filter((id) => {
+    const task = tasksCollection.get(id);
+    return task !== undefined && task.deletedAt === null && attempt(() => trashTask(id));
+  });
+}
+
+/** Restores tasks trashed together, skipping any purged or restored meanwhile. */
+export function restoreTasks(ids: readonly string[]) {
+  return ids.filter((id) => {
+    const task = tasksCollection.get(id);
+    return task !== undefined && task.deletedAt !== null && attempt(() => restoreTask(id));
+  });
 }
 
 /** Whether a task counts as trashed: it, its parent or its project is in the trash. */
