@@ -59,7 +59,7 @@ export function TagTree({
     <>
       {searchPosition === 'top' && searchInput}
       <ScrollArea className={cn('flex flex-col [--scrollbar-inset:0.25rem]', className)}>
-        <ScrollAreaViewport className="h-auto max-h-[inherit] pr-3">
+        <ScrollAreaViewport className="min-h-0 h-auto max-h-[inherit] flex-1 pr-3">
           <AnimatePresence initial={false}>
             {rows.map(({ tag, depth }, rowIndex) => {
               const renderRow = () => {

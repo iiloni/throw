@@ -1,5 +1,5 @@
 import { isClosedCategory, type Status, type Task } from '@throw/shared';
-import { Check, Copy, RotateCcw } from 'lucide-react';
+import { Check, Copy, Link2, RotateCcw } from 'lucide-react';
 import { Dialog } from 'radix-ui';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -14,17 +14,19 @@ const action =
   'h-12 justify-start gap-2.5 rounded-[calc(var(--dock-radius)-0.25rem)] bg-foreground/[0.04] px-4 text-foreground/80 hover:bg-foreground/[0.07] hover:text-foreground [&_svg]:size-4';
 
 /**
- * Close or reopen the task and copy its link. Content only: whatever hosts it closes it from
- * `onDone` and returns focus to what opened it.
+ * Link another task, close or reopen the task, and copy its link. Content only: whatever hosts
+ * it closes it from `onDone` and returns focus to what opened it.
  */
 export function TaskActions({
   task,
   statuses,
   onDone,
+  onLink,
 }: {
   task: Task;
   statuses: Status[];
   onDone(): void;
+  onLink?: () => void;
 }) {
   const [link, setLink] = useState<string | null>(null);
   const linkRef = useRef<HTMLInputElement>(null);
@@ -37,6 +39,12 @@ export function TaskActions({
   return (
     <>
       <div className="flex flex-col gap-1.5 px-2 pt-2 pb-1">
+        {onLink && (
+          <Button variant="ghost" className={action} onClick={onLink}>
+            <Link2 />
+            Link a task
+          </Button>
+        )}
         {target && (
           <Button
             variant="ghost"

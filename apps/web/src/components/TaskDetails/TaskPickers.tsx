@@ -6,17 +6,33 @@ import {
   type Size,
   type Status,
   sizeLabel,
+  type Tag,
   type Task,
+  taskTagColor,
 } from '@throw/shared';
-import { Check } from 'lucide-react';
-import { useEffect, useId, useRef } from 'react';
+import { Check, Palette, Tag as TagIcon } from 'lucide-react';
+import {
+  AnimatePresence,
+  motion,
+  useIsPresent,
+  useReducedMotion,
+  type Variants,
+} from 'motion/react';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { AnimatedHeight } from '@/components/AnimatedHeight/AnimatedHeight';
 import { PriorityGlyph, StatusGlyph } from '@/components/Board/glyphs';
 import { byCategory, type Project, priorityName } from '@/components/Board/model';
-import { type Branch, ColorTagPicker } from '@/components/ColorTagPicker/ColorTagPicker';
+import {
+  type Branch,
+  ColorTagPicker,
+  type NewTagPlace,
+} from '@/components/ColorTagPicker/ColorTagPicker';
 import { NewTagButton, openNewTag } from '@/components/NewTag/NewTag';
+import { SegmentedTabs } from '@/components/SegmentedTabs/SegmentedTabs';
 import { TagPicker } from '@/components/TagPicker/TagPicker';
 import { useTags, useTaskTags } from '@/lib/collections';
 import { feelStatusChange, haptics } from '@/lib/haptics';
+import { springs } from '@/lib/motion';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { setPrimaryTag, setSecondaryTag } from '@/lib/tags';
 import { sendTask, updateTask } from '@/lib/tasks';
@@ -206,12 +222,14 @@ export function SizePicker({ task, onPicked }: { task: Task; onPicked(): void })
   );
 }
 
+export type TagTab = 'primary' | 'secondary';
+
 function useTaskTagsReady(task: Task) {
   const { tags, isLoading } = useTags(task.projectId);
   const { taskTags, isLoading: loadingAssignments } = useTaskTags(task.id);
   const awaitingTags = useAwaitingSync(isLoading, tags.length);
   const awaitingAssignments = useAwaitingSync(loadingAssignments, taskTags.length);
-  return { tags, taskTags, ready: !awaitingTags && !awaitingAssignments };
+  return { tags, taskTags, awaitingTags, ready: !awaitingTags && !awaitingAssignments };
 }
 
 const loadingTags = (
@@ -221,21 +239,221 @@ const loadingTags = (
 );
 
 /**
- * The color panel's open branch while a new tag's form covers it. On a phone the form takes the
- * drawer's page from the picker, so the picker this notes comes back to it once Back closes the
- * form; on desktop the picker stays open beneath, and the note is dropped when the form closes.
+ * The tags panel's open tab and primary branch while a new tag's form covers it. On a phone the
+ * form takes the drawer's page from the picker, so the picker this notes comes back to the same
+ * tab and branch once Back closes the form; on desktop the picker stays open beneath, and the
+ * note is dropped when the form closes.
  */
-let covered: { taskId: string; branch: Branch } | null = null;
+let covered: { taskId: string; tab: TagTab; branch: Branch } | null = null;
+
+/*
+ * Catch's reminder panel pages: the leaving tab goes quickly, and the arriving one settles on
+ * the same spring as the panel's height, so the two land together.
+ */
+const tabPages: Variants = {
+  enter: (direction: number) => ({ x: direction * 24, opacity: 0 }),
+  shown: {
+    x: 0,
+    opacity: 1,
+    transition: { x: springs.smooth, opacity: { duration: 0.3, ease: 'easeOut' } },
+  },
+  exit: (direction: number) => ({
+    x: direction * -24,
+    opacity: 0,
+    transition: { duration: 0.16, ease: 'easeIn' },
+  }),
+};
 
 /**
- * The primary tag, picked by color as in Catch. Picking leaves the picker open, since a
- * tag with children opens them to pick a more specific one. A new tag made from its corner
- * becomes the primary.
+ * One tab's view. A leaving one lifts out of the flow, pinned to the tabs it sits on, so the
+ * arriving view sets the panel's height from the moment the tab changes; it is inert, so focus
+ * and the keyboard only reach the new one.
  */
-export function ColorTagsPicker({ task }: { task: Task }) {
-  const { tags, isLoading } = useTags(task.projectId);
+function TagTabView({
+  direction,
+  onShown,
+  children,
+}: {
+  direction: number;
+  onShown(): void;
+  children: ReactNode;
+}) {
+  const isPresent = useIsPresent();
+  return (
+    <motion.div
+      custom={direction}
+      variants={tabPages}
+      initial="enter"
+      animate="shown"
+      exit="exit"
+      onAnimationComplete={(definition) => {
+        if (definition === 'shown') onShown();
+      }}
+      inert={!isPresent}
+      className={cn(!isPresent && 'absolute inset-x-0 bottom-0')}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/**
+ * Unified primary (color) and secondary tag picker with a bottom two-tab switch, shared by an
+ * open task and quick capture. Picking leaves the picker open for further choices.
+ */
+export function TagOptions({
+  tags,
+  primaryTagId,
+  secondaryTagIds,
+  onPrimaryChange,
+  onSecondaryChange,
+  tab,
+  onTabChange,
+  initialBranch = null,
+  onNewPrimaryTag,
+  onNewSecondaryTag,
+  loadingPrimary = false,
+  loadingSecondary = false,
+}: {
+  tags: readonly Tag[];
+  primaryTagId: string | null;
+  secondaryTagIds: readonly string[];
+  onPrimaryChange: (id: string | null) => void;
+  onSecondaryChange: (id: string, present: boolean) => void;
+  tab?: TagTab;
+  onTabChange?: (tab: TagTab) => void;
+  initialBranch?: Branch;
+  onNewPrimaryTag?: (place: NewTagPlace) => void;
+  onNewSecondaryTag?: () => void;
+  loadingPrimary?: boolean;
+  loadingSecondary?: boolean;
+}) {
+  const [internalTab, setInternalTab] = useState<TagTab>('primary');
+  const activeTab = tab ?? internalTab;
+  const setActiveTab = onTabChange ?? setInternalTab;
+  const reducedMotion = useReducedMotion();
+  // Which way the views slide: towards Secondary, or back to Primary.
+  const direction = activeTab === 'secondary' ? 1 : -1;
+  // From leaving one tab until the next has arrived, when the panel's height is the one thing
+  // moving. Otherwise the views animate their own heights (the colors' branches, the tree's
+  // rows), and the panel follows them.
+  const [swapping, setSwapping] = useState(false);
+  const [shownTab, setShownTab] = useState(activeTab);
+  if (shownTab !== activeTab) {
+    setShownTab(activeTab);
+    if (!reducedMotion) setSwapping(true);
+  }
+  const ids = useId();
+  const primaryColor = taskTagColor({ primaryTagId, projectId: tags[0]?.projectId ?? '' }, tags);
+  const secondaryCount = secondaryTagIds.filter((id) => tags.some((tag) => tag.id === id)).length;
+
+  // The host sets `--tags-max` to the panel's tallest; the views scroll in what the tabs leave.
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <AnimatedHeight follow={!swapping}>
+        <div className="relative">
+          <AnimatePresence initial={false} custom={reducedMotion ? 0 : direction}>
+            <TagTabView
+              key={activeTab}
+              direction={reducedMotion ? 0 : direction}
+              onShown={() => setSwapping(false)}
+            >
+              {activeTab === 'primary' ? (
+                <div
+                  role="tabpanel"
+                  id={`${ids}-primary`}
+                  aria-labelledby={`${ids}-primary-tab`}
+                  className="max-h-[calc(var(--tags-max,min(26rem,55dvh))-4.5rem-1px)] overflow-y-auto overscroll-contain [scrollbar-width:thin]"
+                >
+                  {loadingPrimary ? (
+                    <div className="px-3 pt-1 pb-1">{loadingTags}</div>
+                  ) : (
+                    <ColorTagPicker
+                      tags={tags}
+                      primaryTagId={primaryTagId}
+                      onChange={onPrimaryChange}
+                      initialBranch={initialBranch}
+                      onNewTag={onNewPrimaryTag}
+                      className="w-full pt-1 pb-1"
+                    />
+                  )}
+                </div>
+              ) : (
+                <div
+                  role="tabpanel"
+                  id={`${ids}-secondary`}
+                  aria-labelledby={`${ids}-secondary-tab`}
+                  className="flex max-h-[calc(var(--tags-max,min(26rem,55dvh))-4.5rem-1px)] flex-col overflow-hidden px-3 pt-2 pb-1"
+                >
+                  {onNewSecondaryTag && (
+                    <div className="mb-1 flex min-h-11 shrink-0 items-center justify-between gap-2">
+                      <p className="px-1 font-medium text-sm">Secondary tags</p>
+                      {!loadingSecondary && <NewTagButton onClick={onNewSecondaryTag} />}
+                    </div>
+                  )}
+                  {loadingSecondary ? (
+                    loadingTags
+                  ) : (
+                    <TagPicker
+                      tags={tags}
+                      primaryTagId={primaryTagId}
+                      secondaryTagIds={secondaryTagIds}
+                      onChange={onSecondaryChange}
+                    />
+                  )}
+                </div>
+              )}
+            </TagTabView>
+          </AnimatePresence>
+        </div>
+      </AnimatedHeight>
+      {/* The role switch stays under both views, as the reminder panel's actions do in Catch. */}
+      <div className="mt-1 shrink-0 border-foreground/10 border-t px-3 pt-2 pb-2">
+        <SegmentedTabs
+          label="Tag role"
+          value={activeTab}
+          onValueChange={(next) => {
+            if (next) setActiveTab(next);
+          }}
+          options={[
+            {
+              value: 'primary',
+              id: `${ids}-primary-tab`,
+              controls: `${ids}-primary`,
+              label: 'Primary',
+              icon: (
+                <Palette
+                  data-color={primaryColor ?? undefined}
+                  className={cn('relative size-4 shrink-0', primaryColor && 'text-tint-accent')}
+                  aria-hidden
+                />
+              ),
+            },
+            {
+              value: 'secondary',
+              id: `${ids}-secondary-tab`,
+              controls: `${ids}-secondary`,
+              label: secondaryCount ? `Secondary · ${secondaryCount}` : 'Secondary',
+              icon: <TagIcon className="relative size-4 shrink-0" aria-hidden />,
+            },
+          ]}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The unified Tags panel for an open task: switches between its primary tag (picked by color, as
+ * in Catch) and its secondary tags, with a "+" in each view's corner that makes and assigns a
+ * new tag at once.
+ */
+export function TaskTagsPicker({ task }: { task: Task }) {
+  const { tags, taskTags, awaitingTags, ready } = useTaskTagsReady(task);
   const mounted = useRef(false);
-  const initialBranch = useRef(covered?.taskId === task.id ? covered.branch : null).current;
+  const restored = useRef(covered?.taskId === task.id ? covered : null).current;
+  const [tab, setTab] = useState<TagTab>(restored?.tab ?? 'primary');
+  const [initialBranch, setInitialBranch] = useState<Branch>(restored?.branch ?? null);
   useEffect(() => {
     mounted.current = true;
     covered = null;
@@ -243,16 +461,24 @@ export function ColorTagsPicker({ task }: { task: Task }) {
       mounted.current = false;
     };
   }, []);
-  // The color reads the project's tags only, not the task's secondary assignments.
-  if (useAwaitingSync(isLoading, tags.length)) return <div className="px-3">{loadingTags}</div>;
+
   return (
-    <ColorTagPicker
+    <TagOptions
       tags={tags}
       primaryTagId={task.primaryTagId}
-      onChange={(id) => setPrimaryTag(task.id, id)}
+      secondaryTagIds={taskTags.map((row) => row.tagId)}
+      onPrimaryChange={(id) => setPrimaryTag(task.id, id)}
+      onSecondaryChange={(id, present) => setSecondaryTag(task.id, id, present)}
+      tab={tab}
+      onTabChange={(next) => {
+        setTab(next);
+        setInitialBranch(null);
+      }}
       initialBranch={initialBranch}
-      onNewTag={({ parentId, color, branch }) => {
-        covered = { taskId: task.id, branch };
+      loadingPrimary={awaitingTags}
+      loadingSecondary={!ready}
+      onNewPrimaryTag={({ parentId, color, branch }) => {
+        covered = { taskId: task.id, tab: 'primary', branch };
         openNewTag({
           projectId: task.projectId,
           parentId,
@@ -263,43 +489,17 @@ export function ColorTagsPicker({ task }: { task: Task }) {
           },
         });
       }}
-      className="w-full pt-1 pb-1"
+      onNewSecondaryTag={() => {
+        covered = { taskId: task.id, tab: 'secondary', branch: null };
+        openNewTag({
+          projectId: task.projectId,
+          parentId: null,
+          onCreated: (id) => setSecondaryTag(task.id, id, true),
+          onClose: () => {
+            if (mounted.current) covered = null;
+          },
+        });
+      }}
     />
-  );
-}
-
-/**
- * Secondary tags take several choices, so picking one leaves the picker open. A new tag made
- * from the heading's corner is added to them.
- */
-export function TagsPicker({ task }: { task: Task }) {
-  const { tags, taskTags, ready } = useTaskTagsReady(task);
-  return (
-    <div className="px-3 pt-2 pb-1">
-      <div className="mb-1 flex min-h-11 items-center justify-between gap-2">
-        <p className="px-1 font-medium text-sm">Secondary tags</p>
-        {ready && (
-          <NewTagButton
-            onClick={() =>
-              openNewTag({
-                projectId: task.projectId,
-                parentId: null,
-                onCreated: (id) => setSecondaryTag(task.id, id, true),
-              })
-            }
-          />
-        )}
-      </div>
-      {ready ? (
-        <TagPicker
-          tags={tags}
-          primaryTagId={task.primaryTagId}
-          secondaryTagIds={taskTags.map((row) => row.tagId)}
-          onChange={(id, present) => setSecondaryTag(task.id, id, present)}
-        />
-      ) : (
-        loadingTags
-      )}
-    </div>
   );
 }

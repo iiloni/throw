@@ -4,11 +4,9 @@ import { motion } from 'motion/react';
 import { type ReactNode, type RefObject, useRef, useState } from 'react';
 import { useShell } from '@/components/AppShell/shell';
 import type { Project } from '@/components/Board/model';
-import { ColorTagPicker } from '@/components/ColorTagPicker/ColorTagPicker';
 import type { DrawerCard, DrawerPage } from '@/components/Drawer/Drawer';
-import { TagPicker } from '@/components/TagPicker/TagPicker';
 import { ControlButtons, panelTitle } from '@/components/TaskDetails/TaskControls';
-import { PriorityOptions, StatusOptions } from '@/components/TaskDetails/TaskPickers';
+import { PriorityOptions, StatusOptions, TagOptions } from '@/components/TaskDetails/TaskPickers';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useStatuses, useTags } from '@/lib/collections';
 import { springs } from '@/lib/motion';
@@ -25,7 +23,7 @@ type Draft = {
   secondaryTagIds: string[];
 };
 
-export type CapturePanel = 'status' | 'priority' | 'color' | 'tags';
+export type CapturePanel = 'status' | 'priority' | 'tags';
 
 export type PhoneCapture = {
   /** The card above the dock while a task is being written. */
@@ -117,25 +115,38 @@ export function usePhonePalette({
               title: panelTitle[panel],
               fit: true,
               dock: true,
-              content: (
-                <ScrollArea
-                  edges
-                  className="flex min-h-0 flex-1 flex-col [--scrollbar-inset:0.5rem]"
-                >
-                  <ScrollAreaViewport className="h-auto w-full min-h-0 flex-1">
-                    <div className="pb-[calc(var(--safe-bottom)+1rem)]">
-                      <CapturePanelContent
-                        panel={panel}
-                        draft={draft}
-                        project={project}
-                        onChange={change}
-                        onDone={() => setPanel(null)}
-                      />
-                    </div>
-                  </ScrollAreaViewport>
-                  <ScrollBar />
-                </ScrollArea>
-              ),
+              content:
+                panel === 'tags' ? (
+                  // Its own scrollers, so the role switch at its foot stays in view, and room
+                  // left above for the card riding over the drawer.
+                  <div className="flex max-h-[calc(100dvh-var(--keyboard)-var(--safe-top)-var(--dock-height)-2rem)] min-h-0 flex-1 flex-col pb-[max(0rem,calc(var(--safe-bottom)+0.25rem-var(--keyboard)))] [--tags-max:min(24.5rem,calc(100dvh-var(--keyboard)-var(--safe-top)-var(--dock-height)-7.5rem-max(0rem,calc(var(--safe-bottom)+0.25rem-var(--keyboard)))))]">
+                    <CapturePanelContent
+                      panel={panel}
+                      draft={draft}
+                      project={project}
+                      onChange={change}
+                      onDone={() => setPanel(null)}
+                    />
+                  </div>
+                ) : (
+                  <ScrollArea
+                    edges
+                    className="flex min-h-0 flex-1 flex-col [--scrollbar-inset:0.5rem]"
+                  >
+                    <ScrollAreaViewport className="h-auto w-full min-h-0 flex-1">
+                      <div className="pb-[calc(var(--safe-bottom)+1rem)]">
+                        <CapturePanelContent
+                          panel={panel}
+                          draft={draft}
+                          project={project}
+                          onChange={change}
+                          onDone={() => setPanel(null)}
+                        />
+                      </div>
+                    </ScrollAreaViewport>
+                    <ScrollBar />
+                  </ScrollArea>
+                ),
             }
           : null,
       closePage: () => setPanel(null),
@@ -318,7 +329,7 @@ function CaptureControls({
         }
         // Opening a picker moves focus off the title, which puts the keyboard away.
         onOpen={(next) => {
-          if (next !== 'more' && next !== 'size' && next !== 'relations') onPanel(next);
+          if (next !== 'more' && next !== 'size') onPanel(next);
         }}
         controlProps={(next) => ({ 'aria-expanded': next === panel })}
         tooltips={false}
@@ -363,29 +374,19 @@ function CapturePanelContent({
         }}
       />
     );
-  if (panel === 'color')
-    return (
-      <ColorTagPicker
-        tags={tags}
-        primaryTagId={draft.primaryTagId}
-        onChange={(primaryTagId) => onChange({ primaryTagId })}
-        className="px-2 pb-2"
-      />
-    );
   return (
-    <div className="px-5 pt-1 pb-3">
-      <TagPicker
-        tags={tags}
-        primaryTagId={draft.primaryTagId}
-        secondaryTagIds={draft.secondaryTagIds}
-        onChange={(id, present) =>
-          onChange({
-            secondaryTagIds: present
-              ? [...new Set([...draft.secondaryTagIds, id])]
-              : draft.secondaryTagIds.filter((other) => other !== id),
-          })
-        }
-      />
-    </div>
+    <TagOptions
+      tags={tags}
+      primaryTagId={draft.primaryTagId}
+      secondaryTagIds={draft.secondaryTagIds}
+      onPrimaryChange={(primaryTagId) => onChange({ primaryTagId })}
+      onSecondaryChange={(id, present) =>
+        onChange({
+          secondaryTagIds: present
+            ? [...new Set([...draft.secondaryTagIds, id])]
+            : draft.secondaryTagIds.filter((other) => other !== id),
+        })
+      }
+    />
   );
 }

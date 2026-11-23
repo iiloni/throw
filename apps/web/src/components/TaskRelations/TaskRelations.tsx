@@ -253,7 +253,15 @@ export function relationSuggestions(
  * desktop dock or phone keyboard). Picking a task links it and closes the picker. As the
  * palette's search, the field keeps focus while the arrows move through the tasks.
  */
-export function RelationPicker({ task, onPicked }: { task: Task; onPicked(): void }) {
+export function RelationPicker({
+  task,
+  onPicked,
+  onClose,
+}: {
+  task: Task;
+  onPicked(): void;
+  onClose?: () => void;
+}) {
   const [role, setRole] = useState<TaskRelationRole>('blocked_by');
   const [query, setQuery] = useState('');
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -332,12 +340,24 @@ export function RelationPicker({ task, onPicked }: { task: Task; onPicked(): voi
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2.5 px-3 pt-2 pb-2">
       <section className="flex min-h-0 flex-1 flex-col gap-1">
-        <h3
-          id={`${ids}-heading`}
-          className="shrink-0 px-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]"
-        >
-          {searching ? 'Matching tasks' : project ? `Open in ${project.name}` : 'Open tasks'}
-        </h3>
+        <div className="flex shrink-0 items-center justify-between gap-2">
+          <h3
+            id={`${ids}-heading`}
+            className="min-w-0 truncate px-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]"
+          >
+            {searching ? 'Matching tasks' : project ? `Open in ${project.name}` : 'Open tasks'}
+          </h3>
+          {onClose && (
+            <IconButton
+              label="Close"
+              tooltip={false}
+              className="-my-1 -mr-1 size-8 shrink-0 text-muted-foreground [&_svg]:size-4"
+              onClick={onClose}
+            >
+              <X />
+            </IconButton>
+          )}
+        </div>
         <div
           ref={list}
           id={`${ids}-tasks`}

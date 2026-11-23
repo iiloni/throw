@@ -284,6 +284,7 @@ export function TaskTimeline({
     count: number;
     blocked: boolean;
     content: ReactNode;
+    add?: ReactNode;
   };
 }) {
   const { timeline, isLoading } = useTaskTimeline(task.id);
@@ -480,12 +481,18 @@ export function TaskTimeline({
               hidden={shown !== 'links'}
               className="pt-2"
             >
-              {links.mounted &&
-                (links.count > 0 ? (
-                  links.content
-                ) : (
-                  <p className="px-1 py-4 text-muted-foreground text-sm">No linked tasks yet.</p>
-                ))}
+              {links.mounted && (
+                <div className="flex flex-col gap-3">
+                  {links.count > 0 ? (
+                    links.content
+                  ) : (
+                    <p className="px-1 pt-2 pb-1 text-muted-foreground text-sm">
+                      No linked tasks yet.
+                    </p>
+                  )}
+                  {links.add}
+                </div>
+              )}
             </div>
           )}
         </motion.div>

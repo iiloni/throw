@@ -36,6 +36,7 @@ import { haptics } from '@/lib/haptics';
 import { createTask, restoreTask, sendTask, trashTask } from '@/lib/tasks';
 import { cn } from '@/lib/utils';
 import { Fold, TaskColumnFrame, useTaskColumn } from './TaskColumn';
+import { openTaskPanel } from './TaskControls';
 import { TaskDescription } from './TaskDescription';
 import { TaskDrawer } from './TaskDrawer';
 import { TaskRefusalNotice, TaskTimeline } from './TaskTimeline';
@@ -151,6 +152,16 @@ export function TaskDetails({
   );
   const relations = (className?: string) => (
     <TaskRelations task={task} groups={relationGroups} onOpen={openRelated} className={className} />
+  );
+  const addLinkButton = (
+    <button
+      type="button"
+      onClick={(event) => openTaskPanel(task.id, 'relations', event.currentTarget)}
+      className="flex min-h-12 w-full items-center gap-2 rounded-2xl border border-foreground/15 border-dashed px-4 text-muted-foreground text-sm outline-none transition-colors hover:border-foreground/30 hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60"
+    >
+      <Plus className="size-4" aria-hidden />
+      Link a task
+    </button>
   );
   /** The subtasks with their slot to add one, inline below the description or in the column. */
   const subtasks = (className?: string, wrapList: (list: ReactNode) => ReactNode = (l) => l) => (
@@ -281,6 +292,7 @@ export function TaskDetails({
               count: linkCount,
               blocked: hasOpenBlocker,
               content: relations(),
+              add: addLinkButton,
             }}
           />
         </div>
@@ -388,7 +400,14 @@ export function TaskDetails({
         <TaskColumnFrame layout={column} card={card}>
           {tagRow}
           {task.parentId === null && subtasks()}
-          {relations()}
+          <div className="flex flex-col gap-2">
+            {relationGroups.length > 0 ? (
+              relations()
+            ) : (
+              <h2 className="px-1 font-medium text-muted-foreground text-xs">Links</h2>
+            )}
+            {addLinkButton}
+          </div>
         </TaskColumnFrame>
       )}
       {!phone && <TaskDrawer task={task} statuses={statuses} />}
