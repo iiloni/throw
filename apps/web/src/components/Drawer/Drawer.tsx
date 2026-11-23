@@ -301,7 +301,9 @@ export function Drawer({
     if (!moveInHead || !element) return;
     const viewOf = () =>
       element.querySelector('[data-move-view]')?.getAttribute('data-move-view') ?? null;
-    let view = viewOf();
+    // Unknown until first observed, so a view already in place when the target mounts
+    // springs the drawer to it as any new view does.
+    let view: string | null = null;
     const observer = new ResizeObserver(() => {
       const next = viewOf();
       if (next !== null && next === view) {

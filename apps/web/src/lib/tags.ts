@@ -104,7 +104,7 @@ export function setSecondaryTag(taskId: string, tagId: string, present: boolean)
 
 /**
  * Gives several tasks of one project the same primary tag, or clears it, as a board selection
- * does. Each task is its own write; returns the ids that hold the tag afterwards.
+ * does. Each task is its own write; returns the ids it wrote, including those cleared.
  */
 export function setPrimaryTags(taskIds: readonly string[], tagId: string | null) {
   return taskIds.filter((id) => {

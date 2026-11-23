@@ -65,7 +65,7 @@ Cards move on both boards by drag, keyboard,
 phone long press and the move drawer (ADR 0008). A selection (Ctrl/⌘/Shift click or right
 click on desktop, long press on a phone) is edited together through `Board/SelectionActions.tsx`:
 the desktop `SelectionBar` and the phone `MovePanel` share its controls, and the boundaries
-supply the priority, size, tag and trash panels (`components/BulkActions`) through
+supply the priority, size and tag panels and the trash action (`components/BulkActions`) through
 `SelectionContentContext`, so the prototype only moves.
 Settings (`/settings/*`) and project settings (`/w/:workspaceId/p/:projectId/settings`,
 with project trash beside it at `/trash`) share Catch's `SettingsLayout`: pages listed

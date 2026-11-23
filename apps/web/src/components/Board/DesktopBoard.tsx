@@ -518,7 +518,8 @@ function SelectionDock({ reduced }: { reduced: boolean }) {
   const trigger = useRef<HTMLElement | null>(null);
   const id = useId();
   const tabs = selectionTabs(project, selectedTasks(state), content);
-  // Tags close once the selection spans projects.
+  // Tags close once the selection spans projects, and stay closed when it narrows again.
+  if (chosen && !tabs.includes(chosen)) setChosen(null);
   const tab = chosen && tabs.includes(chosen) ? chosen : null;
   const collapse = useCallback(() => {
     setChosen(null);

@@ -1,7 +1,8 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockBoards } from './mockData';
 import type { Project, Task } from './model';
+import { MovePanel } from './PhoneBoard';
 import {
   moveTargets,
   SelectionControls,
@@ -140,6 +141,37 @@ describe('trashing a selection', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Move to trash' }));
     expect(content.trash).toHaveBeenCalledWith([first!.id]);
+  });
+});
+
+describe('the phone’s selection panel', () => {
+  it('closes a picker the selection no longer offers, and leaves it closed when offered again', () => {
+    const tasks = [task('a', 'kitchen'), task('b', 'kitchen')];
+    const showing = (tags: Project['tags']) =>
+      act(() =>
+        board.set({
+          ...initialBoard([{ project: { ...kitchen, tags }, tasks }]),
+          selection: ['a', 'b'],
+        }),
+      );
+    showing([tag]);
+    const content: SelectionContent = {
+      sizes: false,
+      panel: (panel) => <p>{panel}</p>,
+      trash: vi.fn(),
+    };
+    render(
+      <SelectionContentContext.Provider value={content}>
+        <MovePanel pick />
+      </SelectionContentContext.Provider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Change tags' }));
+    expect(screen.getByRole('region', { name: 'Tags' })).toBeInTheDocument();
+    showing([]);
+    expect(screen.queryByRole('button', { name: 'Change tags' })).toBeNull();
+    showing([tag]);
+    expect(screen.getByRole('button', { name: 'Change tags' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Tags' })).toBeNull();
   });
 });
 

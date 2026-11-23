@@ -460,8 +460,9 @@ On desktop, a click with Ctrl, Cmd or Shift selects cards, and so does a right c
 also lets a selected card go, in place of the browser's menu (as in Catch). A phone selects by
 long press. A selection is changed together (2026-11-23): its controls are an open task's dock
 (status, priority, size when the server keeps it, tags, and the trash), floating at the foot
-of the desktop board above the search bar and in the phone drawer. Each control opens its
-picker when tapped; selecting opens none, so the phone's move grid waits for Status.
+of the desktop board above the search bar and in the phone drawer. Status, priority, size and
+tags open their pickers when tapped, and the trash acts at once; selecting opens no picker, so
+the phone's move grid waits for Status.
 
 - Status moves every card, as a drop on a status does, and lets the selection go.
 - Priority and size apply to every card and keep the selection, so another change can follow.

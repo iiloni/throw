@@ -233,7 +233,15 @@ test.describe('phone', () => {
     const drawer = page.locator('[data-drawer]');
     const top = async () => Math.round((await drawer.boundingBox())!.y);
     const settledTop = async () => {
-      await expect.poll(async () => [await top(), await top()]).toEqual([await top(), await top()]);
+      let previous = Number.NaN;
+      await expect
+        .poll(async () => {
+          const now = await top();
+          const settled = now === previous;
+          previous = now;
+          return settled;
+        })
+        .toBe(true);
       return top();
     };
     const rests = [await settledTop()];

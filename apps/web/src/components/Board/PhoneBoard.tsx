@@ -685,8 +685,10 @@ export function MovePanel({ pick }: { pick: boolean }) {
     tasks.filter((task) => moving.includes(task.id)),
   );
   const tabs = selectionTabs(project, selected, content);
+  if (chosen && !tabs.includes(chosen)) setChosen(null);
   // A selection opens on its controls alone, as an open task's dock does, until one is tapped;
-  // a tab the selection no longer allows, such as tags once it spans projects, closes. Without
+  // a tab the selection no longer allows, such as tags once it spans projects, closes and stays
+  // closed when the selection narrows again. Without
   // the boundary's controls (the prototype) the move grid is all there is, so it stays open.
   const tab: SelectionTab | null = !pick
     ? 'status'
