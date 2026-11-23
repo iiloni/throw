@@ -351,7 +351,38 @@ test.describe('desktop', () => {
     await expect(chips(page)).toContainText('Largest first');
     await sizeSection.getByRole('button', { name: /^Size L,/ }).click();
     await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Later position']]);
-    // Escape clears active filters and sort first, then closes the sidebar.
+    // The nav rail Search button connects visually to the open sidebar and collapses it without clearing filters.
+    const railSearch = page.getByRole('button', { name: 'Search', exact: true });
+    await expect(railSearch).toHaveAttribute('aria-expanded', 'true');
+    await expect(railSearch).toHaveAttribute('data-connected', '');
+    const [railBg, sidebarBg] = await Promise.all([
+      railSearch.evaluate((el) => getComputedStyle(el).backgroundColor),
+      docked.evaluate((el) => getComputedStyle(el).backgroundColor),
+    ]);
+    expect(railBg).toBe(sidebarBg);
+    await railSearch.click();
+    await expect(bar(page)).toHaveCount(0);
+    await expect(railSearch).toHaveAttribute('aria-expanded', 'false');
+    await expect(railSearch).not.toHaveAttribute('data-connected');
+    // Filters stay active while collapsed and return when reopened from the rail.
+    await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Later position']]);
+    await railSearch.click();
+    await expect(docked).toBeVisible();
+    await expect(chips(page)).toContainText('Largest first');
+    await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Later position']]);
+    // Closing via the search field's close button clears filters and sort.
+    await docked.getByRole('button', { name: 'Close search', exact: true }).click();
+    await expect(bar(page)).toHaveCount(0);
+    await expect(
+      page.getByRole('region', { name: 'Build', exact: true }).getByRole('article'),
+    ).toHaveCount(4);
+    // Reopen and verify Escape clears active filters first, then closes the sidebar.
+    await openBar(page);
+    await docked
+      .getByRole('region', { name: 'Size', exact: true })
+      .getByRole('button', { name: /^Size L,/ })
+      .click();
+    await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Later position']]);
     await page.keyboard.press('Escape');
     await expect(chips(page)).toHaveCount(0);
     await expect(field(page)).toBeFocused();

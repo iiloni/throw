@@ -656,6 +656,11 @@ export function focusSearch() {
   });
 }
 
+/** Hides the desktop search without clearing its query, filters or sort. */
+export function collapseSearch() {
+  if (board.get().searching) update({ searching: false });
+}
+
 /** Closes the bar, and with it the search, its filters and the sort. */
 export function closeSearch() {
   update({ searching: false, filter: EMPTY_FILTER, sort: 'priority' });

@@ -6,8 +6,14 @@ import {
   secondaryTagsByTask,
   workspaceBoardData,
 } from '@/components/Board/selection';
-import { board, initialBoard, receiveBoard, update } from '@/components/Board/state';
-import { BoardSearch, BoardSearchSidebar } from './BoardSearch';
+import {
+  board,
+  collapseSearch,
+  initialBoard,
+  receiveBoard,
+  update,
+} from '@/components/Board/state';
+import { BoardSearch, BoardSearchSidebar, searchSidebarOpen } from './BoardSearch';
 
 const project: Project = {
   id: 'project',
@@ -300,5 +306,40 @@ describe('the docked search sidebar', () => {
     expect(kitchen).toHaveTextContent('1');
     fireEvent.click(kitchen);
     expect(board.get().filter.projectId).toBe('project-2');
+  });
+
+  it('tracks docked open state and collapses without clearing active filters', () => {
+    const { unmount } = render(<BoardSearchSidebar />);
+    expect(searchSidebarOpen.get()).toBe(true);
+
+    const sortRegion = screen.getByRole('region', { name: 'Sort' });
+    fireEvent.click(within(sortRegion).getByRole('button', { name: 'Size' }));
+    const sizeRegion = screen.getByRole('region', { name: 'Size' });
+    fireEvent.click(within(sizeRegion).getByRole('button', { name: /^Size S,/ }));
+
+    act(() => collapseSearch());
+    expect(board.get()).toMatchObject({
+      searching: false,
+      sort: 'size-asc',
+      filter: { sizes: [2] },
+    });
+    expect(searchSidebarOpen.get()).toBe(false);
+
+    act(() => update({ searching: true }));
+    expect(searchSidebarOpen.get()).toBe(true);
+    expect(board.get()).toMatchObject({
+      sort: 'size-asc',
+      filter: { sizes: [2] },
+    });
+
+    // Closing from the search field's close button clears filters and sort.
+    fireEvent.click(screen.getByRole('button', { name: 'Close search' }));
+    expect(board.get()).toMatchObject({
+      searching: false,
+      sort: 'priority',
+      filter: { sizes: [] },
+    });
+    unmount();
+    expect(searchSidebarOpen.get()).toBe(false);
   });
 });

@@ -22,14 +22,17 @@ import {
   viewSchema,
 } from '@/components/AppShell/shell';
 import { AppUpdatePrompt } from '@/components/AppUpdatePrompt/AppUpdatePrompt';
+import { chosenFilters } from '@/components/Board/filter';
 import {
   board,
   closeSearch,
+  collapseSearch,
   focusSearch,
   narrowed,
   openSearch,
   update,
 } from '@/components/Board/state';
+import { searchSidebarOpen } from '@/components/BoardSearch/BoardSearch';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { CommandPalette, type PaletteMode } from '@/components/CommandPalette/CommandPalette';
 import { Hint } from '@/components/Hint/Hint';
@@ -121,7 +124,22 @@ export function AppShell() {
     if (boardSearch) openSearch();
     else setPalette({ mode: 'search', seed: '' });
   }, [boardSearch]);
+  // Clicking Search in the rail again collapses the board search without clearing active filters.
+  const toggleRailSearch = useCallback(() => {
+    if (!boardSearch) return setPalette({ mode: 'search', seed: '' });
+    if (board.get().searching) collapseSearch();
+    else openSearch();
+  }, [boardSearch]);
   const boardState = board.use();
+  const dockedSearch = searchSidebarOpen.use();
+  const sidebarConnected = boardSearch && boardState.searching && dockedSearch;
+  const searchActive = boardSearch && boardState.searching;
+  const searchFiltered = boardSearch && narrowed(boardState);
+  const activeFilterCount = searchFiltered
+    ? chosenFilters(boardState.filter) +
+      Number(boardState.sort !== 'priority') +
+      Number(boardState.filter.query.trim() !== '')
+    : 0;
   const isAppSettings = routeId?.startsWith('/_app/settings') ?? false;
   const isProjectSettings =
     routeId === '/_app/w/$workspaceId/p/$projectId_/settings' ||
@@ -308,22 +326,52 @@ export function AppShell() {
               initial={false}
               animate={{ width: expanded ? 248 : 80 }}
               transition={reduced ? { duration: 0 } : { ...springs.smooth, bounce: 0 }}
-              className="glass sticky top-0 flex h-dvh shrink-0 flex-col overflow-hidden border-y-0 border-l-0 pt-[calc(var(--safe-top)+0.75rem)] pb-[calc(var(--safe-bottom)+0.75rem)] pl-[var(--safe-left)]"
+              className="glass sticky top-0 flex h-dvh shrink-0 flex-col overflow-visible border-y-0 border-l-0 pt-[calc(var(--safe-top)+0.75rem)] pb-[calc(var(--safe-bottom)+0.75rem)] pl-[var(--safe-left)]"
             >
               {/*
               Inset so the mark sits on the rail's icon column. The lockup measures this box
               and falls back to the mark alone once the collapsed rail is too narrow for it.
             */}
-              <div className="mb-2 pr-3 pl-[1.125rem]">
+              <div className="mb-2 overflow-hidden pr-3 pl-[1.125rem]">
                 <BrandLockup orientation="horizontal" iconSize={32} />
               </div>
-              <div className="px-3">
+              <div className="overflow-hidden px-3">
                 <ShellMenu expanded={expanded} />
               </div>
               {workspace && (
-                <div className="mt-3 px-3">
-                  <RailButton label="Search" expanded={expanded} onClick={search}>
-                    <Search className="size-5" aria-hidden />
+                <div className={cn('mt-3 pl-3', sidebarConnected ? 'relative z-20 pr-0' : 'pr-3')}>
+                  <RailButton
+                    label="Search"
+                    expanded={expanded}
+                    expandedControl={boardSearch ? searchActive : undefined}
+                    connected={sidebarConnected}
+                    active={searchActive && !sidebarConnected}
+                    className={cn(
+                      !searchActive &&
+                        searchFiltered &&
+                        'bg-accent/60 font-medium text-brand-link hover:bg-accent',
+                    )}
+                    badge={
+                      searchFiltered ? (
+                        <span
+                          aria-hidden
+                          className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-brand px-1.5 font-semibold text-[0.6875rem] text-brand-foreground tabular-nums"
+                        >
+                          {activeFilterCount}
+                        </span>
+                      ) : undefined
+                    }
+                    onClick={toggleRailSearch}
+                  >
+                    <span className="relative flex items-center justify-center">
+                      <Search className="size-5" aria-hidden />
+                      {searchFiltered && !expanded && (
+                        <span
+                          aria-hidden
+                          className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-brand"
+                        />
+                      )}
+                    </span>
                   </RailButton>
                 </div>
               )}
@@ -404,7 +452,7 @@ export function AppShell() {
                   </div>
                 )}
               </nav>
-              <div className="mt-3 flex flex-col gap-2 px-3">
+              <div className="mt-3 flex flex-col gap-2 overflow-hidden px-3">
                 {fullBoard && (
                   <div className="px-2">
                     <SyncIndicator />
@@ -475,6 +523,9 @@ function RailButton({
   label,
   expanded,
   active,
+  expandedControl,
+  connected,
+  badge,
   children,
   onClick,
   href,
@@ -484,6 +535,11 @@ function RailButton({
   label: string;
   expanded: boolean;
   active?: boolean;
+  /** Panel toggle state (e.g. Search): sets `aria-expanded` instead of `aria-current="page"`. */
+  expandedControl?: boolean;
+  /** Extends flush into the docked search sidebar at the same elevation with concave fillets. */
+  connected?: boolean;
+  badge?: ReactNode;
   /** A project's color: its icon takes it, and so does the row while it is the open one. */
   tint?: string | null;
   children: ReactNode;
@@ -493,18 +549,25 @@ function RailButton({
 }) {
   const props = {
     'aria-label': label,
-    'aria-current': active ? ('page' as const) : undefined,
+    'aria-current': active && expandedControl === undefined ? ('page' as const) : undefined,
+    'aria-expanded': expandedControl,
+    'data-connected': connected ? '' : undefined,
     'data-color': tint ?? undefined,
     className: cn(
-      'relative flex h-12 w-full shrink-0 items-center gap-3 rounded-2xl px-2 text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
-      active
-        ? cn('font-semibold', tint ? 'bg-tint' : 'bg-accent')
-        : 'text-muted-foreground hover:bg-accent/60',
+      'relative flex h-12 shrink-0 items-center px-2 text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+      connected
+        ? 'search-rail-connected -mr-px w-[calc(100%+1px)] pr-5 font-semibold text-foreground'
+        : cn(
+            'w-full rounded-2xl',
+            active
+              ? cn('font-semibold', tint ? 'bg-tint' : 'bg-accent')
+              : 'text-muted-foreground hover:bg-accent/60',
+          ),
       className,
     ),
   };
   const content = (
-    <>
+    <span className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
       <span className="flex size-10 shrink-0 items-center justify-center">{children}</span>
       <span
         aria-hidden={!expanded}
@@ -515,7 +578,8 @@ function RailButton({
       >
         {label}
       </span>
-    </>
+      {expanded && badge}
+    </span>
   );
   // A collapsed rail shows only icons, so each names itself beside the rail.
   const hint = (control: ReactElement) => (

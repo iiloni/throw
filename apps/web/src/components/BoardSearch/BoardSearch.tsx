@@ -28,6 +28,7 @@ import { Hint } from '@/components/Hint/Hint';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
+import { createStore } from '@/lib/store';
 import { createTask } from '@/lib/tasks';
 import { cn } from '@/lib/utils';
 import { ActiveFilters, BoardFilters, hasChips, SidebarFilters } from './BoardFilters';
@@ -42,7 +43,10 @@ export const SEARCH_SPACE = 'var(--board-search-space, 0.25rem)';
  * and a few columns.
  */
 export const SEARCH_SIDEBAR_MIN = 1320;
-const SIDEBAR_WIDTH = 368;
+const SIDEBAR_WIDTH = 376;
+
+/** Whether the docked desktop search sidebar is open beside the navigation rail. */
+export const searchSidebarOpen = createStore(false);
 
 /**
  * Whatever had focus when search opened gets it back when it closes, or the board does.
@@ -186,6 +190,11 @@ export function BoardSearchSidebar() {
   const capture = useCapture();
   const dismiss = useDismiss(root, searching);
 
+  useLayoutEffect(() => {
+    searchSidebarOpen.set(searching);
+    return () => searchSidebarOpen.set(false);
+  }, [searching]);
+
   function clearAndFocus() {
     clearFilters();
     // Keep focus inside search if clearing removed the focused control (direction, match or chip).
@@ -207,7 +216,7 @@ export function BoardSearchSidebar() {
       {searching && (
         <motion.div
           key="sidebar"
-          className="shrink-0 overflow-hidden"
+          className="relative z-10 flex h-full shrink-0 flex-col overflow-hidden"
           initial={{ width: 0, opacity: 0 }}
           animate={{ width: SIDEBAR_WIDTH, opacity: 1 }}
           exit={{ width: 0, opacity: 0 }}
@@ -219,11 +228,11 @@ export function BoardSearchSidebar() {
             data-docked=""
             onKeyDown={onKeyDown}
             style={{ width: SIDEBAR_WIDTH }}
-            className="flex h-full flex-col pt-[calc(var(--safe-top)+1.25rem)] pb-[max(1.5rem,calc(var(--safe-bottom)+0.75rem))] pl-5"
+            className="mt-[calc(var(--safe-top)+1.25rem)] mb-[max(1.5rem,calc(var(--safe-bottom)+0.75rem))] flex min-h-0 flex-1 flex-col rounded-r-3xl bg-[var(--search-surface)] px-4 pt-4 pb-3.5"
           >
-            <ScrollArea edges className="-mr-1 flex-1 [--scrollbar-inset:0.5rem]">
+            <ScrollArea edges className="-mx-1 flex-1 [--scrollbar-inset:0.5rem]">
               <ScrollAreaViewport>
-                <div className="px-0.5 pt-0.5 pr-1.5 pb-4">
+                <div className="px-1 pt-0.5 pb-4">
                   <SidebarFilters />
                 </div>
               </ScrollAreaViewport>
