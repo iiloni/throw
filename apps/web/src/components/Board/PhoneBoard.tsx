@@ -119,7 +119,7 @@ export function PhoneBoard({
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <header className="shrink-0 pt-[var(--safe-top)]" inert={covered}>
-        <div className="flex h-16 items-center gap-2 pr-3 pl-5">
+        <div className="flex h-14 items-center gap-2 pr-3 pl-5">
           {projectMenu ?? (
             <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>

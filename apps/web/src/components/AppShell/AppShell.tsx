@@ -15,7 +15,7 @@ import { type ReactElement, type ReactNode, useCallback, useEffect, useRef, useS
 import { z } from 'zod';
 import { ProjectSwitcher } from '@/components/AppShell/ProjectSwitcher';
 import { ShellMenu } from '@/components/AppShell/ShellMenu';
-import { SwitcherPull } from '@/components/AppShell/SwitcherPull';
+import { useSwitcherPull } from '@/components/AppShell/SwitcherPull';
 import {
   navigationSchema,
   type ProjectView,
@@ -119,6 +119,12 @@ export function AppShell() {
   const openPalette = useCallback(
     (mode: PaletteMode = 'search', seed = '') => setPalette({ mode, seed }),
     [],
+  );
+  // A pull from the top of a phone board opens the switcher, as the title does.
+  useSwitcherPull(
+    mainRef,
+    !desktop && fullBoard && !navigating && !switcherOpen && !form && !palette,
+    openSwitcher,
   );
   // A desktop switches from the rail; a phone that grows into one puts its switcher away.
   useEffect(() => {
@@ -477,17 +483,7 @@ export function AppShell() {
         <AppUpdatePrompt />
         <WebUpdatePrompt />
         <ShellForms form={form} onClose={() => setForm(null)} />
-        {!desktop && (
-          <>
-            <ProjectSwitcher open={switcherOpen} onClose={closeSwitcher} />
-            {/* A pull from the top of a phone board opens the switcher, as the title does. */}
-            <SwitcherPull
-              surface={mainRef}
-              enabled={fullBoard && !navigating && !switcherOpen && !form && !palette}
-              onOpen={openSwitcher}
-            />
-          </>
-        )}
+        {!desktop && <ProjectSwitcher open={switcherOpen} onClose={closeSwitcher} />}
         <NewTagHost />
       </ManagementSurfaceProvider>
     </ShellContext.Provider>

@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
-import { card, finger, workspaceFixture } from './board-helpers';
+import { card, finger, settled, workspaceFixture } from './board-helpers';
 import { switcherItem } from './helpers';
 
 const switcher = (page: Page) => page.getByRole('dialog', { name: 'Projects', exact: true });
@@ -22,6 +22,9 @@ test('the title opens a thumb-reach switcher of project tiles, and a tile switch
   page,
 }, info) => {
   await workspaceFixture(page);
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.screenshot({ path: info.outputPath('title-dark.png') });
+  await page.emulateMedia({ colorScheme: 'light' });
   await title(page).click();
   await expect(title(page)).toHaveAttribute('aria-expanded', 'true');
   const sheet = switcher(page);
@@ -88,14 +91,23 @@ test('pulling down from the top of the board opens the switcher', async ({ page 
   await workspaceFixture(page);
   const column = card(page, 'Bake bread');
   await expect(column).toBeVisible();
-  const box = (await column.boundingBox())!;
+  // Once the board has stopped loading and reordering, so the finger lands where aimed.
+  await expect(page).not.toHaveURL(/task=/);
+  const box = (await (await settled(column)).boundingBox())!;
   const from = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 
-  // A short pull draws the cue and springs back.
-  let touch = await pullDown(page, from, 60);
-  const pill = page.locator('[data-switcher-pull-pill]');
-  await expect(pill).toContainText('Pull to switch projects');
-  await touch.lift();
+  // A short pull draws the cue and springs back. A board still loading its route may miss the
+  // first one, so it is tried until the board takes it.
+  const cue = page.locator('[data-switcher-pull-cue]');
+  let touch: Awaited<ReturnType<typeof finger>> | null = null;
+  await expect(async () => {
+    await touch?.lift();
+    touch = await pullDown(page, from, 60);
+    // The title is the cue: it follows the finger and says what letting go does.
+    await expect(cue).toContainText('Pull to switch projects', { timeout: 1000 });
+  }).toPass();
+  await expect(cue).toHaveCSS('opacity', '1');
+  await touch!.lift();
   await page.waitForTimeout(400);
   await expect(switcher(page)).toHaveCount(0);
 
@@ -106,14 +118,17 @@ test('pulling down from the top of the board opens the switcher', async ({ page 
   await touch.lift();
   await page.waitForTimeout(400);
   await expect(switcher(page)).toHaveCount(0);
-  await expect(pill).not.toHaveAttribute('data-armed');
+  await expect(title(page)).not.toHaveAttribute('data-pull-armed');
+  await expect(cue).toHaveCount(0);
 
   // Past the threshold, letting go opens it, and the card beneath is not opened.
   const header = page.getByRole('heading', { level: 1 });
   const top = (await header.boundingBox())!;
   touch = await pullDown(page, { x: top.x + 40, y: top.y + top.height / 2 }, 180);
-  await expect(pill).toContainText('Release to switch projects');
-  await expect(pill).toHaveAttribute('data-armed', '');
+  await expect(cue).toContainText('Release to switch projects');
+  await expect(title(page)).toHaveAttribute('data-pull-armed', '');
+  const rest = (await title(page).boundingBox())!;
+  expect(rest.y).toBeGreaterThan(top.y + 20);
   await page.screenshot({ path: info.outputPath('switcher-pull.png') });
   await touch.lift();
   await expect(switcher(page)).toBeVisible();

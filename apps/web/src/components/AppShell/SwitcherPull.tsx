@@ -1,31 +1,25 @@
-import { Layers } from 'lucide-react';
-import {
-  AnimatePresence,
-  animate,
-  motion,
-  useMotionValue,
-  useReducedMotion,
-  useTransform,
-} from 'motion/react';
-import { type RefObject, useCallback, useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { animate, motionValue, useReducedMotion } from 'motion/react';
+import { type RefObject, useEffect, useRef } from 'react';
 import { drag, isPrimed } from '@/components/Board/drag';
 import { board } from '@/components/Board/state';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
+import { createStore } from '@/lib/store';
 
 /** Finger travel past this distance opens the switcher on release. */
 export const RELEASE_DISTANCE = 90;
-/** How far the pill has been drawn by then: it arrives exactly as letting go starts to act. */
-const ARRIVED = RELEASE_DISTANCE * 0.5;
-const MAX_PULL = 64;
+/** How far the title follows the finger: half its travel, up to here. */
+export const MAX_PULL = 64;
 /** Android's first touchmove can already be this far along; a later claim is not cancelable. */
 const MOVE_TOLERANCE = 4;
 /** A touch held this long before moving belongs to a card's long press (`Board/drag.ts`). */
 const HOLD_MS = 260;
 
-const PULL = 'Pull to switch projects';
-const RELEASE = 'Release to switch projects';
+/**
+ * The pull in progress, which the phone title draws (`ShellMenu`): how far it has come, damped
+ * to half the finger's travel up to `MAX_PULL`, and whether letting go would open the switcher.
+ */
+export const switcherPull = { travel: motionValue(0), armed: createStore(false) };
 
 /**
  * Whether a touch beginning on `target` may start a pull: nothing covers the board (an open
@@ -64,61 +58,25 @@ export function canPull(target: EventTarget | null, surface: Element) {
 
 /**
  * Pulling down at the top of a phone board opens the project switcher on release, as Catch's
- * page pull acts (`PagePull`): a glass pill drawn down from above the screen says what letting
- * go will do, with a haptic as it arms. Only distance commits, never a fling, and a sideways
- * start belongs to the board's column swipes, a still hold to a card's long press.
+ * page pull acts (`PagePull`). The board's title is the cue: it follows the finger down and
+ * says what letting go will do, with a haptic as it arms. Only distance commits, never a
+ * fling, and a sideways start belongs to the board's column swipes, a still hold to a card's
+ * long press.
  */
-export function SwitcherPull({
-  surface,
-  enabled,
-  onOpen,
-}: {
+export function useSwitcherPull(
   /** Where a pull may begin: the board's page. */
-  surface: RefObject<HTMLElement | null>;
-  enabled: boolean;
-  onOpen: () => void;
-}) {
-  const pull = useMotionValue(0);
+  surface: RefObject<HTMLElement | null>,
+  enabled: boolean,
+  onOpen: () => void,
+) {
   const reducedMotion = useReducedMotion() ?? false;
-  const pill = useRef<HTMLDivElement>(null);
-  // From just above the screen, so it passes over the status bar. Measured as a pull starts,
-  // in pixels, since a percentage would resolve against Android's changing insets.
-  const hiddenY = useRef(0);
-  const y = useTransform(() => {
-    if (reducedMotion) return 0;
-    const travel = pull.get();
-    return (
-      hiddenY.current * (1 - Math.min(travel, ARRIVED) / ARRIVED) + Math.max(0, travel - ARRIVED)
-    );
-  });
-  // Fading keeps its shadow out of view at rest; it is all reduced motion gets. On the pill
-  // itself, because opacity on an ancestor would stop the glass from blurring the board.
-  const opacity = useTransform(pull, reducedMotion ? [12, 40] : [0, 12], [0, 1]);
-  const width = useMotionValue<number | 'auto'>('auto');
-  // The measured width springs, so the glass and its text never stretch.
-  const measure = useCallback(
-    (element: HTMLSpanElement | null) => {
-      if (!element) return;
-      const update = () => {
-        const next = element.offsetWidth + 2;
-        if (width.get() === 'auto' || reducedMotion) width.jump(next);
-        else animate(width, next, springs.smooth);
-      };
-      update();
-      if (typeof ResizeObserver === 'undefined') return;
-      const observer = new ResizeObserver(update);
-      observer.observe(element);
-      return () => observer.disconnect();
-    },
-    [width, reducedMotion],
-  );
-  const [armed, setArmed] = useState(false);
   const open = useRef(onOpen);
   open.current = onOpen;
 
   useEffect(() => {
     const root = surface.current;
     if (!root || !enabled) return;
+    const { travel, armed } = switcherPull;
     let gesture: {
       id: number;
       x: number;
@@ -132,10 +90,8 @@ export function SwitcherPull({
     let clickTimer: ReturnType<typeof setTimeout> | undefined;
 
     function springBack() {
-      animate(pull, 0, {
-        ...(reducedMotion ? { duration: 0 } : springs.snappy),
-        onComplete: () => setArmed(false),
-      });
+      armed.set(false);
+      animate(travel, 0, reducedMotion ? { duration: 0 } : springs.snappy);
     }
 
     function cancel() {
@@ -186,19 +142,16 @@ export function SwitcherPull({
         }
         gesture.dragging = true;
         suppressClick = true;
-        pull.stop();
-        const shape = pill.current;
-        if (shape) hiddenY.current = -(shape.offsetTop + shape.offsetHeight + 8);
-        setArmed(false);
+        travel.stop();
       }
       move.preventDefault();
       gesture.distance = Math.max(0, dy);
-      // Resistance: the pill follows at half the finger's pace, then stops.
-      pull.set(Math.min(gesture.distance * 0.5, MAX_PULL));
+      // Resistance: the title follows at half the finger's pace, then stops.
+      travel.set(Math.min(gesture.distance * 0.5, MAX_PULL));
       const past = gesture.distance > RELEASE_DISTANCE;
       if (past !== gesture.armed) {
         gesture.armed = past;
-        setArmed(past);
+        armed.set(past);
         if (past) haptics.threshold();
       }
     }
@@ -238,43 +191,5 @@ export function SwitcherPull({
       root.removeEventListener('touchcancel', onEnd);
       root.removeEventListener('click', onClick, true);
     };
-  }, [surface, enabled, pull, reducedMotion]);
-
-  const label = armed ? RELEASE : PULL;
-  return createPortal(
-    <div
-      aria-hidden
-      className="pointer-events-none fixed inset-x-0 top-0 z-40 flex justify-center pt-[calc(var(--safe-top)+0.5rem)]"
-    >
-      <motion.div
-        ref={pill}
-        data-switcher-pull-pill=""
-        data-armed={armed ? '' : undefined}
-        style={{ width, y, opacity }}
-        className="glass relative h-10 overflow-hidden rounded-full font-medium text-sm"
-      >
-        <AnimatePresence initial={false}>
-          <motion.span
-            key={label}
-            ref={measure}
-            className="absolute inset-y-0 left-1/2 flex w-max items-center gap-2 whitespace-nowrap px-4"
-            style={{ x: '-50%' }}
-            initial={{ opacity: 0, scale: 0.85, filter: 'blur(4px)' }}
-            animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-            exit={{
-              opacity: 0,
-              scale: 0.85,
-              filter: 'blur(4px)',
-              transition: { duration: reducedMotion ? 0 : 0.14 },
-            }}
-            transition={reducedMotion ? { duration: 0 } : springs.smooth}
-          >
-            <Layers className="size-4 text-muted-foreground" aria-hidden />
-            {label}
-          </motion.span>
-        </AnimatePresence>
-      </motion.div>
-    </div>,
-    document.body,
-  );
+  }, [surface, enabled, reducedMotion]);
 }

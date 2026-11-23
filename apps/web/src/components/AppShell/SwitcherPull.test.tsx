@@ -14,7 +14,7 @@ vi.mock('@/components/Board/drag', () => ({
   isPrimed: () => dragState.primed,
 }));
 
-import { SwitcherPull } from './SwitcherPull';
+import { switcherPull, useSwitcherPull } from './SwitcherPull';
 
 beforeEach(() => {
   boardState.value = { openTaskId: null, selection: [] };
@@ -27,9 +27,9 @@ afterEach(() => {
 
 function Board({ enabled, onOpen }: { enabled: boolean; onOpen: () => void }) {
   const surface = useRef<HTMLElement>(null);
+  useSwitcherPull(surface, enabled, onOpen);
   return (
     <main ref={surface} data-testid="board">
-      <SwitcherPull surface={surface} enabled={enabled} onOpen={onOpen} />
       <button type="button">Card</button>
       <div data-testid="column" style={{ overflowY: 'auto' }}>
         <p>In a column</p>
@@ -83,18 +83,22 @@ describe('switcher pull', () => {
   it('opens the switcher past the threshold, without the tap beneath the finger', () => {
     const { onOpen, onPress, card } = setup();
     expect(pull(card)).toBe(true);
-    expect(screen.getByText('Release to switch projects')).toBeInTheDocument();
+    // The title draws the pull: half the finger's travel, up to its limit, and armed.
+    expect(switcherPull.travel.get()).toBe(60);
+    expect(switcherPull.armed.get()).toBe(true);
     expect(haptics.threshold).toHaveBeenCalledOnce();
     touch(card, 'end', 100, 220, 80);
     fireEvent.click(card);
     expect(onOpen).toHaveBeenCalledOnce();
     expect(onPress).not.toHaveBeenCalled();
+    expect(switcherPull.armed.get()).toBe(false);
   });
 
   it('springs back from a short pull or one pulled back under the threshold', () => {
     const { onOpen, card } = setup();
     pull(card, 40);
-    expect(screen.getByText('Pull to switch projects')).toBeInTheDocument();
+    expect(switcherPull.travel.get()).toBe(20);
+    expect(switcherPull.armed.get()).toBe(false);
     touch(card, 'end', 100, 140, 60);
     touch(card, 'start', 100, 100);
     touch(card, 'move', 100, 220, 50);

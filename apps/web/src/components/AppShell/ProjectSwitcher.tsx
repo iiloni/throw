@@ -151,6 +151,7 @@ export function ProjectSwitcher({ open, onClose }: { open: boolean; onClose: () 
                       <FooterAction
                         icon={Trash2}
                         label="Workspace trash"
+                        short="Trash"
                         onSelect={then(() => shell.goTrash())}
                       />
                     )}
@@ -332,20 +333,27 @@ function ProjectTile({
 function FooterAction({
   icon: Icon,
   label,
+  short,
   onSelect,
 }: {
   icon: LucideIcon;
   label: string;
+  /** What the button shows where the footer is narrow; the full label still names it. */
+  short?: string;
   onSelect: () => void;
 }) {
   return (
     <button
       type="button"
+      aria-label={short ? label : undefined}
       onClick={onSelect}
       className="flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-muted-foreground text-xs outline-none transition-colors active:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring"
     >
       <Icon aria-hidden className="size-5" />
-      <span className="max-w-full truncate">{label}</span>
+      {/* Large text wraps to a second line rather than cutting the label off. */}
+      <span className="line-clamp-2 max-w-full text-balance text-center leading-tight">
+        {short ?? label}
+      </span>
     </button>
   );
 }
