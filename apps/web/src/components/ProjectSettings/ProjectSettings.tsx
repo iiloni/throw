@@ -1,20 +1,11 @@
-import { linkOptions } from '@tanstack/react-router';
 import { DEFAULT_PRIORITY_NAMES, EMPTY_PRIORITY_NAMES, type Project } from '@throw/shared';
-import {
-  ArrowUpDown,
-  Columns3,
-  type LucideIcon,
-  SlidersHorizontal,
-  Tags,
-  Trash2,
-} from 'lucide-react';
-import { type ReactNode, useEffect, useState } from 'react';
+import { Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useShell } from '@/components/AppShell/shell';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
 import { ProjectIconPicker } from '@/components/ProjectIconPicker/ProjectIconPicker';
-import { SettingsLayout, type SettingsPage } from '@/components/SettingsLayout/SettingsLayout';
 import { SettingsSection } from '@/components/SettingsSection/SettingsSection';
 import { TagManager } from '@/components/TagManager/TagManager';
 import { Button } from '@/components/ui/button';
@@ -22,12 +13,7 @@ import { Input } from '@/components/ui/input';
 import { useLocalRowsReady, useProjects, useStatuses, useTasks } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
 import { useLaunchScreenReady } from '@/lib/launchScreen';
-import { useDesktop } from '@/lib/media';
-import {
-  type SettingsSection as ProjectSection,
-  projectKeyIssue,
-  settingsSectionSchema,
-} from '@/lib/projectSettings';
+import { type SettingsSection as ProjectSection, projectKeyIssue } from '@/lib/projectSettings';
 import {
   changeProjectKey,
   restoreProject,
@@ -39,67 +25,6 @@ import { statusesOf } from '@/lib/statuses';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { holdUpdateReload } from '@/lib/useUpdateReloadBlocked';
 import { StatusSettings } from './StatusSettings';
-
-const PAGES = {
-  general: { label: 'General', icon: SlidersHorizontal },
-  statuses: { label: 'Statuses', icon: Columns3 },
-  priorities: { label: 'Priorities', icon: ArrowUpDown },
-  tags: { label: 'Tags', icon: Tags },
-} as const satisfies Record<ProjectSection, { label: string; icon: LucideIcon }>;
-
-export type ProjectSettingsPage = ProjectSection | 'trash';
-
-/**
- * Project settings' pages in the settings frame the app's own settings use: listed beside the
- * open one on wide screens, picked from the dock on a phone.
- */
-export function ProjectSettingsFrame({
-  project,
-  current,
-  children,
-}: {
-  project: Project;
-  current: ProjectSettingsPage;
-  children: ReactNode;
-}) {
-  const wide = useDesktop();
-  const params = { workspaceId: project.workspaceId, projectId: project.id };
-  const pages: SettingsPage[] = [
-    ...settingsSectionSchema.options.map((key) => ({
-      key,
-      ...PAGES[key],
-      link: linkOptions({
-        to: '/w/$workspaceId/p/$projectId/settings',
-        params,
-        search: key === 'general' ? {} : { section: key },
-      }),
-    })),
-    {
-      key: 'trash',
-      label: 'Trash',
-      icon: Trash2,
-      link: linkOptions({ to: '/w/$workspaceId/p/$projectId/trash', params }),
-    },
-  ];
-  return (
-    <SettingsLayout
-      title="Project settings"
-      groups={[{ label: project.name, pages }]}
-      current={pages.find((page) => page.key === current) ?? null}
-      wide={wide}
-      back={{
-        label: 'Back to board',
-        link: linkOptions({
-          to: '/w/$workspaceId/p/$projectId',
-          params,
-          search: { view: 'board' },
-        }),
-      }}
-    >
-      {children}
-    </SettingsLayout>
-  );
-}
 
 export function ProjectSettings({
   project,
@@ -121,7 +46,7 @@ export function ProjectSettings({
   );
   useLaunchScreenReady(localReady && (section !== 'statuses' || !awaiting));
   return (
-    <ProjectSettingsFrame project={project} current={section}>
+    <>
       {section === 'general' && (
         <div className="flex flex-col gap-6">
           <ProjectAppearance project={project} />
@@ -137,7 +62,7 @@ export function ProjectSettings({
         ))}
       {section === 'priorities' && <PrioritySettings project={project} />}
       {section === 'tags' && <TagManager projectId={project.id} titled={false} />}
-    </ProjectSettingsFrame>
+    </>
   );
 }
 

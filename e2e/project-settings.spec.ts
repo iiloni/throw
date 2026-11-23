@@ -47,21 +47,23 @@ const phone = (page: Page) => (page.viewportSize()?.width ?? 1024) < 768;
 /** Opens a project settings page: from the list beside it, or the dock's list on a phone. */
 async function section(page: Page, name: string) {
   if (phone(page)) {
-    await page.getByRole('button', { name: /^Project settings page: / }).click();
+    await page.getByRole('button', { name: /^Settings page: / }).click();
     await page
-      .getByRole('dialog', { name: 'Project settings', exact: true })
+      .getByRole('dialog', { name: 'Settings', exact: true })
       .getByRole('link', { name, exact: true })
+      .first()
       .click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
   } else
     await page
-      .getByRole('navigation', { name: 'Project settings pages' })
+      .getByRole('navigation', { name: 'Settings pages' })
       .getByRole('link', { name, exact: true })
+      .first()
       .click();
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
 }
 async function backToBoard(page: Page) {
-  if (phone(page)) await page.getByRole('button', { name: /^Project settings page: / }).click();
+  if (phone(page)) await page.getByRole('button', { name: /^Settings page: / }).click();
   await page.getByRole('link', { name: 'Back to board', exact: true }).click();
 }
 async function addStatus(page: Page, name: string, category = 'Active') {
@@ -107,7 +109,7 @@ test('project appearance and status rules, ordering, defaults, rename and deleti
   await page.getByLabel('Project name', { exact: true }).fill('Studio');
   await page.getByRole('button', { name: 'Blue', exact: true }).click();
   await page.getByRole('button', { name: 'Home icon', exact: true }).click();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Studio');
+  await expect(page.getByText('Studio', { exact: true }).first()).toBeVisible();
   await section(page, 'Statuses');
   for (const name of ['Backlog', 'In progress', 'Done', 'Cancelled']) {
     await expect(statusRow(page, name)).toContainText('Default');
@@ -585,12 +587,12 @@ test('status colours render on the board and can be cleared', async ({ page, isM
       return expected !== transparent && actual === expected;
     };
     await expect.poll(usesNeutralSurface).toBe(true);
-    const settings = page.getByRole('button', { name: 'Board settings', exact: true });
+    const settingsLink = page.getByRole('link', { name: 'Settings', exact: true });
     const backgrounds = page.getByRole('switch', { name: 'Column backgrounds' });
-    await settings.click();
+    await settingsLink.click();
     await expect(backgrounds).toHaveAttribute('aria-checked', 'true');
     await backgrounds.click();
-    await page.keyboard.press('Escape');
+    await backToBoard(page);
     await expect(column).toHaveCSS('background-color', transparent);
 
     await page.getByRole('button', { name: 'Collapse Verify column' }).click();
@@ -599,10 +601,10 @@ test('status colours render on the board and can be cleared', async ({ page, isM
     await expect(stripe).toBeVisible();
     await page.getByRole('button', { name: 'Expand Verify column' }).click();
 
-    await settings.click();
+    await settingsLink.click();
     await expect(backgrounds).toHaveAttribute('aria-checked', 'false');
     await backgrounds.click();
-    await page.keyboard.press('Escape');
+    await backToBoard(page);
     await expect.poll(usesNeutralSurface).toBe(true);
   }
   const cards = await page.evaluate(

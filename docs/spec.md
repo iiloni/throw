@@ -350,10 +350,11 @@ How a held card behaves, and why, is recorded in
 
 ### Board settings
 
-Settings' General page has a section for how the board looks and behaves. The board settings
-button opens the same options in the [drawer](#the-drawer) at full height on a phone, and in
-a panel from the rail on desktop, sized to the window. These are kept on the device. Column backgrounds and the
-rails' placement shape desktop columns, so a phone does not show them.
+Settings' General page has a section for how the board looks and behaves (the dev-only
+`/prototype/board` workshop keeps a quick popover/drawer for testing). These are kept on the
+device. Column backgrounds and the rails' placement shape desktop columns, so a phone does not
+show them; Scrollbars is hidden on coarse-pointer (touch) devices, where overlay scrollbars are
+never drawn.
 
 | Setting | Default | Effect |
 | --- | --- | --- |
@@ -789,23 +790,26 @@ dock rather than opening as a page. Desktop has no drawer. The rules are in
   `board`. The palette has no route of its own.
 - `/w/:workspaceId/board` is the cross-project board for that workspace; `view=search`
   opens its search and replaces the view with `board`.
-- `/w/:workspaceId/p/:projectId/settings` manages a project in pages laid out as the app's
-  settings are: General (name, color and icon, saved as they change; the key; deleting
-  the project), Statuses, Priorities and Tags, with Trash beside them. The rail's project
-  menu and the phone board's title menu open it. The optional `section` search parameter
-  keeps the chosen page across reloads and reconnects.
+- `/w/:workspaceId/p/:projectId/settings` manages a project inside the unified Settings hub
+  alongside User and Admin pages: General (name, color and icon, saved as they change; the key;
+  deleting the project), Statuses, Priorities and Tags, with Trash beside them. Opening Settings
+  from the rail or phone title menu shows the active or remembered project's pages in the same
+  sidebar (desktop) or dock page picker (phone); the rail's project `...` menu and the phone
+  board's title menu jump directly to a project's settings. The optional `section` search
+  parameter keeps the chosen page across reloads and reconnects.
 - `/w/:workspaceId/p/:projectId/trash` lists that project's independently trashed tasks,
-  with inherited subtasks grouped under their parent. It is project settings' Trash page,
-  and the rail's project menu opens it too.
+  with inherited subtasks grouped under their parent. It is the project's Trash page in
+  Settings, and the rail's project menu opens it too.
 - `/w/:workspaceId/trash` lists trashed projects and independently trashed tasks across the
-  workspace. The workspace menu and desktop rail open it. Each trash offers restore,
-  confirmed permanent removal and confirmed emptying of that scope.
-- `/settings` redirects to `/settings/general`. Settings has Catch's pages: General
-  (theme, the app icon on dev and preview builds, and board), Account (name, password, the server on Android, signing out), Update,
-  and Backups for the server's admin at `/settings/admin/backups`. Throw adds MCP tokens
-  at `/settings/mcp` for creating and revoking the account's workspace tokens, and Webhooks
-  at `/settings/webhooks` for the account's outbound webhooks. Wide, the
-  pages are listed beside the open one; on a phone the dock picks between them. Changing the
+  workspace. The workspace switcher menu opens it on both desktop and phone. Each trash offers
+  restore, confirmed permanent removal and confirmed emptying of that scope.
+- `/settings` redirects to `/settings/general`. Settings is one hub with the active or
+  remembered project's pages (when the workspace has a project), Catch's User pages — General
+  (theme, the app icon on dev and preview builds, and board), Account (name, password, the
+  server on Android, signing out), MCP tokens at `/settings/mcp`, Webhooks at
+  `/settings/webhooks`, Update — and Backups for the server's admin at
+  `/settings/admin/backups`. Wide, all sections are listed beside the open page with a Back to
+  board link when a project exists; on a phone the dock picks between them. Changing the
   password signs the account's other devices out; they keep their unsaved changes until
   the same account signs in again (ADR 0002).
 - `/` restores the device's last workspace and project for the signed-in account.

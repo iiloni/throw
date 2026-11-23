@@ -19,7 +19,7 @@ export function PageHeader({ desktop }: { desktop: boolean }) {
         <SyncIndicator />
       </div>
       <div className="mt-3 flex min-w-0 items-center gap-3">
-        {desktop && shell.project && (
+        {desktop && !shell.settings && shell.project && (
           <span
             data-color={shell.project.color}
             className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-tint text-tint-accent"

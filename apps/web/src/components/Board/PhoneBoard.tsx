@@ -159,13 +159,15 @@ export function PhoneBoard({
           )}
           <span className="flex-1" />
           <DoneCount onOpen={() => setDrawerPage('closed')} />
-          <IconButton
-            label="Board settings"
-            className="size-10"
-            onClick={() => setDrawerPage('settings')}
-          >
-            <SlidersHorizontal />
-          </IconButton>
+          {onReset && (
+            <IconButton
+              label="Board settings"
+              className="size-10"
+              onClick={() => setDrawerPage('settings')}
+            >
+              <SlidersHorizontal />
+            </IconButton>
+          )}
         </div>
         {syncIndicator && (
           <div className="px-5 text-muted-foreground empty:hidden">{syncIndicator}</div>

@@ -38,10 +38,6 @@ vi.mock('@/lib/collections', () => ({
 }));
 vi.mock('@/lib/syncStatus', () => ({ useAwaitingSync: () => false }));
 vi.mock('@/components/AppShell/shell', () => ({ useShell: () => ({ selectWorkspace: vi.fn() }) }));
-vi.mock('@/components/SettingsLayout/SettingsLayout', () => ({
-  SettingsLayout: ({ children }: { children: ReactNode }) => children,
-}));
-vi.mock('@/lib/media', () => ({ useDesktop: () => true }));
 vi.mock('@/components/TagManager/TagManager', () => ({ TagManager: () => null }));
 vi.mock('@/components/ManagementSurface/ManagementSurface', () => ({
   ManagementSurface: ({

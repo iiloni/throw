@@ -12,7 +12,14 @@ import { cn } from '@/lib/utils';
 
 /** A page and where it is: route options, so a renamed route fails the typecheck. */
 export type SettingsPage = { key: string; label: string; icon: LucideIcon; link: LinkOptions };
-export type SettingsPageGroup = { label: string; pages: readonly SettingsPage[] };
+export type SettingsPageGroup = {
+  /** Stable identifier when a project could share a name with another section (e.g. "User"). */
+  key?: string;
+  label: string;
+  /** Optional small mark beside the section title, such as a project's tinted icon. */
+  badge?: ReactNode;
+  pages: readonly SettingsPage[];
+};
 
 type Props = {
   /** What the pages belong to, naming the phone's page list. */
@@ -43,8 +50,20 @@ export function SettingsLayout({
   roomy = false,
   children,
 }: Props) {
+  const currentGroup = current
+    ? groups.find((group) => group.pages.some((page) => page.key === current.key))
+    : undefined;
+  const showEyebrow = Boolean(currentGroup && (currentGroup.badge || (!wide && groups.length > 1)));
   const heading = current && (
-    <h2 className="px-1 font-display font-bold text-2xl tracking-[-0.02em]">{current.label}</h2>
+    <div className="flex flex-col gap-1 px-1">
+      {showEyebrow && currentGroup && (
+        <p className="flex items-center gap-2 font-medium text-muted-foreground text-sm">
+          {currentGroup.badge}
+          <span className="truncate">{currentGroup.label}</span>
+        </p>
+      )}
+      <h2 className="font-display font-bold text-2xl tracking-[-0.02em]">{current.label}</h2>
+    </div>
   );
   if (!wide) {
     return (
@@ -62,7 +81,10 @@ export function SettingsLayout({
         roomy ? 'grid-cols-[14rem_minmax(0,48rem)]' : 'grid-cols-[14rem_minmax(0,42rem)]',
       )}
     >
-      <nav aria-label={`${title} pages`} className="sticky top-8 flex flex-col gap-6 self-start">
+      <nav
+        aria-label={`${title} pages`}
+        className="sticky top-8 flex max-h-[calc(100dvh-4rem)] flex-col gap-6 self-start overflow-y-auto pb-4"
+      >
         {back && <BackLink {...back} />}
         <PageList groups={groups} current={current} indicator="settings-nav" />
       </nav>
@@ -147,8 +169,15 @@ function PageList({
   onNavigate?: () => void;
 }) {
   return groups.map((group) => (
-    <section key={group.label} aria-label={group.label} className="flex flex-col gap-1">
-      <h3 className="px-3 pb-1 font-medium text-muted-foreground text-sm">{group.label}</h3>
+    <section
+      key={group.key ?? group.label}
+      aria-label={group.label}
+      className="flex flex-col gap-1"
+    >
+      <h3 className="flex items-center gap-2 px-3 pb-1 font-medium text-muted-foreground text-sm">
+        {group.badge}
+        <span className="truncate">{group.label}</span>
+      </h3>
       {group.pages.map((page) => {
         const Icon = page.icon;
         const selected = current?.key === page.key;
