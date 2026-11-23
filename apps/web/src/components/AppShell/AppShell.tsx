@@ -124,10 +124,11 @@ export function AppShell() {
     if (boardSearch) openSearch();
     else setPalette({ mode: 'search', seed: '' });
   }, [boardSearch]);
-  // Clicking Search in the rail again collapses the board search without clearing active filters.
+  // Clicking Search in the rail again collapses the docked search sidebar without clearing active filters;
+  // on narrower boards with the floating bar, it opens or focuses the bar as before.
   const toggleRailSearch = useCallback(() => {
     if (!boardSearch) return setPalette({ mode: 'search', seed: '' });
-    if (board.get().searching) collapseSearch();
+    if (board.get().searching && searchSidebarOpen.get()) collapseSearch();
     else openSearch();
   }, [boardSearch]);
   const boardState = board.use();
