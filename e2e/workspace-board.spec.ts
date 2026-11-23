@@ -157,20 +157,26 @@ test.describe('desktop', () => {
 test.describe('phone', () => {
   test.skip(({ isMobile, browserName }) => !isMobile || browserName !== 'chromium', 'Touch input');
 
-  test('swiping a workspace card reveals Done and closes it in its own project', async ({
+  test('swiping right over a workspace card turns to the previous category instead of closing it', async ({
     page,
   }) => {
     const board = await workspaceFixture(page);
+    const columns = page.getByRole('navigation', { name: 'Columns' });
     const touch = await finger(page);
+    const beforeStatus = (await taskRow(page, board.headers, board.ids['Bake bread']!))?.status_id;
     const box = (await (await settled(card(page, 'Bake bread'))).boundingBox())!;
-    const start = { x: box.x + 48, y: box.y + box.height / 2 };
+    const start = { x: box.x + 24, y: box.y + box.height / 2 };
     await touch.press(start, 30);
-    await touch.move({ x: start.x + 170, y: start.y }, 300);
-    await expect(page.locator('[data-swipe-reveal="armed"]')).toHaveText('Done');
+    await touch.move({ x: box.x + box.width - 24, y: start.y }, 250);
     await touch.lift();
-    await expect
-      .poll(async () => (await taskRow(page, board.headers, board.ids['Bake bread']!))?.status_id)
-      .toBe(board.statusIds.Served);
+    await expect(columns.getByRole('button', { name: 'Backlog' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await page.waitForTimeout(400);
+    expect((await taskRow(page, board.headers, board.ids['Bake bread']!))?.status_id).toBe(
+      beforeStatus,
+    );
   });
 
   test('the board pages through categories and the move drawer follows the cards’ projects', async ({

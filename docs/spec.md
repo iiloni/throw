@@ -551,18 +551,13 @@ own way in and out, so the board is not a row of identical pages.
   surface further in and tints it, and the page turns after about half a second.
 - Card titles are 16 CSS pixels on a phone. A held card's column shows each collapsed
   priority as its name alone, on a fainter bar, so it stays quiet on a small screen.
-- A card on a board page swiped to the right closes into the project's default done status:
-  the card follows the finger over a done surface, which fills once letting go will close it,
-  and flies off as the done count bumps. A short swipe springs back. Only rightwards, towards
-  the done pocket: a swipe to the left over a card still turns to the next column, and any
-  swipe that starts outside a card (the gutters, the header) turns the page, so the page
-  swipe wins near the edges. Cards are not swiped while some are selected, and cards in the
-  drawer are not swiped (owner decision, 2026-10-19).
+- Horizontal swipes starting anywhere on a card turn between board pages cleanly in both
+  directions; board cards do not swipe to close (2026-11-23).
 
 ## The cross-project board
 
 A board over every project in the workspace **(assumed scope)**, at `/w/:workspaceId/board`.
-It uses the project board's cards, drag, selection, keyboard carry, swipe to close and task
+It uses the project board's cards, drag, selection, keyboard carry and task
 view, so it reads and moves the same way.
 
 - One column per category instead of per status, since categories are all that projects
@@ -590,8 +585,7 @@ view, so it reads and moves the same way.
 - New work is captured through the palette, which asks which project it belongs to.
 - On a phone the board pages through the four categories as the project board pages through
   statuses, opening on Active. Done and Cancelled can be folded and reopened on their pages,
-  with the same remembered preference as desktop. Backlog and Active swipe to close into each card's
-  project's default done status. The move drawer offers the held cards' project statuses
+  with the same remembered preference as desktop. The move drawer offers the held cards' project statuses
   when they share one project, and the four categories when they do not.
 
 ## The task view

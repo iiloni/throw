@@ -31,7 +31,6 @@ import {
 } from './model';
 import { SubtaskUnderlay } from './SubtaskUnderlay';
 import { board, current, toggleSelected, update, useBoardSettings } from './state';
-import { swipe, swipeX } from './swipe';
 import { useTaskCardHidden, useTaskCardLanding } from './taskTransition';
 
 type Props = {
@@ -166,8 +165,6 @@ export function TaskCard({
   const subtasks = state.subtasksAsCards ? [] : subtasksOf(tasks, task.id);
   const selected = !onOpen && state.selection.includes(task.id);
   const carried = state.carrying?.taskId === task.id;
-  const swiped = swipe.use();
-  const swiping = !overlay && swiped?.taskId === task.id;
   const open = state.openTaskId === task.id;
   const lifted = useTaskCardHidden(task.id);
   // As in Catch, a task shrinking back into its card lands without the underlay, which slides
@@ -263,7 +260,6 @@ export function TaskCard({
       onContextMenu={(event) => {
         if (dragState || isPrimed()) event.preventDefault();
       }}
-      style={swiping ? { x: swipeX } : undefined}
       whileTap={overlay || carried ? undefined : { scale: 0.97 }}
       animate={{ scale: carried ? 1.03 : 1 }}
       transition={springs.snappy}
