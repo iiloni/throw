@@ -27,6 +27,7 @@ export function StatusTile({ status, onPick, shape = 'block', className }: Props
     <motion.button
       type="button"
       data-drop-status={status.id}
+      data-column-color={status.color ?? undefined}
       tabIndex={onPick ? 0 : -1}
       onClick={onPick}
       animate={{ scale: over ? 1.04 : 1 }}
@@ -43,7 +44,12 @@ export function StatusTile({ status, onPick, shape = 'block', className }: Props
         className,
       )}
     >
-      {shape !== 'row' && <StatusGlyph category={status.category} className="size-5" />}
+      {(shape !== 'row' || status.color) && (
+        <StatusGlyph
+          category={status.category}
+          className="size-5 text-[color:var(--column-accent,currentColor)]"
+        />
+      )}
       <span
         className={cn(
           'min-w-0 max-w-full truncate font-medium',

@@ -20,47 +20,59 @@ export class CompatibilityError extends Error {
   }
 }
 
-const taskSizeKeyPrefix = 'throw-task-size-support:';
-const taskSizeKey = (server: string) => `${taskSizeKeyPrefix}${server}`;
-const storedTaskSize = z.boolean();
-const taskSizeSupport = createStore<{ server: string; supported: boolean } | null>(null);
+function serverCapability(preference: string) {
+  const prefix = `throw-${preference}-support:`;
+  const storageKey = (server: string) => prefix + server;
+  const schema = z.boolean();
+  const store = createStore<{ server: string; supported: boolean } | null>(null);
 
-function taskSizeSupported() {
-  const server = getServerUrl();
-  const current = taskSizeSupport.get();
-  return current?.server === server
-    ? current.supported
-    : readPreference(taskSizeKey(server), storedTaskSize, false);
+  const supported = () => {
+    const server = getServerUrl();
+    const current = store.get();
+    return current?.server === server
+      ? current.supported
+      : readPreference(storageKey(server), schema, false);
+  };
+
+  return {
+    useSupport: () => useSyncExternalStore(store.subscribe, supported),
+    readStorage(key: string | null) {
+      if (!key?.startsWith(prefix)) return;
+      const server = getServerUrl();
+      if (key === storageKey(server)) {
+        store.set({ server, supported: readPreference(key, schema, false) });
+      }
+    },
+    remember(server: string, supported: boolean) {
+      store.set({ server, supported });
+      const key = storageKey(server);
+      if (readPreference(key, schema, false) === supported) return;
+      try {
+        writePreference(key, supported);
+      } catch {
+        // The live server response still applies when the offline cache cannot be written.
+      }
+    },
+    async ensureSupport(force = false) {
+      await checkCompatibility(force);
+      if (!supported()) throw new CompatibilityError('server-too-old');
+    },
+  };
 }
+
+const taskSize = serverCapability('task-size');
+const statusColor = serverCapability('status-color');
 
 // A capability saved by one tab also updates the other tabs' live values.
 window.addEventListener('storage', ({ key }) => {
-  if (!key?.startsWith(taskSizeKeyPrefix)) return;
-  const server = getServerUrl();
-  if (key === taskSizeKey(server)) {
-    taskSizeSupport.set({ server, supported: readPreference(key, storedTaskSize, false) });
-  }
+  taskSize.readStorage(key);
+  statusColor.readStorage(key);
 });
 
-export function useTaskSizeSupport() {
-  return useSyncExternalStore(taskSizeSupport.subscribe, taskSizeSupported);
-}
-
-function rememberTaskSizeSupport(server: string, supported: boolean) {
-  taskSizeSupport.set({ server, supported });
-  const key = taskSizeKey(server);
-  if (readPreference(key, storedTaskSize, false) === supported) return;
-  try {
-    writePreference(key, supported);
-  } catch {
-    // The live server response still applies when the offline cache cannot be written.
-  }
-}
-
-export async function ensureTaskSizeSupport(force = false) {
-  await checkCompatibility(force);
-  if (!taskSizeSupported()) throw new CompatibilityError('server-too-old');
-}
+export const useTaskSizeSupport = taskSize.useSupport;
+export const ensureTaskSizeSupport = taskSize.ensureSupport;
+export const useStatusColorSupport = statusColor.useSupport;
+export const ensureStatusColorSupport = statusColor.ensureSupport;
 
 let checkedUntil = 0;
 let checking: Promise<void> | null = null;
@@ -76,14 +88,16 @@ export function checkCompatibility(force = false): Promise<void> {
     });
     // Not a Throw server, or one behind a proxy that hides the route. Never send it writes.
     if (response.status === 404) {
-      rememberTaskSizeSupport(server, false);
+      taskSize.remember(server, false);
+      statusColor.remember(server, false);
       updateSyncStatus({ incompatibility: 'server-too-old' });
     } else {
       if (!response.ok) throw new Error('Could not check API compatibility');
       const range = compatibilitySchema.safeParse(await response.json());
       // A malformed bootstrap response is retryable, never a Zod write-validation failure.
       if (!range.success) throw new Error('Could not verify API compatibility');
-      rememberTaskSizeSupport(server, range.data.taskSize);
+      taskSize.remember(server, range.data.taskSize);
+      statusColor.remember(server, range.data.statusColor);
       updateSyncStatus({
         incompatibility: protocolCompatibility(API_PROTOCOL_VERSION, range.data),
       });

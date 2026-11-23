@@ -22,12 +22,12 @@ function useEdges(enabled: boolean) {
     };
     measure();
     viewport.addEventListener('scroll', measure, { passive: true });
-    const observer = new ResizeObserver(measure);
-    observer.observe(viewport);
-    if (viewport.firstElementChild) observer.observe(viewport.firstElementChild);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(viewport);
+    if (viewport.firstElementChild) observer?.observe(viewport.firstElementChild);
     return () => {
       viewport.removeEventListener('scroll', measure);
-      observer.disconnect();
+      observer?.disconnect();
     };
   }, [enabled]);
   return ref;

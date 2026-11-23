@@ -1,13 +1,4 @@
-import {
-  Check,
-  ChevronDown,
-  Columns3,
-  Layers,
-  Pencil,
-  Plus,
-  Settings2,
-  Trash2,
-} from 'lucide-react';
+import { Check, ChevronDown, Columns3, Layers, Pencil, Plus, Settings, Trash2 } from 'lucide-react';
 import { DropdownMenu } from 'radix-ui';
 import type { ReactNode } from 'react';
 import { useShell } from '@/components/AppShell/shell';
@@ -169,7 +160,7 @@ export function ShellMenu({
               )}
               <DropdownMenu.Separator className="my-2 border-t" />
               <MenuItem onSelect={shell.goSettings}>
-                <Settings2 aria-hidden className="size-4" />
+                <Settings aria-hidden className="size-4" />
                 Settings
               </MenuItem>
             </>

@@ -1344,3 +1344,75 @@ test('MCP task size supports exact and unset filters, replay, conflicts and the 
     await client.close();
   }
 });
+
+test('status colours round trip through REST, MCP and the change feed @api', async ({
+  request,
+}) => {
+  const account = await createAccount(request);
+  const token = await makeToken(request, account);
+  const project = await makeProject(request, account, token.metadata.workspaceId);
+  const client = await connect(token.token);
+  try {
+    const start = await call(client, 'list_changes');
+    const input = {
+      operationId: structureId(),
+      projectId: project.id,
+      name: 'Verify',
+      category: 'active',
+      color: 'mint',
+    };
+    const created = await call(client, 'create_status', input);
+    expect(created.current.color).toBe('mint');
+    expect(await call(client, 'create_status', input)).toEqual(created);
+
+    const statusId = created.current.id;
+    const rest = (data: object) =>
+      request.patch(`/api/statuses/${statusId}`, { headers: account.headers, data });
+    expect((await rest({ name: 'In review' })).status()).toBe(200);
+    expect((await rest({ color: 'chartreuse' })).status()).toBe(400);
+    const listed = await call(client, 'list_statuses', { projectId: project.id });
+    expect(listed.items).toContainEqual(
+      expect.objectContaining({ id: statusId, name: 'In review', color: 'mint' }),
+    );
+    const update = {
+      operationId: structureId(),
+      statusId,
+      changes: { color: { before: 'mint', after: null } },
+    };
+    const cleared = await call(client, 'update_status', update);
+    expect(cleared).toMatchObject({ outcome: 'applied', current: { color: null } });
+    expect(await call(client, 'update_status', update)).toEqual(cleared);
+    const stale = {
+      ...update,
+      operationId: structureId(),
+      changes: { color: { before: 'mint', after: 'red' } },
+    };
+    expect(await call(client, 'update_status', stale)).toMatchObject({
+      outcome: 'conflict',
+      conflicts: ['color'],
+    });
+
+    expect((await rest({ color: 'dark-blue' })).status()).toBe(200);
+    expect(await (await rest({ color: 'dark-blue' })).json()).toEqual({ txid: null });
+    await expect
+      .poll(
+        async () =>
+          (await shapeRows(request, 'statuses', account.headers)).find(({ id }) => id === statusId)
+            ?.color,
+      )
+      .toBe('dark-blue');
+
+    const feed = await call(client, 'list_changes', { since: start.cursor, includeOwn: true });
+    expect(
+      feed.changes.flatMap(({ entity, changes }) =>
+        entity.id === statusId ? changes.filter(({ field }) => field === 'color') : [],
+      ),
+    ).toEqual([
+      { field: 'color', before: null, after: 'mint' },
+      { field: 'color', before: 'mint', after: null },
+      { field: 'color', before: null, after: 'dark-blue' },
+    ]);
+  } finally {
+    await client.close();
+  }
+});

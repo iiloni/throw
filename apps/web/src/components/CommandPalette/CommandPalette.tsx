@@ -1,6 +1,7 @@
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { Dialog } from 'radix-ui';
 import { useEffect, useLayoutEffect, useRef } from 'react';
+import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
 import { useDesktop } from '@/lib/media';
 import { springs } from '@/lib/motion';
@@ -159,13 +160,19 @@ function DesktopSearch({ dismiss, onClose, onCaptureTitle, actions }: InnerProps
       />
       <div className="pointer-events-none relative mx-auto flex h-full w-full max-w-xl flex-col justify-end px-3 pt-[12vh] pb-8">
         <motion.div
-          ref={search.list}
-          className="glass-thick pointer-events-auto mb-3 max-h-[min(62dvh,38rem)] min-h-0 flex-[0_1_auto] overflow-y-auto overscroll-contain rounded-[28px] p-3"
+          className="glass-thick pointer-events-auto mb-3 flex max-h-[min(62dvh,38rem)] min-h-0 flex-[0_1_auto] flex-col overflow-hidden rounded-[28px]"
           initial={{ opacity: 0, y: reduced ? 0 : 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={reduced ? { duration: 0 } : { ...springs.smooth, delay: 0.05 }}
         >
-          <SearchResults search={search} />
+          <ScrollArea edges className="flex min-h-0 flex-1 flex-col [--scrollbar-inset:1rem]">
+            <ScrollAreaViewport ref={search.list} className="h-auto w-full min-h-0 flex-1">
+              <div className="p-3">
+                <SearchResults search={search} />
+              </div>
+            </ScrollAreaViewport>
+            <ScrollBar />
+          </ScrollArea>
         </motion.div>
         <ScopePanel search={search} />
         <motion.div
@@ -196,8 +203,15 @@ function ScopePanel({ search }: { search: SearchState }) {
           exit={{ height: 0, opacity: 0 }}
           transition={reduced ? { duration: 0 } : springs.smooth}
         >
-          <div className="glass mb-3 max-h-[50dvh] overflow-y-auto overscroll-contain rounded-[var(--dock-radius)] p-3">
-            <FilterOptions search={search} />
+          <div className="glass mb-3 flex max-h-[50dvh] flex-col overflow-hidden rounded-[var(--dock-radius)]">
+            <ScrollArea edges className="flex min-h-0 flex-1 flex-col [--scrollbar-inset:0.75rem]">
+              <ScrollAreaViewport className="h-auto w-full min-h-0 flex-1">
+                <div className="p-3">
+                  <FilterOptions search={search} />
+                </div>
+              </ScrollAreaViewport>
+              <ScrollBar />
+            </ScrollArea>
           </div>
         </motion.div>
       )}

@@ -1,3 +1,4 @@
+import type { Color } from '@throw/shared';
 import { ChevronDown, ChevronsDown, ChevronsUp, ChevronUp } from 'lucide-react';
 import { Hint } from '@/components/Hint/Hint';
 import { cn } from '@/lib/utils';
@@ -6,13 +7,23 @@ import type { Category, Priority } from './model';
 /**
  * A status drawn by its category, so it reads the same in every project: an open dashed ring
  * for the backlog, a half-filled one for active work, a full one for done, a struck one for
- * cancelled.
+ * cancelled. A status's color, where it has one, tints the glyph and nothing around it.
  */
-export function StatusGlyph({ category, className }: { category: Category; className?: string }) {
+export function StatusGlyph({
+  category,
+  color,
+  className,
+}: {
+  category: Category;
+  color?: Color | null;
+  className?: string;
+}) {
   return (
     <svg
       viewBox="0 0 16 16"
       aria-hidden
+      data-column-color={color ?? undefined}
+      style={color ? { color: 'var(--column-accent)' } : undefined}
       className={cn('size-3.5 shrink-0', category === 'cancelled' && 'opacity-60', className)}
       fill="none"
       stroke="currentColor"

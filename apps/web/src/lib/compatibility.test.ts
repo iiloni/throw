@@ -22,6 +22,37 @@ afterEach(() => {
 });
 
 describe('client compatibility transport', () => {
+  it('keeps color writes queued on a protocol 1 server without status color', async () => {
+    fetcher.mockResolvedValueOnce(json(compatible)).mockResolvedValueOnce(json({ txid: null }));
+    const { api } = await import('./api');
+    const { CompatibilityError, useStatusColorSupport } = await import('./compatibility');
+    const { result } = renderHook(useStatusColorSupport);
+    await expect(api.updateStatus('id', { color: null })).rejects.toBeInstanceOf(
+      CompatibilityError,
+    );
+    expect(result.current).toBe(false);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    await expect(api.updateStatus('id', { name: 'Review' })).resolves.toEqual({ txid: null });
+
+    fetcher
+      .mockResolvedValueOnce(json({ ...compatible, statusColor: true }))
+      .mockResolvedValueOnce(json({ txid: 42 }));
+    const colored = {
+      id: 'id',
+      projectId: 'project',
+      name: 'Review',
+      category: 'active',
+      position: 'a0',
+      isDefault: false,
+      color: 'mint',
+    } as const;
+    await act(async () => {
+      await expect(api.createStatus(colored)).resolves.toEqual({ txid: 42 });
+    });
+    expect(result.current).toBe(true);
+    expect(JSON.parse(fetcher.mock.lastCall?.[1].body)).toEqual(colored);
+  });
+
   it('pauses a refused shape, preserves pending writes, and resumes after sign-in', async () => {
     fetcher.mockResolvedValueOnce(json(compatible)).mockResolvedValueOnce(json({}, 401));
     const { compatibleShapeFetch } = await import('./compatibility');

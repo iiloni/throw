@@ -227,7 +227,7 @@ test.describe('desktop', () => {
     ).toBeVisible();
   });
 
-  test('the backlog gallery places a reordered card at a caret, left to right', async ({
+  test('the backlog gallery makes room for a held card as it moves, as Catch’s does', async ({
     page,
   }) => {
     const board = await fixture(page);
@@ -244,16 +244,18 @@ test.describe('desktop', () => {
     await backlog.getByRole('button', { name: 'Open as a gallery' }).click();
     const gallery = backlog.getByRole('region', { name: 'Backlog tasks' });
     await expect(gallery.getByRole('article', { name: /Gallery three$/ })).toBeVisible();
-    const first = (await card(page, 'Gallery one').boundingBox())!;
+    const first = (await (await settled(card(page, 'Gallery one'))).boundingBox())!;
     await carry(
       page,
       card(page, 'Gallery three'),
-      [{ x: first.x + first.width * 0.2, y: first.y + first.height / 2 }],
+      [{ x: first.x + first.width * 0.4, y: first.y + first.height / 2 }],
       { drop: false },
     );
-    // A caret marks the place; the cards stay where they are.
-    await expect(gallery.locator('[data-slot] > span[aria-hidden]')).toHaveCount(1);
-    expect((await card(page, 'Gallery one').boundingBox())!.x).toBeCloseTo(first.x, 0);
+    // A gap opens where it would land, and the cards it displaces spring along to make room.
+    await expect(gallery.locator('[data-gap]')).toHaveCount(1);
+    await expect
+      .poll(async () => (await card(page, 'Gallery one').boundingBox())!.x)
+      .toBeGreaterThan(first.x + first.width / 2);
     await page.mouse.up();
     const order = () =>
       gallery

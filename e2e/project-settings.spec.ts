@@ -47,21 +47,23 @@ const phone = (page: Page) => (page.viewportSize()?.width ?? 1024) < 768;
 /** Opens a project settings page: from the list beside it, or the dock's list on a phone. */
 async function section(page: Page, name: string) {
   if (phone(page)) {
-    await page.getByRole('button', { name: /^Project settings page: / }).click();
+    await page.getByRole('button', { name: /^Settings page: / }).click();
     await page
-      .getByRole('dialog', { name: 'Project settings', exact: true })
+      .getByRole('dialog', { name: 'Settings', exact: true })
       .getByRole('link', { name, exact: true })
+      .first()
       .click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
   } else
     await page
-      .getByRole('navigation', { name: 'Project settings pages' })
+      .getByRole('navigation', { name: 'Settings pages' })
       .getByRole('link', { name, exact: true })
+      .first()
       .click();
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
 }
 async function backToBoard(page: Page) {
-  if (phone(page)) await page.getByRole('button', { name: /^Project settings page: / }).click();
+  if (phone(page)) await page.getByRole('button', { name: /^Settings page: / }).click();
   await page.getByRole('link', { name: 'Back to board', exact: true }).click();
 }
 async function addStatus(page: Page, name: string, category = 'Active') {
@@ -107,7 +109,7 @@ test('project appearance and status rules, ordering, defaults, rename and deleti
   await page.getByLabel('Project name', { exact: true }).fill('Studio');
   await page.getByRole('button', { name: 'Blue', exact: true }).click();
   await page.getByRole('button', { name: 'Home icon', exact: true }).click();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Studio');
+  await expect(page.getByText('Studio', { exact: true }).first()).toBeVisible();
   await section(page, 'Statuses');
   for (const name of ['Backlog', 'In progress', 'Done', 'Cancelled']) {
     await expect(statusRow(page, name)).toContainText('Default');
@@ -525,4 +527,141 @@ test('opening a task from settings search returns to its project board', async (
   await expect(page.getByRole('textbox', { name: 'Task title', exact: true })).toHaveValue(
     'Open from settings',
   );
+});
+
+test('status colours render on the board and can be cleared', async ({ page, isMobile }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  const fixture = await setup(page, isMobile);
+  await section(page, 'Statuses');
+  await page.getByRole('button', { name: 'Add status to Active', exact: true }).click();
+  await page.getByLabel('Status name', { exact: true }).fill('Verify');
+  const picker = page.getByRole('group', { name: 'Status color' });
+  await expect(picker.getByRole('button', { name: 'No color', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await picker.getByRole('button', { name: 'Mint', exact: true }).click();
+  await page.getByRole('button', { name: 'Save status', exact: true }).click();
+  const row = statusRow(page, 'Verify');
+  await expect(row.locator('[data-column-color="mint"]')).toBeVisible();
+  const syncedStatus = async () =>
+    (await shapeRows(page.request, 'statuses', fixture.headers)).find(
+      ({ name }) => name === 'Verify',
+    );
+  await synced.poll(syncedStatus).toMatchObject({ color: 'mint' });
+  const statusId = String((await syncedStatus())?.id);
+
+  await backToBoard(page);
+  const tab = page
+    .getByRole('navigation', { name: 'Columns' })
+    .getByRole('button', { name: 'Verify', exact: true });
+  if (isMobile) {
+    await expect(tab).toHaveAttribute('data-column-color', 'mint');
+    await tab.click();
+  }
+  const stripe = isMobile
+    ? tab.locator('[data-column-stripe]')
+    : page.locator(`[data-column="${statusId}"] [data-column-stripe]`);
+  const transparent = 'rgba(0, 0, 0, 0)';
+  await expect(stripe).toBeVisible();
+  await expect(stripe).not.toHaveCSS('background-color', transparent);
+  const lightStripe = await stripe.evaluate((element) => getComputedStyle(element).backgroundColor);
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(stripe).not.toHaveCSS('background-color', lightStripe);
+
+  if (isMobile) {
+    await expect(page.locator('[data-page][data-origin="active"]').last()).toHaveCSS(
+      'background-color',
+      transparent,
+    );
+  } else {
+    const column = page.locator(`[data-column="${statusId}"]`);
+    const uncolored = page
+      .getByRole('button', { name: 'Collapse In progress column', exact: true })
+      .locator('xpath=ancestor::section[@data-column]');
+    const usesNeutralSurface = async () => {
+      const expected = await uncolored.evaluate(
+        (element) => getComputedStyle(element).backgroundColor,
+      );
+      const actual = await column.evaluate((element) => getComputedStyle(element).backgroundColor);
+      return expected !== transparent && actual === expected;
+    };
+    await expect.poll(usesNeutralSurface).toBe(true);
+    const settingsLink = page.getByRole('link', { name: 'Settings', exact: true });
+    const backgrounds = page.getByRole('switch', { name: 'Column backgrounds' });
+    await settingsLink.click();
+    await expect(backgrounds).toHaveAttribute('aria-checked', 'true');
+    await backgrounds.click();
+    await backToBoard(page);
+    await expect(column).toHaveCSS('background-color', transparent);
+
+    await page.getByRole('button', { name: 'Collapse Verify column' }).click();
+    await expect(column).toHaveAttribute('data-collapsed', '');
+    await expect(column).toHaveCSS('background-color', transparent);
+    await expect(stripe).toBeVisible();
+    await page.getByRole('button', { name: 'Expand Verify column' }).click();
+
+    await settingsLink.click();
+    await expect(backgrounds).toHaveAttribute('aria-checked', 'false');
+    await backgrounds.click();
+    await backToBoard(page);
+    await expect.poll(usesNeutralSurface).toBe(true);
+  }
+  const cards = await page.evaluate(
+    async ({ projectId, statusId }) => {
+      const { createTag } = await import('/src/lib/tags.ts');
+      const { createTask } = await import('/src/lib/tasks.ts');
+      const primaryTagId = createTag(projectId, { name: 'Urgent', color: 'red' });
+      return {
+        plain: createTask(projectId, { title: 'No tag', statusId }),
+        tagged: createTask(projectId, { title: 'Colour tag', statusId, primaryTagId }),
+      };
+    },
+    { projectId: fixture.projectId, statusId },
+  );
+  const plain = page.locator(`[data-card-id="${cards.plain}"]`);
+  await expect(plain).toBeVisible();
+  await expect(plain).not.toHaveAttribute('data-color');
+  await expect(page.locator(`[data-card-id="${cards.tagged}"]`)).toHaveAttribute(
+    'data-color',
+    'red',
+  );
+
+  await page.goto(fixture.settings);
+  await section(page, 'Statuses');
+  await statusAction(page, 'Verify', 'Change color');
+  await expect(picker.getByRole('button', { name: 'Mint', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await picker.getByRole('button', { name: 'No color', exact: true }).click();
+  await page.getByRole('button', { name: 'Save color', exact: true }).click();
+  await expect(row.locator('[data-column-color]')).toHaveCount(0);
+  await synced.poll(syncedStatus).toMatchObject({ color: null });
+  await backToBoard(page);
+  await expect(page.locator('[data-column-color="mint"]')).toHaveCount(0);
+});
+
+test('status colours mark backlog statuses on their cards and filters', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'The phone backlog draws the same cards and filters');
+  const fixture = await setup(page, isMobile);
+  await backToBoard(page);
+  const task = await page.evaluate(async (projectId) => {
+    const { createStatus } = await import('/src/lib/statuses.ts');
+    const { createTask } = await import('/src/lib/tasks.ts');
+    const statusId = createStatus(projectId, 'Icebox', 'backlog', 'amber');
+    return createTask(projectId, { title: 'Frozen', statusId });
+  }, fixture.projectId);
+  const card = page.locator(`[data-card-id="${task}"]`);
+  await expect(card).toBeVisible();
+  await expect(card).not.toHaveAttribute('data-color');
+  await expect(card.locator('svg[data-column-color="amber"]')).toBeVisible();
+  const filter = page.getByRole('button', { name: 'Icebox', exact: true });
+  await expect(filter.locator('svg[data-column-color="amber"]')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Backlog', exact: true }).locator('svg'),
+  ).toHaveCount(0);
 });

@@ -31,7 +31,8 @@ describe('pageTransition', () => {
     expect(pageTransition(settings, board, true)).toEqual(['back']);
     expect(pageTransition(board, at('/settings/general'), false)).toEqual(['forward']);
     expect(pageTransition(at('/settings/account'), board, false)).toEqual(['back']);
-    expect(pageTransition(settings, at('/settings/general'), true)).toEqual(['forward']);
+    expect(pageTransition(settings, at('/settings/general'), false)).toEqual(['forward']);
+    expect(pageTransition(at('/settings/general'), settings, false)).toEqual(['back']);
   });
 
   it('slides between settings pages in list order on a phone', () => {
@@ -51,11 +52,17 @@ describe('pageTransition', () => {
     );
   });
 
-  it('changes only the open page beside the list on wide screens', () => {
+  it('changes only the open page beside the unified list on wide screens', () => {
     expect(pageTransition(at('/settings/general'), at('/settings/update'), true)).toEqual([
       'inner',
     ]);
     expect(pageTransition(at('/w/a/p/one/settings'), at('/w/a/p/one/trash'), true)).toEqual([
+      'inner',
+    ]);
+    expect(pageTransition(at('/w/a/p/one/settings'), at('/settings/general'), true)).toEqual([
+      'inner',
+    ]);
+    expect(pageTransition(at('/settings/account'), at('/w/a/p/one/trash'), true)).toEqual([
       'inner',
     ]);
   });

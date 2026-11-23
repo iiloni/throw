@@ -141,6 +141,9 @@ The mapping is many-to-one: a category holds any number of statuses.
 - Statuses are always ordered by category (backlog, active, done, cancelled), with free
   ordering inside each category.
 - A project always has at least one status in each category, and starts with one in each.
+- A status can take a named tag color. The project board uses it for a stripe along the top of
+  its desktop column, the phone board's progress track, and status controls. The desktop
+  column background has its own setting. A task card takes its color from its primary tag.
 - A status's category is fixed when it is created. Changing it would close or reopen every
   task in it at once.
 - Each project has a default status per category, used when a task is dropped on a category
@@ -300,7 +303,14 @@ motion.
 - The backlog panel is open by default when space allows, collapses to a strip, and expands
   to a full-width gallery.
 - The closed strip expands on click to a single column, and from there to a full-width
-  gallery. Closed tasks are sorted by when they were closed.
+  gallery. Closed tasks are sorted by when they were closed, and the gallery reads newest
+  first across its top row.
+- On a desktop, an open rail's inner edge drags it to any width from a single column to the
+  whole board; its cards fill as many columns as fit, as Catch's masonry does. Let go near a
+  strip or near the whole board, it snaps to the strip or the gallery. The width is kept on
+  the device, and the gallery button still opens and restores it in one click. A column and
+  its gallery are one grid: the cards fan out into columns and gather back, each springing
+  from where it is.
 - The backlog and the closed zone are rails, not columns, and do not look like columns. A
   rail runs the full height of the window and is flat: it has no surface, border or shadow
   of its own, whatever the column backgrounds setting says. Only the navigation rail has a
@@ -317,8 +327,9 @@ motion.
   into targets for changing status. The closed zone is ordered by time, so cards are sent to
   it and never placed in it.
 - The full-width backlog gallery reads left to right, then down, in a band per priority, so
-  a place between two cards reads as it does in a sentence. A card held there is placed with
-  a caret in the gutter between cards, and nothing moves until it is dropped. Every priority
+  a place between two cards reads as it does in a sentence. A card held there opens a gap
+  where it would land, and the other cards spring aside to make room as it moves, as in
+  Catch's gallery. Every priority
   shows a band while a card is placed, so an empty one can take it. Cards from elsewhere are
   sent to a backlog status through its filters, never placed in the mixed gallery.
 - On a desktop, an active column folds to a narrow strip and opens again, as a column of
@@ -349,10 +360,11 @@ How a held card behaves, and why, is recorded in
 
 ### Board settings
 
-Settings' General page has a section for how the board looks and behaves. The board settings
-button opens the same options in the [drawer](#the-drawer) at full height on a phone, and in
-a panel from the rail on desktop, sized to the window. These are kept on the device. Column backgrounds and the
-rails' placement shape desktop columns, so a phone does not show them.
+Settings' General page has a section for how the board looks and behaves (the dev-only
+`/prototype/board` workshop keeps a quick popover/drawer for testing). These are kept on the
+device. Column backgrounds and the rails' placement shape desktop columns, so a phone does not
+show them; Scrollbars is hidden on coarse-pointer (touch) devices, where overlay scrollbars are
+never drawn.
 
 | Setting | Default | Effect |
 | --- | --- | --- |
@@ -791,23 +803,26 @@ dock rather than opening as a page. Desktop has no drawer. The rules are in
   `board`. The palette has no route of its own.
 - `/w/:workspaceId/board` is the cross-project board for that workspace; `view=search`
   opens its search and replaces the view with `board`.
-- `/w/:workspaceId/p/:projectId/settings` manages a project in pages laid out as the app's
-  settings are: General (name, color and icon, saved as they change; the key; deleting
-  the project), Statuses, Priorities and Tags, with Trash beside them. The rail's project
-  menu and the phone board's title menu open it. The optional `section` search parameter
-  keeps the chosen page across reloads and reconnects.
+- `/w/:workspaceId/p/:projectId/settings` manages a project inside the unified Settings hub
+  alongside User and Admin pages: General (name, color and icon, saved as they change; the key;
+  deleting the project), Statuses, Priorities and Tags, with Trash beside them. Opening Settings
+  from the rail or phone title menu shows the active or remembered project's pages in the same
+  sidebar (desktop) or dock page picker (phone); the rail's project `...` menu and the phone
+  board's title menu jump directly to a project's settings. The optional `section` search
+  parameter keeps the chosen page across reloads and reconnects.
 - `/w/:workspaceId/p/:projectId/trash` lists that project's independently trashed tasks,
-  with inherited subtasks grouped under their parent. It is project settings' Trash page,
-  and the rail's project menu opens it too.
+  with inherited subtasks grouped under their parent. It is the project's Trash page in
+  Settings, and the rail's project menu opens it too.
 - `/w/:workspaceId/trash` lists trashed projects and independently trashed tasks across the
-  workspace. The workspace menu and desktop rail open it. Each trash offers restore,
-  confirmed permanent removal and confirmed emptying of that scope.
-- `/settings` redirects to `/settings/general`. Settings has Catch's pages: General
-  (theme, the app icon on dev and preview builds, and board), Account (name, password, the server on Android, signing out), Update,
-  and Backups for the server's admin at `/settings/admin/backups`. Throw adds MCP tokens
-  at `/settings/mcp` for creating and revoking the account's workspace tokens, and Webhooks
-  at `/settings/webhooks` for the account's outbound webhooks. Wide, the
-  pages are listed beside the open one; on a phone the dock picks between them. Changing the
+  workspace. The workspace switcher menu opens it on both desktop and phone. Each trash offers
+  restore, confirmed permanent removal and confirmed emptying of that scope.
+- `/settings` redirects to `/settings/general`. Settings is one hub with the active or
+  remembered project's pages (when the workspace has a project), Catch's User pages — General
+  (theme, the app icon on dev and preview builds, and board), Account (name, password, the
+  server on Android, signing out), MCP tokens at `/settings/mcp`, Webhooks at
+  `/settings/webhooks`, Update — and Backups for the server's admin at
+  `/settings/admin/backups`. Wide, all sections are listed beside the open page with a Back to
+  board link when a project exists; on a phone the dock picks between them. Changing the
   password signs the account's other devices out; they keep their unsaved changes until
   the same account signs in again (ADR 0002).
 - `/` restores the device's last workspace and project for the signed-in account.
@@ -895,10 +910,11 @@ little as possible; it is not the normal way to use the app (ADR 0005).
    was wanted, what stood and why. A refused description links to the existing draft
    recovery and review controls; another device can recover its document from the log.
    Dismissal does not delete the history or a recovery draft.
-6. **Reordering the full-width backlog — settled (2026-10-19).** The gallery reads left to
-   right, then down, in a band per priority, and a held card is placed with a caret; nothing
-   reflows until the drop. A gap that parted the cards was prototyped and was too busy for
-   an overview; see [The project board](#the-project-board).
+6. **Reordering the full-width backlog — settled (2026-11-22).** The gallery reads left to
+   right, then down, in a band per priority, and the cards make room for a held card as it
+   moves, as Catch's masonry gallery does. A caret with nothing moving until the drop was
+   chosen first (2026-10-19), when a parting gap in a CSS grid read as too busy; Catch's
+   springs and slot hysteresis replaced it. See [The project board](#the-project-board).
 7. **The task view — settled for the first version (2026-11-18).** It holds what
    [The task view](#the-task-view) lists: the title and identifier, status, priority and
    tags, the description, subtasks, relations, and its comments and history, each under its

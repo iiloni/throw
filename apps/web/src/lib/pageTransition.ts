@@ -77,12 +77,12 @@ export function pageTransition(
   if (!before || !after || before.key === after.key) return false;
   if (before.kind === 'board' && after.kind === 'board') return ['fade'];
   if (before.kind === 'other' || after.kind === 'other') return ['enter'];
-  if (before.kind === 'settings' && after.kind === 'settings' && before.frame !== after.frame) {
-    // One project's settings to another's have no order between them.
-    if (before.frame !== 'app' && after.frame !== 'app') return ['enter'];
-  } else if (before.kind === 'settings' && after.kind === 'settings' && wide) {
-    // Side by side, the page list stays put while the page beside it changes.
-    return ['inner'];
+  if (before.kind === 'settings' && after.kind === 'settings') {
+    // Switching from one project's settings to another's replaces the project group and has no order.
+    if (before.frame !== after.frame && before.frame !== 'app' && after.frame !== 'app')
+      return ['enter'];
+    // Side by side, the unified settings list stays put while only the open page changes.
+    if (wide) return ['inner'];
   }
   return [after.order > before.order ? 'forward' : 'back'];
 }

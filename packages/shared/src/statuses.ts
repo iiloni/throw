@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { colorSchema } from './colors';
 import { positionSchema } from './position';
 
 /**
@@ -28,6 +29,8 @@ export const statusSchema = z.object({
   workspaceId: z.uuid(),
   projectId: z.uuid(),
   name: z.string().trim().min(1).max(40),
+  // Older servers and queued creates may omit the column.
+  color: colorSchema.nullable().optional(),
   /** Fixed when the status is created: changing it would close or reopen its tasks at once. */
   category: statusCategorySchema,
   /** Fractional index among the statuses of the same category. */
@@ -38,7 +41,11 @@ export const statusSchema = z.object({
 export type Status = z.infer<typeof statusSchema>;
 
 /** A status as a new project's create request carries it. */
-export const newProjectStatusSchema = statusSchema.omit({ workspaceId: true, projectId: true });
+export const newProjectStatusSchema = statusSchema.omit({
+  workspaceId: true,
+  projectId: true,
+  color: true,
+});
 export type NewProjectStatus = z.infer<typeof newProjectStatusSchema>;
 
 /** The server sets the workspace from the project. */
@@ -52,6 +59,7 @@ export type CreateStatus = z.infer<typeof createStatusSchema>;
 export const updateStatusSchema = z
   .object({
     name: statusSchema.shape.name,
+    color: statusSchema.shape.color,
     position: positionSchema,
     isDefault: z.literal(true),
   })

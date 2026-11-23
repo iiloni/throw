@@ -208,7 +208,7 @@ export function ControlButtons({
         {...controlProps('status')}
         onOpen={(element) => onOpen('status', element)}
       >
-        <StatusGlyph category={status?.category ?? 'backlog'} />
+        <StatusGlyph category={status?.category ?? 'backlog'} color={status?.color} />
       </DockControl>
       <DockControl
         label={`Priority: ${priorityName(project, priority)}. Change`}

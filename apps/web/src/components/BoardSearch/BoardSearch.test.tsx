@@ -3,7 +3,7 @@ import type { Project, Status, Task } from '@throw/shared';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { projectBoardData, secondaryTagsByTask } from '@/components/Board/selection';
 import { board, initialBoard, receiveBoard, update } from '@/components/Board/state';
-import { BoardSearch } from './BoardSearch';
+import { BoardSearch, BoardSearchSidebar } from './BoardSearch';
 
 const project: Project = {
   id: 'project',
@@ -112,5 +112,31 @@ describe('the board’s search bar', () => {
     expect(board.get()).toMatchObject({ filter: { sizes: [] }, sort: 'priority', searching: true });
     fireEvent.keyDown(field(), { key: 'Escape' });
     expect(board.get().searching).toBe(false);
+  });
+
+  it('feathers the top and bottom edges of the docked sidebar scroller when overflowing', () => {
+    const { container } = render(<BoardSearchSidebar />);
+    const area = container.querySelector<HTMLElement>('[data-slot="scroll-area"][data-edges]');
+    const viewport = area?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
+    expect(area).toBeInTheDocument();
+    expect(viewport).toBeInTheDocument();
+    if (!area || !viewport) return;
+
+    Object.defineProperty(viewport, 'clientHeight', { configurable: true, value: 200 });
+    Object.defineProperty(viewport, 'scrollHeight', { configurable: true, value: 500 });
+    viewport.scrollTop = 0;
+    fireEvent.scroll(viewport);
+    expect(area).not.toHaveAttribute('data-more-top');
+    expect(area).toHaveAttribute('data-more-bottom');
+
+    viewport.scrollTop = 100;
+    fireEvent.scroll(viewport);
+    expect(area).toHaveAttribute('data-more-top');
+    expect(area).toHaveAttribute('data-more-bottom');
+
+    viewport.scrollTop = 300;
+    fireEvent.scroll(viewport);
+    expect(area).toHaveAttribute('data-more-top');
+    expect(area).not.toHaveAttribute('data-more-bottom');
   });
 });

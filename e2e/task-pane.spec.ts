@@ -1217,21 +1217,25 @@ test('task size picker and optional card badge work on both boards', async ({ pa
   const card = page.locator(`[data-card-id="${account.taskId}"]`);
   const badge = card.getByText('Size XL', { exact: true });
   await expect(badge).toHaveCount(0);
-  const openSettings = () =>
-    page.getByRole('button', { name: 'Board settings', exact: true }).click();
-  const setting = page.getByRole('switch', { name: 'Size on cards', exact: true });
-  await openSettings();
-  await expect(setting).not.toBeChecked();
-  await setting.click();
-  await expect(setting).toBeChecked();
-  await page.keyboard.press('Escape');
+  const toggleSizeOnCards = async (expectedChecked: boolean) => {
+    if (isMobile) {
+      await page.getByRole('button', { name: 'Switch project or workspace', exact: true }).click();
+      await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
+    } else await page.getByRole('link', { name: 'Settings', exact: true }).click();
+    const setting = page.getByRole('switch', { name: 'Size on cards', exact: true });
+    if (expectedChecked) await expect(setting).not.toBeChecked();
+    else await expect(setting).toBeChecked();
+    await setting.click();
+    if (expectedChecked) await expect(setting).toBeChecked();
+    else await expect(setting).not.toBeChecked();
+    await page.goBack();
+  };
+  await toggleSizeOnCards(true);
   await expect(badge).toBeVisible();
 
   await page.goto(`/w/${account.workspaceId}/board`);
   await expect(badge).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
-  await openSettings();
-  await setting.click();
-  await page.keyboard.press('Escape');
+  await toggleSizeOnCards(false);
   await expect(badge).toHaveCount(0);
 
   await page.goto(`${account.path}&task=${account.taskId}`);
