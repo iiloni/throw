@@ -5,8 +5,11 @@ import { en } from '@blocknote/core/locales';
 import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/shadcn';
 import type { Description } from '@throw/shared';
-import { useEffect, useMemo } from 'react';
+import { type MouseEvent, useEffect, useMemo, useState } from 'react';
 import { useResolvedTheme } from '@/lib/theme';
+import { CodeLanguagePicker } from './CodeLanguagePicker';
+import { codeBlock, syntaxHighlighting } from './codeBlock';
+import { pasteCode } from './codePaste';
 import {
   type EditorControls,
   type FormattingState,
@@ -23,7 +26,7 @@ export const descriptionEditorSchema = BlockNoteSchema.create({
     numberedListItem: defaultBlockSpecs.numberedListItem,
     checkListItem: defaultBlockSpecs.checkListItem,
     quote: defaultBlockSpecs.quote,
-    codeBlock: defaultBlockSpecs.codeBlock,
+    codeBlock,
     divider: defaultBlockSpecs.divider,
     table: defaultBlockSpecs.table,
   },
@@ -60,6 +63,8 @@ export function DescriptionEditor({
   const theme = useResolvedTheme();
   const editor = useCreateBlockNote({
     schema: descriptionEditorSchema,
+    extensions: [syntaxHighlighting],
+    pasteHandler: pasteCode,
     initialContent: initialContent?.length
       ? (initialContent as (typeof descriptionEditorSchema.PartialBlock)[])
       : [{ type: 'paragraph' }],
@@ -72,6 +77,16 @@ export function DescriptionEditor({
   useEffect(() => {
     if (autoFocus && editable) editor.focus();
   }, [autoFocus, editable, editor]);
+  const [languageBlock, setLanguageBlock] = useState<{ id: string; anchor: Element } | null>(null);
+  function openCodeLanguage(event: MouseEvent<HTMLDivElement>) {
+    if (!editable || !(event.target instanceof Element)) return;
+    // A code block draws its language button itself, outside React (see codeBlock.ts).
+    const language = event.target.closest('.description-code-language > button');
+    if (language && editor.domElement?.contains(language)) {
+      const id = language.closest<HTMLElement>('[data-node-type="blockContainer"]')?.dataset.id;
+      if (id) setLanguageBlock((open) => (open?.id === id ? null : { id, anchor: language }));
+    }
+  }
   const controls = useMemo(() => createControls(editor), [editor]);
   // While it has focus on a touch screen, this editor is the one the dock formats.
   useEffect(() => {
@@ -136,8 +151,18 @@ export function DescriptionEditor({
         filePanel={false}
         formattingToolbar={!coarsePointer}
         onChange={() => onChange?.(editor.document as Description)}
+        onClick={openCodeLanguage}
         className="task-editor"
       />
+      {editable && languageBlock && (
+        <CodeLanguagePicker
+          key={languageBlock.id}
+          editor={editor}
+          blockId={languageBlock.id}
+          anchor={languageBlock.anchor}
+          onClose={() => setLanguageBlock(null)}
+        />
+      )}
     </div>
   );
 }

@@ -6,7 +6,14 @@ import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { type TaskPanel, taskDrawerContent } from '@/components/TaskDetails/TaskControls';
 import { TaskDetails } from '@/components/TaskDetails/TaskDetails';
 import { useBlockersByTask } from '@/components/TaskRelations/TaskRelations';
-import { useAllTags, useAllTaskTags, useStatuses, useTasks } from '@/lib/collections';
+import {
+  useAllTags,
+  useAllTaskTags,
+  useLocalRowsReady,
+  useStatuses,
+  useTasks,
+} from '@/lib/collections';
+import { useLaunchScreenReady } from '@/lib/launchScreen';
 import { useDesktop } from '@/lib/media';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { BoardAnnouncer } from './BoardAnnouncer';
@@ -14,7 +21,7 @@ import { TaskBlockersContext } from './blockers';
 import { taskScreens, taskWrites, useBoardBoundary } from './boundary';
 import { DragOverlay } from './DragOverlay';
 import { secondaryTagsByTask, workspaceBoardData } from './selection';
-import { board } from './state';
+import { board, canOpenTask } from './state';
 import { TaskScreen } from './TaskView';
 import { TaskContentContext } from './taskContent';
 import { useTaskUrl } from './taskUrl';
@@ -73,6 +80,23 @@ export function WorkspaceBoard({
   // Whether the board holds this page's data, and whether its tasks have caught up.
   const ready = state.projectId === data.project.id && state.actions !== null && !awaitingTasks;
   useTaskUrl(task, ready, !loadingTasks);
+  const localReady = useLocalRowsReady(
+    'workspaces',
+    'projects',
+    'statuses',
+    'tasks',
+    'tags',
+    'task-tags',
+    'task-relations',
+  );
+  const linkedTask = task && canOpenTask(task, data);
+  useLaunchScreenReady(
+    localReady &&
+      !awaiting &&
+      state.projectId === data.project.id &&
+      state.actions !== null &&
+      (!linkedTask || state.openTaskId === task),
+  );
   if (awaiting || state.projectId !== data.project.id || state.actions === null)
     return (
       <p role="status" className="p-6 text-muted-foreground">

@@ -16,6 +16,14 @@
   font-size: 0.9375rem;
   line-height: 1.65;
 }
+/* BlockNote's stylesheet resets .bn-block-outer to 1.5, which shrank text after the preview swap. */
+.bn-container.task-editor .bn-block-outer {
+  line-height: inherit;
+}
+/* Match BlockNote's .bn-block-content padding directly on each preview block (including code blocks). */
+.description-preview-block > :first-child {
+  padding-block: 3px;
+}
 /* A posted comment is as tall as its text; only an editor keeps room to write in. */
 .comment-body .bn-container.task-editor .bn-editor {
   min-height: 0;
@@ -28,10 +36,170 @@
   height: 1.25rem;
   accent-color: var(--brand);
 }
+/*
+ * Inline code is set as the preview sets it (DescriptionPreview), so it holds through the swap.
+ * A monospace face runs large beside the text, hence the smaller size.
+ */
+.bn-container.task-editor .bn-inline-content code {
+  border-radius: 0.375em;
+  /*
+   * The background spans the font's ascent and descent, which leave more room below the
+   * letters than above them in most system monospace faces, so the top gets the padding.
+   */
+  padding: 0.12em 0.4em 0.05em;
+  background: color-mix(in oklab, var(--foreground) 10%, transparent);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+/*
+ * Code blocks, in the editor and in the preview it opens from. BlockNote paints them black
+ * in both themes and shows its language picker only on hover.
+ */
+.description-code-block,
 .bn-container.task-editor .bn-block-content[data-content-type="codeBlock"] {
+  position: relative;
+  display: block;
+  container-type: inline-size;
+  /* Keeps blocks that follow each other apart. */
+  margin-block: 3px;
+  border-radius: var(--radius-md);
+  background: var(--code-background);
+  color: var(--code-foreground);
+  direction: ltr;
+}
+.description-code-block > pre,
+.bn-container.task-editor .bn-block-content[data-content-type="codeBlock"] > pre {
+  width: 100%;
+  margin: 0;
+  padding: 0.875rem 3rem 0.875rem 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  tab-size: 2;
+}
+:is(
+    .description-code-block,
+    .bn-container.task-editor .bn-block-content[data-content-type="codeBlock"]
+  )
+  > pre
+  > code {
+  display: block;
+  min-height: 1.55em;
+  font-family: inherit;
+  /* Long lines wrap: a sideways scroll would fight the page's swipes on a phone. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.description-code-toolbar {
+  position: absolute;
+  top: 0.375rem;
+  right: 0.375rem;
+  z-index: 1;
+  display: flex;
+  width: max-content;
+  /* One inset button plus the rim and the glass border. */
+  max-width: calc(var(--code-pill-button) + 2 * var(--code-pill-inset) + 2px);
+  flex-direction: row-reverse;
+  align-items: center;
+  padding: var(--code-pill-inset);
+  overflow: clip;
+  /* A rounded rectangle like the dock, its radius scaled down with the height, and the
+     buttons inset to stay concentric. */
+  border-radius: var(--code-pill-radius);
+  --code-pill-button: 1.75rem;
+  --code-pill-inset: 2px;
+  --code-pill-radius: 0.75rem;
+  color: var(--muted-foreground);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+.description-code-language {
+  display: flex;
+  min-width: 0;
+  flex-shrink: 0;
+}
+.description-code-label {
+  max-width: min(8rem, calc(100cqw - 11rem));
+}
+.description-code-language > button,
+.description-code-language > span,
+.description-code-action {
+  position: static;
+  display: flex;
+  min-width: var(--code-pill-button);
+  height: var(--code-pill-button);
+  flex-direction: row-reverse;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding-inline: 0.375rem;
+  border: 0;
+  border-radius: calc(var(--code-pill-radius) - var(--code-pill-inset) - 1px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.description-code-action {
+  width: var(--code-pill-button);
+  flex-shrink: 0;
+}
+/* Revealed and hidden by codeBlock.ts, which animates them in and out. */
+.description-code-label,
+.description-code-chevron,
+.description-code-action {
+  visibility: hidden;
+  opacity: 0;
+}
+.description-code-chevron {
+  display: flex;
+  width: 0.875rem;
+  flex-shrink: 0;
+  justify-content: center;
+}
+.description-code-chevron::before {
+  width: 0.375rem;
+  height: 0.375rem;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  content: "";
+  transform: translateY(-25%) rotate(45deg);
+}
+.description-code-block .description-code-action > svg,
+.bn-container.task-editor .description-code-action > svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.code-language-icon {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  background: var(--code-language-icon) center / contain no-repeat;
+}
+.code-language-icon[data-tinted] {
+  background: currentColor;
+  mask: var(--code-language-icon) center / contain no-repeat;
+}
+.description-code-toolbar button:enabled {
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .description-code-toolbar button:enabled:hover {
+    background: var(--code-background);
+    color: var(--foreground);
+  }
+}
+.description-code-toolbar button:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--ring);
   color: var(--foreground);
-  background: color-mix(in srgb, var(--foreground) 6%, transparent);
-  border-radius: 0.75rem;
+  outline: none;
 }
 .bn-container.task-editor a {
   color: var(--brand-link);
@@ -74,6 +242,19 @@
   --brand: #20ae96;
   --brand-foreground: var(--brand-charcoal);
   --brand-link: light-dark(#0b7765, #70ddc6);
+
+  /* Shiki assigns these tokens, which follow the current theme and task tint. */
+  --code-background: color-mix(in oklab, var(--foreground) 7%, transparent);
+  --code-foreground: var(--foreground);
+  --code-token-keyword: light-dark(oklch(0.48 0.14 45), oklch(0.82 0.11 70));
+  --code-token-string: light-dark(oklch(0.48 0.14 150), oklch(0.82 0.11 150));
+  --code-token-string-expression: light-dark(oklch(0.48 0.14 195), oklch(0.82 0.11 195));
+  --code-token-function: light-dark(oklch(0.48 0.14 250), oklch(0.82 0.11 245));
+  --code-token-constant: light-dark(oklch(0.48 0.14 300), oklch(0.82 0.11 300));
+  --code-token-parameter: var(--foreground);
+  --code-token-punctuation: color-mix(in oklab, var(--foreground) 75%, transparent);
+  --code-token-comment: var(--muted-foreground);
+  --code-token-link: var(--brand-link);
 
   /* Frosted material for the dock, the navigation rail and sheets. */
   --glass: light-dark(oklch(0.99 0.005 85 / 0.66), oklch(0.29 0.012 70 / 0.6));

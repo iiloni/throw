@@ -2,16 +2,21 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { useShell } from '@/components/AppShell/shell';
 import { ProjectSettingsFrame } from '@/components/ProjectSettings/ProjectSettings';
 import { Trash } from '@/components/Trash/Trash';
-import { useProjects } from '@/lib/collections';
+import { useLocalRowsReady, useProjects } from '@/lib/collections';
+import { useLaunchScreenReady } from '@/lib/launchScreen';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/p/$projectId_/trash')({
+  staticData: { holdsLaunchScreen: true },
   component: Page,
 });
 function Page() {
   const shell = useShell();
   const { workspaceId, projectId } = Route.useParams();
   const { projects } = useProjects();
-  if (shell.awaitingWorkspaces || shell.awaitingProjects)
+  const localReady = useLocalRowsReady('workspaces', 'projects');
+  const waiting = shell.awaitingWorkspaces || shell.awaitingProjects;
+  useLaunchScreenReady(localReady && !waiting && !shell.project);
+  if (waiting)
     return (
       <p role="status" className="p-6">
         Loading…
