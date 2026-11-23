@@ -181,6 +181,11 @@ test.describe('phone', () => {
       name: 'Fragile',
       color: 'red',
     });
+    // Enough secondary tags that the two role views differ in height, as on a real project.
+    const area = await newTag(page.request, board, board.projectId, { name: 'Area' });
+    for (const name of ['Bug', 'Docs', 'Polish', 'Research'])
+      await newTag(page.request, board, board.projectId, { name });
+    await newTag(page.request, board, board.projectId, { name: 'Board', parentId: area.id });
     const titles = ['Earlier position', 'Later position'];
     const ids = titles.map((title) => board.ids[title]!);
     const touch = await finger(page);
@@ -217,9 +222,28 @@ test.describe('phone', () => {
       .toEqual(['4', '4']);
 
     await touch.tap(bar.getByRole('button', { name: 'Change tags' }));
-    await touch.tap(
-      page.getByRole('region', { name: 'Tags' }).getByRole('button', { name: 'Red: Fragile' }),
-    );
+    const tags = page.getByRole('region', { name: 'Tags' });
+    await touch.tap(tags.getByRole('button', { name: 'Red: Fragile' }));
+    // Switching between the tag roles moves only the panel's views: the drawer stays where it
+    // rests instead of chasing their height frame by frame.
+    const drawer = page.locator('[data-drawer]');
+    const top = async () => Math.round((await drawer.boundingBox())!.y);
+    await expect.poll(async () => [await top(), await top()]).toEqual([await top(), await top()]);
+    const resting = await top();
+    for (const role of ['Secondary', 'Primary']) {
+      await touch.tap(tags.getByRole('tab', { name: new RegExp(`^${role}`) }));
+      const seen = await page.evaluate(async () => {
+        const element = document.querySelector('[data-drawer]')!;
+        const tops: number[] = [];
+        for (let frame = 0; frame < 40; frame++) {
+          tops.push(Math.round(element.getBoundingClientRect().y));
+          await new Promise(requestAnimationFrame);
+        }
+        return tops;
+      });
+      expect(new Set(seen)).toEqual(new Set([resting]));
+      await page.screenshot({ path: testInfo.outputPath(`phone-tags-${role.toLowerCase()}.png`) });
+    }
     await expect
       .poll(async () => (await rows(page, board.headers, ids)).map((row) => row?.primary_tag_id))
       .toEqual([fragile.id, fragile.id]);

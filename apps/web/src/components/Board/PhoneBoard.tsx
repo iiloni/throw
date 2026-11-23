@@ -739,8 +739,10 @@ export function MovePanel({ pick }: { pick: boolean }) {
           aria-label={selectionTabTitle[tab]}
           className={cn(
             '-mx-2 mt-1.5 [--tags-max:min(24rem,48dvh)]',
+            // The drawer springs to its header's height whenever it changes, so the tags panel,
+            // whose tabs spring their own heights, keeps one height for the drawer to rest at.
             tab === 'tags'
-              ? 'flex max-h-[min(24rem,48dvh)] flex-col overflow-hidden'
+              ? 'flex h-[min(24rem,48dvh)] flex-col overflow-hidden'
               : 'max-h-[min(24rem,48dvh)] overflow-y-auto overscroll-contain',
           )}
         >
