@@ -13,6 +13,7 @@ export * from './sizes';
 export * from './statuses';
 export * from './sync';
 export * from './tags';
+export * from './taskRelations';
 export * from './tasks';
 export * from './webhooks';
 export * from './workspaces';

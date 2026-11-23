@@ -76,3 +76,68 @@ it('moves focus without opening a panel while both are hidden', () => {
   expect(first).toHaveFocus();
   expect(first).toHaveAttribute('aria-selected', 'true');
 });
+
+it('navigates across three tabs and skips a hidden third tab', () => {
+  const onValueChange = vi.fn();
+  const three = (hideThird: boolean) => [
+    { value: 'a', id: 't-a', controls: 'p-a', label: 'Comments', icon: null },
+    { value: 'b', id: 't-b', controls: 'p-b', label: 'History', icon: null },
+    { value: 'c', id: 't-c', controls: 'p-c', label: 'Links', icon: null, hidden: hideThird },
+  ];
+  const { rerender } = render(
+    <SegmentedTabs label="Tabs" value="a" onValueChange={onValueChange} options={three(false)} />,
+  );
+  expect(screen.getAllByRole('tab')).toHaveLength(3);
+  const first = screen.getByRole('tab', { name: 'Comments' });
+  fireEvent.keyDown(first, { key: 'End' });
+  expect(onValueChange).toHaveBeenLastCalledWith('c');
+  rerender(
+    <SegmentedTabs label="Tabs" value="c" onValueChange={onValueChange} options={three(false)} />,
+  );
+  fireEvent.keyDown(screen.getByRole('tab', { name: 'Links' }), { key: 'ArrowRight' });
+  expect(onValueChange).toHaveBeenLastCalledWith('a');
+
+  // Hiding the third tab removes it from the accessible tablist and wraps between the first two.
+  rerender(
+    <SegmentedTabs label="Tabs" value="b" onValueChange={onValueChange} options={three(true)} />,
+  );
+  expect(screen.getAllByRole('tab')).toHaveLength(2);
+  fireEvent.keyDown(screen.getByRole('tab', { name: 'History' }), { key: 'ArrowRight' });
+  expect(onValueChange).toHaveBeenLastCalledWith('a');
+});
+
+it('switches to compact icon-only inactive tabs below 368px only when three tabs are visible', () => {
+  const spy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    x: 0,
+    y: 0,
+    left: 0,
+    top: 0,
+    right: 320,
+    bottom: 44,
+    width: 320,
+    height: 44,
+    toJSON: () => {},
+  });
+  try {
+    const three = (hideThird: boolean) => [
+      { value: 'a', id: 'c-a', controls: 'cp-a', label: 'Comments', icon: null },
+      { value: 'b', id: 'c-b', controls: 'cp-b', label: 'History', icon: null },
+      { value: 'c', id: 'c-c', controls: 'cp-c', label: 'Links', icon: null, hidden: hideThird },
+    ];
+    const { rerender } = render(
+      <SegmentedTabs label="Compact" value="a" onValueChange={vi.fn()} options={three(false)} />,
+    );
+    const list = screen.getByRole('tablist', { name: 'Compact' });
+    expect(list).toHaveAttribute('data-compact', '');
+    // All three accessible names remain intact even when inactive tabs collapse visually to icons.
+    expect(screen.getByRole('tab', { name: 'History' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Links' })).toBeInTheDocument();
+
+    rerender(
+      <SegmentedTabs label="Compact" value="a" onValueChange={vi.fn()} options={three(true)} />,
+    );
+    expect(list).not.toHaveAttribute('data-compact');
+  } finally {
+    spy.mockRestore();
+  }
+});

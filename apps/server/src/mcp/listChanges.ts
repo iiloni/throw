@@ -75,15 +75,19 @@ function taskChange(
           : moved
             ? 'moved'
             : 'updated',
-    changes: fields.map(({ field, previous, requested, applied, tagId, reason }) => ({
-      field,
-      before: previous,
-      after: applied ? requested : previous,
-      applied,
-      ...(applied ? {} : { requested }),
-      tagId,
-      reason,
-    })),
+    changes: fields.map(
+      ({ field, previous, requested, applied, tagId, relationId, relation, reason }) => ({
+        field,
+        before: previous,
+        after: applied ? requested : previous,
+        applied,
+        ...(applied ? {} : { requested }),
+        tagId,
+        relationId,
+        relation,
+        reason,
+      }),
+    ),
   };
 }
 

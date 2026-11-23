@@ -2,10 +2,12 @@ import {
   activityEntrySchema,
   commentSchema,
   createTagSchema,
+  relationRole,
   STARTER_STATUSES,
   TAG_ICONS,
   type Tag,
   tagWriteIssue,
+  taskRelationSchema,
   taskSchema,
   taskTagSchema,
 } from '@throw/shared';
@@ -13,8 +15,10 @@ import { uuidv7 } from 'uuidv7';
 import { describe, expect, it } from 'vitest';
 import {
   buildProjectFixtures,
+  buildRelationFixtures,
   buildTags,
   DEMO_PROJECTS,
+  DEMO_RELATIONS,
   HOUSE_COMMENTS,
   HOUSE_CREATED_DAYS_AGO,
   HOUSE_TAGS,
@@ -51,10 +55,12 @@ it('gives each demo project a bundled icon', () => {
   for (const project of DEMO_PROJECTS) expect(TAG_ICONS).toContain(project.icon);
 });
 
-describe.each(projects)('$name fixtures', (project) => {
-  const scope = { workspaceId: uuidv7(), projectId: uuidv7() };
-  const userId = 'seeded-admin';
-  const now = new Date('2026-11-22T12:00:00.000Z');
+const workspaceId = uuidv7();
+const userId = 'seeded-admin';
+const now = new Date('2026-11-22T12:00:00.000Z');
+
+function build(project: (typeof projects)[number]) {
+  const scope = { workspaceId, projectId: uuidv7() };
   const tagRows = buildTags(project.tags, scope);
   const statuses = [
     ...STARTER_STATUSES.map((s) => ({ ...s, isDefault: true })),
@@ -70,6 +76,11 @@ describe.each(projects)('$name fixtures', (project) => {
     comments: project.comments,
     createdDaysAgo: project.createdDaysAgo,
   });
+  return { scope, tagRows, statuses, fixtures };
+}
+
+describe.each(projects)('$name fixtures', (project) => {
+  const { tagRows, fixtures } = build(project);
 
   it('makes a valid tag tree', () => {
     const tags = tagRows.map((row) => ({ ...row, position: row.position ?? null }) as Tag);
@@ -145,4 +156,55 @@ describe.each(projects)('$name fixtures', (project) => {
       fixtures.comments.map((comment) => comment.id),
     );
   });
+});
+
+it('links tasks within and across the demo projects as the server records it', () => {
+  const built = new Map(projects.map((project) => [project.name, build(project)]));
+  const lookup = ({ project, ref }: { project: string; ref: string }) => {
+    const { scope, fixtures } = built.get(project)!;
+    const id = fixtures.refs.get(ref)!;
+    const task = fixtures.tasks.find((row) => row.id === id)!;
+    return {
+      id,
+      projectId: scope.projectId,
+      identifier: `${project}-${task.number}`,
+      createdAt: task.createdAt!,
+    };
+  };
+  const { relations, activity } = buildRelationFixtures({
+    workspaceId,
+    userId,
+    now,
+    task: lookup,
+    relations: DEMO_RELATIONS,
+  });
+  for (const row of relations) {
+    expect(
+      taskRelationSchema.strict().parse({ ...row, createdAt: iso(row.createdAt) }),
+    ).toBeTruthy();
+  }
+  expect(new Set(relations.map((row) => row.kind))).toEqual(
+    new Set(['blocks', 'duplicates', 'relates_to']),
+  );
+  const projectOf = new Map(
+    [...built.values()].flatMap(({ scope, fixtures }) =>
+      fixtures.tasks.map((task) => [task.id, scope.projectId]),
+    ),
+  );
+  expect(
+    relations.some((row) => projectOf.get(row.sourceTaskId) !== projectOf.get(row.targetTaskId)),
+  ).toBe(true);
+
+  expect(activity).toHaveLength(relations.length * 2);
+  for (const entry of activity) {
+    const { feedOrder: _feedOrder, ...synced } = entry;
+    expect(
+      activityEntrySchema.strict().safeParse({ ...synced, createdAt: iso(entry.createdAt) }).error,
+    ).toBeUndefined();
+  }
+  const release = lookup({ project: 'Throw', ref: 'release' });
+  const blockers = relations
+    .filter((row) => relationRole(row, release.id)?.role === 'blocked_by')
+    .map((row) => row.sourceTaskId);
+  expect(blockers).toHaveLength(4);
 });

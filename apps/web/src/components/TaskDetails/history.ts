@@ -5,6 +5,7 @@ import {
   prioritySchema,
   sizeLabel,
   sizeSchema,
+  type TaskRelationRole,
 } from '@throw/shared';
 
 export type HistoryContext = {
@@ -63,9 +64,34 @@ const labels: Record<string, string> = {
   trashed: 'Trash change',
 };
 
+/** How an added relation reads from this task's side, with the other task named. */
+const relationAdded: Record<TaskRelationRole, (other: string) => string> = {
+  blocks: (other) => `Now blocks ${other}.`,
+  blocked_by: (other) => `Marked as blocked by ${other}.`,
+  duplicates: (other) => `Marked as a duplicate of ${other}.`,
+  duplicated_by: (other) => `${other} was marked as a duplicate of this task.`,
+  relates_to: (other) => `Linked to ${other}.`,
+};
+const relationRemoved: Record<TaskRelationRole, (other: string) => string> = {
+  blocks: (other) => `No longer blocks ${other}.`,
+  blocked_by: (other) => `No longer blocked by ${other}.`,
+  duplicates: (other) => `No longer a duplicate of ${other}.`,
+  duplicated_by: (other) => `${other} is no longer a duplicate of this task.`,
+  relates_to: (other) => `Unlinked from ${other}.`,
+};
+
+function relationSentence(change: ActivityChange) {
+  const added = change.requested !== null;
+  const other = (added ? change.requestedName : change.previousName) || 'a task';
+  const role = change.relation;
+  if (!role) return added ? `Linked to ${other}.` : `Unlinked from ${other}.`;
+  return (added ? relationAdded : relationRemoved)[role](other);
+}
+
 export function changeSentence(change: ActivityChange, context: HistoryContext): string {
   if (change.field === 'position')
     return change.applied ? 'Reordered.' : 'Could not move the task to that position.';
+  if (change.field === 'relations') return relationSentence(change);
   const wanted = value(change, true, context);
   const stood = value(change, false, context);
   if (change.reason === 'replaced') return `The requested status was unavailable. Used ${wanted}.`;

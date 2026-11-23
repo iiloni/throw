@@ -7,6 +7,7 @@ import { sizeSchema } from './sizes';
 import { statusCategorySchema, statusSchema } from './statuses';
 import { timestampSchema } from './sync';
 import { secondaryTagChangesSchema, tagSchema } from './tags';
+import { taskRelationRoleSchema } from './taskRelations';
 import { taskTitleSchema } from './tasks';
 
 const uuid = z.uuid();
@@ -53,6 +54,20 @@ const task = taskReference.extend({
   effectivelyTrashed: z.boolean(),
   closedAt: timestampSchema.nullable(),
 });
+const relatedTask = taskReference.extend({
+  projectId: uuid,
+  title: taskTitleSchema,
+  category: statusCategorySchema,
+  effectivelyTrashed: z.boolean(),
+});
+const relation = z.object({
+  id: uuid,
+  relation: taskRelationRoleSchema.describe('How the task you asked about sees the other task.'),
+  task: relatedTask,
+});
+const relationRole = taskRelationRoleSchema.describe(
+  'blocks: this task blocks the other. blocked_by: the other blocks this one. duplicates: this task is a duplicate of the other. duplicated_by: the other is a duplicate of this one. relates_to: a plain link.',
+);
 const textDocument = z.object({ markdown: z.string().nullable(), lossy: z.boolean() });
 const changeResult = activityChangeSchema.omit({ rejectedDocument: true }).extend({
   rejectedDescription: textDocument.optional(),
@@ -168,6 +183,8 @@ const feedChange = z.object({
       applied: z.boolean().optional(),
       requested: z.unknown().optional(),
       tagId: uuid.optional(),
+      relationId: uuid.optional(),
+      relation: taskRelationRoleSchema.optional(),
       reason: z.enum(['stale', 'invalid', 'replaced']).optional(),
     }),
   ),
@@ -353,7 +370,11 @@ export const mcpTools = {
         description: textDocument,
         descriptionVersion: uuid.nullable(),
         secondaryTagIds: z.array(uuid),
+        blocked: z
+          .boolean()
+          .describe('A blocking task is still open and out of the trash. Informational only.'),
       }),
+      relations: z.array(relation),
       subtasks: uuidPage(task),
       comments: timelinePage(comment),
       history: timelinePage(activity),
@@ -410,6 +431,40 @@ export const mcpTools = {
       })
       .refine((input) => !!(input.primaryTagId || input.secondaryTags), 'Supply a tag change.'),
     output: taskWriteResult,
+  },
+  add_task_relation: {
+    input: z.strictObject({
+      operationId,
+      task: taskRef,
+      relation: relationRole,
+      other: taskRef.describe('Any task in this workspace, in this or another project.'),
+    }),
+    output: z.object({
+      operationId: z.uuidv7(),
+      outcome: z
+        .enum(['added', 'existing'])
+        .describe('existing: the tasks were already linked this way, by another relation.'),
+      relation,
+    }),
+  },
+  remove_task_relation: {
+    input: z
+      .strictObject({
+        operationId,
+        relationId: uuid.optional().describe('A relation id from get_task.'),
+        task: taskRef.optional(),
+        relation: relationRole.optional(),
+        other: taskRef.optional(),
+      })
+      .refine(
+        (input) => !!input.relationId || !!(input.task && input.relation && input.other),
+        'Supply a relationId, or task, relation and other.',
+      ),
+    output: z.object({
+      operationId: z.uuidv7(),
+      outcome: z.enum(['removed', 'absent']),
+      relationId: uuid.nullable(),
+    }),
   },
   add_comment: {
     input: z.strictObject({ operationId, task: taskRef, body: markdown }),

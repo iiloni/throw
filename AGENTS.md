@@ -41,7 +41,11 @@ Tags have their data layer and reusable controls in `components/Tag*`, with a re
 development only. The board color helper is `taskTagColor` in `@throw/shared`. The task
 pane picks and lists tags, and its Color and Tags panels make new tags through the shell's
 `NewTagHost` (`components/NewTag`); project settings mounts tag management.
-The task pane shows comments and server history under separate tabs (`SegmentedTabs`).
+Task relations (blocks, duplicates, relates to) link tasks across a workspace's projects:
+actions in `lib/taskRelations.ts`, the pane's list, dock picker and card blocked mark in
+`components/TaskRelations` (cards read `Board/blockers.ts`, which the prototype leaves empty).
+The task pane shows comments, server history and (on narrow desktop panes and phones,
+moving to the ADR 0012 side column when wide) task links under `SegmentedTabs`.
 Touch screens swipe between them with `useTabSwipe`. Refused changes have a quiet task-only
 notice and description recovery links. Desktop columns on both boards fold to a strip, as Catch's deck does
 (`Board/BoardColumn.tsx`, remembered per project by `useCollapsedColumns` in `Board/state.ts`).

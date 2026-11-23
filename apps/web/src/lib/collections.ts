@@ -33,8 +33,10 @@ import {
   type Tag,
   type TagWriteResponse,
   type Task,
+  type TaskRelation,
   type TaskTag,
   tagSchema,
+  taskRelationSchema,
   taskSchema,
   taskTagKey,
   taskTagSchema,
@@ -80,6 +82,7 @@ import {
   statusUpdateRequest,
   tagCreateRequest,
   taskCreateFromWrite,
+  taskRelationCreateRequest,
   taskUpdateRequest,
 } from './writeRequests';
 
@@ -262,6 +265,20 @@ export const taskTagsCollection = createCollection(
   ),
 );
 
+/** Links between tasks, across the projects of a workspace. Always synced for board cards. */
+export const taskRelationsCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      ...alwaysSynced,
+      id: 'task-relations',
+      schema: taskRelationSchema,
+      getKey: (relation) => relation.id,
+      shapeOptions: shapeOptions('task-relations'),
+    }),
+    1,
+  ),
+);
+
 /**
  * The tasks' activity log (ADR 0006). The server writes every entry; devices only read it, so
  * it is not writable. It always syncs because a task's timeline reads offline.
@@ -301,6 +318,7 @@ const writableCollections = {
   comments: commentsCollection,
   tags: tagsCollection,
   taskTags: taskTagsCollection,
+  taskRelations: taskRelationsCollection,
 };
 
 type WritableCollection = (typeof writableCollections)[keyof typeof writableCollections];
@@ -593,6 +611,20 @@ function send(
       }
     }
   }
+  if (mutation.collection.id === taskRelationsCollection.id) {
+    switch (mutation.type) {
+      case 'insert':
+        return sending(
+          api.createTaskRelation(taskRelationCreateRequest(mutation.modified as TaskRelation)),
+          taskRelationsCollection,
+        );
+      case 'update':
+        // A relation is replaced, never edited.
+        return null;
+      case 'delete':
+        return sending(api.deleteTaskRelation(key), taskRelationsCollection);
+    }
+  }
   if (mutation.collection.id === commentsCollection.id) {
     switch (mutation.type) {
       case 'insert':
@@ -829,6 +861,16 @@ export function useTaskTags(taskId: string) {
     [taskId],
   );
   return { taskTags: data ?? emptyTaskTags, isLoading };
+}
+
+const emptyRelations: TaskRelation[] = [];
+
+/** Every task relation in the user's workspaces, for board cards and the task view. */
+export function useTaskRelations() {
+  const { data = emptyRelations, isLoading } = useLiveQuery((q) =>
+    q.from({ relation: taskRelationsCollection }),
+  );
+  return { relations: useSteadyRows(data), isLoading };
 }
 
 /** A reload must wait for in-flight writes to reach durable storage or the server. */

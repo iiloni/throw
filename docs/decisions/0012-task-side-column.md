@@ -15,10 +15,13 @@ the dock below it), so its extras follow the same pattern.
 
 **A wide desktop pane has a side column for the task's extras.** It is a fixed 256 px
 (`w-64`) column, 12 px beside the card, with its own scroll area, and like the card it stops
-above the dock. It holds the task's tags, then its subtasks with their slot to add one. It is
+above the dock. It holds the task's tags, then its subtasks with their slot to add one, then its relations
+(2026-11-22). It is
 the place for later extras such as link previews and media: each is one more block in
 `TaskColumnFrame`'s children, in order, with its inline copy folding in the main column
-(`Fold`). Comments and history stay in the main column, below the description.
+(`Fold`). Comments and history stay in the main column, below the description; on narrower
+panes and phones, relations live in a third **Links** tab beside Comments and History, which
+animates smoothly in and out of `SegmentedTabs` on `springs.pane` as the pane crosses 620 px.
 
 **The pane must be at least 620 px wide** (`COLUMN_MIN` in
 `components/TaskDetails/taskColumn.ts`). Catch waits for 700 px (`SIDE_LINKS_MIN`), but
@@ -29,8 +32,9 @@ beside the column, more than the narrowest pane (340 px). The pane opens at 440 
 column waits until someone widens the pane for it. Narrower panes and phones (ADR 0009) keep
 the stacked layout.
 
-**It shows only when there is something in it.** A task's first tag or subtask springs it open
-and removing the last springs it shut. The card narrows or widens on the spring rather than
+**It shows only when there is something in it.** A task's first tag, subtask or relation
+springs it open and removing the last springs it shut. Relations are added from the dock,
+so they have no inline slot. The card narrows or widens on the spring rather than
 jumping. While it is shut, “Add subtask” stays inline below the description, so it can always
 be reached. A subtask added there opens as a task of its own, and its parent shows the column
 when Back returns there. A new extra goes straight to the open column rather than showing
@@ -47,7 +51,7 @@ the same way, so nothing stretches and then snaps. The springs (`springs.pane`) 
 painted frames (`animateSteadySpring`), start once the frame that changed the layout is
 painted, and continue from their current value when reversed. Reduced motion changes the
 layout immediately. Opening a task lays it out at once. Its extras spring only after its
-tags have loaded, so switching tasks, or going back to a parent, does not replay the
+tags and relations have loaded, so switching tasks, or going back to a parent, does not replay the
 column's entry.
 
 **One copy can be reached.** During a transition both copies are drawn. Only the

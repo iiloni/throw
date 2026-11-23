@@ -25,7 +25,7 @@ change no task: the spec's no-automation rule stands.
 | Event | When |
 | --- | --- |
 | `task.created` | A task or subtask is created. |
-| `task.updated` | A task's fields, tags, position (from MCP), trash state or parent change. `kind` is `updated`, `reordered`, `trashed` or `restored`. |
+| `task.updated` | A task's fields, tags, relations, position (from MCP), trash state or parent change. A relation announces both its tasks. `kind` is `updated`, `reordered`, `trashed` or `restored`. |
 | `task.deleted` | A task is purged from the trash. Purging a parent announces each subtask too. |
 | `comment.created`, `comment.updated`, `comment.deleted` | A comment changes. |
 | `structure.updated` | A project, status or tag is created, edited, reordered by MCP, trashed, restored or deleted. One per project per transaction. |

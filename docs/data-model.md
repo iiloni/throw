@@ -1,7 +1,8 @@
 # Task data model
 
 Status: agreed with the owner on 2026-10-13. Projects, statuses, priorities, keys, tasks,
-subtasks, tags, the trash, the conflict rule, the log's sync and comments are built; the
+subtasks, tags, task relations, the trash, the conflict rule, the log's sync and comments
+are built; the
 timeline has a data layer but no view. Decisions taken while building it are under
 [Implementation notes](#implementation-notes).
 
@@ -220,6 +221,51 @@ new tag routes and shapes require the new server. Existing queued task
 writes keep their format and receive null/empty tag defaults; device rows are resynced after
 the task shape version bump, and no outbox is cleared.
 
+## Task relation
+
+A link between two tasks of one workspace, in the same project or different ones
+(`task_relations`, 2026-11-22). Relations are informational: no write to a task checks them.
+
+| Field | Who sets it | Notes |
+| --- | --- | --- |
+| `id` | Client | UUIDv7, so a relation can be made offline. |
+| `workspaceId` | Server, fixed | From the tasks, which must share it. |
+| `sourceTaskId` | Fixed | The task that blocks or duplicates. |
+| `targetTaskId` | Fixed | The task blocked or duplicated. |
+| `kind` | Fixed | `blocks`, `duplicates` or `relates_to`. |
+| `createdAt` | Server | |
+
+- A relation is never edited: changing one is a remove and an add.
+- It has no `projectId`, since its two tasks can be in different projects. Membership of a
+  single project, if it comes, will filter relations through their tasks.
+- `relates_to` is symmetric, so its pair is stored with the lower id first (`canonicalPair`
+  in `@throw/shared`), on the device and again on the server, with a check constraint.
+  `(sourceTaskId, targetTaskId, kind)` is unique and a task cannot relate to itself.
+- The server refuses the reverse of a directed relation with 409: with B blocks A stored,
+  A blocks B is refused, and likewise for duplicates. Writes over one pair serialize on a
+  transaction advisory lock after both tasks are held with key share, in id order, so two
+  devices cannot each add one direction. Longer cycles (A blocks B blocks C blocks A) are
+  allowed **(default)**.
+- A create whose id is stored with the same pair and kind is a replay; with another pair it
+  is 409. A create for a link already stored under another id (two devices offline) changes
+  nothing. Both answer `{ txid: null }`, and the device's optimistic row gives way to the
+  synced one. Tasks that are missing, unreachable or purged answer 404.
+- A delete of a relation that is gone or unreachable answers `{ txid: null }`.
+- Purging either task, or a project or workspace, removes its relations by cascade.
+- A task is blocked while a `blocks` source is neither in a done or cancelled status nor
+  trashed (with its parent or project counting, as for any task). A blocker the device
+  does not hold does not count (`openBlockers`).
+- Each add and remove writes an `updated` entry on both tasks with one `relations` item:
+  `relationId`, `relation` (how that task sees it: `blocks`, `blocked_by`, `duplicates`,
+  `duplicated_by` or `relates_to`), `previous`/`requested` of null and the other task's id
+  (added: `null` → id; removed: id → `null`), and the other task's identifier at the time
+  in the names. Entry ids are the server's, since the relation's own id makes it
+  replayable. Each also queues a `task.updated` webhook with `changedFields: ["relations"]`.
+- The `task-relations` shape syncs every relation in the user's workspaces, and its
+  collection always syncs (schemaVersion 1) so cards are marked offline. No existing shape,
+  collection or queued write format changed, so protocol 1 stands (ADR 0003). The release
+  ships server and client together, so no capability flag gates the new routes.
+
 ## Task writes
 
 ### Size compatibility
@@ -327,6 +373,7 @@ a `jsonb` column, synced whole). A device shows an item whose field it does not 
 generically, or skips it; it never drops the entry. Tag items:
 
 - `primaryTagId`: as a status item, with the tags' names.
+- `relations`: one item per relation added or removed; see [Task relation](#task-relation).
 - `secondaryTags`: one item per tag added or removed, with that tag's id in an additional
   `tagId`. `previous` and `requested` are the tag's id or null (added: `null` → id;
   removed: id → `null`), with names for both. A tag that no longer exists is recorded with

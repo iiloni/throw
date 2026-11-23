@@ -1,5 +1,5 @@
 import { sizeLabel } from '@throw/shared';
-import { Check, CornerDownRight } from 'lucide-react';
+import { Ban, Check, CornerDownRight } from 'lucide-react';
 import { animate, motion, useMotionValue } from 'motion/react';
 import {
   type KeyboardEvent,
@@ -15,6 +15,7 @@ import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { CARD_HELP_ID } from './BoardAnnouncer';
+import { blockedLabel, useTaskBlockers } from './blockers';
 import { carryAcross, carryVertically, pickUp, putBack, setDown } from './carry';
 import { consumeDragClick, drag, isPrimed, pressCard } from './drag';
 import { PriorityGlyph, StatusGlyph } from './glyphs';
@@ -40,7 +41,7 @@ type Props = {
   /** The copy that follows the pointer during a drag. */
   overlay?: boolean;
   className?: string;
-  onOpen?: () => void;
+  onOpen?: (origin?: HTMLElement | null) => void;
   statusControl?: ReactNode;
 };
 
@@ -70,6 +71,7 @@ export function TaskCardFace({
   const [settings] = useBoardSettings();
   const state = board.use();
   const status = statusById(project, task.statusId);
+  const blockers = useTaskBlockers(task.id);
   const parent = task.parentId
     ? current(state).tasks.find((item) => item.id === task.parentId)
     : undefined;
@@ -100,6 +102,18 @@ export function TaskCardFace({
         <span className="shrink-0 font-medium tabular-nums">
           {identifier(project, task) ?? 'Pending'}
         </span>
+        {blockers.length > 0 && task.closedAt === null && (
+          <Hint label={blockedLabel(blockers)}>
+            <span
+              role="img"
+              data-blocked=""
+              aria-label={blockedLabel(blockers)}
+              className="flex shrink-0 items-center text-destructive/80"
+            >
+              <Ban aria-hidden className="size-3" />
+            </span>
+          </Hint>
+        )}
         {parent && state.actions && (
           <Hint label={`Subtask of ${parent.title}`}>
             <span role="img" aria-label={`Subtask of ${parent.title}`}>
@@ -188,14 +202,14 @@ export function TaskCard({
     if (event.target instanceof Node && !event.currentTarget.contains(event.target)) return;
     if (event.target instanceof Element && event.target.closest('[data-no-drag]')) return;
     if (onOpen) {
-      onOpen();
+      onOpen(ref.current);
       return;
     }
     if (event.metaKey || event.ctrlKey || event.shiftKey || state.selection.length > 0) {
       haptics.selection();
       toggleSelected(task.id);
     } else {
-      update({ openTaskId: open ? null : task.id });
+      update({ openTaskId: open ? null : task.id }, ref.current);
     }
   }
 
@@ -203,7 +217,7 @@ export function TaskCard({
     if (event.target !== event.currentTarget) return;
     if (onOpen && (event.key === 'Enter' || event.key === ' ')) {
       event.preventDefault();
-      onOpen();
+      onOpen(ref.current);
       return;
     }
     const arrows: Record<string, () => void> = {
@@ -225,7 +239,7 @@ export function TaskCard({
     } else if (event.key === 'Enter') {
       event.preventDefault();
       if (carried) setDown();
-      else update({ openTaskId: task.id });
+      else update({ openTaskId: task.id }, ref.current);
     }
   }
 

@@ -11,6 +11,13 @@ export type TaskRect = {
   showStatus: boolean;
   /** Whether that status is a control (a subtask's, in its parent), shaped as a button is. */
   statusControl: boolean;
+  /**
+   * A row that stands for the task without being its card, such as a related task in the pane:
+   * the screen dissolves out of and back into it rather than wearing a card's face.
+   */
+  row: boolean;
+  /** The exact DOM node the task grew out of, so closing lands back in it when several exist. */
+  element: HTMLElement;
 };
 const origins = new Map<string, TaskRect>();
 const hidden = createStore<ReadonlySet<string>>(new Set());
@@ -19,26 +26,41 @@ const landing = createStore<ReadonlySet<string>>(new Set());
 // Task surfaces on screen, counting one still closing after its task has left the board.
 const surfaces = createStore(0);
 
+/** Whether an origin card or row is mounted and at least partly inside the viewport. */
+export function isVisibleOrigin(card: HTMLElement): boolean {
+  if (!card.isConnected) return false;
+  const box = card.getBoundingClientRect();
+  const top = box.top + drawerTravel(card);
+  return !(
+    !box.width ||
+    !box.height ||
+    top + box.height <= 0 ||
+    top >= innerHeight ||
+    box.right <= 0 ||
+    box.left >= innerWidth
+  );
+}
+
 /**
- * The card a task leaves from or lands in. Prefer a subtask card in the open pane over a
- * second copy on the board behind it. A card in a drawer that is still rising counts where
- * the drawer will rest, so a task closing into the reopening backlog finds its card.
+ * The card a task leaves from or lands in. Prefer a subtask card or a relation row
+ * (`data-task-origin`) in the open pane over a second copy on the board behind it. A card in a
+ * drawer that is still rising counts where the drawer will rest, so a task closing into the
+ * reopening backlog finds its card.
  */
-export function findTaskCard(taskId: string): HTMLElement | null {
-  const cards = document.querySelectorAll<HTMLElement>('[data-card-id]:not([data-overlay])');
+export function findTaskCard(
+  taskId: string,
+  kind: 'any' | 'card' | 'row' = 'any',
+): HTMLElement | null {
+  const selector =
+    kind === 'card'
+      ? '[data-card-id]:not([data-overlay])'
+      : kind === 'row'
+        ? '[data-task-origin]'
+        : '[data-card-id]:not([data-overlay]), [data-task-origin]';
+  const cards = document.querySelectorAll<HTMLElement>(selector);
   for (const card of Array.from(cards).reverse()) {
-    if (card.dataset.cardId !== taskId) continue;
-    const box = card.getBoundingClientRect();
-    const top = box.top + drawerTravel(card);
-    if (
-      !box.width ||
-      !box.height ||
-      top + box.height <= 0 ||
-      top >= innerHeight ||
-      box.right <= 0 ||
-      box.left >= innerWidth
-    )
-      continue;
+    if ((card.dataset.cardId ?? card.dataset.taskOrigin) !== taskId) continue;
+    if (!isVisibleOrigin(card)) continue;
     return card;
   }
   return null;
@@ -55,6 +77,8 @@ export function taskCardRect(card: HTMLElement): TaskRect {
     radius: Number.parseFloat(getComputedStyle(card).borderTopLeftRadius) || 16,
     showStatus: card.dataset.showStatus !== undefined,
     statusControl: card.dataset.statusControl !== undefined,
+    row: card.dataset.taskOrigin !== undefined,
+    element: card,
   };
 }
 
@@ -63,8 +87,9 @@ export function measureTaskCard(taskId: string): TaskRect | null {
   return card && taskCardRect(card);
 }
 
-export function rememberTaskOrigin(taskId: string) {
-  const rect = measureTaskCard(taskId);
+export function rememberTaskOrigin(taskId: string, element?: HTMLElement | null) {
+  const target = element && isVisibleOrigin(element) ? element : findTaskCard(taskId);
+  const rect = target && taskCardRect(target);
   if (rect) origins.set(taskId, rect);
 }
 
