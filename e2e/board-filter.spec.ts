@@ -283,7 +283,7 @@ test.describe('desktop', () => {
       ]);
   });
 
-  test('a wide window docks search beside the backlog as Catch’s search page, with tags to browse', async ({
+  test('a wide window docks search beside the backlog with full inline sort and filter controls', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
@@ -291,8 +291,16 @@ test.describe('desktop', () => {
     await openBar(page);
     const docked = bar(page);
     await expect(docked).toHaveAttribute('data-docked', '');
-    // Left of the backlog, not over a column, with its field at the foot below the tags.
-    const browse = docked.getByRole('region', { name: 'Browse tags' });
+    // No popup filter trigger or tabbed filter card in the wide docked sidebar.
+    await expect(docked.getByRole('button', { name: 'Filter and sort' })).toHaveCount(0);
+    await expect(docked.getByRole('tablist', { name: 'Filter type' })).toHaveCount(0);
+    // Left of the backlog, not over a column, with inline Sort, Size and Tags above the field.
+    const sortSection = docked.getByRole('region', { name: 'Sort', exact: true });
+    const sizeSection = docked.getByRole('region', { name: 'Size', exact: true });
+    const tagsSection = docked.getByRole('region', { name: 'Tags', exact: true });
+    await expect(sortSection).toBeVisible();
+    await expect(sizeSection).toBeVisible();
+    await expect(tagsSection).toBeVisible();
     // Measured once the sidebar has opened to its width.
     await expect
       .poll(async () => {
@@ -303,43 +311,50 @@ test.describe('desktop', () => {
         return search!.x + search!.width <= backlog!.x;
       })
       .toBe(true);
-    const [tiles, input] = await Promise.all([browse.boundingBox(), field(page).boundingBox()]);
-    expect(input!.y).toBeGreaterThan(tiles!.y + tiles!.height);
-    await expect(filters(page)).toHaveCount(0);
+    const [tagsBox, input] = await Promise.all([
+      tagsSection.boundingBox(),
+      field(page).boundingBox(),
+    ]);
+    expect(input!.y).toBeGreaterThan(tagsBox!.y + tagsBox!.height);
     // Board parent and Review this have no tag.
-    await expect(browse.getByRole('button', { name: /^Untagged/ })).toContainText('2');
-    // A tag's tile filters by it, and the tags beneath it.
-    const home = browse.getByRole('button', { name: /^Home/ });
-    await expect(home).toContainText('2');
+    await expect(tagsSection.getByRole('button', { name: /^Untagged,/ })).toContainText('2');
+    // Root and nested tags work inline, with Any/All matching once multiple tags are chosen.
+    const garden = tagsSection.getByRole('button', { name: /^Home \/ Garden,/ });
+    const work = tagsSection.getByRole('button', { name: /^Work,/ });
+    await garden.click();
+    await expect(garden).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Earlier position']]);
+    await work.click();
+    await expect
+      .poll(() => cardIds(page, 'Build'))
+      .toEqual([
+        board.ids['Earlier position'],
+        board.ids['Later position'],
+        board.ids['Low priority'],
+      ]);
+    await tagsSection.getByRole('button', { name: 'All tags', exact: true }).click();
+    await expect.poll(() => cardIds(page, 'Build')).toEqual([]);
+    await garden.click();
+    const home = tagsSection.getByRole('button', { name: /^Home,/ });
     await home.click();
-    await expect(home).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Later position']]);
+    // Size and Sort controls live inline too, without opening any popup.
+    await work.click();
     await expect
       .poll(() => cardIds(page, 'Build'))
       .toEqual([board.ids['Earlier position'], board.ids['Later position']]);
-    // The filter button raises the filter card over the tiles, above the field.
-    await field(page).fill('position');
-    await docked.getByRole('button', { name: 'Filter and sort', exact: true }).click();
-    await expect(filters(page)).toBeVisible();
+    await sortSection.getByRole('button', { name: 'Size', exact: true }).click();
+    await sortSection.getByRole('button', { name: 'Largest', exact: true }).click();
     await expect
-      .poll(async () => {
-        const [card, foot] = await Promise.all([
-          filters(page).boundingBox(),
-          field(page).boundingBox(),
-        ]);
-        return card!.y + card!.height <= foot!.y;
-      })
-      .toBe(true);
-    await section(page, 'Size');
-    await filters(page)
-      .getByRole('button', { name: /^Size L,/ })
-      .click();
+      .poll(() => cardIds(page, 'Build'))
+      .toEqual([board.ids['Later position'], board.ids['Earlier position']]);
+    await expect(chips(page)).toContainText('Largest first');
+    await sizeSection.getByRole('button', { name: /^Size L,/ }).click();
     await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Later position']]);
-    // Escape closes the filters, then clears, then closes.
+    // Escape clears active filters and sort first, then closes the sidebar.
     await page.keyboard.press('Escape');
-    await expect(filters(page)).toHaveCount(0);
-    await expect(browse).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(field(page)).toHaveValue('');
+    await expect(chips(page)).toHaveCount(0);
+    await expect(field(page)).toBeFocused();
     await expect(
       page.getByRole('region', { name: 'Build', exact: true }).getByRole('article'),
     ).toHaveCount(4);
@@ -412,6 +427,25 @@ test.describe('desktop', () => {
     await expect(capture.getByRole('textbox', { name: 'Task title' })).toHaveValue(
       'Capture from the bar',
     );
+  });
+
+  test('a wide workspace board shows Sort, Size and Projects inline in the docked sidebar', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    const board = await workspaceFixture(page);
+    await openBar(page);
+    const docked = bar(page);
+    await expect(docked).toHaveAttribute('data-docked', '');
+    await expect(docked.getByRole('button', { name: 'Filter and sort' })).toHaveCount(0);
+    await expect(docked.getByRole('region', { name: 'Tags', exact: true })).toHaveCount(0);
+    const projectsSection = docked.getByRole('region', { name: 'Projects', exact: true });
+    await expect(projectsSection).toBeVisible();
+    await projectsSection.getByRole('button', { name: /^Garden\b/ }).click();
+    await expect
+      .poll(() => cardIds(page, 'Active'))
+      .toEqual([board.ids['Water tomatoes'], board.ids['Prune roses']]);
+    await expect(chips(page).getByRole('button', { name: 'Remove Garden filter' })).toBeVisible();
   });
 
   test('the docked search sidebar feathers its overflowing top and bottom edges', async ({

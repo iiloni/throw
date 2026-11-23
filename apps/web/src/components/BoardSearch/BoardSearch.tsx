@@ -30,7 +30,7 @@ import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { createTask } from '@/lib/tasks';
 import { cn } from '@/lib/utils';
-import { ActiveFilters, BoardFilters, hasChips, QuickFilters } from './BoardFilters';
+import { ActiveFilters, BoardFilters, hasChips, SidebarFilters } from './BoardFilters';
 import { FilterCard } from './FilterCard';
 
 /** Room the open bar takes at the foot of the board, so a column's last card can scroll clear. */
@@ -172,29 +172,33 @@ export function BoardSearch() {
 }
 
 /**
- * Search on a wide board: a column between the navigation rail and the backlog, laid out as
- * Catch's search page, so nothing floats over the cards. The field and filter button sit at its
- * foot with the chips above them, and the tags fill the column above as quick filters. The
- * filter button raises Catch's filter card over the tags, anchored above the field. It narrows
- * the board as the bar does, and Escape steps back the same way.
+ * Search on a wide board: a column between the navigation rail and the backlog, so nothing
+ * floats over the cards. The full inline sort and filter controls fill the scrolling column
+ * above the active chips and search field, removing the need for a popup filter card. It
+ * narrows the board in place as the floating bar does, and Escape clears active filters and
+ * search before closing.
  */
 export function BoardSearchSidebar() {
   const state = board.use();
   const reduced = useReducedMotion();
   const root = useRef<HTMLElement>(null);
   const searching = state.searching;
-  const [panel, setPanel] = useFilterCard(root, searching);
   const capture = useCapture();
   const dismiss = useDismiss(root, searching);
+
+  function clearAndFocus() {
+    clearFilters();
+    // Keep focus inside search if clearing removed the focused control (direction, match or chip).
+    root.current?.querySelector<HTMLElement>('[data-board-search-input]')?.focus({
+      preventScroll: true,
+    });
+  }
 
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.key !== 'Escape' || event.nativeEvent.isComposing) return;
     event.preventDefault();
     event.stopPropagation();
-    if (panel) {
-      setPanel(false);
-      root.current?.querySelector<HTMLElement>('[data-board-filter-trigger]')?.focus();
-    } else if (narrowed(board.get())) clearFilters();
+    if (narrowed(board.get())) clearAndFocus();
     else dismiss();
   }
 
@@ -219,18 +223,14 @@ export function BoardSearchSidebar() {
           >
             <ScrollArea edges className="-mr-1 flex-1 [--scrollbar-inset:0.5rem]">
               <ScrollAreaViewport>
-                <div className="pr-1 pb-3">
-                  <QuickFilters />
+                <div className="px-0.5 pt-0.5 pr-1.5 pb-4">
+                  <SidebarFilters />
                 </div>
               </ScrollAreaViewport>
               <ScrollBar />
             </ScrollArea>
-            <div className="relative">
-              {/* Over the tags, rising from just above what sits at the foot. */}
-              <div className="absolute inset-x-0 bottom-full">
-                <FilterPanel open={panel} />
-              </div>
-              <Chips />
+            <div className="relative pt-2">
+              <Chips onClear={clearAndFocus} />
               {capture.error && (
                 <p
                   role="alert"
@@ -239,10 +239,7 @@ export function BoardSearchSidebar() {
                   {capture.error}
                 </p>
               )}
-              <div className="flex items-end gap-3">
-                <SearchField onClose={dismiss} onCapture={capture.create} placeholder="Search" />
-                <FilterButton open={panel} onToggle={() => setPanel(!panel)} />
-              </div>
+              <SearchField onClose={dismiss} onCapture={capture.create} placeholder="Search" />
             </div>
           </search>
         </motion.div>
@@ -274,7 +271,7 @@ function FilterPanel({ open }: { open: boolean }) {
 }
 
 /** The chips of what narrows the board, on their own glass above the field. */
-function Chips() {
+function Chips({ onClear }: { onClear?: () => void }) {
   const state = board.use();
   const reduced = useReducedMotion();
   const shown = hasChips(state);
@@ -290,7 +287,7 @@ function Chips() {
           transition={reduced ? { duration: 0 } : springs.smooth}
         >
           <div className="glass mb-3 rounded-[1.25rem] px-2.5 py-2">
-            <ActiveFilters state={state} />
+            <ActiveFilters state={state} onClear={onClear} />
           </div>
         </motion.div>
       )}

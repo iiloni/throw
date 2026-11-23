@@ -1,7 +1,11 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
-import type { Project, Status, Task } from '@throw/shared';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import type { Project, Status, Tag, Task } from '@throw/shared';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { projectBoardData, secondaryTagsByTask } from '@/components/Board/selection';
+import {
+  projectBoardData,
+  secondaryTagsByTask,
+  workspaceBoardData,
+} from '@/components/Board/selection';
 import { board, initialBoard, receiveBoard, update } from '@/components/Board/state';
 import { BoardSearch, BoardSearchSidebar } from './BoardSearch';
 
@@ -138,5 +142,163 @@ describe('the board’s search bar', () => {
     fireEvent.scroll(viewport);
     expect(area).toHaveAttribute('data-more-top');
     expect(area).not.toHaveAttribute('data-more-bottom');
+  });
+});
+
+const makeTag = (
+  id: string,
+  name: string,
+  parentId: string | null = null,
+  color: Tag['color'] = parentId ? null : 'teal',
+): Tag => ({
+  id,
+  name,
+  parentId,
+  projectId: project.id,
+  workspaceId: project.workspaceId,
+  icon: null,
+  color,
+  position: 'a0',
+});
+
+describe('the docked search sidebar', () => {
+  const tags: Tag[] = [
+    makeTag('home', 'Home', null, 'teal'),
+    makeTag('garden', 'Garden', 'home'),
+    makeTag('work', 'Work', null, 'blue'),
+  ];
+
+  beforeEach(() => {
+    receiveBoard(
+      projectBoardData(
+        project,
+        statuses,
+        [
+          { ...task('Weed beds', 2), primaryTagId: 'garden' },
+          { ...task('Paint fence', 4), primaryTagId: 'home' },
+          { ...task('Write report', null), primaryTagId: 'work' },
+          task('Tidy desk', null),
+        ],
+        tags,
+        secondaryTagsByTask([]),
+      ),
+      { rename: () => {}, place: () => true, send: () => true },
+    );
+    act(() => update({ searching: true }));
+  });
+
+  it('shows inline Sort, Size and Tags sections directly without a popup filter button', () => {
+    render(<BoardSearchSidebar />);
+    expect(screen.queryByRole('button', { name: 'Filter and sort' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tablist', { name: 'Filter type' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Sort' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Size' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Tags' })).toBeInTheDocument();
+
+    const sortRegion = screen.getByRole('region', { name: 'Sort' });
+    fireEvent.click(within(sortRegion).getByRole('button', { name: 'Size' }));
+    fireEvent.click(within(sortRegion).getByRole('button', { name: 'Largest' }));
+
+    const sizeRegion = screen.getByRole('region', { name: 'Size' });
+    fireEvent.click(within(sizeRegion).getByRole('button', { name: /^Size S,/ }));
+    fireEvent.click(within(sizeRegion).getByRole('button', { name: /^Unsized,/ }));
+
+    const tagsRegion = screen.getByRole('region', { name: 'Tags' });
+    fireEvent.click(within(tagsRegion).getByRole('button', { name: /^Home \/ Garden,/ }));
+    fireEvent.click(within(tagsRegion).getByRole('button', { name: /^Work,/ }));
+    fireEvent.click(within(tagsRegion).getByRole('button', { name: 'All tags' }));
+
+    expect(board.get()).toMatchObject({
+      sort: 'size-desc',
+      filter: {
+        sizes: [2],
+        unsized: true,
+        tagIds: ['garden', 'work'],
+        match: 'all',
+      },
+    });
+    expect(screen.getByRole('group', { name: 'Active filters' })).toHaveTextContent(
+      /Largest first/,
+    );
+  });
+
+  it('clears filters and focuses the search input on Escape, then dismisses on the next Escape', () => {
+    render(<BoardSearchSidebar />);
+    const sortRegion = screen.getByRole('region', { name: 'Sort' });
+    fireEvent.click(within(sortRegion).getByRole('button', { name: 'Size' }));
+    const largest = within(sortRegion).getByRole('button', { name: 'Largest' });
+    largest.focus();
+    fireEvent.click(largest);
+    expect(board.get().sort).toBe('size-desc');
+
+    // Pressing Escape while focus is on the conditional direction button clears filters and moves focus to the search input.
+    fireEvent.keyDown(largest, { key: 'Escape' });
+    expect(board.get()).toMatchObject({ sort: 'priority', searching: true });
+    expect(field()).toHaveFocus();
+
+    fireEvent.keyDown(field(), { key: 'Escape' });
+    expect(board.get().searching).toBe(false);
+  });
+
+  it('shows Find tags for large tag lists and clears the tag query before board filters on Escape', () => {
+    const manyTags = Array.from({ length: 10 }, (_, i) => makeTag(`t-${i}`, `Tag ${i + 1}`));
+    receiveBoard(
+      projectBoardData(
+        project,
+        statuses,
+        [task('Weed beds', 2)],
+        manyTags,
+        secondaryTagsByTask([]),
+      ),
+      { rename: () => {}, place: () => true, send: () => true },
+    );
+    act(() => update({ searching: true }));
+
+    render(<BoardSearchSidebar />);
+    const findTags = screen.getByRole('searchbox', { name: 'Find tags' });
+    fireEvent.click(screen.getByRole('button', { name: /^Size S,/ }));
+    fireEvent.change(findTags, { target: { value: 'Tag 10' } });
+    expect(screen.getByRole('button', { name: /^Tag 10,/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Tag 2,/ })).not.toBeInTheDocument();
+
+    // First Escape clears Find tags without clearing active board filters.
+    fireEvent.keyDown(findTags, { key: 'Escape' });
+    expect(findTags).toHaveValue('');
+    expect(board.get().filter.sizes).toEqual([2]);
+
+    // Next Escape clears board filters, then final Escape dismisses the sidebar.
+    fireEvent.keyDown(findTags, { key: 'Escape' });
+    expect(board.get().filter.sizes).toEqual([]);
+    expect(board.get().searching).toBe(true);
+    fireEvent.keyDown(field(), { key: 'Escape' });
+    expect(board.get().searching).toBe(false);
+  });
+
+  it('renders Projects inline instead of Tags on the workspace board', () => {
+    const secondProject: Project = { ...project, id: 'project-2', name: 'Kitchen', key: 'KIT' };
+    const secondStatus: Status = { ...statuses[0]!, id: 'kit-build', projectId: secondProject.id };
+    receiveBoard(
+      workspaceBoardData(
+        project.workspaceId,
+        [project, secondProject],
+        [statuses[0]!, secondStatus],
+        [
+          task('Weed beds', 2),
+          { ...task('Wash dishes', 3), projectId: secondProject.id, statusId: secondStatus.id },
+        ],
+        [],
+        secondaryTagsByTask([]),
+      ),
+      { rename: () => {}, place: () => true, send: () => true },
+    );
+    act(() => update({ searching: true }));
+
+    render(<BoardSearchSidebar />);
+    expect(screen.queryByRole('region', { name: 'Tags' })).not.toBeInTheDocument();
+    const projectsRegion = screen.getByRole('region', { name: 'Projects' });
+    const kitchen = within(projectsRegion).getByRole('button', { name: /Kitchen/ });
+    expect(kitchen).toHaveTextContent('1');
+    fireEvent.click(kitchen);
+    expect(board.get().filter.projectId).toBe('project-2');
   });
 });

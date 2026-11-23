@@ -692,13 +692,11 @@ lists the projects.
 
 When the board is at least 1320 CSS pixels wide (the window less the rail), search docks as a
 sidebar between the rail and the backlog instead of floating, so nothing sits over the cards
-(2026-11-22). It is laid out as Catch's search page: the field and filter button at its foot,
-the chips above them, and above those Catch's Browse tags, the project's root tags as tiles in
-their color with the cards each would leave, and Untagged. A tile toggles its tag in the
-filter; on the cross-project board the tiles are the projects and scope the board to one. The
-filter button raises Catch's filter card over the tiles, anchored above the field, with the
-full filters and sort; a press outside it closes it. It opens, closes and steps back on Escape as
-the bar does.
+(2026-11-22). The scrolling column above the search field surfaces the full sort and filter
+controls directly — Sort, Size, and Tags (including nested tags, Any/All matching and Untagged,
+or Projects on the cross-project board) — without a popup filter card (2026-11-23). The active
+chips and Clear all sit above the field at its foot. Escape clears active filters and search
+first, then closes the sidebar and returns focus.
 
 Away from the boards (settings, trash, an empty workspace) search is a command palette. There
 is no search page. The palette also captures tasks. It takes Catch's search and quick note as
