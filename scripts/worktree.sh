@@ -150,8 +150,12 @@ resolve_worktree() {
 }
 
 # Ignored paths that are safe to discard when removing a worktree: dependencies,
-# build output and test artifacts.
+# build output and test artifacts, plus what Gradle and `cap sync` regenerate in the
+# Android project. Local Android config and signing keys (local.properties, *.jks,
+# *.keystore, .idea/) stay protected.
 DISPOSABLE='(^|/)(node_modules|dist|dev-dist|coverage|playwright-report|test-results|\.tanstack)(/|$)|\.(tsbuildinfo|log)$'
+DISPOSABLE+='|^apps/web/android/(\.gradle|build|app/build|capacitor-cordova-android-plugins|app/src/main/assets/public)(/|$)'
+DISPOSABLE+='|^apps/web/android/app/src/main/(assets/capacitor\.(config|plugins)\.json|res/xml/config\.xml)$'
 
 remove_worktree() {
     local query=$1
