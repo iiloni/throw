@@ -430,6 +430,12 @@ test.describe('phone', () => {
     await section(page, 'Sort');
     await page.getByRole('button', { name: 'Size', exact: true }).click();
     await page.getByRole('button', { name: 'Largest', exact: true }).click();
+    // With nothing typed, the results list what the board behind now shows, in its order.
+    await expect(page.getByText('2 tasks on the board', { exact: true })).toBeVisible();
+    await expect(page.getByRole('option', { name: /Low priority|Later position/ })).toHaveText([
+      /Low priority/,
+      /Later position/,
+    ]);
     // The results narrow with the board.
     await page.getByRole('combobox', { name: /^Search tasks/ }).fill('position');
     await expect(page.getByRole('option', { name: /Later position/ })).toBeVisible();

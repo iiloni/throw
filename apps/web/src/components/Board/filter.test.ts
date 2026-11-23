@@ -27,6 +27,7 @@ import {
   receiveBoard,
   setFilter,
   setSort,
+  shownTasks,
   update,
 } from './state';
 
@@ -292,6 +293,22 @@ describe('a narrowed board', () => {
     expect(narrowed(board.get())).toBe(true);
     clearFilters();
     expect(countIn(board.get(), 'build')).toBe(5);
+  });
+
+  it('lists everything it shows column by column, for the phone’s search', () => {
+    update({ subtasksAsCards: true });
+    setFilter({ sizes: [3, 4, 5] });
+    expect(shownTasks(board.get()).map((item) => item.id)).toEqual([
+      'write report',
+      'paint fence',
+      'order seeds',
+    ]);
+    setSort('size-asc');
+    expect(shownTasks(board.get()).map((item) => item.id)).toEqual([
+      'paint fence',
+      'write report',
+      'order seeds',
+    ]);
   });
 
   it('orders the columns by size while sorted, and the closed zone by time still', () => {

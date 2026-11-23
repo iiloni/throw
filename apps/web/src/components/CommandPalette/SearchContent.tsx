@@ -11,7 +11,7 @@ import {
   useState,
 } from 'react';
 import { type ShellState, useShell } from '@/components/AppShell/shell';
-import { matchingIds } from '@/components/Board/filter';
+import { isFiltering, matchingIds } from '@/components/Board/filter';
 import { PriorityGlyph, StatusGlyph } from '@/components/Board/glyphs';
 import { DEFAULT_PRIORITY_NAMES } from '@/components/Board/model';
 import { secondaryTagsByTask } from '@/components/Board/selection';
@@ -21,6 +21,7 @@ import {
   current,
   narrowed,
   setFilter,
+  shownTasks,
   useBoardSettings,
 } from '@/components/Board/state';
 import { ActiveFilters, BoardFilters } from '@/components/BoardSearch/BoardFilters';
@@ -114,14 +115,26 @@ export function useSearch({
     () => indexTasks(tasks, shell.projects, actions.statuses, shell.workspace?.id ?? '', tagNames),
     [tasks, shell.projects, actions.statuses, shell.workspace?.id, tagNames],
   );
-  const results = useMemo(
-    () =>
-      searchTasks(allowed ? indexed.filter((row) => allowed.has(row.task.id)) : indexed, query, {
+  // With filters and no words, the results are what the board behind now shows, in its order,
+  // so choosing a tag shows its cards here rather than only behind the page.
+  const browsing =
+    !!onBoard && !query.trim() && !!boardFilter && isFiltering({ ...boardFilter, query: '' });
+  const results = useMemo(() => {
+    if (browsing && onBoard) {
+      const byId = new Map(indexed.map((row) => [row.task.id, row]));
+      return shownTasks(onBoard)
+        .flatMap((task) => byId.get(task.id) ?? [])
+        .slice(0, SEARCH_LIMIT);
+    }
+    return searchTasks(
+      allowed ? indexed.filter((row) => allowed.has(row.task.id)) : indexed,
+      query,
+      {
         projectId: projectFilter,
         currentProjectId: shell.project?.id,
-      }),
-    [indexed, allowed, query, projectFilter, shell.project?.id],
-  );
+      },
+    );
+  }, [browsing, onBoard, indexed, allowed, query, projectFilter, shell.project?.id]);
   const projects = useMemo(
     () => (board ? [] : searchProjects(shell.projects, query)),
     [board, shell.projects, query],
@@ -188,6 +201,8 @@ export function useSearch({
     list,
     query,
     title,
+    /** Listing the narrowed board, with filters chosen and no words typed. */
+    browsing,
     results,
     tagsByProject,
     secondaryTags,
@@ -533,7 +548,7 @@ export function SearchResults({ search }: { search: SearchState }) {
         )}
       </AnimatePresence>
       <div id={`${search.id}-results`} role="listbox" aria-label="Tasks, projects and capture">
-        {!title ? (
+        {!title && !search.browsing ? (
           <p className="px-1 pb-5 text-muted-foreground text-sm">
             Search titles, descriptions and tags, or go straight to a task with its identifier.
           </p>
@@ -547,6 +562,7 @@ export function SearchResults({ search }: { search: SearchState }) {
               {results.length === SEARCH_LIMIT
                 ? `First ${SEARCH_LIMIT} tasks`
                 : `${results.length} ${results.length === 1 ? 'task' : 'tasks'}`}
+              {search.browsing && ' on the board'}
             </p>
             <ul className="flex flex-col gap-2">
               <AnimatePresence initial={false} mode="popLayout">
@@ -562,9 +578,11 @@ export function SearchResults({ search }: { search: SearchState }) {
           projects.length === 0 && (
             <div className="pb-6">
               <EmptyState icon={SearchX} title="No matching tasks">
-                {scope && !search.scoped
-                  ? 'Try fewer words, or search all projects.'
-                  : 'Try fewer words, or type an identifier like 12.'}
+                {search.browsing
+                  ? 'Nothing on the board matches these filters.'
+                  : scope && !search.scoped
+                    ? 'Try fewer words, or search all projects.'
+                    : 'Try fewer words, or type an identifier like 12.'}
               </EmptyState>
             </div>
           )

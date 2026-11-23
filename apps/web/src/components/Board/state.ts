@@ -14,6 +14,7 @@ import {
 } from './filter';
 import type { BoardData } from './model';
 import {
+  CATEGORIES,
   type Category,
   categoryTarget,
   compareClosed,
@@ -520,6 +521,19 @@ export function listTasks(state: BoardState, listId: ListId): Task[] {
     .filter((task) => state.subtasksAsCards || task.parentId === null)
     .filter((task) => visible === null || visible.has(task.id))
     .sort(compare);
+}
+
+/**
+ * Every card the board shows, column by column in its order: what a phone's search lists
+ * while filters narrow the board and no words are typed. The backlog's and closed zone's own
+ * status choices are left out, as they only scope what those zones draw.
+ */
+export function shownTasks(state: BoardState): Task[] {
+  const { project } = current(state);
+  const lists: ListId[] = project.members
+    ? CATEGORIES.map((category) => categoryTarget(category))
+    : project.statuses.map((status) => `status:${status.id}` as const);
+  return lists.flatMap((list) => listTasks(state, list));
 }
 
 /** The cards in a status, or in every status of a category target, as the filter leaves them. */

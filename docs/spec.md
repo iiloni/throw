@@ -700,6 +700,8 @@ field at the bottom where the dock was, focused so the keyboard rises right unde
 filter button opens the board's [filters and sort](#search-filters-and-sorting) above the
 field, with their chips over the results. They apply to the board behind and stay after the
 search page closes, shown by the chip bar under the title; the words narrow only the results.
+With filters chosen and no words typed, the results list what the board behind shows, column by
+column in its order, so choosing a tag shows its cards on the search page too.
 The cross-project board's palette offers the same filters and sort, with its project scope. The
 create button opens Catch's quick note for a task: a card above the dock with the title,
 focused, and create. The task lands where a new card would, in the column on screen, or the
