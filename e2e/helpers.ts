@@ -189,3 +189,21 @@ export async function shapeRows(
   }
   throw new Error(`The ${shape} shape never caught up`);
 }
+
+/**
+ * An item in the phone's project switcher, the drawer page the title opens (ADR 0009).
+ * Workspaces and their actions are in its Workspaces view, which `workspace` opens first.
+ */
+export async function switcherItem(page: Page, name: string, { workspace = false } = {}) {
+  if (!workspace)
+    return page
+      .getByRole('dialog', { name: 'Projects' })
+      .getByRole('button', { name, exact: true });
+  await page
+    .getByRole('dialog', { name: 'Projects' })
+    .getByRole('button', { name: /^Workspace: / })
+    .click();
+  return page
+    .getByRole('dialog', { name: 'Workspaces' })
+    .getByRole('button', { name, exact: true });
+}

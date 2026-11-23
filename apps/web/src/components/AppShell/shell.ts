@@ -35,6 +35,8 @@ export type ShellState = {
    */
   selectWorkspace: (id: string, leaving?: string) => void;
   openForm: (form: ShellForm) => void;
+  /** The phone's project switcher, a drawer page (ADR 0009); null on a desktop. */
+  switcher: { open: boolean; show: () => void } | null;
   /** The palette; `seed` starts capture with a title already written. */
   openPalette: (mode?: PaletteMode, seed?: string) => void;
   /** Search where it lives here: the bar over a desktop board, or the palette. */

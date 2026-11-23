@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { type Browser, expect, type Locator, type Page, test } from '@playwright/test';
-import { APP_LOAD_TIMEOUT, shapeRows, signUp, waitForCachedProject } from './helpers';
+import { APP_LOAD_TIMEOUT, shapeRows, signUp, switcherItem, waitForCachedProject } from './helpers';
 import { newTag } from './tag-helpers';
 
 async function fixture(page: Page, { followWorkspaceHome = false } = {}) {
@@ -1220,7 +1220,7 @@ test('task size picker and optional card badge work on both boards', async ({ pa
   const toggleSizeOnCards = async (expectedChecked: boolean) => {
     if (isMobile) {
       await page.getByRole('button', { name: 'Switch project or workspace', exact: true }).click();
-      await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
+      await (await switcherItem(page, 'Settings')).click();
     } else await page.getByRole('link', { name: 'Settings', exact: true }).click();
     const setting = page.getByRole('switch', { name: 'Size on cards', exact: true });
     if (expectedChecked) await expect(setting).not.toBeChecked();

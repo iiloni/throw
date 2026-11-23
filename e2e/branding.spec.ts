@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
-import { APP_LOAD_TIMEOUT, signUp, waitForShapeRow } from './helpers';
+import { APP_LOAD_TIMEOUT, signUp, switcherItem, waitForShapeRow } from './helpers';
 
 async function contrast(locator: Locator, ink: 'color' | 'borderColor', surface: 'self' | 'page') {
   return locator.evaluate(
@@ -49,7 +49,7 @@ async function openPhoneMenu(page: Page) {
 async function addProject(page: Page, name: string, phone: boolean) {
   if (phone) {
     await openPhoneMenu(page);
-    await page.getByRole('menuitem', { name: 'New project', exact: true }).click();
+    await (await switcherItem(page, 'New project')).click();
   } else await page.getByRole('button', { name: 'New project', exact: true }).click();
   await page.getByLabel('Project name', { exact: true }).fill(name);
   await page.getByRole('button', { name: 'Create', exact: true }).click();
@@ -184,7 +184,7 @@ test('brand surfaces preserve artwork, contrast and usable layout on light and d
 
   if (isMobile) {
     await openPhoneMenu(page);
-    await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
+    await (await switcherItem(page, 'Settings')).click();
   } else {
     const settings = page.getByRole('link', { name: 'Settings', exact: true });
     await settings.click();

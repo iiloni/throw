@@ -1,5 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 import { card, workspaceFixture } from './board-helpers';
+import { switcherItem } from './helpers';
 
 type Transition = { types: string[]; names: string[]; animations: string[] };
 
@@ -81,7 +82,7 @@ test('boards cross-fade, ordered pages slide, and the rail and dock stay put', a
   let count = (await transitions(page)).length;
   if (isMobile) {
     await openMenu(page, true);
-    await page.getByRole('menuitem', { name: 'Kitchen', exact: true }).click();
+    await (await switcherItem(page, 'Kitchen')).click();
   } else
     await page
       .getByRole('navigation', { name: 'Projects', exact: true })
@@ -106,7 +107,7 @@ test('boards cross-fade, ordered pages slide, and the rail and dock stay put', a
   // phone, and the board slides back.
   if (isMobile) {
     await openMenu(page, true);
-    await page.getByRole('menuitem', { name: 'Project settings', exact: true }).click();
+    await (await switcherItem(page, 'Project settings')).click();
   } else {
     await page.getByRole('button', { name: 'Project menu for Kitchen', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Project settings', exact: true }).click();
@@ -171,9 +172,13 @@ test('boards cross-fade, ordered pages slide, and the rail and dock stay put', a
 
   // The workspace trash has no place in the order, so it rises softly into view.
   count = (await transitions(page)).length;
-  if (isMobile) await openMenu(page, true);
-  else await page.getByRole('button', { name: 'Switch workspace', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Workspace trash', exact: true }).click();
+  if (isMobile) {
+    await openMenu(page, true);
+    await (await switcherItem(page, 'Workspace trash')).click();
+  } else {
+    await page.getByRole('button', { name: 'Switch workspace', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Workspace trash', exact: true }).click();
+  }
   const enter = await nextTransition(page, count);
   expect(enter.types).toEqual(['enter']);
   expect(enter.animations).toContain('::view-transition-new(root) page-rise');
@@ -189,7 +194,8 @@ test('reduced motion turns page transitions into a short cross-fade', async ({
   await workspaceFixture(page);
   const count = (await transitions(page)).length;
   await openMenu(page, isMobile);
-  await page.getByRole('menuitem', { name: 'Workspace trash', exact: true }).click();
+  if (isMobile) await (await switcherItem(page, 'Workspace trash')).click();
+  else await page.getByRole('menuitem', { name: 'Workspace trash', exact: true }).click();
   const fade = await nextTransition(page, count);
   expect(fade.types).toEqual(['enter']);
   expect(fade.animations).toContain('::view-transition-new(root) page-fade-in');

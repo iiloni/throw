@@ -13,7 +13,9 @@ The repository has the stack end to end (auth, sync, the outbox, local persisten
 task model (workspaces, projects, statuses, tasks and subtasks, with keys, numbers, the trash
 and ADR 0005's conflict rule; see `docs/data-model.md`), and the responsive app shell. The
 shell owns workspace and project management, a desktop navigation rail and remembered
-navigation; each phone board brings its own dock. Page changes animate through the router's
+navigation; each phone board brings its own dock. On a phone the title, or a pull down from
+the top of a board, opens the shell's project switcher as a drawer page
+(`AppShell/ProjectSwitcher.tsx`, `AppShell/SwitcherPull.tsx`). Page changes animate through the router's
 view transitions (`lib/pageTransition.ts`, ADR 0013): boards cross-fade, ordered pages
 slide, and content enters once per document with `useEntryMotion` (`lib/entryMotion.ts`).
 Its project board uses the shared Board
