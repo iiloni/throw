@@ -1,6 +1,13 @@
 import { ListTree, X } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import {
+  AnimatePresence,
+  motion,
+  frame as motionFrame,
+  useMotionValueEvent,
+  useTransform,
+} from 'motion/react';
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import {
   BoardSearch,
   BoardSearchSidebar,
@@ -19,32 +26,35 @@ import { BoardSettingsPanel } from './BoardSettingsPanel';
 import { CardList } from './CardList';
 import { drag, makingWay } from './drag';
 import type { Status } from './model';
-import { railWidth, SideZone, STRIP_WIDTH, zoneWidth } from './SideZone';
+import {
+  type RailGeometry,
+  railGeometry,
+  SideZone,
+  TILES_WIDTH,
+  useRailSpring,
+  ZONE_GAP,
+} from './SideZone';
 import { StatusMenu } from './StatusMenu';
 import { StatusTile } from './StatusTile';
 import {
   board,
   countIn,
   current,
+  railResize,
   selectProject,
   sendTasks,
   setSubtasksAsCards,
   update,
   useBoardSettings,
   useCollapsedColumns,
+  useRailWidths,
 } from './state';
 import { PANE_MIN, SplitHandle, TaskPane } from './TaskView';
 import { TaskPaneWidthContext } from './taskMotionContext';
 
-const TILES_WIDTH = 176;
 const HANDLE_WIDTH = 24;
 /** The pane's `pr-6`: the closed rail reaches the window's edge, the pane does not. */
 const PANE_MARGIN = 24;
-/**
- * Between a rail and the first column beside it. The rails lie over the ends of the columns'
- * scroller, so scrolled columns pass through this space and on under the rail.
- */
-const ZONE_GAP = 20;
 
 export function useWidth() {
   const ref = useRef<HTMLDivElement>(null);
@@ -52,7 +62,11 @@ export function useWidth() {
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
-    const observer = new ResizeObserver(([entry]) => setWidth(entry!.contentRect.width));
+    // Rendered before the frame is painted, so what is laid out from the width (a gallery
+    // beside the task pane sliding open) keeps up with it instead of trailing a frame behind.
+    const observer = new ResizeObserver(([entry]) =>
+      flushSync(() => setWidth(entry!.contentRect.width)),
+    );
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
@@ -69,27 +83,44 @@ const COLUMN_GAP = 12;
  * add room past the last column and leave the rail lying over it, so the scroller follows
  * the trailing spacer: the closed rail pushes the columns as the backlog does.
  */
-function ColumnsEdge({ rail, trailing = false }: { rail: number; trailing?: boolean }) {
-  const width = rail + ZONE_GAP - COLUMN_GAP;
-  const drawn = useRef(width);
-  return (
-    <motion.span
-      ref={(element) => {
-        if (element && trailing) drawn.current = element.getBoundingClientRect().width;
-      }}
-      aria-hidden
-      className="shrink-0"
-      initial={false}
-      animate={{ width }}
-      transition={springs.smooth}
-      onUpdate={(latest) => {
-        if (!trailing || typeof latest.width !== 'number') return;
-        const scroller = document.querySelector<HTMLElement>('[data-autoscroll-x]');
-        if (scroller) scroller.scrollLeft += latest.width - drawn.current;
-        drawn.current = latest.width;
-      }}
-    />
-  );
+function ColumnsEdge({
+  geometry,
+  trailing = false,
+}: {
+  geometry: RailGeometry;
+  trailing?: boolean;
+}) {
+  // The rail's own spring, so the columns move exactly with it: springing when it changes
+  // state, following it while the row or its edge is resized.
+  const rail = useRailSpring(geometry.zone, geometry.mode, geometry.tracking);
+  return <EdgeSpacer rail={rail} trailing={trailing} />;
+}
+
+const EDGE = ZONE_GAP - COLUMN_GAP;
+
+function EdgeSpacer({
+  rail,
+  trailing,
+}: {
+  rail: ReturnType<typeof useRailSpring>;
+  trailing: boolean;
+}) {
+  const spring = useTransform(() => rail.value.get() + EDGE);
+  const element = useRef<HTMLSpanElement>(null);
+  const drawn = useRef<number | null>(null);
+  // Measured once the new width is drawn: a scroller cannot scroll past what is laid out yet.
+  const follow = useCallback(() => {
+    const span = element.current;
+    if (!trailing || !span) return;
+    const now = span.getBoundingClientRect().width;
+    const scroller = document.querySelector<HTMLElement>('[data-autoscroll-x]');
+    if (scroller && drawn.current !== null) scroller.scrollLeft += now - drawn.current;
+    drawn.current = now;
+  }, [trailing]);
+  useLayoutEffect(follow);
+  useMotionValueEvent(spring, 'change', () => motionFrame.postRender(follow));
+  const width = typeof rail.width === 'number' ? rail.width + EDGE : spring;
+  return <motion.span ref={element} aria-hidden className="shrink-0" style={{ width }} />;
 }
 
 /** With the columns' own gap, the space between a bound rail and the column beside it. */
@@ -111,15 +142,21 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
   const closedBound = settings.closedRail === 'bound';
   const [frame, frameWidth] = useWidth();
   const [row, rowWidth] = useWidth();
+  const [railWidths] = useRailWidths();
+  const resizing = railResize.use();
   const active = project.statuses.filter((status) => status.category === 'active');
   const dragging = makingWay(held);
   // A gallery covers the columns. A held card still needs somewhere to go, so they come
   // back as dropzones for as long as it is held.
   const covered = state.backlog === 'full' || state.closed === 'full';
-  const fullWidth = Math.max(
-    0,
-    rowWidth - STRIP_WIDTH - ZONE_GAP * 2 - (dragging ? TILES_WIDTH : 0),
-  );
+  const rails = railGeometry({
+    rowWidth,
+    views: { backlog: state.backlog, closed: state.closed },
+    widths: railWidths,
+    resize: resizing,
+    holding: dragging,
+    origin: held?.origin ?? null,
+  });
 
   // A wheel turned where nothing scrolls up and down (the page, a rail's strip, a column
   // short enough to fit) moves the board sideways instead of doing nothing.
@@ -148,9 +185,6 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
     return () => element.removeEventListener('wheel', onWheel);
   }, [row]);
 
-  const backlogWidth = zoneWidth(state.backlog, fullWidth);
-  const closedWidth = zoneWidth(state.closed, fullWidth);
-
   // A bound closed rail opens past the end of the scroller, so the scroller follows it.
   const closedView = state.closed;
   const followed = useRef(closedView);
@@ -168,8 +202,8 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
   }, [closedBound, closedView, row]);
 
   const docked = frameWidth >= SEARCH_SIDEBAR_MIN;
-  const backlogRail = <SideZone zone="backlog" fullWidth={fullWidth} />;
-  const closedRail = <SideZone zone="closed" fullWidth={fullWidth} />;
+  const backlogRail = <SideZone zone="backlog" geometry={rails.backlog} />;
+  const closedRail = <SideZone zone="closed" geometry={rails.closed} />;
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -236,16 +270,8 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
                 <ScrollAreaViewport
                   data-origin="active"
                   data-autoscroll-x=""
-                  data-inset-start={
-                    backlogBound
-                      ? 0
-                      : railWidth(state.backlog, fullWidth, dragging && held.origin !== 'backlog')
-                  }
-                  data-inset-end={
-                    closedBound
-                      ? 0
-                      : railWidth(state.closed, fullWidth, dragging && held.origin !== 'closed')
-                  }
+                  data-inset-start={backlogBound ? 0 : rails.backlog.drawn}
+                  data-inset-end={closedBound ? 0 : rails.closed.drawn}
                   className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3"
                 >
                   {backlogBound ? (
@@ -254,7 +280,7 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
                       <RailGap />
                     </>
                   ) : (
-                    <ColumnsEdge rail={backlogWidth} />
+                    <ColumnsEdge geometry={rails.backlog} />
                   )}
                   {covered
                     ? dragging && (
@@ -281,7 +307,7 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
                       {closedRail}
                     </>
                   ) : (
-                    <ColumnsEdge rail={closedWidth} trailing />
+                    <ColumnsEdge geometry={rails.closed} trailing />
                   )}
                 </ScrollAreaViewport>
                 <ScrollBar orientation="horizontal" />

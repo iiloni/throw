@@ -7,28 +7,28 @@ import {
   PanelRightClose,
   Plus,
 } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion } from 'motion/react';
+import { useLayoutEffect, useRef } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
-import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
+import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
-import { CardList } from './CardList';
 import { drag, makingWay } from './drag';
-import { BacklogGallery } from './Gallery';
-import { PriorityIcon } from './glyphs';
-import { type Category, groupByPriority, priorityName, type Status } from './model';
+import { GALLERY_INSET, ZoneGallery } from './Gallery';
+import type { Category, Status } from './model';
 import { StatusTile } from './StatusTile';
 import {
   board,
   countIn,
   createTask,
   current,
-  listTasks,
-  sortedByField,
+  type RailWidths,
+  railResize,
+  setRailWidth,
   update,
   type ZoneState,
 } from './state';
-import { TaskCard } from './TaskCard';
+import { SplitHandle } from './TaskView';
 
 export const ZONES = {
   backlog: { title: 'Backlog', categories: ['backlog'] as Category[], icon: Inbox },
@@ -42,18 +42,133 @@ export const STRIP_WIDTH = 64;
  * across without it lying over a column, which is a drop target too.
  */
 const HELD_STRIP_WIDTH = 80;
-const PANEL_WIDTH = 304;
+/** A rail open as a single column. Its edge drags it wider, up to the whole board. */
+export const PANEL_WIDTH = 304;
+/** A rail's edge let go of this close to a strip or to the whole board snaps to it. */
+export const RAIL_SNAP = 72;
+/**
+ * Between a rail and the first column beside it. The rails lie over the ends of the columns'
+ * scroller, so scrolled columns pass through this space and on under the rail.
+ */
+export const ZONE_GAP = 20;
+/** The active statuses' dropzones, which take this much of a gallery while a card is held. */
+export const TILES_WIDTH = 176;
 
-export function zoneWidth(view: ZoneState, fullWidth: number) {
-  return view === 'full' ? fullWidth : view === 'panel' ? PANEL_WIDTH : STRIP_WIDTH;
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(Math.max(min, max), Math.max(min, value));
+
+/** How a rail is laid out on the board this moment. */
+export type RailGeometry = {
+  /** The width it takes from the columns: where the columns start beside it. */
+  zone: number;
+  /** The width it is drawn at, which widens a strip over the gap while it shows dropzones. */
+  drawn: number;
+  /** The width its cards are laid out at: never narrower than a single column. */
+  content: number;
+  /** The widest its edge can be dragged: as far as it goes beside the other rail. */
+  max: number;
+  /** A change of this springs the rail; any other change of width follows exactly. */
+  mode: string;
+  /** Its edge is held, so it follows the pointer. */
+  tracking: boolean;
+};
+
+/**
+ * Both rails' widths from the row they share. A rail open as a panel keeps the width its
+ * edge was dragged to, as far as the row allows beside the other rail; one being dragged
+ * takes the pointer's width.
+ */
+export function railGeometry({
+  rowWidth,
+  views,
+  widths,
+  resize,
+  holding,
+  origin,
+}: {
+  rowWidth: number;
+  views: Record<Zone, ZoneState>;
+  widths: RailWidths;
+  resize: { zone: Zone; width: number } | null;
+  /** A card is held and the board makes way for it. */
+  holding: boolean;
+  /** The zone the held card came from. */
+  origin: string | null;
+}) {
+  const fullWidth = Math.max(
+    0,
+    rowWidth - STRIP_WIDTH - ZONE_GAP * 2 - (holding ? TILES_WIDTH : 0),
+  );
+  const room = (other: number) => rowWidth - ZONE_GAP * 2 - other;
+  const panel = (zone: Zone, max: number) =>
+    clamp(widths[zone] ?? PANEL_WIDTH, PANEL_WIDTH, max - RAIL_SNAP);
+  // What each rail would take beside a strip: the room the other has is what it leaves.
+  const natural = (zone: Zone) =>
+    views[zone] === 'full'
+      ? fullWidth
+      : views[zone] === 'panel'
+        ? panel(zone, room(STRIP_WIDTH))
+        : STRIP_WIDTH;
+  const geometry = (zone: Zone, other: Zone): RailGeometry => {
+    const view = views[zone];
+    const max = room(natural(other));
+    const live = resize?.zone === zone ? resize.width : null;
+    const width =
+      live ?? (view === 'full' ? fullWidth : view === 'panel' ? panel(zone, max) : STRIP_WIDTH);
+    const tiles = holding && origin !== zone;
+    return {
+      zone: width,
+      drawn: tiles && view === 'strip' && live === null ? HELD_STRIP_WIDTH : width,
+      content: Math.max(PANEL_WIDTH, width),
+      max,
+      mode: `${view}:${holding}:${tiles}:${widths[zone]}`,
+      tracking: live !== null,
+    };
+  };
+  return {
+    fullWidth,
+    backlog: geometry('backlog', 'closed'),
+    closed: geometry('closed', 'backlog'),
+  };
+}
+
+/** Where a rail's edge let go of at `width` settles: a strip, a panel that wide, or full. */
+export function settleRail(width: number, max: number): { view: ZoneState; width: number } {
+  if (width <= PANEL_WIDTH - RAIL_SNAP) return { view: 'strip', width: PANEL_WIDTH };
+  if (max - RAIL_SNAP > PANEL_WIDTH && width >= max - RAIL_SNAP)
+    return { view: 'full', width: max };
+  return { view: 'panel', width: clamp(width, PANEL_WIDTH, max - RAIL_SNAP) };
 }
 
 /**
- * The width a rail is drawn at. A strip widens while it shows dropzones, over the gap beside
- * it: the columns stay where `zoneWidth` put them.
+ * A rail's width: a spring when the rail changes state (a strip opening, a gallery closing, a
+ * card picked up), and otherwise its target exactly, as the row narrows while the task pane
+ * slides open or a window or the rail's own edge is dragged. Re-firing a spring at a target
+ * that moves every frame made those changes lag and bounce.
+ *
+ * `width` is what to draw: the motion value while it springs, and the plain number otherwise,
+ * so React writes it in the same commit as the row's new width rather than a frame later.
+ * `value` follows either way, for whatever tracks the rail as it moves.
  */
-export function railWidth(view: ZoneState, fullWidth: number, tiles: boolean) {
-  return tiles && view === 'strip' ? HELD_STRIP_WIDTH : zoneWidth(view, fullWidth);
+export function useRailSpring(target: number, mode: string, tracking: boolean) {
+  const reducedMotion = useReducedMotion();
+  const value = useMotionValue(target);
+  const last = useRef({ target, mode });
+  const changed = last.current.target !== target;
+  // A spring under way keeps going, to wherever its target has moved.
+  const springing =
+    changed && !tracking && !reducedMotion && (last.current.mode !== mode || value.isAnimating());
+  if (changed && !springing && value.get() !== target) {
+    value.stop();
+    value.jump(target);
+  }
+  useLayoutEffect(() => {
+    const before = last.current;
+    last.current = { target, mode };
+    if (before.target !== target && springing) animate(value, target, springs.smooth);
+  }, [target, mode, springing, value]);
+  const moving = springing || value.isAnimating();
+  return { value, width: moving ? value : target };
 }
 
 export function zoneStatuses(zone: Zone, statuses: Status[]) {
@@ -66,9 +181,10 @@ export function zoneStatuses(zone: Zone, statuses: Status[]) {
  * it was in.
  *
  * These are not columns and do not look like them: they are rails that run the height of
- * the window, over the ends of the columns' scroller, and never take a column's surface.
+ * the window, over the ends of the columns' scroller, and never take a column's surface. An
+ * open rail's inner edge drags it to any width between a column and the whole board.
  */
-export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number }) {
+export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometry }) {
   const state = board.use();
   const held = drag.use();
   const { project } = current(state);
@@ -78,22 +194,58 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
   const count = statuses.reduce((sum, status) => sum + countIn(state, status.id), 0);
   // A card held from this zone keeps the zone as it is, so it can still be placed here.
   const tiles = makingWay(held) && held.origin !== zone;
-  const width = railWidth(view, fullWidth, tiles);
+  const { width } = useRailSpring(geometry.drawn, geometry.mode, geometry.tracking);
   const other = zone === 'backlog' ? 'closed' : 'backlog';
+  const start = zone === 'backlog';
   // A gallery takes the board, so the opposite zone steps back to its strip.
   const setView = (next: ZoneState) =>
     update((before) => ({ [zone]: next, [other]: next === 'full' ? 'strip' : before[other] }));
+  // The snap the held edge would make if let go now, to mark crossing into another.
+  const snap = useRef<ZoneState>(view);
+
+  function commit(next: { view: ZoneState; width: number }) {
+    if (next.view === 'panel') setRailWidth(zone, next.width);
+    if (next.view !== view) setView(next.view);
+  }
+
+  function resize(next: number, keyboard: boolean) {
+    if (keyboard) {
+      // The keys walk a panel's width and step on to the gallery at the end; from the
+      // gallery they step back to the widest panel. Closing is the close button's.
+      commit(
+        view === 'full'
+          ? next < geometry.zone
+            ? { view: 'panel', width: Math.min(next, geometry.max - RAIL_SNAP) }
+            : { view: 'full', width: next }
+          : settleRail(Math.max(PANEL_WIDTH, next), geometry.max),
+      );
+      return;
+    }
+    railResize.set({ zone, width: next });
+    const region = settleRail(next, geometry.max).view;
+    if (region !== snap.current) haptics.threshold();
+    snap.current = region;
+  }
+
+  function hold(active: boolean) {
+    if (active) {
+      snap.current = view;
+      railResize.set({ zone, width: geometry.zone });
+      return;
+    }
+    const live = railResize.get();
+    if (live?.zone === zone) commit(settleRail(live.width, geometry.max));
+    railResize.set(null);
+  }
 
   return (
     <motion.aside
       aria-label={title}
       data-origin={zone}
       data-status-home={statuses.map((status) => status.id).join(' ')}
-      data-side={zone === 'backlog' ? 'start' : 'end'}
+      data-side={start ? 'start' : 'end'}
       className="board-rail relative z-20 flex min-h-0 shrink-0 flex-col overflow-hidden"
-      initial={false}
-      animate={{ width }}
-      transition={springs.smooth}
+      style={{ width }}
     >
       <AnimatePresence initial={false}>
         {tiles ? (
@@ -123,7 +275,7 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
               />
             ))}
           </motion.div>
-        ) : view === 'strip' ? (
+        ) : view === 'strip' && !geometry.tracking ? (
           <motion.button
             key="strip"
             type="button"
@@ -145,9 +297,10 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
           <motion.div
             key="open"
             className="absolute inset-y-0 flex min-h-0 flex-col pt-[calc(var(--safe-top)+1.25rem)]"
-            // Laid out at its resting width from the start, so opening reveals the cards
-            // instead of re-wrapping them at every width on the way.
-            style={{ width, [zone === 'backlog' ? 'left' : 'right']: 0 }}
+            // Laid out at its resting width from the start, so opening the rail reveals the
+            // cards, and widening it fans them out into columns, rather than re-wrapping them
+            // at every width on the way.
+            style={{ width: geometry.content, [start ? 'left' : 'right']: 0 }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -168,44 +321,35 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
                 {view === 'full' ? <Minimize2 /> : <Maximize2 />}
               </IconButton>
               <IconButton label={`Close ${title.toLowerCase()}`} onClick={() => setView('strip')}>
-                {zone === 'backlog' ? <PanelLeftClose /> : <PanelRightClose />}
+                {start ? <PanelLeftClose /> : <PanelRightClose />}
               </IconButton>
             </div>
             <StatusFilter zone={zone} />
-            {view === 'full' && zone === 'backlog' ? (
-              <BacklogGallery showStatus={state.backlogFilter === null} />
-            ) : view === 'full' ? (
-              <Gallery zone={zone} />
-            ) : zone === 'backlog' ? (
-              <CardList
-                listId="backlog"
-                showStatus={state.backlogFilter === null}
-                className="flex-1"
-              />
-            ) : (
-              <ScrollArea edges className="card-scroller flex-1 [--scrollbar-inset:0.5rem]">
-                <ScrollAreaViewport>
-                  <div className="space-y-3 px-3.5 pt-1 pb-4">
-                    {listTasks(state, 'closed').length === 0 && (
-                      <p className="py-10 text-center text-muted-foreground text-sm">
-                        {state.awaitingTasks ? 'Loading tasks…' : 'Nothing closed.'}
-                      </p>
-                    )}
-                    {listTasks(state, 'closed').map((task) => (
-                      <TaskCard
-                        key={task.id}
-                        task={task}
-                        showStatus={state.closedFilter === null}
-                      />
-                    ))}
-                  </div>
-                </ScrollAreaViewport>
-                <ScrollBar />
-              </ScrollArea>
-            )}
+            <ZoneGallery
+              zone={zone}
+              width={geometry.content - GALLERY_INSET * 2}
+              anchor={start ? 'start' : 'end'}
+            />
           </motion.div>
         )}
       </AnimatePresence>
+      {!tiles && (view !== 'strip' || geometry.tracking) && (
+        <SplitHandle
+          width={geometry.zone}
+          min={STRIP_WIDTH}
+          keyMin={PANEL_WIDTH}
+          max={geometry.max}
+          grows={start ? 'right' : 'left'}
+          label={`Resize ${title.toLowerCase()}`}
+          subtle
+          className={cn(
+            'absolute bottom-0 z-10 w-3 top-[calc(var(--safe-top)+4.75rem)]',
+            start ? 'right-0' : 'left-0',
+          )}
+          onResize={resize}
+          onActive={hold}
+        />
+      )}
     </motion.aside>
   );
 }
@@ -279,50 +423,5 @@ export function StatusFilter({
         );
       })}
     </div>
-  );
-}
-
-/** A zone across the whole board: cards in as many columns as fit. */
-function Gallery({ zone }: { zone: Zone }) {
-  const state = board.use();
-  const { project } = current(state);
-  const tasks = listTasks(state, zone);
-  const filter = zone === 'backlog' ? state.backlogFilter : state.closedFilter;
-  const bands =
-    zone === 'backlog' && !sortedByField(state)
-      ? groupByPriority(tasks).filter((group) => group.tasks.length > 0)
-      : [{ priority: null, tasks }];
-  return (
-    <ScrollArea edges className="flex-1 [--scrollbar-inset:0.5rem]">
-      <ScrollAreaViewport>
-        <div className="px-5 pt-1 pb-5">
-          {tasks.length === 0 && (
-            <p className="py-10 text-center text-muted-foreground text-sm">
-              {state.awaitingTasks ? 'Loading tasks…' : 'Nothing here.'}
-            </p>
-          )}
-          {bands.map((band) => (
-            <section key={band.priority ?? 'all'}>
-              {band.priority !== null && (
-                <h3 className="zone-header" data-mode="label">
-                  <span className="zone-header-face">
-                    <span className="truncate">{priorityName(project, band.priority)}</span>
-                    <PriorityIcon priority={band.priority} className="zone-chevron" />
-                  </span>
-                </h3>
-              )}
-              <div className="columns-[17rem] gap-4 pb-3">
-                {band.tasks.map((task) => (
-                  <div key={task.id} className="mb-4 break-inside-avoid">
-                    <TaskCard task={task} showStatus={filter === null} />
-                  </div>
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
-      </ScrollAreaViewport>
-      <ScrollBar />
-    </ScrollArea>
   );
 }

@@ -298,7 +298,14 @@ motion.
 - The backlog panel is open by default when space allows, collapses to a strip, and expands
   to a full-width gallery.
 - The closed strip expands on click to a single column, and from there to a full-width
-  gallery. Closed tasks are sorted by when they were closed.
+  gallery. Closed tasks are sorted by when they were closed, and the gallery reads newest
+  first across its top row.
+- On a desktop, an open rail's inner edge drags it to any width from a single column to the
+  whole board; its cards fill as many columns as fit, as Catch's masonry does. Let go near a
+  strip or near the whole board, it snaps to the strip or the gallery. The width is kept on
+  the device, and the gallery button still opens and restores it in one click. A column and
+  its gallery are one grid: the cards fan out into columns and gather back, each springing
+  from where it is.
 - The backlog and the closed zone are rails, not columns, and do not look like columns. A
   rail runs the full height of the window and is flat: it has no surface, border or shadow
   of its own, whatever the column backgrounds setting says. Only the navigation rail has a
