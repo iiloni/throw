@@ -31,6 +31,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+import type { WebhookFold } from '../webhooks/fold';
 
 const createdAt = () => timestamp({ withTimezone: true }).notNull().defaultNow();
 const xid8 = customType<{ data: string }>({ dataType: () => 'xid8' });
@@ -508,13 +509,24 @@ export const webhooks = pgTable(
     encryptedSecret: text().notNull(),
     ignoreTokenWrites: boolean().notNull().default(true),
     enabled: boolean().notNull().default(true),
+    /** Waits this long after the last change before sending; 0 sends at once. */
+    quietWindowSeconds: integer().notNull().default(0),
     lastDeliveryAt: timestamp({ withTimezone: true }),
     lastDeliveryStatus: text().$type<'ok' | 'error'>(),
     lastResponseStatus: smallint(),
     lastError: text(),
     createdAt: createdAt(),
   },
-  (table) => [index().on(table.userId), index().on(table.workspaceId), index().on(table.projectId)],
+  (table) => [
+    index().on(table.userId),
+    index().on(table.workspaceId),
+    index().on(table.projectId),
+    check(
+      'webhooks_quiet_window_range',
+      // MAX_WEBHOOK_QUIET_WINDOW_SECONDS in @throw/shared.
+      sql`${table.quietWindowSeconds} BETWEEN 0 AND 600`,
+    ),
+  ],
 );
 
 /** The delivery queue, written in the transaction of the change it announces. */
@@ -530,13 +542,31 @@ export const webhookDeliveries = pgTable(
     payload: jsonb().$type<WebhookPayload>().notNull(),
     attempts: integer().notNull().default(0),
     nextAttemptAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
-    status: text().$type<'pending' | 'delivered' | 'failed'>().notNull().default('pending'),
+    /** `held`: folded changes that send nothing for now, such as an edit and its undo. */
+    status: text()
+      .$type<'pending' | 'held' | 'delivered' | 'failed'>()
+      .notNull()
+      .default('pending'),
     lastError: text(),
     createdAt: createdAt(),
     deliveredAt: timestamp({ withTimezone: true }),
+    /**
+     * What a quiet window folds changes by, such as `task:<id>`. Null for deliveries that are
+     * never folded: comments, and webhooks that send at once.
+     */
+    coalesceKey: text(),
+    /**
+     * What a quiet window has folded so far, to tell net changes from undone ones. It holds
+     * field values, such as titles, so it is cleared when the worker claims the delivery.
+     */
+    fold: jsonb().$type<WebhookFold>(),
   },
   (table) => [
     index().on(table.nextAttemptAt).where(sql`${table.status} = 'pending'`),
+    // One waiting (unsent) delivery per webhook and key, so concurrent writes fold into it.
+    uniqueIndex('webhook_deliveries_waiting')
+      .on(table.webhookId, table.coalesceKey)
+      .where(sql`${table.status} IN ('pending', 'held') AND ${table.attempts} = 0`),
     index().on(table.webhookId),
     index().on(table.createdAt),
   ],

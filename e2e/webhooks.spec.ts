@@ -418,6 +418,179 @@ test('webhooks deliver signed thin pokes for task, comment and structure writes 
   }
 });
 
+test('a quiet window folds a burst into one notice and drops what was undone @api', async ({
+  request,
+}) => {
+  const account = await createAccount(request);
+  const listed = await inventory(request, account);
+  expect(listed.quietWindow).toBe(true);
+  const workspaceId = listed.workspaces[0]!.id;
+  const project = await makeProject(request, account, workspaceId);
+  const backlog = project.statuses.find((status) => status.category === 'backlog')!;
+  const done = project.statuses.find((status) => status.category === 'done')!;
+  const receiver = await startReceiver();
+  const window = 2;
+  const createTask = async (title: string) => {
+    const id = randomUUID();
+    const response = await request.post('/api/tasks', {
+      headers: account.headers,
+      data: {
+        id,
+        projectId: project.id,
+        title,
+        description: null,
+        descriptionVersion: null,
+        position: 'a0',
+        parentId: null,
+        statusId: backlog.id,
+      },
+    });
+    expect(response.status(), await response.text()).toBe(201);
+    return id;
+  };
+  const change = async (id: string, changes: Record<string, unknown>) => {
+    const response = await request.patch(`/api/tasks/${id}`, {
+      headers: account.headers,
+      data: { changeId: randomUUID(), changes },
+    });
+    expect(response.status(), await response.text()).toBe(200);
+  };
+  /**
+   * Waits for a task created now, with the same window, to be announced. The worker claims
+   * deliveries in the order they fall due and sends each batch before claiming the next, so
+   * by then anything queued earlier that was going to be sent has been.
+   */
+  const sentinel = async () => {
+    const id = await createTask('Sentinel');
+    await receiver.next(({ payload }) => payload.event === 'task.created' && payload.taskId === id);
+  };
+  const about = (taskId: string) =>
+    receiver.received.filter((hook) => hook.payload.taskId === taskId);
+  try {
+    expect(
+      (
+        await request.post('/api/webhooks', {
+          headers: account.headers,
+          data: { workspaceId, name: 'Too slow', url: receiver.url(), quietWindowSeconds: 601 },
+        })
+      ).status(),
+    ).toBe(400);
+    const { secret, webhook } = await createWebhook(request, account, {
+      workspaceId,
+      projectId: project.id,
+      name: 'Patient agent',
+      url: receiver.url(),
+      quietWindowSeconds: window,
+    });
+    expect(webhook.quietWindowSeconds).toBe(window);
+    expect((await inventory(request, account)).webhooks[0]!.quietWindowSeconds).toBe(window);
+
+    // A burst of edits to a new task is one `task.created`, sent once it goes quiet.
+    const started = Date.now();
+    const named = await createTask('Wake the agent');
+    await change(named, { title: { before: 'Wake the agent', after: 'Wake the agent gently' } });
+    await change(named, { priority: { before: 3, after: 2 } });
+    // A blank `+` stays quiet until someone names it, and one made by mistake never speaks.
+    const blank = await createTask('New task');
+    const mistake = await createTask('Oops');
+    await change(mistake, { trashed: { before: false, after: true } });
+    const created = await receiver.next(
+      ({ payload }) => payload.event === 'task.created' && payload.taskId === named,
+    );
+    expect(Date.now() - started).toBeGreaterThanOrEqual(window * 1000);
+    expectSigned(created, secret);
+    expect(created.payload).toMatchObject({
+      kind: 'created',
+      changedFields: ['title', 'statusId', 'priority'],
+      statusTo: { id: backlog.id },
+    });
+    expect(created.body).not.toContain('Wake the agent');
+    await sentinel();
+    expect(about(named)).toHaveLength(1);
+    expect(about(blank)).toHaveLength(0);
+    expect(about(mistake)).toHaveLength(0);
+
+    // Purging the mistake has nothing left to announce. Naming the blank task announces it.
+    expect(
+      (await request.delete(`/api/tasks/${mistake}`, { headers: account.headers })).status(),
+    ).toBe(200);
+    await change(blank, { title: { before: 'New task', after: 'Write the notes' } });
+    // Done by mistake and moved back sends nothing; the priority change beside it stands.
+    await change(named, { statusId: { before: backlog.id, after: done.id } });
+    await change(named, { priority: { before: 2, after: 1 } });
+    await change(named, { statusId: { before: done.id, after: backlog.id } });
+    const announced = await receiver.next(
+      ({ payload }) => payload.event === 'task.created' && payload.taskId === blank,
+    );
+    expect(announced.payload.changedFields).toEqual(['title', 'statusId', 'priority']);
+    const updated = await receiver.next(
+      ({ payload }) => payload.event === 'task.updated' && payload.taskId === named,
+    );
+    expect(updated.payload).toMatchObject({ kind: 'updated', changedFields: ['priority'] });
+    expect(updated.payload).not.toHaveProperty('statusTo');
+    await sentinel();
+    expect(about(mistake)).toHaveLength(0);
+    expect(about(named)).toHaveLength(2);
+
+    await change(named, { statusId: { before: backlog.id, after: done.id } });
+    await change(named, { statusId: { before: done.id, after: backlog.id } });
+    await sentinel();
+    expect(about(named)).toHaveLength(2);
+
+    // A comment is sent at once, ahead of the edit still waiting out its window.
+    const before = receiver.received.length;
+    await change(named, { title: { before: 'Wake the agent gently', after: 'Wake it' } });
+    expect(
+      (
+        await request.post('/api/comments', {
+          headers: account.headers,
+          data: { id: randomUUID(), taskId: named, body: paragraph('Ready for you') },
+        })
+      ).status(),
+    ).toBe(201);
+    const first = await receiver.next(() => true, before);
+    expect(first.payload.event).toBe('comment.created');
+    expect(
+      (await receiver.next(({ payload }) => payload.event === 'task.updated', before)).payload
+        .changedFields,
+    ).toEqual(['title']);
+
+    // Shortening the window applies to a delivery already waiting.
+    const patched = await request.patch(`/api/webhooks/${webhook.id}`, {
+      headers: account.headers,
+      data: { quietWindowSeconds: 600 },
+    });
+    expect(webhookResponseSchema.parse(await patched.json()).webhook.quietWindowSeconds).toBe(600);
+    const waiting = receiver.received.length;
+    await change(named, { title: { before: 'Wake it', after: 'Wake it now' } });
+    // A comment is sent at once: by the time it arrives, an edit sent at once would have too.
+    expect(
+      (
+        await request.post('/api/comments', {
+          headers: account.headers,
+          data: { id: randomUUID(), taskId: named, body: paragraph('Still there?') },
+        })
+      ).status(),
+    ).toBe(201);
+    await receiver.next(({ payload }) => payload.event === 'comment.created', waiting);
+    expect(receiver.received.slice(waiting).map(({ payload }) => payload.event)).toEqual([
+      'comment.created',
+    ]);
+    expect(
+      (
+        await request.patch(`/api/webhooks/${webhook.id}`, {
+          headers: account.headers,
+          data: { quietWindowSeconds: 0 },
+        })
+      ).status(),
+    ).toBe(200);
+    const flushed = await receiver.next(({ payload }) => payload.event === 'task.updated', waiting);
+    expect(flushed.payload.changedFields).toEqual(['title']);
+  } finally {
+    await receiver.close();
+  }
+});
+
 test('a failing receiver is retried, reported and stops when the owner leaves @api', async ({
   request,
 }) => {

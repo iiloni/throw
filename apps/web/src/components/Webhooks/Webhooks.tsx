@@ -2,6 +2,7 @@ import {
   createWebhookSchema,
   type UpdateWebhook,
   updateWebhookSchema,
+  WEBHOOK_QUIET_WINDOW_PRESETS,
   type Webhook,
   type WebhooksResponse,
   webhookUrlSchema,
@@ -66,6 +67,23 @@ function deliverySummary(webhook: Webhook) {
     : `Failed ${at}${webhook.lastError ? `: ${webhook.lastError}` : ''}`;
 }
 
+/** A quiet window in words: `30 seconds`, `2 minutes`, `1 min 30 s`. */
+function quietWindowLabel(seconds: number) {
+  if (seconds < 60) return `${seconds} second${seconds === 1 ? '' : 's'}`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  if (rest) return `${minutes} min ${rest} s`;
+  return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+}
+
+function rowSummary(webhook: Webhook, scope: string) {
+  if (!webhook.enabled) return `${scope} · Off`;
+  const quiet = webhook.quietWindowSeconds
+    ? ` · ${quietWindowLabel(webhook.quietWindowSeconds)} quiet window`
+    : '';
+  return `${scope}${quiet} · ${deliverySummary(webhook)}`;
+}
+
 function scopeOf(webhook: Webhook, workspaces: Workspaces) {
   const workspace = workspaces.find(({ id }) => id === webhook.workspaceId);
   if (!workspace) return null;
@@ -116,11 +134,7 @@ function WebhookList({ inventory }: { inventory: WebhooksResponse }) {
               key={webhook.id}
               icon={WebhookIcon}
               label={<span className="break-all">{webhook.name}</span>}
-              description={
-                scope
-                  ? `${scope.label} · ${webhook.enabled ? deliverySummary(webhook) : 'Off'}`
-                  : 'Workspace access ended'
-              }
+              description={scope ? rowSummary(webhook, scope.label) : 'Workspace access ended'}
             >
               {scope ? (
                 <>
@@ -190,6 +204,7 @@ function WebhookList({ inventory }: { inventory: WebhooksResponse }) {
       {surface?.kind === 'create' && (
         <CreateWebhook
           workspaces={inventory.workspaces}
+          quietWindow={inventory.quietWindow}
           onCreate={settings.added}
           onClose={close}
         />
@@ -198,6 +213,7 @@ function WebhookList({ inventory }: { inventory: WebhooksResponse }) {
         <EditWebhook
           webhook={editing}
           workspaces={inventory.workspaces}
+          quietWindow={inventory.quietWindow}
           onChange={settings.replaced}
           onRotated={(webhook, secret) => {
             settings.replaced(webhook);
@@ -332,12 +348,54 @@ function IgnoreTokenWrites({
   );
 }
 
+function QuietWindow({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: number;
+  onChange: (seconds: number) => void;
+  disabled: boolean;
+}) {
+  const id = useId();
+  const help = useId();
+  const presets: readonly number[] = WEBHOOK_QUIET_WINDOW_PRESETS;
+  return (
+    <div className="flex flex-col gap-2">
+      <label htmlFor={id} className="font-medium text-sm">
+        Quiet window
+      </label>
+      <select
+        id={id}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className={selectClass}
+        aria-describedby={help}
+        disabled={disabled}
+      >
+        {[...presets, ...(presets.includes(value) ? [] : [value])].map((seconds) => (
+          <option key={seconds} value={seconds}>
+            {seconds ? `Wait ${quietWindowLabel(seconds)}` : 'Send at once'}
+          </option>
+        ))}
+      </select>
+      <p id={help} className="text-muted-foreground text-sm">
+        {value
+          ? 'Sends one notice once a task or project has been left alone this long. Task changes that are undone send nothing, and a new task still titled “New task” waits until it is named or changed. Comments and purges are sent at once.'
+          : 'Sends a notice for every change as it happens.'}
+      </p>
+    </div>
+  );
+}
+
 function CreateWebhook({
   workspaces,
+  quietWindow,
   onCreate,
   onClose,
 }: {
   workspaces: Workspaces;
+  quietWindow: boolean;
   onCreate: (webhook: Webhook) => void;
   onClose: () => void;
 }) {
@@ -346,6 +404,7 @@ function CreateWebhook({
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? '');
   const [projectId, setProjectId] = useState<string | null>(null);
   const [ignoreTokenWrites, setIgnoreTokenWrites] = useState(true);
+  const [quietWindowSeconds, setQuietWindowSeconds] = useState(0);
   const [secret, setSecret] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -364,6 +423,8 @@ function CreateWebhook({
       workspaceId,
       projectId,
       ignoreTokenWrites,
+      // An older server refuses the field, so it is sent only to one that lists support.
+      ...(quietWindow ? { quietWindowSeconds } : {}),
     });
     if (!body.success) {
       setError(
@@ -466,6 +527,13 @@ function CreateWebhook({
             onChange={setIgnoreTokenWrites}
             disabled={busy}
           />
+          {quietWindow && (
+            <QuietWindow
+              value={quietWindowSeconds}
+              onChange={setQuietWindowSeconds}
+              disabled={busy}
+            />
+          )}
           {error && (
             <p role="alert" className="text-destructive text-sm">
               {error}
@@ -488,6 +556,7 @@ function CreateWebhook({
 function EditWebhook({
   webhook,
   workspaces,
+  quietWindow,
   onChange,
   onRotated,
   onDelete,
@@ -495,6 +564,7 @@ function EditWebhook({
 }: {
   webhook: Webhook;
   workspaces: Workspaces;
+  quietWindow: boolean;
   onChange: (webhook: Webhook) => void;
   onRotated: (webhook: Webhook, secret: string) => void;
   onDelete: () => void;
@@ -504,6 +574,7 @@ function EditWebhook({
   const [url, setUrl] = useState(webhook.url);
   const [projectId, setProjectId] = useState(webhook.projectId);
   const [ignoreTokenWrites, setIgnoreTokenWrites] = useState(webhook.ignoreTokenWrites);
+  const [quietWindowSeconds, setQuietWindowSeconds] = useState(webhook.quietWindowSeconds);
   const [busy, setBusy] = useState<'save' | 'test' | 'secret' | null>(null);
   const [confirmRotate, setConfirmRotate] = useState(false);
   const [error, setError] = useState('');
@@ -518,6 +589,7 @@ function EditWebhook({
     ...(url.trim() !== webhook.url ? { url } : {}),
     ...(projectId !== webhook.projectId ? { projectId } : {}),
     ...(ignoreTokenWrites !== webhook.ignoreTokenWrites ? { ignoreTokenWrites } : {}),
+    ...(quietWindowSeconds !== webhook.quietWindowSeconds ? { quietWindowSeconds } : {}),
   };
   const dirty = Object.keys(changes).length > 0;
 
@@ -624,6 +696,13 @@ function EditWebhook({
           onChange={setIgnoreTokenWrites}
           disabled={busy !== null}
         />
+        {quietWindow && (
+          <QuietWindow
+            value={quietWindowSeconds}
+            onChange={setQuietWindowSeconds}
+            disabled={busy !== null}
+          />
+        )}
         <div className="flex flex-col gap-1 rounded-xl bg-foreground/[0.05] px-3 py-2 text-sm">
           <p className="font-medium">Last delivery</p>
           <p className="break-words text-muted-foreground">{deliverySummary(webhook)}</p>

@@ -34,7 +34,9 @@ tags and subtasks to a side column beside the card while it has any (ADR 0012,
 `TaskDetails/TaskColumn.tsx`); later extras such as link previews join it there.
 Outbound webhooks (ADR 0015) are server-only: `apps/server/src/webhooks` queues deliveries
 in the write's transaction, checks receivers against its SSRF policy and sends them from a
-worker; Settings manages them at `/settings/webhooks`.
+worker; Settings manages them at `/settings/webhooks`. A webhook's quiet window folds a
+task's or project's changes into one waiting delivery and sends only their net effect
+(`webhooks/fold.ts`).
 The activity log syncs to devices and comments are built (`lib/comments.ts`), with a
 timeline query in `collections.ts` and a task history view in `TaskDetails/TaskTimeline.tsx`.
 Tags have their data layer and reusable controls in `components/Tag*`, with a real-data `/prototype/tags` workshop in

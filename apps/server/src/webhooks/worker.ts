@@ -18,7 +18,8 @@ type Delivery = typeof webhookDeliveries.$inferSelect;
 async function claim(): Promise<Delivery[]> {
   const rows = await db.execute<{ id: string }>(sql`
     UPDATE ${webhookDeliveries} AS d
-    SET attempts = d.attempts + 1, next_attempt_at = now() + ${LEASE}
+    -- A claimed delivery never folds again, so the field values its fold kept go now.
+    SET attempts = d.attempts + 1, next_attempt_at = now() + ${LEASE}, fold = NULL
     FROM (
       SELECT id FROM ${webhookDeliveries}
       WHERE status = 'pending' AND next_attempt_at <= now()
@@ -139,7 +140,9 @@ async function prune() {
 
 /**
  * Sends queued deliveries in the background. A commit that queues one wakes it through
- * LISTEN; retries wake it on their own schedule. It pauses while a backup or restore runs.
+ * LISTEN; retries and deliveries waiting out a quiet window wake it when they are due (every
+ * queueing or folding commit notifies, so a sooner due time is picked up at once). It pauses
+ * while a backup or restore runs.
  */
 export function startWebhookWorker({ paused }: { paused: () => boolean }) {
   let timer: NodeJS.Timeout | undefined;

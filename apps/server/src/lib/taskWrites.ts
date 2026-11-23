@@ -218,6 +218,7 @@ export function createTask(actor: WriteActor, input: z.output<typeof createTaskS
       taskNumber: counter!.number,
       changedFields: changedFields(changes),
       statusTo: { id: status.id, name: status.name, category: status.category },
+      values: changes,
     });
     const txid = await currentTxid(tx);
     return { txid, changes, ...(validSecondary.length ? { secondaryTagsTxid: txid } : {}) };
@@ -451,6 +452,19 @@ export function updateTask(actor: WriteActor, id: string, input: UpdateTask, mov
         taskNumber: task.number,
         changedFields: fields,
         ...(nextStatus ? { statusTo: nextStatus } : {}),
+        values: [
+          ...plan.items.filter((item) => item.field !== 'position'),
+          ...(plan.set.position === undefined
+            ? []
+            : [
+                {
+                  field: 'position' as const,
+                  previous: task.position,
+                  requested: plan.set.position,
+                  applied: true,
+                },
+              ]),
+        ],
       });
     }
     return {
