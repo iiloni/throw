@@ -323,9 +323,14 @@ test('a task links another project’s task as its blocker, which shows on its c
   await expect(results).toHaveCount(0);
 
   const relations = pane.getByRole('region', { name: 'Relations' });
+  await expect(pane.getByRole('tab', { name: /Links · 1/ })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
   await expect(relations).toBeVisible();
   await expect(relations.getByText('Blocked by', { exact: true })).toBeVisible();
   await expect(relations.getByText('Operations', { exact: true })).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath('links-tab.png') });
   await expect
     .poll(async () =>
       (await shapeRows(page.request, 'task-relations', headers)).map((row) => [
@@ -377,20 +382,30 @@ test('a wide desktop pane lists relations in its side column, which shuts with t
   await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue('Ship the release', {
     timeout: APP_LOAD_TIMEOUT,
   });
+  // The narrow pane starts with Comments, History and Links tabs.
+  await expect(pane.getByRole('tab', { name: /^Links/ })).toBeVisible();
   const column = pane.getByRole('complementary', { name: 'Task sidebar' });
   const handle = page.getByRole('separator', { name: 'Resize task' });
   await handle.focus();
   while (Number(await handle.getAttribute('aria-valuenow')) < 620)
     await handle.press('Shift+ArrowLeft');
   await expect(column).toHaveCount(0);
+  // Once wide enough for the side column, the third tab leaves the tab strip.
+  await expect(pane.getByRole('tab', { name: /^Links/ })).toHaveCount(0);
 
   const link = relation(sibling, blocked, 'duplicates');
   expect((await page.request.post('/api/task-relations', { headers, data: link })).status()).toBe(
     201,
   );
-  // The synced link goes straight to the column; the inline copy cannot be reached.
+  // The synced link goes straight to the column; the tab copy cannot be reached.
   await expect(column.getByRole('region', { name: 'Relations' })).toContainText('Duplicated by');
   await expect(pane.getByRole('region', { name: 'Relations' })).toHaveCount(1);
   await column.getByRole('button', { name: 'Remove duplicated by APP-2' }).click();
   await expect(column).toHaveCount(0);
+
+  // Narrowing back below the breakpoint brings the Links tab back.
+  await handle.focus();
+  while (Number(await handle.getAttribute('aria-valuenow')) >= 620)
+    await handle.press('Shift+ArrowRight');
+  await expect(pane.getByRole('tab', { name: /^Links/ })).toBeVisible();
 });

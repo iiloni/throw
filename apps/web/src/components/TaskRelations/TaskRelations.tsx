@@ -21,6 +21,7 @@ import { StatusGlyph } from '@/components/Board/glyphs';
 import { Highlighted } from '@/components/CommandPalette/SearchContent';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
+import { focusLinks } from '@/components/TaskDetails/TaskTimeline';
 import { useProjects, useStatuses, useTaskRelations, useTasks } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
@@ -114,7 +115,7 @@ export function TaskRelations({
 }: {
   task: Task;
   groups: RelationGroup[];
-  onOpen(task: Task): void;
+  onOpen(task: Task, origin?: HTMLElement | null): void;
   className?: string;
 }) {
   if (groups.length === 0) return null;
@@ -129,7 +130,7 @@ export function TaskRelations({
                 key={item.relationId}
                 item={item}
                 crossProject={item.task.projectId !== task.projectId}
-                onOpen={() => onOpen(item.task)}
+                onOpen={(origin) => onOpen(item.task, origin)}
               />
             ))}
           </ul>
@@ -146,22 +147,25 @@ function RelationRow({
 }: {
   item: RelatedTask;
   crossProject: boolean;
-  onOpen(): void;
+  onOpen(origin?: HTMLElement | null): void;
 }) {
   const title = item.task.title || 'Untitled task';
   const identifier = item.identifier ?? 'Pending';
   const done = item.closed || item.trashed;
+  const rowRef = useRef<HTMLLIElement>(null);
   return (
     // The row stands for the task on a phone: its screen opens out of it and closes back in.
+    // The full row is the open target, with the remove button inset on top in the z-axis.
     <li
+      ref={rowRef}
       data-task-origin={item.task.id}
-      className="flex min-h-11 items-center gap-1 rounded-xl bg-foreground/[0.04]"
+      className="relative flex min-h-11 items-center rounded-xl bg-foreground/[0.04] transition-colors hover:bg-foreground/[0.07]"
     >
       <button
         type="button"
-        onClick={onOpen}
+        onClick={() => onOpen(rowRef.current)}
         aria-label={`Open ${identifier} ${title}${item.trashed ? ', in the trash' : item.closed ? `, ${item.status?.name ?? 'closed'}` : ''}`}
-        className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-xl py-1.5 pl-3 text-left text-sm outline-none transition-colors hover:bg-foreground/[0.04] focus-visible:ring-[3px] focus-visible:ring-ring/60"
+        className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-xl py-1.5 pr-11 pl-3 text-left text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
       >
         <StatusGlyph
           category={item.status?.category ?? 'backlog'}
@@ -189,7 +193,7 @@ function RelationRow({
       </button>
       <IconButton
         label={`Remove ${relationRoleLabel[item.role].toLowerCase()} ${identifier}`}
-        className="size-11 shrink-0 text-muted-foreground [&_svg]:size-4"
+        className="absolute top-1/2 right-1.5 z-10 size-8 -translate-y-1/2 rounded-lg text-muted-foreground hover:bg-foreground/[0.1] hover:text-foreground after:absolute after:-inset-1.5 [&_svg]:size-4"
         onClick={() => {
           removeTaskRelation(item.relationId);
           haptics.selection();
@@ -308,6 +312,7 @@ export function RelationPicker({ task, onPicked }: { task: Task; onPicked(): voi
       addTaskRelation(task.id, role, other.id);
       haptics.success();
       setError(null);
+      focusLinks();
       onPicked();
     } catch (caught) {
       if (!(caught instanceof RelationError)) throw caught;

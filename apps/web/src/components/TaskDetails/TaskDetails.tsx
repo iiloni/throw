@@ -139,10 +139,15 @@ export function TaskDetails({
    * A related task on this board opens over this one, so Back returns here as it does from a
    * subtask. One in another project opens on its own board.
    */
-  function openRelated(other: Task) {
-    if (canOpenTask(other.id)) openSubtask(other.id);
+  function openRelated(other: Task, origin?: HTMLElement | null) {
+    if (canOpenTask(other.id)) openSubtask(other.id, origin);
     else shell?.openTask(other.projectId, other.id);
   }
+  const linkCount = relationGroups.reduce((sum, group) => sum + group.items.length, 0);
+  const hasOpenBlocker = relationGroups.some(
+    (group) =>
+      group.role === 'blocked_by' && group.items.some((item) => !item.closed && !item.trashed),
+  );
   const relations = (className?: string) => (
     <TaskRelations task={task} groups={relationGroups} onOpen={openRelated} className={className} />
   );
@@ -164,7 +169,7 @@ export function TaskDetails({
                   secondaryTagIds: boardTasks.get(child.id)?.secondaryTagIds ?? [],
                 }}
                 showStatus
-                onOpen={() => openSubtask(child.id)}
+                onOpen={(origin) => openSubtask(child.id, origin)}
                 statusControl={
                   childStatus && (
                     <StatusMenu
@@ -253,9 +258,6 @@ export function TaskDetails({
               ))}
             </Fold>
           )}
-          <Fold data-fold="relations" amount={column.inline} hidden={column.fits}>
-            {column.inlineMounted && relations('mt-8')}
-          </Fold>
           <TaskTimeline
             key={`timeline:${task.id}`}
             task={task}
@@ -268,6 +270,13 @@ export function TaskDetails({
               },
             }}
             onRecoverDescription={(entry) => setRecovery({ ...entry })}
+            links={{
+              inTabs: !column.fits,
+              mounted: column.inlineMounted,
+              count: linkCount,
+              blocked: hasOpenBlocker,
+              content: relations(),
+            }}
           />
         </div>
       </ScrollAreaViewport>

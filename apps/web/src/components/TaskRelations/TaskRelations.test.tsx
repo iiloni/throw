@@ -130,7 +130,10 @@ describe('the task view', () => {
     const section = screen.getByRole('region', { name: 'Relations' });
     expect(within(section).getByText('Operations')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Open OPS-7 Task 7' }));
-    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'other-project' }));
+    expect(onOpen).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'other-project' }),
+      expect.any(HTMLLIElement),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Remove duplicate of APP-3' }));
     expect(fake.remove).toHaveBeenCalledWith('r3');
   });

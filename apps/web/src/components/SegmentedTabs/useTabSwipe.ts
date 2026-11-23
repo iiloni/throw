@@ -52,7 +52,7 @@ function velocity(samples: Gesture['samples']) {
 }
 
 /**
- * Swiping sideways over two tabs and their panels turns between them on a touch screen. The
+ * Swiping sideways over tabs and their panels turns between them on a touch screen. The
  * panel follows the finger and the tabs' indicator follows along (`drag`, in tabs); letting
  * go past a third of the way, or flicking, switches, and the new panel arrives from the side
  * the finger was heading. Vertical movement stays the page's scroll: the element given `ref`
@@ -69,7 +69,7 @@ export function useTabSwipe<TValue extends string>({
 }: {
   value: TValue | null;
   shown: TValue | null;
-  values: readonly [TValue, TValue];
+  values: readonly TValue[];
   onValueChange: (value: TValue) => void;
 }) {
   const reducedMotion = useReducedMotion();

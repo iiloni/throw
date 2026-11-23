@@ -19,7 +19,9 @@ above the dock. It holds the task's tags, then its subtasks with their slot to a
 (2026-11-22). It is
 the place for later extras such as link previews and media: each is one more block in
 `TaskColumnFrame`'s children, in order, with its inline copy folding in the main column
-(`Fold`). Comments and history stay in the main column, below the description.
+(`Fold`). Comments and history stay in the main column, below the description; on narrower
+panes and phones, relations live in a third **Links** tab beside Comments and History, which
+animates smoothly in and out of `SegmentedTabs` on `springs.pane` as the pane crosses 620 px.
 
 **The pane must be at least 620 px wide** (`COLUMN_MIN` in
 `components/TaskDetails/taskColumn.ts`). Catch waits for 700 px (`SIDE_LINKS_MIN`), but

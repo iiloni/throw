@@ -5,9 +5,9 @@ import {
   type Project,
   type Task,
 } from '@throw/shared';
-import { History, MessageCircle, Pencil, Trash2 } from 'lucide-react';
+import { History, Link2, MessageCircle, Pencil, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { memo, useDeferredValue, useEffect, useId, useMemo, useState } from 'react';
+import { memo, type ReactNode, useDeferredValue, useEffect, useId, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { Collapse } from '@/components/Collapse/Collapse';
 import { LazyDescriptionEditor } from '@/components/DescriptionEditor/LazyDescriptionEditor';
@@ -42,16 +42,26 @@ function Time({ at }: { at: string }) {
 }
 
 const FOCUS_EVENT = 'throw:focus-history';
-const panels = ['comments', 'history'] as const;
-// `none` hides both panels; any other stored value falls back to Comments.
-const tabSchema = z.enum([...panels, 'none']);
+const FOCUS_LINKS_EVENT = 'throw:focus-links';
+const basePanels = ['comments', 'history'] as const;
+const allPanels = ['comments', 'history', 'links'] as const;
+// `none` hides all panels; any other stored value falls back to Comments.
+const tabSchema = z.enum([...allPanels, 'none']);
 
 /**
- * Shows a history entry: the timeline turns to its History tab, opening it if both were
+ * Shows a history entry: the timeline turns to its History tab, opening it if all were
  * hidden, then focuses the entry.
  */
 export function focusHistory(id: string) {
   window.dispatchEvent(new CustomEvent(FOCUS_EVENT, { detail: id }));
+}
+
+/**
+ * Turns to the Links tab when links live in the tabs (narrow panes and phones), so a task
+ * just linked from the dock shows up right away.
+ */
+export function focusLinks() {
+  window.dispatchEvent(new CustomEvent(FOCUS_LINKS_EVENT));
 }
 
 // Rows render only when their own data changes: switching tabs must stay cheap, or the
@@ -258,11 +268,23 @@ export function TaskTimeline({
   project,
   context,
   onRecoverDescription,
+  links,
 }: {
   task: Task;
   project: Project;
   context: HistoryContext;
   onRecoverDescription: (entry: ActivityEntry) => void;
+  /**
+   * Relations as a 3rd tab on narrow panes and phones; wide desktop panes move them to the
+   * side column (ADR 0012) and animate the 3rd tab out.
+   */
+  links?: {
+    inTabs: boolean;
+    mounted: boolean;
+    count: number;
+    blocked: boolean;
+    content: ReactNode;
+  };
 }) {
   const { timeline, isLoading } = useTaskTimeline(task.id);
   // Which task the composer is open for: the timeline stays mounted as the pane switches tasks.
@@ -270,8 +292,13 @@ export function TaskTimeline({
   const composing = composingFor === task.id;
   const hasDraft = useHasCommentDraft(task.id);
   const [stored, setTab] = usePersistentState('throw-task-timeline-tab', tabSchema, 'comments');
-  const tab = stored === 'none' ? null : stored;
-  // The panel showing, or the one on its way out (and back in) while both are hidden.
+  const [lastBase, setLastBase] = useState<'comments' | 'history'>(
+    stored === 'history' ? 'history' : 'comments',
+  );
+  if ((stored === 'comments' || stored === 'history') && stored !== lastBase) setLastBase(stored);
+  const showLinks = links?.inTabs ?? false;
+  const tab = stored === 'none' ? null : !showLinks && stored === 'links' ? lastBase : stored;
+  // The panel showing, or the one on its way out (and back in) while all are hidden.
   const [panel, setPanel] = useState(tab ?? 'comments');
   if (tab !== null && tab !== panel) setPanel(tab);
   // Whether the open panel has finished opening, so an entry in it has its place.
@@ -284,7 +311,7 @@ export function TaskTimeline({
   const swipe = useTabSwipe({
     value: tab,
     shown: tab === null ? null : shown,
-    values: panels,
+    values: showLinks ? allPanels : basePanels,
     onValueChange: setTab,
   });
   const [focusing, setFocusing] = useState<string | null>(null);
@@ -298,6 +325,12 @@ export function TaskTimeline({
     window.addEventListener(FOCUS_EVENT, onFocus);
     return () => window.removeEventListener(FOCUS_EVENT, onFocus);
   }, [setTab]);
+  useEffect(() => {
+    if (!showLinks) return;
+    const onFocusLinks = () => setTab('links');
+    window.addEventListener(FOCUS_LINKS_EVENT, onFocusLinks);
+    return () => window.removeEventListener(FOCUS_LINKS_EVENT, onFocusLinks);
+  }, [showLinks, setTab]);
   useEffect(() => {
     if (!focusing || shown !== 'history' || !laidOut) return;
     const element = document.getElementById(`history-${focusing}`);
@@ -316,6 +349,43 @@ export function TaskTimeline({
       {isLoading ? 'History has not synced yet.' : text}
     </p>
   );
+  const tabOptions = [
+    {
+      value: 'comments' as const,
+      id: `${ids}-comments-tab`,
+      controls: `${ids}-comments`,
+      label: comments.length ? `Comments · ${comments.length}` : 'Comments',
+      icon: <MessageCircle className="relative size-4 shrink-0" aria-hidden />,
+    },
+    {
+      value: 'history' as const,
+      id: `${ids}-history-tab`,
+      controls: `${ids}-history`,
+      label: 'History',
+      icon: <History className="relative size-4 shrink-0" aria-hidden />,
+    },
+    ...(links
+      ? [
+          {
+            value: 'links' as const,
+            id: `${ids}-links-tab`,
+            controls: `${ids}-links`,
+            label: links.count ? `Links · ${links.count}` : 'Links',
+            icon: <Link2 className="relative size-4 shrink-0" aria-hidden />,
+            badge: links.blocked ? (
+              <>
+                <span
+                  aria-hidden
+                  className="relative ml-1.5 size-1.5 shrink-0 rounded-full bg-destructive"
+                />
+                <span className="sr-only">, blocked</span>
+              </>
+            ) : undefined,
+            hidden: !showLinks,
+          },
+        ]
+      : []),
+  ];
   return (
     // Swiping sideways over the tabs or a panel turns between them; scrolling stays the pane's.
     <section
@@ -326,30 +396,14 @@ export function TaskTimeline({
       {...swipe.handlers}
     >
       <SegmentedTabs
-        label="Comments and history"
+        label={showLinks ? 'Comments, history and links' : 'Comments and history'}
         value={tab}
         onValueChange={(next) => setTab(next ?? 'none')}
         collapsible
         drag={swipe.drag}
-        options={[
-          {
-            value: 'comments',
-            id: `${ids}-comments-tab`,
-            controls: `${ids}-comments`,
-            label: comments.length ? `Comments · ${comments.length}` : 'Comments',
-            icon: <MessageCircle className="relative size-4" aria-hidden />,
-          },
-          {
-            value: 'history',
-            id: `${ids}-history-tab`,
-            controls: `${ids}-history`,
-            label: 'History',
-            icon: <History className="relative size-4" aria-hidden />,
-          },
-        ]}
+        options={tabOptions}
       />
-      {/* Both stay mounted, so a comment being written survives a look at the history or
-          hiding them both. */}
+      {/* Panels stay mounted, so a comment being written survives switching tabs or hiding them. */}
       <Collapse open={tab !== null} contentKey={shown} onRest={setLaidOut}>
         <motion.div style={{ x: swipe.x, opacity: swipe.opacity }}>
           <div
@@ -418,6 +472,22 @@ export function TaskTimeline({
               ))}
             </ol>
           </div>
+          {links && (
+            <div
+              role="tabpanel"
+              id={`${ids}-links`}
+              aria-labelledby={`${ids}-links-tab`}
+              hidden={shown !== 'links'}
+              className="pt-2"
+            >
+              {links.mounted &&
+                (links.count > 0 ? (
+                  links.content
+                ) : (
+                  <p className="px-1 py-4 text-muted-foreground text-sm">No linked tasks yet.</p>
+                ))}
+            </div>
+          )}
         </motion.div>
       </Collapse>
     </section>

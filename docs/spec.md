@@ -218,12 +218,18 @@ one (2026-11-22). A link is one of three kinds, and each task sees it from its o
 - A pair is linked once per kind. A task cannot be linked to itself, and a directed link
   cannot be added beside its reverse: if B blocks A, A cannot also block B.
 - The task view lists them in groups (Blocked by, Blocks, Duplicate of, Duplicated by,
-  Relates to), empty groups left out. Each row shows the other task's status, identifier
-  and title, struck through when it is closed or in the trash, and its project's name when
-  it is in another project. Tapping a row opens that task, over this one on the same board
-  so Back returns, or on its own project's board. On a phone the task grows out of its row
-  and dissolves back into it, as a subtask does from its card. Each row has a remove
-  button, always shown since a touch screen has no hover.
+  Relates to), empty groups left out. On wide desktop panes (620 px and wider) they live in
+  the side column ([ADR 0012](decisions/0012-task-side-column.md)); on narrower panes and
+  phones they live in a third **Links** tab beside Comments and History, with a count and a
+  quiet blocked dot while an open blocker remains (animating smoothly out of the tab strip
+  when the side column takes over; on narrow containers with three tabs, inactive tabs show
+  only their icons while the active tab expands to show its label). Each row shows the other
+  task's status, identifier and
+  title, struck through when it is closed or in the trash, and its project's name when it is
+  in another project. Tapping a row opens that task, over this one on the same board so Back
+  returns, or on its own project's board. On a phone the task grows out of its exact opener
+  row and dissolves back into it once settled, never crossing to a subtask card of the same
+  task. Each row has a remove button, always shown since a touch screen has no hover.
 - The dock's link control opens a picker. Its controls sit at the bottom for reachability
   (directly above the desktop dock, and riding above the safe area or keyboard on a phone):
   the relation kind as one segmented control (Blocked by, Blocks, Duplicate of, Relates to)
@@ -585,7 +591,8 @@ view), comments and activity.
   Catch note pane does (2026-11-19, ADR 0012). It holds the task's tags and then its
   subtasks, then its relations, and later its link previews and media. It opens with the
   first of them and closes with the last. Until then, “Add subtask” stays below the description. Narrower panes
-  and phones keep them inline.
+  and phones keep tags and subtasks inline, and show relations under a third **Links** tab
+  beside Comments and History.
 - Phone opening/closing uses Catch's card-to-note container transform and timing: the
   surface grows from its card and shrinks into its current position, with a fade when no
   card is visible. As in Catch, the surface has no shadow of its own,

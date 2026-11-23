@@ -41,7 +41,7 @@ type Props = {
   /** The copy that follows the pointer during a drag. */
   overlay?: boolean;
   className?: string;
-  onOpen?: () => void;
+  onOpen?: (origin?: HTMLElement | null) => void;
   statusControl?: ReactNode;
 };
 
@@ -202,14 +202,14 @@ export function TaskCard({
     if (event.target instanceof Node && !event.currentTarget.contains(event.target)) return;
     if (event.target instanceof Element && event.target.closest('[data-no-drag]')) return;
     if (onOpen) {
-      onOpen();
+      onOpen(ref.current);
       return;
     }
     if (event.metaKey || event.ctrlKey || event.shiftKey || state.selection.length > 0) {
       haptics.selection();
       toggleSelected(task.id);
     } else {
-      update({ openTaskId: open ? null : task.id });
+      update({ openTaskId: open ? null : task.id }, ref.current);
     }
   }
 
@@ -217,7 +217,7 @@ export function TaskCard({
     if (event.target !== event.currentTarget) return;
     if (onOpen && (event.key === 'Enter' || event.key === ' ')) {
       event.preventDefault();
-      onOpen();
+      onOpen(ref.current);
       return;
     }
     const arrows: Record<string, () => void> = {
@@ -239,7 +239,7 @@ export function TaskCard({
     } else if (event.key === 'Enter') {
       event.preventDefault();
       if (carried) setDown();
-      else update({ openTaskId: task.id });
+      else update({ openTaskId: task.id }, ref.current);
     }
   }
 

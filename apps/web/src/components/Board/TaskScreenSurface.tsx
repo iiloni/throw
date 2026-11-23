@@ -17,6 +17,7 @@ import { TaskContentContext } from './taskContent';
 import { TaskEditorReadyContext, TaskScrollContext } from './taskMotionContext';
 import {
   findTaskCard,
+  isVisibleOrigin,
   landTaskCard,
   setTaskCardHidden,
   showTaskSurface,
@@ -152,29 +153,40 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
         stopSteady(fade);
       };
     }
-    if (isPresent && origin) setTaskCardHidden(task.id, true);
+    if (isPresent && origin && !origin.row) setTaskCardHidden(task.id, true);
     let landing = 0;
+    const originElement = origin?.element ?? null;
+    const openedFromRow = origin?.row ?? false;
+    // Land back on the exact opener element when it is still in view, so a task that appears
+    // as both a subtask card and a blocker row never crosses between the two.
+    const findLanding = () => {
+      if (originElement && isVisibleOrigin(originElement)) return originElement;
+      if (openedFromRow) return null;
+      return findTaskCard(task.id, 'card');
+    };
     // The card is followed every frame: the backlog's drawer is still rising to it, and the
     // list it is in may scroll.
     let target: HTMLElement | null = null;
     const follow = () => {
-      if (!target?.isConnected) target = findTaskCard(task.id);
+      if (!target || !isVisibleOrigin(target)) target = findLanding();
       if (target) card.set(taskCardRect(target));
     };
     const cancel = afterPaint(() => {
       if (!isPresent) {
         // Trash and status changes have had a paint to remove or reposition the landing card.
-        target = findTaskCard(task.id);
+        target = findLanding();
         const rect = target && taskCardRect(target);
         card.set(rect);
         if (rect) {
-          setFace({ showStatus: rect.showStatus, statusControl: rect.statusControl });
-          setTaskCardHidden(task.id, true);
+          if (!rect.row) {
+            setFace({ showStatus: rect.showStatus, statusControl: rect.statusControl });
+            setTaskCardHidden(task.id, true);
+            landing = window.setTimeout(
+              () => landTaskCard(task.id),
+              (curves.collapse.duration - LAND_EARLY) * 1000,
+            );
+          }
           frame.read(follow, true);
-          landing = window.setTimeout(
-            () => landTaskCard(task.id),
-            (curves.collapse.duration - LAND_EARLY) * 1000,
-          );
         }
       }
       const curve = isPresent ? curves.expand : curves.collapse;
