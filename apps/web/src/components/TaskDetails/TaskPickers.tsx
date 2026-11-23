@@ -11,7 +11,15 @@ import {
   taskTagColor,
 } from '@throw/shared';
 import { Check, Palette, Tag as TagIcon } from 'lucide-react';
-import { useEffect, useId, useRef, useState } from 'react';
+import {
+  AnimatePresence,
+  motion,
+  useIsPresent,
+  useReducedMotion,
+  type Variants,
+} from 'motion/react';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { AnimatedHeight } from '@/components/AnimatedHeight/AnimatedHeight';
 import { PriorityGlyph, StatusGlyph } from '@/components/Board/glyphs';
 import { byCategory, type Project, priorityName } from '@/components/Board/model';
 import {
@@ -24,6 +32,7 @@ import { SegmentedTabs } from '@/components/SegmentedTabs/SegmentedTabs';
 import { TagPicker } from '@/components/TagPicker/TagPicker';
 import { useTags, useTaskTags } from '@/lib/collections';
 import { feelStatusChange, haptics } from '@/lib/haptics';
+import { springs } from '@/lib/motion';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { setPrimaryTag, setSecondaryTag } from '@/lib/tags';
 import { sendTask, updateTask } from '@/lib/tasks';
@@ -232,9 +241,55 @@ const loadingTags = (
  */
 let covered: { taskId: string; tab: TagTab; branch: Branch } | null = null;
 
+/*
+ * Catch's reminder panel pages: the leaving tab goes quickly, and the arriving one settles on
+ * the same spring as the panel's height, so the two land together.
+ */
+const tabPages: Variants = {
+  enter: (direction: number) => ({ x: direction * 24, opacity: 0 }),
+  shown: {
+    x: 0,
+    opacity: 1,
+    transition: { x: springs.smooth, opacity: { duration: 0.3, ease: 'easeOut' } },
+  },
+  exit: (direction: number) => ({
+    x: direction * -24,
+    opacity: 0,
+    transition: { duration: 0.16, ease: 'easeIn' },
+  }),
+};
+
+/** One tab's view. A leaving one is inert, so focus and the keyboard only reach the new one. */
+function TagTabView({
+  direction,
+  onShown,
+  children,
+}: {
+  direction: number;
+  onShown(): void;
+  children: ReactNode;
+}) {
+  const isPresent = useIsPresent();
+  return (
+    <motion.div
+      custom={direction}
+      variants={tabPages}
+      initial="enter"
+      animate="shown"
+      exit="exit"
+      onAnimationComplete={(definition) => {
+        if (definition === 'shown') onShown();
+      }}
+      inert={!isPresent}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
 /**
- * Unified primary (color) and secondary tag picker behind a two-tab switch, shared by an open
- * task and quick capture. Picking leaves the picker open for further choices.
+ * Unified primary (color) and secondary tag picker with a bottom two-tab switch, shared by an
+ * open task and quick capture. Picking leaves the picker open for further choices.
  */
 export function TagOptions({
   tags,
@@ -266,13 +321,82 @@ export function TagOptions({
   const [internalTab, setInternalTab] = useState<TagTab>('primary');
   const activeTab = tab ?? internalTab;
   const setActiveTab = onTabChange ?? setInternalTab;
+  const reducedMotion = useReducedMotion();
+  // Which way the views slide: towards Secondary, or back to Primary.
+  const direction = activeTab === 'secondary' ? 1 : -1;
+  // From leaving one tab until the next has arrived, when the panel's height is the one thing
+  // moving. Otherwise the views animate their own heights (the colors' branches, the tree's
+  // rows), and the panel follows them.
+  const [swapping, setSwapping] = useState(false);
+  const [shownTab, setShownTab] = useState(activeTab);
+  if (shownTab !== activeTab) {
+    setShownTab(activeTab);
+    if (!reducedMotion) setSwapping(true);
+  }
   const ids = useId();
   const primaryColor = taskTagColor({ primaryTagId, projectId: tags[0]?.projectId ?? '' }, tags);
   const secondaryCount = secondaryTagIds.filter((id) => tags.some((tag) => tag.id === id)).length;
 
+  // The host sets `--tags-max` to the panel's tallest; the views scroll in what the tabs leave.
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 px-3 pt-2">
+      <AnimatedHeight follow={!swapping}>
+        <AnimatePresence initial={false} mode="wait" custom={reducedMotion ? 0 : direction}>
+          <TagTabView
+            key={activeTab}
+            direction={reducedMotion ? 0 : direction}
+            onShown={() => setSwapping(false)}
+          >
+            {activeTab === 'primary' ? (
+              <div
+                role="tabpanel"
+                id={`${ids}-primary`}
+                aria-labelledby={`${ids}-primary-tab`}
+                className="max-h-[calc(var(--tags-max,min(26rem,55dvh))-4.5rem-1px)] overflow-y-auto overscroll-contain [scrollbar-width:thin]"
+              >
+                {loadingPrimary ? (
+                  <div className="px-3 pt-1 pb-1">{loadingTags}</div>
+                ) : (
+                  <ColorTagPicker
+                    tags={tags}
+                    primaryTagId={primaryTagId}
+                    onChange={onPrimaryChange}
+                    initialBranch={initialBranch}
+                    onNewTag={onNewPrimaryTag}
+                    className="w-full pt-1 pb-1"
+                  />
+                )}
+              </div>
+            ) : (
+              <div
+                role="tabpanel"
+                id={`${ids}-secondary`}
+                aria-labelledby={`${ids}-secondary-tab`}
+                className="flex max-h-[calc(var(--tags-max,min(26rem,55dvh))-4.5rem-1px)] flex-col overflow-hidden px-3 pt-2 pb-1"
+              >
+                {onNewSecondaryTag && (
+                  <div className="mb-1 flex min-h-11 shrink-0 items-center justify-between gap-2">
+                    <p className="px-1 font-medium text-sm">Secondary tags</p>
+                    {!loadingSecondary && <NewTagButton onClick={onNewSecondaryTag} />}
+                  </div>
+                )}
+                {loadingSecondary ? (
+                  loadingTags
+                ) : (
+                  <TagPicker
+                    tags={tags}
+                    primaryTagId={primaryTagId}
+                    secondaryTagIds={secondaryTagIds}
+                    onChange={onSecondaryChange}
+                  />
+                )}
+              </div>
+            )}
+          </TagTabView>
+        </AnimatePresence>
+      </AnimatedHeight>
+      {/* The role switch stays under both views, as the reminder panel's actions do in Catch. */}
+      <div className="mt-1 shrink-0 border-foreground/10 border-t px-3 pt-2 pb-2">
         <SegmentedTabs
           label="Tag role"
           value={activeTab}
@@ -303,51 +427,6 @@ export function TagOptions({
           ]}
         />
       </div>
-      {activeTab === 'primary' ? (
-        <div
-          role="tabpanel"
-          id={`${ids}-primary`}
-          aria-labelledby={`${ids}-primary-tab`}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:thin]"
-        >
-          {loadingPrimary ? (
-            <div className="px-3 pt-1 pb-1">{loadingTags}</div>
-          ) : (
-            <ColorTagPicker
-              tags={tags}
-              primaryTagId={primaryTagId}
-              onChange={onPrimaryChange}
-              initialBranch={initialBranch}
-              onNewTag={onNewPrimaryTag}
-              className="w-full pt-1 pb-1"
-            />
-          )}
-        </div>
-      ) : (
-        <div
-          role="tabpanel"
-          id={`${ids}-secondary`}
-          aria-labelledby={`${ids}-secondary-tab`}
-          className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pt-2 pb-1"
-        >
-          {onNewSecondaryTag && (
-            <div className="mb-1 flex min-h-11 shrink-0 items-center justify-between gap-2">
-              <p className="px-1 font-medium text-sm">Secondary tags</p>
-              {!loadingSecondary && <NewTagButton onClick={onNewSecondaryTag} />}
-            </div>
-          )}
-          {loadingSecondary ? (
-            loadingTags
-          ) : (
-            <TagPicker
-              tags={tags}
-              primaryTagId={primaryTagId}
-              secondaryTagIds={secondaryTagIds}
-              onChange={onSecondaryChange}
-            />
-          )}
-        </div>
-      )}
     </div>
   );
 }

@@ -634,6 +634,14 @@ test('tags are picked from the task controls and listed on the task', async ({
     page.getByRole(isMobile ? 'dialog' : 'region', { name: 'Tags', exact: true });
   // The children reach the device after the root; the picker can only open what it has.
   await controls(page).getByRole('button', { name: 'Tags: none. Change', exact: true }).click();
+  // The Primary / Secondary tab selector sits at the bottom of the panel, below the picker content.
+  const roleTabs = tagsPanel().getByRole('tablist', { name: 'Tag role', exact: true });
+  await expect(roleTabs).toBeVisible();
+  const primaryBox = (await tagsPanel()
+    .getByRole('button', { name: 'No color tag', exact: true })
+    .boundingBox())!;
+  const tabsBox = (await roleTabs.boundingBox())!;
+  expect(tabsBox.y).toBeGreaterThanOrEqual(primaryBox.y + primaryBox.height);
   await tagsPanel().getByRole('tab', { name: 'Secondary', exact: true }).click();
   await expect(
     tagsPanel().getByRole('checkbox', { name: 'Launch / Video', exact: true }),
@@ -657,11 +665,45 @@ test('tags are picked from the task controls and listed on the task', async ({
   await expect(launchButton.locator('[data-color="amber"]')).toBeVisible();
   await launchButton.click();
   const picker = tagsPanel();
-  await picker.getByRole('tab', { name: 'Secondary', exact: true }).click();
+  // Switching role swaps the views above the role tabs, and the panel springs between their
+  // heights rather than jumping (the phone's drawer follows it frame by frame).
+  const roles = picker.getByRole('tablist', { name: 'Tag role', exact: true });
+  const views = roles.locator('xpath=../preceding-sibling::*[1]');
+  await expect(views).toBeVisible();
+  // Clicked from the page so the samples start with the click, not after Playwright's wait for
+  // the drawer to come to rest.
+  const sampled = await roles.evaluate(
+    (tabs, views) =>
+      new Promise<number[]>((resolve) => {
+        const seen: number[] = [];
+        const step = () => {
+          seen.push(Math.round(views.getBoundingClientRect().height));
+          // Done once it has held still for a while after moving.
+          const still = seen.length > 20 && new Set(seen.slice(-15)).size === 1;
+          if ((still && seen.at(-1) !== seen[0]) || seen.length >= 180) resolve(seen);
+          else requestAnimationFrame(step);
+        };
+        tabs.querySelector<HTMLElement>('[role="tab"]:not([aria-selected="true"])')?.click();
+        requestAnimationFrame(step);
+      }),
+    await views.elementHandle(),
+  );
+  const [from, to] = [sampled[0]!, sampled.at(-1)!];
+  expect(to - from).toBeGreaterThan(20);
+  expect(sampled.filter((h) => h > from + 4 && h < to - 4).length).toBeGreaterThan(2);
+  await expect(picker.getByRole('tab', { name: 'Secondary', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
   await picker.getByRole('checkbox', { name: 'Launch / Press', exact: true }).check();
-  // Tags take several choices, so the picker stays open until it is dismissed.
+  // Tags take several choices, so the picker stays open until it is dismissed, with tabs pinned below.
   await expect(picker).toBeVisible();
   await expect(picker.getByRole('tab', { name: 'Secondary · 1', exact: true })).toBeVisible();
+  const searchBox = (await picker.getByRole('textbox', { name: 'Find tags' }).boundingBox())!;
+  const bottomTabsBox = (await picker
+    .getByRole('tablist', { name: 'Tag role', exact: true })
+    .boundingBox())!;
+  expect(bottomTabsBox.y).toBeGreaterThanOrEqual(searchBox.y + searchBox.height);
   await page.screenshot({ path: test.info().outputPath('tag-picker.png') });
   await page.keyboard.press('Escape');
   await expect(picker).toHaveCount(0);

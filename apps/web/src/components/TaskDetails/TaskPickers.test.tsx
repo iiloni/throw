@@ -92,7 +92,7 @@ it('names priorities by the project and updates the task with the one picked', (
   expect(onPicked).toHaveBeenCalledOnce();
 });
 
-it('assigns tags in both roles from the unified panel without closing', () => {
+it('assigns tags in both roles from the unified panel without closing', async () => {
   const tag = (id: string, name: string, parentId: string | null = null): Tag => ({
     id,
     workspaceId: 'workspace',
@@ -118,7 +118,8 @@ it('assigns tags in both roles from the unified panel without closing', () => {
   expect(fake.primary).toHaveBeenCalledWith('task', null);
 
   fireEvent.click(screen.getByRole('tab', { name: 'Secondary · 1' }));
-  expect(screen.getByRole('checkbox', { name: 'Work' })).toBeChecked();
+  // The Primary view slides out before the Secondary one arrives.
+  expect(await screen.findByRole('checkbox', { name: 'Work' })).toBeChecked();
   fireEvent.click(screen.getByRole('checkbox', { name: 'Work' }));
   expect(fake.secondary).toHaveBeenCalledWith('task', 'work', false);
 });
@@ -161,7 +162,8 @@ it('assigns a tag made from either tab’s corner, and restores the tab and bran
 
   // Making a tag from the Secondary tab returns to the Secondary tab after a phone unmount.
   fireEvent.click(screen.getByRole('tab', { name: 'Secondary' }));
-  fireEvent.click(screen.getByRole('button', { name: 'New tag' }));
+  const secondaryView = await screen.findByRole('tabpanel', { name: 'Secondary' });
+  fireEvent.click(within(secondaryView).getByRole('button', { name: 'New tag' }));
   const secondaryAsked = newTagRequest.get();
   cleanup();
   secondaryAsked?.onCreated('made-secondary');
@@ -169,7 +171,7 @@ it('assigns a tag made from either tab’s corner, and restores the tab and bran
   closeNewTag();
   render(<TaskTagsPicker task={task} />);
   expect(screen.getByRole('tab', { name: 'Secondary' })).toHaveAttribute('aria-selected', 'true');
-  expect(screen.getByRole('checkbox', { name: 'Work' })).toBeInTheDocument();
+  expect(await screen.findByRole('checkbox', { name: 'Work' })).toBeInTheDocument();
   newTagHosted.set(false);
 });
 

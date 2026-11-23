@@ -115,7 +115,15 @@ export function usePhonePalette({
               fit: true,
               dock: true,
               content: (
-                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[calc(var(--safe-bottom)+1rem)]">
+                <div
+                  className={
+                    panel === 'tags'
+                      ? // Its own scrollers, so the role switch at its foot stays in view, and room
+                        // left above for the card riding over the drawer.
+                        'flex max-h-[calc(100dvh-var(--keyboard)-var(--safe-top)-var(--dock-height)-2rem)] min-h-0 flex-1 flex-col pb-[max(0rem,calc(var(--safe-bottom)+0.25rem-var(--keyboard)))] [--tags-max:min(24.5rem,calc(100dvh-var(--keyboard)-var(--safe-top)-var(--dock-height)-7.5rem-max(0rem,calc(var(--safe-bottom)+0.25rem-var(--keyboard)))))]'
+                      : 'min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[calc(var(--safe-bottom)+1rem)]'
+                  }
+                >
                   <CapturePanelContent
                     panel={panel}
                     draft={draft}

@@ -20,7 +20,7 @@ import { leaveTask } from '@/components/Board/state';
 import type { TaskDrawerContent } from '@/components/Board/taskContent';
 import { touchEditor } from '@/components/DescriptionEditor/editorControls';
 import { FormattingBar } from '@/components/FormattingBar/FormattingBar';
-import { IconButton } from '@/components/IconButton/IconButton';
+import { Hint } from '@/components/Hint/Hint';
 import { RelationPicker } from '@/components/TaskRelations/TaskRelations';
 import { useTags, useTaskTags } from '@/lib/collections';
 import { useTaskSizeSupport } from '@/lib/compatibility';
@@ -78,7 +78,41 @@ export function useOpenTaskPanel(
 // As Catch's note toolbar: inset in the dock so their corners follow its corners, and only
 // the one whose panel is open takes a surface.
 const control =
-  'size-full rounded-[calc(var(--dock-radius)-0.25rem)] text-foreground/80 transition-[background-color,color,scale] duration-200 hover:bg-foreground/[0.05] hover:text-foreground active:scale-[0.92] aria-expanded:bg-foreground/[0.08] aria-expanded:text-foreground aria-expanded:shadow-[inset_0_1px_0_var(--glass-highlight)] [&_svg]:size-6!';
+  'relative flex size-full items-center justify-center rounded-[calc(var(--dock-radius)-0.25rem)] text-foreground/80 outline-none transition-colors duration-200 hover:bg-foreground/[0.05] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/70 aria-expanded:bg-foreground/[0.08] aria-expanded:text-foreground aria-expanded:shadow-[inset_0_1px_0_var(--glass-highlight)] [&_svg]:size-6! [&_svg]:shrink-0';
+
+/** One of the dock's controls, pressed in on Catch's toolbar spring. */
+function DockControl({
+  label,
+  tooltip,
+  onOpen,
+  children,
+  ...props
+}: ControlProps & {
+  label: string;
+  tooltip: boolean;
+  onOpen(element: HTMLButtonElement): void;
+  children: ReactNode;
+}) {
+  return (
+    <Hint label={label} disabled={!tooltip}>
+      <motion.button
+        type="button"
+        aria-label={label}
+        className={control}
+        whileTap={{ scale: 0.88 }}
+        transition={springs.snappy}
+        {...props}
+        onClick={(event) => {
+          // A dock over a clickable card keeps the tap to itself.
+          event.stopPropagation();
+          onOpen(event.currentTarget);
+        }}
+      >
+        {children}
+      </motion.button>
+    </Hint>
+  );
+}
 
 type ControlProps = Pick<
   ButtonHTMLAttributes<HTMLButtonElement>,
@@ -168,67 +202,62 @@ export function ControlButtons({
 }) {
   return (
     <div className="grid h-[var(--dock-height)] w-full auto-cols-fr grid-flow-col gap-1 p-1">
-      <IconButton
+      <DockControl
         label={`Status: ${status?.name ?? 'Pending'}. Change`}
-        className={control}
         tooltip={tooltips}
         {...controlProps('status')}
-        onClick={(event) => onOpen('status', event.currentTarget)}
+        onOpen={(element) => onOpen('status', element)}
       >
         <StatusGlyph category={status?.category ?? 'backlog'} />
-      </IconButton>
-      <IconButton
+      </DockControl>
+      <DockControl
         label={`Priority: ${priorityName(project, priority)}. Change`}
-        className={control}
         tooltip={tooltips}
         {...controlProps('priority')}
-        onClick={(event) => onOpen('priority', event.currentTarget)}
+        onOpen={(element) => onOpen('priority', element)}
       >
         {priority === 3 ? (
           <Flag />
         ) : (
           <PriorityGlyph priority={priority} name={priorityName(project, priority)} />
         )}
-      </IconButton>
+      </DockControl>
       {size !== undefined && (
-        <IconButton
+        <DockControl
           label={`Size: ${size === null ? 'none' : sizeLabel(size)}. Change`}
-          className={control}
           tooltip={tooltips}
           {...controlProps('size')}
-          onClick={(event) => onOpen('size', event.currentTarget)}
+          onOpen={(element) => onOpen('size', element)}
         >
           {size === null ? (
             <Scaling />
           ) : (
             <span className="font-semibold text-sm">{sizeLabel(size)}</span>
           )}
-        </IconButton>
+        </DockControl>
       )}
       {tags && (
-        <IconButton
+        <DockControl
           label={`Tags: ${tagSummary(tags)}. Change`}
-          className={control}
           tooltip={tooltips}
           {...controlProps('tags')}
-          onClick={(event) => onOpen('tags', event.currentTarget)}
+          onOpen={(element) => onOpen('tags', element)}
         >
           <Tag
             data-color={tags.color ?? undefined}
             className={tags.color ? 'text-tint-accent' : ''}
           />
-        </IconButton>
+        </DockControl>
       )}
       {more && (
-        <IconButton
+        <DockControl
           label="More task actions"
-          className={control}
           tooltip={tooltips}
           {...controlProps('more')}
-          onClick={(event) => onOpen('more', event.currentTarget)}
+          onOpen={(element) => onOpen('more', element)}
         >
           <MoreHorizontal />
-        </IconButton>
+        </DockControl>
       )}
     </div>
   );
@@ -324,9 +353,9 @@ export function taskDrawerContent({
       dock: page !== 'relations',
       content:
         page === 'relations' || page === 'tags' ? (
-          // Own scroller inside the picker so its tabs/search controls stay pinned above the safe
+          // Own scroller inside the picker so its bottom controls stay pinned above the safe
           // area or keyboard and the sheet never clips off the top when the keyboard rises.
-          <div className="flex max-h-[calc(100dvh-var(--keyboard)-var(--safe-top)-var(--dock-height)-2rem)] min-h-0 flex-1 flex-col pb-[max(0rem,calc(var(--safe-bottom)+0.25rem-var(--keyboard)))]">
+          <div className="flex max-h-[calc(100dvh-var(--keyboard)-var(--safe-top)-var(--dock-height)-2rem)] min-h-0 flex-1 flex-col pb-[max(0rem,calc(var(--safe-bottom)+0.25rem-var(--keyboard)))] [--tags-max:calc(100dvh-var(--keyboard)-var(--safe-top)-var(--dock-height)-2rem-max(0rem,calc(var(--safe-bottom)+0.25rem-var(--keyboard))))]">
             <TaskPanelContent
               panel={page}
               task={task}

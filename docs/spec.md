@@ -602,7 +602,7 @@ view), comments and activity.
   tabs: each opens its panel in the drawer beneath the dock, which stays as the panel's
   header, and the drawer holds still until a panel is open. The status panel is the
   board's grid of statuses by category. The unified Tags panel switches between **Primary**
-  and **Secondary** tabs (2026-11-22): Primary picks the primary tag by color (each colored
+  and **Secondary** tabs at the bottom of the panel (2026-11-22): Primary picks the primary tag by color (each colored
   top-level tag is a swatch, picking one opens its children to pick a more specific one, and
   uncolored top-level tags sit one step away), and Secondary lists the secondary tags with
   the primary marked, since a tag may hold both roles. The picker stays open for further
