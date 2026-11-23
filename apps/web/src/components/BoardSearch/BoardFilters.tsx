@@ -43,6 +43,7 @@ import { SegmentedTabs } from '@/components/SegmentedTabs/SegmentedTabs';
 import { TagBadge } from '@/components/TagBadge/TagBadge';
 import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { TagTree } from '@/components/TagTree/TagTree';
+import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { usePersistentState } from '@/lib/storage';
@@ -182,7 +183,7 @@ export function BoardFilters({ className }: { className?: string }) {
           <FilterTabView
             key={tab}
             id={viewId(tab)}
-            scroll={tab !== 'group'}
+            scroll={tab !== 'group' || workspace}
             labelledBy={tabId(tab)}
             direction={direction}
           >
@@ -476,12 +477,20 @@ function FilterTabView({
       exit="leave"
       transition={reducedMotion ? { duration: 0 } : springs.smooth}
       className={cn(
-        'max-h-[var(--board-filter-view-max,24rem)] overflow-x-hidden',
-        scroll ? 'overflow-y-auto overscroll-contain' : 'overflow-y-hidden',
+        'flex max-h-[var(--board-filter-view-max,24rem)] flex-col overflow-hidden',
         !isPresent && 'absolute inset-x-0 bottom-0',
       )}
     >
-      {children}
+      {scroll ? (
+        <ScrollArea edges className="flex min-h-0 flex-1 flex-col [--scrollbar-inset:0.25rem]">
+          <ScrollAreaViewport className="h-auto w-full min-h-0 flex-1">
+            {children}
+          </ScrollAreaViewport>
+          <ScrollBar />
+        </ScrollArea>
+      ) : (
+        children
+      )}
     </motion.section>
   );
 }
