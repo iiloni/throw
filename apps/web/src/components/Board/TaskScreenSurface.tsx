@@ -69,10 +69,10 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
   const opener = useRef(
     document.activeElement instanceof HTMLElement ? document.activeElement : null,
   );
-  // A task discarded as it closes (a new subtask left empty) keeps its last page while it goes.
+  // A task discarded or trashed as it closes keeps its last page while it goes.
   const page = content.body(task.id);
   const lastPage = useRef(page);
-  if (page) lastPage.current = page;
+  if (isPresent && page) lastPage.current = page;
   const close = () => {
     if (board.get().openTaskId === task.id) leaveTask();
   };
@@ -187,6 +187,8 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
             );
           }
           frame.read(follow, true);
+        } else {
+          setTaskCardHidden(task.id, false);
         }
       }
       const curve = isPresent ? curves.expand : curves.collapse;
