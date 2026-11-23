@@ -443,7 +443,8 @@ export function Drawer({
               onFocusCapture={() => {
                 if (paged) onClosePage();
               }}
-              className="absolute inset-x-3 bottom-full mb-3 flex max-h-[calc(100dvh-var(--keyboard)-var(--safe-top)-var(--dock-height)-3rem)] flex-col overflow-hidden rounded-[28px] bg-card text-card-foreground shadow-[0_24px_60px_-12px_oklch(0_0_0/0.45)]"
+              // Sits behind the drawer's -z-10 glass so the card's shadow never paints over the dock.
+              className="absolute inset-x-3 bottom-full -z-20 mb-3 flex max-h-[calc(100dvh-var(--keyboard)-var(--safe-top)-var(--dock-height)-3rem)] flex-col overflow-hidden rounded-[28px] bg-card text-card-foreground shadow-[0_24px_60px_-12px_oklch(0_0_0/0.45)]"
               // Grows out of the dock's create button, below the card's bottom-right corner.
               style={{ transformOrigin: 'calc(100% - 2rem) calc(100% + 3rem)' }}
               initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.3 }}
