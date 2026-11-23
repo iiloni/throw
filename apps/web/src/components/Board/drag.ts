@@ -1,8 +1,10 @@
 import { animate, motionValue } from 'motion/react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { haptics } from '@/lib/haptics';
+import { dropIndex } from '@/lib/masonry';
 import { springs } from '@/lib/motion';
 import { createStore } from '@/lib/store';
+import type { MasonryData } from './Gallery';
 import type { Priority } from './model';
 import {
   board,
@@ -37,6 +39,8 @@ import {
  * - `data-drop-list`: a column or gallery cards can be placed in. Inside it, `data-slot`
  *   wraps each card, `data-gap` marks where a card may land, `data-zone-header` starts a
  *   priority zone and `data-drop-rail` is a folded zone that takes the card when held over.
+ *   With `data-layout="masonry"`, a gallery's `data-masonry` element describes its bands and
+ *   cards instead, and the place is worked out from that.
  *   With `data-drop-send`, the list keeps no manual order (the board is sorted by size): a
  *   card is sent to its status instead of placed, and the backlog takes none.
  * - `data-drop-status`: a tile that sends cards to a status without placing them.
@@ -528,25 +532,55 @@ function indexIn(list: HTMLElement, priority: Priority, y: number, height: numbe
   return index;
 }
 
+/** The masonry a gallery draws (`Gallery.tsx`), in the coordinates of its grid element. */
+function masonryOf(list: HTMLElement) {
+  const element = list.querySelector<HTMLElement>('[data-masonry]');
+  if (!element?.dataset.masonry) return null;
+  try {
+    return {
+      rect: element.getBoundingClientRect(),
+      data: JSON.parse(element.dataset.masonry) as MasonryData,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Where among a gallery's cards, read left to right and then down, a card centred on `x`,
- * `y` belongs. Nothing in a gallery moves while a card is held, so the cards are compared
- * where they stand.
+ * Where among a masonry gallery's cards a card centred on `x`, `y` belongs: the slot nearest
+ * it in the layout its peers would have with it placed there (Catch's `dropIndex`). The
+ * gallery says where its bands and cards are, so the answer does not depend on cards that are
+ * still springing to their places. Returns the band too, read from where the bands start.
  */
-function gridIndex(list: HTMLElement, priority: Priority, x: number, y: number, ids: string[]) {
-  const boxes = [...list.querySelectorAll<HTMLElement>('[data-slot]')]
-    .filter(
-      (element) =>
-        Number(element.dataset.zone) === priority && !ids.includes(element.dataset.slot ?? ''),
-    )
-    .map((element) => element.getBoundingClientRect());
-  // The row the card is in: the last one starting above its centre.
-  const rows = [...new Set(boxes.map((box) => Math.round(box.top)))].sort((a, b) => a - b);
-  const row = rows.filter((top) => top <= y).at(-1) ?? rows[0] ?? 0;
-  return boxes.filter((box) => {
-    const top = Math.round(box.top);
-    return top < row || (top === row && box.left + box.width / 2 < x);
-  }).length;
+function masonryPlace(
+  list: HTMLElement,
+  fallback: Priority,
+  x: number,
+  y: number,
+  height: number,
+  current: DropTarget | null,
+): { priority: Priority; index: number } | null {
+  const masonry = masonryOf(list);
+  if (!masonry) return null;
+  const { rect, data } = masonry;
+  const top = y - rect.top;
+  let band = data.bands[0];
+  for (const candidate of data.bands) if (candidate.top <= top) band = candidate;
+  if (!band) return { priority: fallback, index: 0 };
+  const priority = band.priority ?? fallback;
+  const index = dropIndex({
+    columns: data.columns,
+    columnWidth: data.columnWidth,
+    gap: data.gap,
+    heights: band.peers,
+    height,
+    center: { x: x - rect.left, y: top - band.cards },
+    current:
+      current?.kind === 'place' && current.priority === priority
+        ? Math.min(current.index, band.peers.length)
+        : -1,
+  });
+  return { priority, index };
 }
 
 /** Works out where the card would land. `pickup` finds its own place as it is lifted. */
@@ -633,12 +667,24 @@ function resolve(pickup = false) {
     return set({ target: liftedFrom, priority, rail });
   }
   const centre = pointer.y - grab.y + state.height / 2;
-  // A gallery keeps its layout under a held card, as a column does in Full.
-  const grid = list.dataset.layout === 'grid';
-  if (config.heldColumn === 'full' || grid) priority = zoneAt(list, centre, priority);
-  const index = grid
-    ? gridIndex(list, priority, pointer.x - grab.x + overlayWidth.get() / 2, centre, state.ids)
-    : indexIn(list, priority, centre, state.height, state.ids);
+  // A gallery lays its cards out in masonry, and says where they are.
+  const placed =
+    list.dataset.layout === 'masonry'
+      ? masonryPlace(
+          list,
+          priority,
+          pointer.x - grab.x + overlayWidth.get() / 2,
+          centre,
+          state.height,
+          state.target,
+        )
+      : null;
+  if (placed) {
+    set({ target: { kind: 'place', listId, ...placed }, priority: placed.priority, rail });
+    return;
+  }
+  if (config.heldColumn === 'full') priority = zoneAt(list, centre, priority);
+  const index = indexIn(list, priority, centre, state.height, state.ids);
   set({ target: { kind: 'place', listId, priority, index }, priority, rail });
 }
 

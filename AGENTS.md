@@ -47,7 +47,12 @@ actions in `lib/taskRelations.ts`, the pane's list, dock picker and card blocked
 The task pane shows comments, server history and (on narrow desktop panes and phones,
 moving to the ADR 0012 side column when wide) task links under `SegmentedTabs`.
 Touch screens swipe between them with `useTabSwipe`. Refused changes have a quiet task-only
-notice and description recovery links. Desktop columns on both boards fold to a strip, as Catch's deck does
+notice and description recovery links. The desktop backlog and closed rails are one masonry grid at any width (`Board/Gallery.tsx`
+on `lib/masonry.ts`, Catch's `NoteGrid` springs): a single column, a width their inner edge
+was dragged to (`SplitHandle`, kept by `useRailWidths` in `Board/state.ts`) or a gallery across
+the board. `railGeometry` and `useRailSpring` in `Board/SideZone.tsx` spring a rail only when
+its state changes and track its width exactly as the row or its edge is resized.
+Desktop columns on both boards fold to a strip, as Catch's deck does
 (`Board/BoardColumn.tsx`, remembered per project by `useCollapsedColumns` in `Board/state.ts`).
 Both boards narrow in place: the board store holds a filter and a temporary sort
 (`Board/filter.ts`, applied by `listTasks` and `countIn`), set from the desktop boards'
