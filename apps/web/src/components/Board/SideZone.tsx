@@ -15,6 +15,7 @@ import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { drag, makingWay } from './drag';
 import { GALLERY_INSET, ZoneGallery } from './Gallery';
+import { StatusGlyph } from './glyphs';
 import type { Category, Status } from './model';
 import { StatusTile } from './StatusTile';
 import {
@@ -326,7 +327,7 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
             >
-              <div className="flex h-14 shrink-0 items-center gap-2 pr-2.5 pl-5">
+              <div className="column-head flex h-14 shrink-0 items-center gap-2 pr-2.5 pl-5">
                 <h2 className="font-display font-semibold text-lg tracking-[-0.01em]">{title}</h2>
                 <span className="flex-1 text-muted-foreground text-sm tabular-nums">{count}</span>
                 {zone === 'backlog' && state.actions && (
@@ -438,6 +439,13 @@ export function StatusFilter({
                   : 'border-transparent bg-foreground/[0.06] text-foreground/75 hover:bg-foreground/[0.1]',
             )}
           >
+            {status.color && (
+              <StatusGlyph
+                category={status.category}
+                color={status.color}
+                className="-ml-0.5 mr-1.5"
+              />
+            )}
             {status.name}
           </button>
         );

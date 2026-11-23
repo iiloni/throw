@@ -141,6 +141,9 @@ The mapping is many-to-one: a category holds any number of statuses.
 - Statuses are always ordered by category (backlog, active, done, cancelled), with free
   ordering inside each category.
 - A project always has at least one status in each category, and starts with one in each.
+- A status can take a named tag color. The project board uses it for a stripe along the top of
+  its desktop column, the phone board's progress track, and status controls. The desktop
+  column background has its own setting. A task card takes its color from its primary tag.
 - A status's category is fixed when it is created. Changing it would close or reopen every
   task in it at once.
 - Each project has a default status per category, used when a task is dropped on a category

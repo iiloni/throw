@@ -1,6 +1,7 @@
 import { Check, Search } from 'lucide-react';
 import { type ReactNode, useId, useMemo, useRef, useState } from 'react';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
+import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { normalizeSearch } from '@/lib/taskSearch';
 import { cn } from '@/lib/utils';
 
@@ -98,42 +99,45 @@ export function ProjectOptions({
           className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
         />
       </label>
-      <div ref={list} className="max-h-60 min-h-0 overflow-y-auto overscroll-contain">
-        <div id={`${id}-list`} role="listbox" aria-label={label}>
-          {shown.map((option) => {
-            const selected = option.value === value;
-            return (
-              // biome-ignore lint/a11y/useKeyWithClickEvents: the search field holds focus and takes the keys for the list
-              <div
-                key={option.value}
-                id={`${id}-${option.value}`}
-                role="option"
-                tabIndex={-1}
-                aria-selected={selected}
-                data-active={option === activeOption || undefined}
-                // Keeps the keyboard up while the choice lands.
-                onPointerDown={(event) => event.preventDefault()}
-                onClick={() => onChange(option.value)}
-                className={cn(
-                  'flex min-h-11 cursor-pointer items-center gap-2.5 rounded-xl px-3 py-1.5 text-sm outline-none transition-colors duration-200',
-                  selected
-                    ? 'glass-chosen'
-                    : 'hover:bg-foreground/[0.06] data-active:bg-foreground/[0.06]',
-                )}
-              >
-                {option.icon}
-                <span className="min-w-0 flex-1 truncate">{option.label}</span>
-                {selected && <Check className="size-4 shrink-0" aria-hidden />}
-              </div>
-            );
-          })}
-        </div>
-        {shown.length === 0 && (
-          <p role="status" className="px-3 py-6 text-center text-muted-foreground text-sm">
-            No matching projects
-          </p>
-        )}
-      </div>
+      <ScrollArea edges className="flex max-h-60 min-h-0 flex-col [--scrollbar-inset:0.25rem]">
+        <ScrollAreaViewport ref={list} className="h-auto w-full min-h-0 flex-1">
+          <div id={`${id}-list`} role="listbox" aria-label={label}>
+            {shown.map((option) => {
+              const selected = option.value === value;
+              return (
+                // biome-ignore lint/a11y/useKeyWithClickEvents: the search field holds focus and takes the keys for the list
+                <div
+                  key={option.value}
+                  id={`${id}-${option.value}`}
+                  role="option"
+                  tabIndex={-1}
+                  aria-selected={selected}
+                  data-active={option === activeOption || undefined}
+                  // Keeps the keyboard up while the choice lands.
+                  onPointerDown={(event) => event.preventDefault()}
+                  onClick={() => onChange(option.value)}
+                  className={cn(
+                    'flex min-h-11 cursor-pointer items-center gap-2.5 rounded-xl px-3 py-1.5 text-sm outline-none transition-colors duration-200',
+                    selected
+                      ? 'glass-chosen'
+                      : 'hover:bg-foreground/[0.06] data-active:bg-foreground/[0.06]',
+                  )}
+                >
+                  {option.icon}
+                  <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                  {selected && <Check className="size-4 shrink-0" aria-hidden />}
+                </div>
+              );
+            })}
+          </div>
+          {shown.length === 0 && (
+            <p role="status" className="px-3 py-6 text-center text-muted-foreground text-sm">
+              No matching projects
+            </p>
+          )}
+        </ScrollAreaViewport>
+        <ScrollBar />
+      </ScrollArea>
     </div>
   );
 }

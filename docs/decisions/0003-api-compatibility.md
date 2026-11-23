@@ -32,7 +32,9 @@ and the server's maximum, with tests at the boundaries and a documented upgrade 
 
 Some compatible additions advertise a capability in `/api/compatibility`. The task size
 field uses `taskSize: true` so a new app can keep using an older server and send size
-changes once the server supports them.
+changes once the server supports them. Status colors use `statusColor: true`: older servers
+can still sync uncolored statuses and accept ordinary status edits. The new client hides
+the color picker while the capability is absent and keeps any queued color writes for retry.
 
 ## Consequences
 

@@ -413,6 +413,36 @@ test.describe('desktop', () => {
       'Capture from the bar',
     );
   });
+
+  test('the docked search sidebar feathers its overflowing top and bottom edges', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1920, height: 520 });
+    const board = await fixture(page, true);
+    for (let i = 1; i <= 14; i++) {
+      await newTag(page.request, board, board.projectId, { name: `Tag ${i}` });
+    }
+    await openBar(page);
+    const sidebar = bar(page);
+    await expect(sidebar).toHaveAttribute('data-docked', '');
+    const area = sidebar.locator('[data-slot="scroll-area"][data-edges]').first();
+    const viewport = area.locator('> [data-slot="scroll-area-viewport"]');
+    await expect(area).toBeVisible();
+    await expect(area).not.toHaveAttribute('data-more-top');
+    await expect(area).toHaveAttribute('data-more-bottom');
+
+    await viewport.evaluate((el) => {
+      el.scrollTop = 80;
+    });
+    await expect(area).toHaveAttribute('data-more-top');
+    await expect(area).toHaveAttribute('data-more-bottom');
+
+    await viewport.evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+    await expect(area).toHaveAttribute('data-more-top');
+    await expect(area).not.toHaveAttribute('data-more-bottom');
+  });
 });
 
 test.describe('phone', () => {
@@ -471,5 +501,55 @@ test.describe('phone', () => {
         board.ids['Earlier position'],
         board.ids['Low priority'],
       ]);
+  });
+
+  test('the search drawer feathers overflowing results and still dismisses on pull from the top', async ({
+    page,
+  }) => {
+    const board = await fixture(page, true);
+    for (let i = 1; i <= 12; i++) {
+      await taggedTask(page.request, board, board.projectId, {
+        title: `Feather item ${i}`,
+        statusId: board.status('Build'),
+        priority: 3,
+        position: `a${String(i).padStart(2, '0')}`,
+      });
+    }
+    await expect(
+      page.getByRole('region', { name: 'Build', exact: true }).getByRole('article'),
+    ).toHaveCount(12);
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Search', exact: true });
+    await dialog.getByRole('combobox', { name: /^Search tasks/ }).fill('Feather item');
+    await expect(dialog.getByRole('option', { name: /Feather item 1\b/ })).toBeVisible();
+
+    const area = dialog.locator('[data-slot="scroll-area"][data-edges]').first();
+    const viewport = area.locator('> [data-slot="scroll-area-viewport"]');
+    await expect(area).not.toHaveAttribute('data-more-top');
+    await expect(area).toHaveAttribute('data-more-bottom');
+
+    await viewport.evaluate((el) => {
+      el.scrollTop = 100;
+    });
+    await expect(area).toHaveAttribute('data-more-top');
+    await expect(area).toHaveAttribute('data-more-bottom');
+
+    await viewport.evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+    await expect(area).toHaveAttribute('data-more-top');
+    await expect(area).not.toHaveAttribute('data-more-bottom');
+
+    // Returning to the top restores pull-to-dismiss on the drawer.
+    await viewport.evaluate((el) => {
+      el.scrollTop = 0;
+    });
+    await expect(area).not.toHaveAttribute('data-more-top');
+    const box = (await viewport.boundingBox())!;
+    const touch = await finger(page);
+    await touch.press({ x: box.x + box.width / 2, y: box.y + 40 }, 0);
+    await touch.move({ x: box.x + box.width / 2, y: box.y + 260 }, 150);
+    await touch.lift();
+    await expect(dialog).toHaveCount(0);
   });
 });

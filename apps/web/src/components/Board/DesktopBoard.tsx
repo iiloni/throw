@@ -357,6 +357,7 @@ function StatusColumn({ status, index }: { status: Status; index: number }) {
   return (
     <BoardColumn
       columnId={status.id}
+      color={status.color}
       name={status.name}
       category={status.category}
       count={count}
@@ -374,6 +375,7 @@ function StatusColumn({ status, index }: { status: Status; index: number }) {
           header={
             <ColumnHeader
               name={status.name}
+              category={status.color ? status.category : undefined}
               count={count}
               onCollapse={() => setCollapsed(status.id, true)}
             />

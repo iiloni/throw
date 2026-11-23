@@ -187,7 +187,11 @@ export function TaskDetails({
                           'outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/60',
                         )}
                       >
-                        <StatusGlyph category={childStatus.category} className="size-3" />
+                        <StatusGlyph
+                          category={childStatus.category}
+                          color={childStatus.color}
+                          className="size-3"
+                        />
                         <span className="truncate">{childStatus.name}</span>
                       </button>
                     </StatusMenu>

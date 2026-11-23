@@ -89,7 +89,7 @@ export function createApp() {
 
   app.get('/api/compatibility', (c) => {
     c.header('Cache-Control', 'no-store');
-    return c.json({ ...SUPPORTED_API_PROTOCOLS, taskSize: true });
+    return c.json({ ...SUPPORTED_API_PROTOCOLS, taskSize: true, statusColor: true });
   });
 
   app.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(withClientIp(c)));

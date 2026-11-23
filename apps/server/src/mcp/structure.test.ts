@@ -101,6 +101,7 @@ test('default changes compare the observed category default and send only the se
     projectId: project.id,
     workspaceId: actor.workspaceId,
     name: 'In progress',
+    color: null,
     position: 'a0',
     category: 'active' as const,
     isDefault: true,

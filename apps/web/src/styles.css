@@ -385,6 +385,66 @@
   --tint: light-dark(oklch(0.915 0.006 255), oklch(0.33 0.008 255));
 }
 
+/* Status accents use Catch's deck colors, with the remaining hues from the tag palette. */
+[data-column-color] {
+  --column-accent: light-dark(
+    oklch(0.54 0.12 var(--column-hue)),
+    oklch(0.78 0.1 var(--column-hue))
+  );
+  --column-label: color-mix(in oklab, var(--column-accent) 55%, var(--foreground));
+}
+[data-column-color="amber"] {
+  --column-accent: light-dark(#b56a12, #ffc247);
+}
+[data-column-color="red"] {
+  --column-accent: light-dark(#c75248, #ed8a7e);
+}
+[data-column-color="green"] {
+  --column-accent: light-dark(#428661, #7fc99b);
+}
+[data-column-color="teal"] {
+  --column-accent: light-dark(#288b91, #76cad0);
+}
+[data-column-color="blue"] {
+  --column-accent: light-dark(#5279b8, #91b4ec);
+}
+[data-column-color="violet"] {
+  --column-accent: light-dark(#8964ad, #b9a0d8);
+}
+[data-column-color="gray"] {
+  --column-accent: light-dark(#797672, #aaa8a3);
+}
+[data-column-color="orange"] {
+  --column-hue: 50;
+}
+[data-column-color="yellow"] {
+  --column-hue: 95;
+}
+[data-column-color="lime"] {
+  --column-hue: 125;
+}
+[data-column-color="mint"] {
+  --column-hue: 168;
+}
+[data-column-color="cyan"] {
+  --column-hue: 215;
+}
+[data-column-color="dark-blue"] {
+  --column-hue: 270;
+}
+[data-column-color="purple"] {
+  --column-hue: 312;
+}
+[data-column-color="magenta"] {
+  --column-hue: 334;
+}
+[data-column-color="pink"] {
+  --column-hue: 355;
+}
+[data-column-color="brown"] {
+  --column-hue: 65;
+}
+
 @theme {
   --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
   /* Titles: the one place the type is loud. */
@@ -555,6 +615,17 @@
 }
 /* The column that would take the card. */
 /* An active column sits on a faint surface of its own, which sets it apart from its neighbours. */
+/*
+ * A colored status draws a stripe above its header. While any column on the board has one,
+ * every header and strip makes room for it, so titles and first cards stay in line.
+ */
+body:has(section.board-column[data-column-color]) .column-head {
+  height: 4.125rem;
+  padding-top: 0.625rem;
+}
+body:has(section.board-column[data-column-color]) .column-strip {
+  padding-top: 1.8125rem;
+}
 .board-column[data-surface] {
   --column: color-mix(in oklab, var(--foreground) 3.5%, transparent);
 }

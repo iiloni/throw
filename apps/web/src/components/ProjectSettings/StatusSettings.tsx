@@ -1,10 +1,17 @@
-import { STATUS_CATEGORIES, type Status, type StatusCategory, type Task } from '@throw/shared';
+import {
+  type Color,
+  STATUS_CATEGORIES,
+  type Status,
+  type StatusCategory,
+  type Task,
+} from '@throw/shared';
 import {
   ArrowDown,
   ArrowUp,
   CircleCheck,
   Ellipsis,
   GripVertical,
+  Palette,
   Pencil,
   Plus,
   Trash2,
@@ -14,12 +21,14 @@ import { DropdownMenu } from 'radix-ui';
 import { type KeyboardEvent, type RefObject, useMemo, useRef, useState } from 'react';
 import { StatusGlyph } from '@/components/Board/glyphs';
 import { CATEGORY_NAMES } from '@/components/Board/StatusMenu';
+import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { Hint } from '@/components/Hint/Hint';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
 import { SettingsSection } from '@/components/SettingsSection/SettingsSection';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useStatusColorSupport } from '@/lib/compatibility';
 import { useEntryMotion } from '@/lib/entryMotion';
 import { haptics } from '@/lib/haptics';
 import { curves } from '@/lib/motion';
@@ -30,11 +39,13 @@ import {
   makeDefaultStatus,
   moveStatus,
   renameStatus,
+  setStatusColor,
 } from '@/lib/statuses';
 import { cn } from '@/lib/utils';
 
 type Actions = {
   rename: (status: Status) => void;
+  recolor?: (status: Status) => void;
   remove: (status: Status) => void;
 };
 
@@ -48,6 +59,9 @@ export function StatusSettings({
   tasks: Task[];
 }) {
   const [editor, setEditor] = useState<{ category: StatusCategory; status?: Status } | null>(null);
+  const colorSupported = useStatusColorSupport();
+  const [colorEditor, setColorEditor] = useState<Status | null>(null);
+  const [color, setColor] = useState<Color | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState('');
   const counts = useMemo(() => statusUsage(tasks), [tasks]);
@@ -56,6 +70,12 @@ export function StatusSettings({
     removed && statusDeletionIssue(removed, statuses, counts.get(removed.id) ?? 0);
   const actions: Actions = {
     rename: (status) => setEditor({ category: status.category, status }),
+    recolor: colorSupported
+      ? (status) => {
+          setColor(status.color ?? null);
+          setColorEditor(status);
+        }
+      : undefined,
     remove: (status) => setDeleting(status.id),
   };
   return (
@@ -87,14 +107,34 @@ export function StatusSettings({
           <StatusForm
             key={editor.status?.id ?? editor.category}
             initial={editor.status?.name ?? ''}
+            pickColor={colorSupported && !editor.status}
             onCancel={() => setEditor(null)}
-            onSave={(name) => {
+            onSave={(name, color) => {
               if (editor.status) renameStatus(editor.status.id, name);
-              else createStatus(projectId, name, editor.category);
+              else createStatus(projectId, name, editor.category, color);
               haptics.success();
               setEditor(null);
             }}
           />
+        </ManagementSurface>
+      )}
+      {colorEditor && (
+        <ManagementSurface open title="Change status color" onClose={() => setColorEditor(null)}>
+          <ColorPicker allowNone value={color} onChange={setColor} />
+          <div className="mt-5 flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setColorEditor(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setStatusColor(colorEditor.id, color);
+                haptics.success();
+                setColorEditor(null);
+              }}
+            >
+              Save color
+            </Button>
+          </div>
         </ManagementSurface>
       )}
       {/* A status that cannot go says why here, when someone asks to delete it. */}
@@ -290,6 +330,11 @@ function StatusRow({
       )}
     >
       <motion.div style={entry} className="flex min-h-14 items-center gap-1 py-1.5 pr-1 pl-4">
+        {status.color && (
+          <span data-column-color={status.color} className="text-[color:var(--column-accent)]">
+            <StatusGlyph category={status.category} />
+          </span>
+        )}
         <span className="min-w-0 flex-1 break-words font-medium">
           {status.name}
           {status.isDefault && (
@@ -359,6 +404,15 @@ function StatusMenu({
             <Pencil aria-hidden />
             Rename
           </DropdownMenu.Item>
+          {actions.recolor && (
+            <DropdownMenu.Item
+              className={itemClass}
+              onSelect={after(() => actions.recolor?.(status))}
+            >
+              <Palette aria-hidden />
+              Change color
+            </DropdownMenu.Item>
+          )}
           {!status.isDefault && (
             <DropdownMenu.Item
               className={itemClass}
@@ -437,20 +491,23 @@ function MoveHandle({
 
 function StatusForm({
   initial,
+  pickColor,
   onSave,
   onCancel,
 }: {
   initial: string;
-  onSave: (name: string) => void;
+  pickColor: boolean;
+  onSave: (name: string, color?: Color) => void;
   onCancel: () => void;
 }) {
   const [name, setName] = useState(initial);
+  const [color, setColor] = useState<Color | null>(null);
   return (
     <form
       className="space-y-5"
       onSubmit={(event) => {
         event.preventDefault();
-        if (name.trim()) onSave(name.trim());
+        if (name.trim()) onSave(name.trim(), pickColor ? (color ?? undefined) : undefined);
       }}
     >
       <label htmlFor="status-name" className="flex flex-col gap-2 font-medium text-sm">
@@ -463,6 +520,7 @@ function StatusForm({
           required
         />
       </label>
+      {pickColor && <ColorPicker allowNone value={color} onChange={setColor} />}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" type="button" onClick={onCancel}>
           Cancel

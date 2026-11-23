@@ -51,7 +51,12 @@ export function StatusMenu({
                     }}
                     className="flex min-h-10 cursor-pointer items-center gap-2.5 rounded-xl px-3 text-sm outline-none data-[highlighted]:bg-accent"
                   >
-                    <StatusGlyph category={status.category} />
+                    <span
+                      data-column-color={status.color ?? undefined}
+                      className="shrink-0 text-[color:var(--column-accent,currentColor)]"
+                    >
+                      <StatusGlyph category={status.category} />
+                    </span>
                     <span className="min-w-0 flex-1 truncate">{status.name}</span>
                     {status.id === value && <Check aria-hidden className="size-4" />}
                   </DropdownMenu.Item>

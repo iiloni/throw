@@ -65,6 +65,7 @@ One row per status of a project.
 | `id` | Client | |
 | `projectId` | Fixed | |
 | `name` | Client | |
+| `color` | Client | Optional named palette color for the status stripe and controls. |
 | `category` | Fixed | `backlog`, `active`, `done` or `cancelled`. |
 | `position` | Client | Fractional index among the statuses of the same category. |
 | `isDefault` | Client | The status a task takes when it is dropped on the category. |

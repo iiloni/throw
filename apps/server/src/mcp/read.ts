@@ -108,6 +108,7 @@ export async function listStatuses(
     .select({
       id: statuses.id,
       name: statuses.name,
+      color: statuses.color,
       category: statuses.category,
       position: statuses.position,
       isDefault: statuses.isDefault,

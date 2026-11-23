@@ -274,6 +274,7 @@ export const mcpTools = {
       projectId: structureId,
       name: statusSchema.shape.name,
       category: statusCategorySchema,
+      color: statusSchema.shape.color,
     }),
     output: statusResult,
   },
@@ -284,6 +285,7 @@ export const mcpTools = {
       changes: z
         .strictObject({
           name: change(statusSchema.shape.name),
+          color: change(statusSchema.shape.color.unwrap()),
           defaultStatusId: change(structureId).describe(
             'Use the current category default UUID as before, and this status UUID as after.',
           ),

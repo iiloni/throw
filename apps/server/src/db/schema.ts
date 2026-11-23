@@ -210,6 +210,7 @@ export const statuses = pgTable(
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
     name: text().notNull(),
+    color: text().$type<Color>(),
     category: text().$type<StatusCategory>().notNull(),
     /** Fractional index among the project's statuses of the same category. */
     position: text().notNull(),
