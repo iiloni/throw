@@ -37,7 +37,7 @@ type Props = {
  * A desktop column that folds to a strip and opens again, as a column of Catch's deck does.
  * The root keeps its surface and size through both states and springs between widths; only
  * what is inside is swapped, and fades in once the column has mostly resized, so no card is
- * seen squeezed into a strip's width. Both states draw their status color from this root.
+ * seen squeezed into a strip's width. The status stripe stays on the root through both states.
  *
  * A strip shows no cards, so a held card is sent to it (ADR 0008): it takes the card at its
  * column's default place without opening or moving under the pointer.
@@ -89,10 +89,17 @@ export function BoardColumn({
       data-surface={settings.surfaces ? '' : undefined}
       className={cn(
         // Folds and opens on the transition in styles.css (`.board-column[data-column]`).
-        'board-column group/column mt-[calc(var(--safe-top)+1.25rem)] mb-6 flex min-h-0 shrink-0 flex-col rounded-3xl',
+        'board-column group/column relative mt-[calc(var(--safe-top)+1.25rem)] mb-6 flex min-h-0 shrink-0 flex-col rounded-3xl',
         collapsed ? 'min-w-16 max-w-16 grow-0 basis-16' : className,
       )}
     >
+      {color && (
+        <span
+          aria-hidden
+          data-column-stripe=""
+          className="pointer-events-none absolute inset-x-3 top-1 h-1 rounded-full bg-[var(--column-accent)]"
+        />
+      )}
       <motion.div
         key={collapsed ? 'collapsed' : 'open'}
         className="flex min-h-0 flex-1 flex-col"

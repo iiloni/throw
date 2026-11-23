@@ -40,7 +40,7 @@ export function StatusTile({ status, onPick, shape = 'block', className }: Props
         shape === 'row' && 'h-12 px-2.5',
         over
           ? 'border-brand bg-accent text-foreground shadow-md'
-          : 'border-transparent bg-foreground/[0.06] text-foreground/75 data-[column-color]:bg-[var(--column-wash)]',
+          : 'border-transparent bg-foreground/[0.06] text-foreground/75',
         className,
       )}
     >

@@ -391,7 +391,6 @@
     oklch(0.54 0.12 var(--column-hue)),
     oklch(0.78 0.1 var(--column-hue))
   );
-  --column-wash: color-mix(in oklab, var(--column-accent) 8%, transparent);
   --column-label: color-mix(in oklab, var(--column-accent) 55%, var(--foreground));
 }
 [data-column-color="amber"] {
@@ -618,9 +617,6 @@
 /* An active column sits on a faint surface of its own, which sets it apart from its neighbours. */
 .board-column[data-surface] {
   --column: color-mix(in oklab, var(--foreground) 3.5%, transparent);
-}
-.board-column[data-column-color] {
-  --column: var(--column-wash);
 }
 .board-column[data-over] {
   --column: color-mix(in oklab, var(--accent) 75%, transparent);

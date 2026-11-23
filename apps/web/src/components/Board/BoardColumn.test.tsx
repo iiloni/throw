@@ -45,10 +45,13 @@ describe('a board column', () => {
     const { container, rerender } = render(<Column collapsed={false} color="mint" />);
     const surface = container.querySelector('[data-column="status-review"]');
     expect(surface).toHaveAttribute('data-column-color', 'mint');
+    const stripe = surface?.querySelector('[data-column-stripe]');
+    expect(stripe).toBeInTheDocument();
     rerender(<Column collapsed color="mint" />);
-    expect(surface).toHaveAttribute('data-column-color', 'mint');
+    expect(surface?.querySelector('[data-column-stripe]')).toBe(stripe);
     rerender(<Column collapsed color={null} />);
     expect(surface).not.toHaveAttribute('data-column-color');
+    expect(stripe).not.toBeInTheDocument();
   });
 
   it('folds to a strip that names the column, counts its cards and opens it', () => {

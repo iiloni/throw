@@ -550,27 +550,60 @@ test('status colours render on the board and can be cleared', async ({ page, isM
   const statusId = String((await syncedStatus())?.id);
 
   await backToBoard(page);
+  const tab = page
+    .getByRole('navigation', { name: 'Columns' })
+    .getByRole('button', { name: 'Verify', exact: true });
   if (isMobile) {
-    const tab = page
-      .getByRole('navigation', { name: 'Columns' })
-      .getByRole('button', { name: 'Verify', exact: true });
     await expect(tab).toHaveAttribute('data-column-color', 'mint');
     await tab.click();
   }
-  const column = isMobile
-    ? page.locator('[data-page][data-column-color="mint"]')
-    : page.locator(`[data-column="${statusId}"]`);
-  await expect(column).toHaveAttribute('data-column-color', 'mint');
-  await expect(column).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-  const lightWash = await column.evaluate((element) => getComputedStyle(element).backgroundColor);
+  const stripe = isMobile
+    ? tab.locator('[data-column-stripe]')
+    : page.locator(`[data-column="${statusId}"] [data-column-stripe]`);
+  const transparent = 'rgba(0, 0, 0, 0)';
+  await expect(stripe).toBeVisible();
+  await expect(stripe).not.toHaveCSS('background-color', transparent);
+  const lightStripe = await stripe.evaluate((element) => getComputedStyle(element).backgroundColor);
   await page.emulateMedia({ colorScheme: 'dark' });
-  await expect(column).not.toHaveCSS('background-color', lightWash);
+  await expect(stripe).not.toHaveCSS('background-color', lightStripe);
 
-  if (!isMobile) {
+  if (isMobile) {
+    await expect(page.locator('[data-page][data-origin="active"]').last()).toHaveCSS(
+      'background-color',
+      transparent,
+    );
+  } else {
+    const column = page.locator(`[data-column="${statusId}"]`);
+    const uncolored = page
+      .getByRole('button', { name: 'Collapse In progress column', exact: true })
+      .locator('xpath=ancestor::section[@data-column]');
+    const usesNeutralSurface = async () => {
+      const expected = await uncolored.evaluate(
+        (element) => getComputedStyle(element).backgroundColor,
+      );
+      const actual = await column.evaluate((element) => getComputedStyle(element).backgroundColor);
+      return expected !== transparent && actual === expected;
+    };
+    await expect.poll(usesNeutralSurface).toBe(true);
+    const settings = page.getByRole('button', { name: 'Board settings', exact: true });
+    const backgrounds = page.getByRole('switch', { name: 'Column backgrounds' });
+    await settings.click();
+    await expect(backgrounds).toHaveAttribute('aria-checked', 'true');
+    await backgrounds.click();
+    await page.keyboard.press('Escape');
+    await expect(column).toHaveCSS('background-color', transparent);
+
     await page.getByRole('button', { name: 'Collapse Verify column' }).click();
     await expect(column).toHaveAttribute('data-collapsed', '');
-    await expect(column).toHaveAttribute('data-column-color', 'mint');
+    await expect(column).toHaveCSS('background-color', transparent);
+    await expect(stripe).toBeVisible();
     await page.getByRole('button', { name: 'Expand Verify column' }).click();
+
+    await settings.click();
+    await expect(backgrounds).toHaveAttribute('aria-checked', 'false');
+    await backgrounds.click();
+    await page.keyboard.press('Escape');
+    await expect.poll(usesNeutralSurface).toBe(true);
   }
   const cards = await page.evaluate(
     async ({ projectId, statusId }) => {
