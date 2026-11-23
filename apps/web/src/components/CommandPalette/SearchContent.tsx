@@ -582,32 +582,39 @@ export function PhoneSearchContent({
   const reduced = useReducedMotion();
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div
-        ref={search.list}
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pt-2 pb-3"
-      >
-        {/* Few results sit by the field; more scroll from the best one down. */}
-        <div className="mt-auto">
-          <SearchResults search={search} />
+      {/* A size container, so the filter card can fit the room above the field however the
+          keyboard leaves it. */}
+      <div className="relative flex min-h-0 flex-1 flex-col [container-type:size]">
+        <div
+          ref={search.list}
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pt-2 pb-3"
+        >
+          {/* Few results sit by the field; more scroll from the best one down. */}
+          <div className="mt-auto">
+            <SearchResults search={search} />
+          </div>
+        </div>
+        {/* As in Catch, the filter card covers the results rather than pushing them away. */}
+        <div className="pointer-events-none absolute inset-x-3 bottom-3 flex flex-col justify-end">
+          <AnimatePresence initial={false}>
+            {search.filtersOpen && (
+              <motion.div
+                key="filters"
+                className="pointer-events-auto shrink-0 overflow-hidden rounded-[var(--dock-radius)] shadow-[0_10px_30px_-10px_var(--glass-shadow)]"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={reduced ? { duration: 0 } : springs.smooth}
+              >
+                {/* The board's filter sections fit what is left above their tabs. */}
+                <div className="glass max-h-[calc(100cqh-1.5rem)] overflow-y-auto overscroll-contain rounded-[var(--dock-radius)] p-3 [--board-filter-view-max:min(24rem,calc(100cqh-6.75rem))]">
+                  <FilterOptions search={search} />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
-      <AnimatePresence initial={false}>
-        {search.filtersOpen && (
-          <motion.div
-            key="filters"
-            className="shrink-0 overflow-hidden"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={reduced ? { duration: 0 } : springs.smooth}
-          >
-            {/* The board's filter sections scroll by themselves, above their tabs. */}
-            <div className="glass mx-3 mb-3 max-h-[min(28rem,55dvh)] overflow-y-auto overscroll-contain rounded-[var(--dock-radius)] p-3 [--board-filter-view-max:calc(min(28rem,55dvh)-5.5rem)]">
-              <FilterOptions search={search} />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
       {/* Clear of the gesture bar with the keyboard down; just above the keyboard when up. */}
       <div className="flex shrink-0 items-end gap-3 px-3 pt-1 pb-[max(0.5rem,calc(var(--safe-bottom)+0.75rem-var(--keyboard)))]">
         <SearchField search={search} inputRef={inputRef} onClose={onClose} />

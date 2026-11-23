@@ -8,14 +8,7 @@ import {
   Tags,
   X,
 } from 'lucide-react';
-import {
-  AnimatePresence,
-  animate,
-  LayoutGroup,
-  motion,
-  useIsPresent,
-  useReducedMotion,
-} from 'motion/react';
+import { AnimatePresence, animate, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import {
   forwardRef,
   type ReactNode,
@@ -154,6 +147,7 @@ export function BoardFilters({ className }: { className?: string }) {
   const selected = new Set(filter.tagIds);
   const order = sortOrder(state.sort);
   const ids = useId();
+  const reduced = useReducedMotion();
   const [tab, setTab] = usePersistentState('throw-board-filter-tab', filterTabSchema, 'group');
   const [direction, setDirection] = useState(1);
   function selectTab(next: FilterTab | null) {
@@ -185,9 +179,15 @@ export function BoardFilters({ className }: { className?: string }) {
     <div className={cn('flex min-h-0 flex-col gap-2', className)}>
       <FilterTabContents tab={tab}>
         <AnimatePresence initial={false} custom={direction}>
-          <FilterTabView key={tab} id={viewId(tab)} labelledBy={tabId(tab)} direction={direction}>
+          <FilterTabView
+            key={tab}
+            id={viewId(tab)}
+            scroll={tab !== 'group'}
+            labelledBy={tabId(tab)}
+            direction={direction}
+          >
             {tab === 'sort' && (
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col">
                 <Choice
                   label="Sort cards by"
                   value={order?.field ?? 'priority'}
@@ -199,18 +199,30 @@ export function BoardFilters({ className }: { className?: string }) {
                     );
                   }}
                 />
-                {order && (
-                  <Choice
-                    key={order.field}
-                    label="Order"
-                    value={order.direction}
-                    options={DIRECTIONS[order.field]}
-                    onChange={(direction) => {
-                      haptics.selection();
-                      setSort(`${order.field}-${direction}`);
-                    }}
-                  />
-                )}
+                <AnimatePresence initial={false}>
+                  {order && (
+                    <motion.div
+                      key="direction"
+                      className="overflow-hidden"
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={reduced ? { duration: 0 } : springs.smooth}
+                    >
+                      <Choice
+                        key={order.field}
+                        className="mt-1.5"
+                        label="Order"
+                        value={order.direction}
+                        options={DIRECTIONS[order.field]}
+                        onChange={(direction) => {
+                          haptics.selection();
+                          setSort(`${order.field}-${direction}`);
+                        }}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             )}
             {tab === 'size' && (
@@ -283,7 +295,8 @@ export function BoardFilters({ className }: { className?: string }) {
                         )}
                       </AnimatePresence>
                     )}
-                    className="max-h-[min(20rem,36dvh)]"
+                    // The tree scrolls; its search and Untagged stay put below it.
+                    className="max-h-[clamp(6rem,calc(var(--board-filter-view-max,24rem)-6.5rem),20rem)]"
                     renderTag={(tag, path) => (
                       <label className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-xl px-2 hover:bg-foreground/5">
                         <span
@@ -433,11 +446,14 @@ function FilterTabView({
   id,
   labelledBy,
   direction,
+  scroll,
 }: {
   children: ReactNode;
   id: string;
   labelledBy: string;
   direction: number;
+  /** Whether the section scrolls as a whole; the tags section scrolls only its tree. */
+  scroll: boolean;
 }) {
   const isPresent = useIsPresent();
   const reducedMotion = useReducedMotion();
@@ -459,7 +475,8 @@ function FilterTabView({
       exit="leave"
       transition={reducedMotion ? { duration: 0 } : springs.smooth}
       className={cn(
-        'max-h-[var(--board-filter-view-max,min(24rem,50dvh))] overflow-x-hidden overflow-y-auto overscroll-contain',
+        'max-h-[var(--board-filter-view-max,24rem)] overflow-x-hidden',
+        scroll ? 'overflow-y-auto overscroll-contain' : 'overflow-y-hidden',
         !isPresent && 'absolute inset-x-0 bottom-0',
       )}
     >
@@ -468,45 +485,52 @@ function FilterTabView({
   );
 }
 
-/** A few mutually exclusive choices, with Catch's sliding pill under the chosen one. */
+/**
+ * A few mutually exclusive choices, with Catch's pill sliding under the chosen one. The pill
+ * springs its own offset rather than a shared layout animation, so it stays put while the card
+ * around it moves or resizes.
+ */
 function Choice<T extends string>({
   label,
   value,
   options,
   onChange,
+  className,
 }: {
   label: string;
   value: T;
   options: { value: T; label: string }[];
   onChange: (value: T) => void;
+  className?: string;
 }) {
   const reduced = useReducedMotion();
-  const group = useId();
+  const index = Math.max(
+    0,
+    options.findIndex((option) => option.value === value),
+  );
   return (
-    <LayoutGroup id={group}>
-      <fieldset className="relative flex rounded-xl bg-foreground/[0.05] p-1">
-        <legend className="sr-only">{label}</legend>
-        {options.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            aria-pressed={value === option.value}
-            onClick={() => value !== option.value && onChange(option.value)}
-            className="relative flex h-9 min-w-0 flex-1 items-center justify-center rounded-lg px-2 font-medium text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-          >
-            {value === option.value && (
-              <motion.span
-                layoutId="choice"
-                aria-hidden
-                className="absolute inset-0 rounded-lg bg-background shadow-sm"
-                transition={reduced ? { duration: 0 } : springs.snappy}
-              />
-            )}
-            <span className="relative truncate">{option.label}</span>
-          </button>
-        ))}
-      </fieldset>
-    </LayoutGroup>
+    <fieldset className={cn('relative flex rounded-xl bg-foreground/[0.05] p-1', className)}>
+      <legend className="sr-only">{label}</legend>
+      <motion.span
+        aria-hidden
+        className="pointer-events-none absolute top-1 bottom-1 left-1 rounded-lg bg-background shadow-sm"
+        style={{ width: `calc((100% - 0.5rem) / ${options.length})` }}
+        initial={false}
+        animate={{ x: `${index * 100}%` }}
+        transition={reduced ? { duration: 0 } : springs.snappy}
+      />
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={value === option.value}
+          onClick={() => value !== option.value && onChange(option.value)}
+          className="relative flex h-9 min-w-0 flex-1 items-center justify-center rounded-lg px-2 font-medium text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        >
+          <span className="truncate">{option.label}</span>
+        </button>
+      ))}
+    </fieldset>
   );
 }
 
@@ -520,7 +544,6 @@ function TagMatchControl({
 }) {
   const isPresent = useIsPresent();
   const reduced = useReducedMotion();
-  const layoutId = useId();
   return (
     <motion.div
       inert={!isPresent}
@@ -533,38 +556,33 @@ function TagMatchControl({
     >
       <fieldset className="ml-2 flex h-11 w-26 items-center justify-end">
         <legend className="sr-only">Match tags</legend>
-        <LayoutGroup id={layoutId}>
-          <div className="relative flex px-1">
-            <span
-              aria-hidden
-              className="absolute inset-x-0 inset-y-0.5 rounded-xl bg-foreground/5"
-            />
-            {(['any', 'all'] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                aria-label={value === 'any' ? 'Any tag' : 'All tags'}
-                aria-pressed={match === value}
-                onPointerDown={(event) => event.preventDefault()}
-                onClick={() => {
-                  haptics.selection();
-                  onChange(value);
-                }}
-                className="relative flex h-11 min-w-12 items-center justify-center rounded-lg px-2 font-medium text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-              >
-                {match === value && (
-                  <motion.span
-                    layoutId="tag-match"
-                    aria-hidden
-                    className="absolute inset-x-0 inset-y-1 rounded-lg bg-foreground/[0.08] shadow-[inset_0_1px_0_var(--glass-highlight)]"
-                    transition={reduced ? { duration: 0 } : springs.snappy}
-                  />
-                )}
-                <span className="relative">{value === 'any' ? 'Any' : 'All'}</span>
-              </button>
-            ))}
-          </div>
-        </LayoutGroup>
+        <div className="relative flex px-1">
+          <span aria-hidden className="absolute inset-x-0 inset-y-0.5 rounded-xl bg-foreground/5" />
+          {/* Its own offset, as in Choice, so it stays put while the card moves. */}
+          <motion.span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-1 left-1 w-12 rounded-lg bg-foreground/[0.08] shadow-[inset_0_1px_0_var(--glass-highlight)]"
+            initial={false}
+            animate={{ x: match === 'all' ? '100%' : '0%' }}
+            transition={reduced ? { duration: 0 } : springs.snappy}
+          />
+          {(['any', 'all'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-label={value === 'any' ? 'Any tag' : 'All tags'}
+              aria-pressed={match === value}
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => {
+                haptics.selection();
+                onChange(value);
+              }}
+              className="relative flex h-11 w-12 items-center justify-center rounded-lg px-2 font-medium text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+            >
+              <span className="relative">{value === 'any' ? 'Any' : 'All'}</span>
+            </button>
+          ))}
+        </div>
       </fieldset>
     </motion.div>
   );
