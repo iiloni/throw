@@ -48,6 +48,7 @@ import {
 } from '@/lib/taskSearch';
 import { cn } from '@/lib/utils';
 import { backlogOf, type Dismiss, focusPaletteInput, type PaletteActions } from './actions';
+import { useCoverBoard } from './coverBoard';
 import { ProjectBadge, ProjectOptions } from './ProjectOptions';
 
 export type SearchState = ReturnType<typeof useSearch>;
@@ -727,8 +728,10 @@ export function PhoneSearchContent({
   onClose?: () => void;
 }) {
   const room = useFilterRoom(search.filtersOpen);
+  const page = useRef<HTMLDivElement>(null);
+  useCoverBoard(page);
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div ref={page} className="flex h-full min-h-0 flex-col">
       {/* A size container, so the filter card can fit the room above the field however the
           keyboard leaves it. */}
       <div ref={room.area} className="relative flex min-h-0 flex-1 flex-col [container-type:size]">
