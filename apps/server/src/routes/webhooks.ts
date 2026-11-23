@@ -18,7 +18,7 @@ import { projects, webhooks, workspaces } from '../db/schema';
 import { requireUser } from '../lib/requireUser';
 import { isMember, memberWorkspaces } from '../lib/workspaces';
 import { webhookPolicy, webhookSecretKey } from '../webhooks/config';
-import { buildPayload } from '../webhooks/enqueue';
+import { buildPayload, shortenWaiting } from '../webhooks/enqueue';
 import { checkWebhookUrl } from '../webhooks/policy';
 import { sendWebhook } from '../webhooks/send';
 import { decryptSecret, encryptSecret, newWebhookSecret } from '../webhooks/signing';
@@ -36,6 +36,7 @@ function metadata(row: Row): Webhook {
     url: row.url,
     ignoreTokenWrites: row.ignoreTokenWrites,
     enabled: row.enabled,
+    quietWindowSeconds: row.quietWindowSeconds,
     createdAt: row.createdAt.toISOString(),
     lastDeliveryAt: row.lastDeliveryAt?.toISOString() ?? null,
     lastDeliveryStatus: row.lastDeliveryStatus ?? null,
@@ -112,6 +113,7 @@ export const webhookRoutes = new Hono<AppEnv>()
     return c.json(
       webhooksResponseSchema.parse({
         webhooks: rows.map(metadata),
+        quietWindow: true,
         workspaces: reachable.map((workspace) => ({
           ...workspace,
           projects: active
@@ -152,6 +154,7 @@ export const webhookRoutes = new Hono<AppEnv>()
           url: url.checked.url.toString(),
           encryptedSecret: encryptSecret(secret, webhookSecretKey),
           ignoreTokenWrites: body.ignoreTokenWrites,
+          quietWindowSeconds: body.quietWindowSeconds ?? 0,
         })
         .returning();
       return inserted!;
@@ -176,11 +179,16 @@ export const webhookRoutes = new Hono<AppEnv>()
     }
     if (body.projectId && !(await activeProject(db, userId, current.workspaceId, body.projectId)))
       return c.json({ error: 'Project not found' }, 404);
-    const [updated] = await db
-      .update(webhooks)
-      .set({ ...body, ...(url === undefined ? {} : { url }) })
-      .where(and(eq(webhooks.id, id), eq(webhooks.userId, userId)))
-      .returning();
+    const updated = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(webhooks)
+        .set({ ...body, ...(url === undefined ? {} : { url }) })
+        .where(and(eq(webhooks.id, id), eq(webhooks.userId, userId)))
+        .returning();
+      if (row && body.quietWindowSeconds !== undefined)
+        await shortenWaiting(tx, row.id, body.quietWindowSeconds);
+      return row;
+    });
     if (!updated) return c.json({ error: 'Webhook not found' }, 404);
     return c.json(webhookResponseSchema.parse({ webhook: metadata(updated) }));
   })

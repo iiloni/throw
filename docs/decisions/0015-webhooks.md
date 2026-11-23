@@ -1,6 +1,6 @@
 # 0015 — Outbound webhooks
 
-Status: accepted (2026-11-22)
+Status: accepted (2026-11-22); quiet windows added 2026-11-23
 
 ## Context
 
@@ -29,7 +29,7 @@ change no task: the spec's no-automation rule stands.
 | `task.deleted` | A task is purged from the trash. Purging a parent announces each subtask too. |
 | `comment.created`, `comment.updated`, `comment.deleted` | A comment changes. |
 | `structure.updated` | A project, status or tag is created, edited, reordered by MCP, trashed, restored or deleted. One per project per transaction. |
-| `webhook.test` | Settings' **Send test**. Sent at once, not queued. |
+| `webhook.test` | Settings' **Send test**. Sent at once, not queued, whatever the quiet window. |
 
 Headers are `Content-Type: application/json`, `User-Agent: Throw-Webhooks/1`,
 `X-Throw-Event`, `X-Throw-Delivery` (the delivery's UUIDv7, the same on every retry) and
@@ -68,6 +68,60 @@ send. A webhook whose owner has left the workspace stops delivering, and its que
 deliveries fail, as do those of a webhook that was turned off. A project webhook is quiet while its project is in the trash, apart from the change
 that trashes it. Purging the project deletes the webhook (`ON DELETE CASCADE`) rather than
 widening it to the workspace. Deleting the account or workspace deletes its webhooks.
+
+### Quiet windows
+
+A board's `+` makes a task at once, and every title keystroke, description save or tag
+toggle after it is a write. Sent one by one, these wake an agent while the person is still
+writing the task. Each webhook therefore has a **quiet window**, `quietWindowSeconds` from 0
+(the default: every change is sent as it happens, as before) to 600. Settings offers 30 s,
+1, 2, 5 and 10 minutes.
+
+With a window, task and structure changes wait for a pause:
+
+- **Folding.** A change folds into the webhook's waiting (unsent) delivery for the same
+  task (`task:<id>`) or project (`structure:<projectId>`), and the window starts again from
+  that change: a trailing debounce, so a person who keeps editing keeps it waiting. The
+  delivery keeps its ID. `occurredAt` is the latest change's and the actor is the person if
+  anyone but a token took part, so an agent that skips its own writes still looks.
+- **Net changes.** Task changes count by their effect. Each task write passes its activity
+  items, and the waiting delivery stores (in `fold`, never sent) each field, secondary tag
+  and relation as it was before the window's first change to it and after the latest.
+  `changedFields` lists only what still differs, and `statusTo` appears only while the status
+  does. Marking a task done by mistake and moving it back, or removing a tag and adding it
+  again, leaves nothing, and such a delivery sends nothing. Status moves wait like any other
+  change, so that an undone move is caught. A position left over from an undone move does not
+  count, as device reorders are not announced; an agent's reorder does.
+- **New tasks.** A task created in the window is announced as `task.created` with the fields
+  it was created with and any that changed since. One that is still blank (titled `New task`
+  with no description or tags, and nothing changed since) or that is in the trash sends
+  nothing for now; naming or restoring it announces it as created after the window. A task
+  created and purged within the window was never announced and its delivery is removed.
+- **At once.** Comments are written on purpose and are never folded: each comment event is
+  sent at once and leaves the task's waiting delivery as it is. A purge (`task.deleted`) is
+  final, so it folds in (replacing whatever was waiting) and is sent at once.
+- **Structure** notices are not cancelled: they list every changed field, named after the
+  first change, as within one transaction.
+
+A delivery with nothing to send for now is `held`: not sent, but still open to later changes,
+which compare with the same starting point. Held deliveries are deleted after a day like
+finished ones; a change after that starts afresh. Changing a webhook's window applies to what
+is already waiting when it shortens it: nothing waits longer than the new window from now, so
+setting 0 sends waiting deliveries at once. A longer window leaves them on their schedule,
+and held deliveries stay held. Turning a window off does not unfold anything: later changes
+are sent one by one.
+
+Folding is safe under concurrent writes. A partial unique index allows one waiting (`pending`
+or `held`, never attempted) delivery per webhook and key. A write locks the waiting row
+(`FOR UPDATE`) and folds into it, or inserts with `ON CONFLICT DO NOTHING` and folds on its
+next round when a concurrent write inserted first. The worker claims with `SKIP LOCKED`, so it
+skips a row being folded; a claimed row has an attempt, leaves the index and is never changed,
+so a change after the claim starts a new delivery. After three contended rounds the change is
+queued on its own rather than lost.
+
+Every queueing or folding commit notifies the worker, which then sleeps until the earliest
+due delivery (at most the 30-second poll), so windows shorter than the poll and deliveries
+brought forward are sent on time.
 
 ### Delivery
 
@@ -119,16 +173,26 @@ user recreates them as they reissue MCP tokens.
 
 `/api/webhooks` uses the app session and the `X-Throw-Protocol` gate like token
 management, with `Cache-Control: no-store`: list (with the user's workspaces and active
-projects), create, update (`name`, `url`, `projectId`, `ignoreTokenWrites`, `enabled`),
-delete, `POST /:id/secret` and `POST /:id/test`. Users see only their own webhooks; others
-answer 404. This is an addition under [ADR 0003](0003-api-compatibility.md): the protocol
-stays at 1. A new app on an older server gets 404 and hides the Webhooks page; an older
-app never asks.
+projects), create, update (`name`, `url`, `projectId`, `ignoreTokenWrites`, `enabled`,
+`quietWindowSeconds`), delete, `POST /:id/secret` and `POST /:id/test`. Users see only their
+own webhooks; others answer 404. This is an addition under
+[ADR 0003](0003-api-compatibility.md): the protocol stays at 1. A new app on an older server
+gets 404 and hides the Webhooks page; an older app never asks.
+
+Quiet windows are a compatible addition too. Requests leave `quietWindowSeconds` out by
+default and the server reads a missing value as 0 on create and unchanged on update, so an
+older app keeps working. The list answers `quietWindow: true`. A new app shows the control,
+and sends the field, only when it does: create and update bodies are strict, so an older
+server would refuse it. A webhook from an older server reads as 0.
 
 ## Consequences
 
 - Receivers must verify signatures and deduplicate by delivery ID. Ordering between
   deliveries is not guaranteed; the change feed is ordered.
-- Every announced write runs one indexed query for the workspace's webhooks.
+- Every announced write runs one indexed query for the workspace's webhooks, and one more
+  per write for webhooks with a quiet window.
+- A quiet window has no upper bound on waiting while changes keep coming: a task edited
+  continuously is announced once its editing pauses. The change feed has every change
+  meanwhile.
 - The worker runs in the single supported server process. Multiple instances would share
   the queue safely through `SKIP LOCKED`, but each would need its own `LISTEN`.

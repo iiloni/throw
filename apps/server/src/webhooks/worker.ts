@@ -139,7 +139,9 @@ async function prune() {
 
 /**
  * Sends queued deliveries in the background. A commit that queues one wakes it through
- * LISTEN; retries wake it on their own schedule. It pauses while a backup or restore runs.
+ * LISTEN; retries and deliveries waiting out a quiet window wake it when they are due (every
+ * queueing or folding commit notifies, so a sooner due time is picked up at once). It pauses
+ * while a backup or restore runs.
  */
 export function startWebhookWorker({ paused }: { paused: () => boolean }) {
   let timer: NodeJS.Timeout | undefined;

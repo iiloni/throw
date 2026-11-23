@@ -45,6 +45,17 @@ test('create, test, turn off and delete a webhook in Settings', async ({ page, i
     await expect(edit).toBeHidden();
     await expect(page.getByText(/Personal · All projects · Delivered/)).toBeVisible();
 
+    await page.getByRole('button', { name: 'Edit Agent wake-up' }).click();
+    const quiet = page.getByRole('dialog', { name: 'Edit webhook' });
+    await expect(quiet.getByLabel('Quiet window')).toHaveValue('0');
+    await quiet.getByLabel('Quiet window').selectOption({ label: 'Wait 1 minute' });
+    await expect(quiet.getByText(/Comments and purges are sent at once/)).toBeVisible();
+    await quiet.getByRole('button', { name: 'Save' }).click();
+    await expect(quiet).toBeHidden();
+    await expect(
+      page.getByText(/Personal · All projects · 1 minute quiet window · Delivered/),
+    ).toBeVisible();
+
     const toggle = page.getByRole('switch', { name: 'Deliver to Agent wake-up' });
     await toggle.click();
     await expect(toggle).not.toBeChecked();

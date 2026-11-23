@@ -28,6 +28,19 @@ export const WEBHOOK_USER_AGENT = 'Throw-Webhooks/1';
 export const WEBHOOK_SECRET_PREFIX = 'throw_whsec_';
 export const MAX_WEBHOOK_URL_LENGTH = 2048;
 
+/**
+ * A webhook may wait until changes pause before it sends (ADR 0015). Each change to a task or
+ * a project's structure restarts the wait; status moves, comments and purges are sent at once.
+ */
+export const MAX_WEBHOOK_QUIET_WINDOW_SECONDS = 600;
+export const WEBHOOK_QUIET_WINDOW_PRESETS = [0, 30, 60, 120, 300, 600] as const;
+
+export const webhookQuietWindowSchema = z
+  .number()
+  .int()
+  .min(0)
+  .max(MAX_WEBHOOK_QUIET_WINDOW_SECONDS);
+
 const webhookNameSchema = z
   .string()
   .trim()
@@ -50,6 +63,12 @@ export const createWebhookSchema = z.strictObject({
   url: webhookUrlSchema,
   /** Skips writes made through MCP tokens, so an agent is not woken by its own changes. */
   ignoreTokenWrites: z.boolean().default(true),
+  /**
+   * Seconds without changes before a delivery is sent. Left out means 0, so a client only
+   * sends it to a server that lists `quietWindow` support and older servers keep accepting
+   * the body.
+   */
+  quietWindowSeconds: webhookQuietWindowSchema.optional(),
 });
 
 export const updateWebhookSchema = z
@@ -59,6 +78,7 @@ export const updateWebhookSchema = z
     projectId: z.uuid().nullable(),
     ignoreTokenWrites: z.boolean(),
     enabled: z.boolean(),
+    quietWindowSeconds: webhookQuietWindowSchema,
   })
   .partial()
   .refine((body) => Object.keys(body).length > 0, 'Change at least one field');
@@ -73,6 +93,8 @@ export const webhookSchema = z.object({
   url: z.string(),
   ignoreTokenWrites: z.boolean(),
   enabled: z.boolean(),
+  /** Absent from servers before quiet windows, which send at once. */
+  quietWindowSeconds: z.number().int().min(0).default(0),
   createdAt: timestampSchema,
   lastDeliveryAt: timestampSchema.nullable(),
   lastDeliveryStatus: webhookDeliveryStatusSchema.nullable(),
@@ -83,6 +105,8 @@ export const webhookSchema = z.object({
 
 export const webhooksResponseSchema = z.object({
   webhooks: z.array(webhookSchema),
+  /** The server accepts `quietWindowSeconds`. Older servers leave it out and refuse the field. */
+  quietWindow: z.boolean().default(false),
   workspaces: z.array(
     z.object({
       id: z.uuid(),

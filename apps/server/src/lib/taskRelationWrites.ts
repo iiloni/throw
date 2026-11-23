@@ -104,6 +104,7 @@ async function recordRelation(
       taskId: task.id,
       taskNumber: task.number,
       changedFields: ['relations'],
+      values: [item],
     });
   }
 }
