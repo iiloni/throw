@@ -103,6 +103,8 @@ describe('project requests', () => {
 
 describe('status requests', () => {
   it('leaves clearing a default to the server', () => {
+    expect(statusUpdateRequest({ color: 'mint' })).toEqual({ color: 'mint' });
+    expect(statusUpdateRequest({ color: null })).toEqual({ color: null });
     expect(statusUpdateRequest({ isDefault: false })).toBeNull();
     expect(statusUpdateRequest({ isDefault: true, name: 'Ready' })).toEqual({
       isDefault: true,

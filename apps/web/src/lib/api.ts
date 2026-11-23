@@ -30,7 +30,7 @@ import {
   webhookTestResponseSchema,
 } from '@throw/shared';
 import { getAuthToken } from './auth';
-import { compatibleFetch, ensureTaskSizeSupport } from './compatibility';
+import { compatibleFetch, ensureStatusColorSupport, ensureTaskSizeSupport } from './compatibility';
 import { getServerUrl } from './serverUrl';
 
 export class ApiError extends Error {
@@ -66,19 +66,19 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-async function writeTask<T>(
+async function writeWithCapability<T>(
   path: string,
   method: string,
-  body: CreateTask | UpdateTask,
-  sized: boolean,
+  body: object,
+  ensureSupport?: (force?: boolean) => Promise<void>,
+  force = false,
 ) {
-  if (sized) await ensureTaskSizeSupport();
+  await ensureSupport?.(force);
   try {
     return await request<T>(path, { method, body: JSON.stringify(body) });
   } catch (error) {
     // A server downgraded since bootstrap can reject the new field with a validation error.
-    if (sized && error instanceof ApiError && error.status === 400)
-      await ensureTaskSizeSupport(true);
+    if (error instanceof ApiError && error.status === 400) await ensureSupport?.(true);
     throw error;
   }
 }
@@ -149,9 +149,21 @@ export const api = {
     request<TxidResponse>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   purgeProject: (id: string) => request<TxidResponse>(`/projects/${id}`, { method: 'DELETE' }),
   createStatus: (body: CreateStatus) =>
-    request<TxidResponse>('/statuses', { method: 'POST', body: JSON.stringify(body) }),
+    writeWithCapability<TxidResponse>(
+      '/statuses',
+      'POST',
+      body,
+      body.color !== undefined ? ensureStatusColorSupport : undefined,
+      // Older servers silently discard unknown create fields, so get a fresh capability.
+      true,
+    ),
   updateStatus: (id: string, body: UpdateStatus) =>
-    request<TxidResponse>(`/statuses/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    writeWithCapability<TxidResponse>(
+      `/statuses/${id}`,
+      'PATCH',
+      body,
+      body.color !== undefined ? ensureStatusColorSupport : undefined,
+    ),
   deleteStatus: (id: string) => request<TxidResponse>(`/statuses/${id}`, { method: 'DELETE' }),
   createTag: (body: CreateTag) =>
     request<TagWriteResponse>('/tags', { method: 'POST', body: JSON.stringify(body) }),
@@ -159,9 +171,19 @@ export const api = {
     request<TagWriteResponse>(`/tags/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteTag: (id: string) => request<TagWriteResponse>(`/tags/${id}`, { method: 'DELETE' }),
   createTask: (body: CreateTask) =>
-    writeTask<TagWriteResponse>('/tasks', 'POST', body, body.size !== undefined),
+    writeWithCapability<TagWriteResponse>(
+      '/tasks',
+      'POST',
+      body,
+      body.size !== undefined ? ensureTaskSizeSupport : undefined,
+    ),
   updateTask: (id: string, body: UpdateTask) =>
-    writeTask<UpdateTaskResponse>(`/tasks/${id}`, 'PATCH', body, body.changes.size !== undefined),
+    writeWithCapability<UpdateTaskResponse>(
+      `/tasks/${id}`,
+      'PATCH',
+      body,
+      body.changes.size !== undefined ? ensureTaskSizeSupport : undefined,
+    ),
   purgeTask: (id: string) => request<TxidResponse>(`/tasks/${id}`, { method: 'DELETE' }),
   createTaskRelation: (body: CreateTaskRelation) =>
     request<TxidResponse>('/task-relations', { method: 'POST', body: JSON.stringify(body) }),

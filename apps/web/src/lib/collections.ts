@@ -220,7 +220,7 @@ export const statusesCollection = createCollection(
       getKey: (status) => status.id,
       shapeOptions: shapeOptions('statuses'),
     }),
-    1,
+    2,
   ),
 );
 

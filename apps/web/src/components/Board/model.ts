@@ -24,6 +24,7 @@ export type Status = {
   id: string;
   name: string;
   category: Category;
+  color?: Color | null;
   isDefault: boolean;
 };
 

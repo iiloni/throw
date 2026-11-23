@@ -101,7 +101,12 @@ export function StatusOptions({
                     // A checked radio fires no change; picking it again still closes the picker.
                     onClick={() => value === row.id && onChange(row.id)}
                   />
-                  <StatusGlyph category={row.category} className="size-4 shrink-0" />
+                  <span
+                    data-column-color={row.color ?? undefined}
+                    className="shrink-0 text-[color:var(--column-accent,currentColor)]"
+                  >
+                    <StatusGlyph category={row.category} className="size-4 shrink-0" />
+                  </span>
                   <span className="min-w-0 truncate font-medium text-[0.8125rem]">{row.name}</span>
                 </label>
               ))}

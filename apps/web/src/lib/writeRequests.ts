@@ -96,6 +96,7 @@ export function statusUpdateRequest(changes: Partial<Status>): UpdateStatus | nu
   const body: Record<string, unknown> = {};
   if ('name' in changes) body.name = changes.name;
   if ('position' in changes) body.position = changes.position;
+  if (changes.color !== undefined) body.color = changes.color;
   if (changes.isDefault === true) body.isDefault = true;
   return Object.keys(body).length === 0 ? null : updateStatusSchema.parse(body);
 }

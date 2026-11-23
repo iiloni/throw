@@ -106,6 +106,11 @@ export async function updateStatus(
   if (!project) return undefined;
   const status = await findStatus(tx, actor, id);
   if (!status) return undefined;
+  // Replaying a color edit that already landed produces no new transaction or feed event.
+  if (changes.color === status.color) {
+    const { color: _color, ...remaining } = changes;
+    changes = remaining;
+  }
   if (Object.keys(changes).length === 0) return null;
   if (changes.isDefault) await clearDefault(tx, actor, status, project.key);
   const [updated] = await tx
@@ -128,8 +133,14 @@ export async function updateStatus(
   return currentTxid(tx);
 }
 
-function statusFields({ name, category, position, isDefault }: typeof statuses.$inferSelect) {
-  return { name, category, position, isDefault };
+function statusFields({
+  name,
+  color,
+  category,
+  position,
+  isDefault,
+}: typeof statuses.$inferSelect) {
+  return { name, color, category, position, isDefault };
 }
 
 export class StatusDeleteRefused extends Error {}
