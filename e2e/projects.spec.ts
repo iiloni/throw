@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
-import { APP_LOAD_TIMEOUT, shapeRows, signUp, waitForShapeRow } from './helpers';
+import { APP_LOAD_TIMEOUT, shapeRows, signUp, switcherItem, waitForShapeRow } from './helpers';
 
 async function openMenu(page: Page, isMobile: boolean) {
   await page
@@ -12,7 +12,7 @@ async function openMenu(page: Page, isMobile: boolean) {
 async function addProject(page: Page, name: string, isMobile: boolean) {
   if (isMobile) {
     await openMenu(page, isMobile);
-    await page.getByRole('menuitem', { name: 'New project', exact: true }).click();
+    await (await switcherItem(page, 'New project')).click();
     // A phone has one drawer, the board's when there is one (ADR 0009), and no other sheet.
     await expect(
       page.locator('section[data-page]').getByLabel('Project name', { exact: true }),
@@ -26,7 +26,7 @@ async function addProject(page: Page, name: string, isMobile: boolean) {
 async function selectProject(page: Page, name: string, isMobile: boolean) {
   if (isMobile) {
     await openMenu(page, isMobile);
-    await page.getByRole('menuitem', { name, exact: true }).click();
+    await (await switcherItem(page, name)).click();
   } else
     await page
       .getByRole('navigation', { name: 'Projects', exact: true })
@@ -35,19 +35,25 @@ async function selectProject(page: Page, name: string, isMobile: boolean) {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
 }
 async function selectWorkspace(page: Page, name: string, isMobile: boolean) {
+  await workspaceItem(page, name, isMobile);
+}
+/** A workspace or workspace action: the desktop menu's, or the phone switcher's Workspaces. */
+async function workspaceItem(page: Page, name: string, isMobile: boolean) {
   await openMenu(page, isMobile);
-  await page.getByRole('menuitem', { name, exact: true }).click();
+  if (isMobile) await (await switcherItem(page, name, { workspace: true })).click();
+  else await page.getByRole('menuitem', { name, exact: true }).click();
 }
 
 async function editProject(page: Page, isMobile: boolean) {
   if (!page.url().split('?')[0]?.endsWith('/settings')) {
     if (isMobile) {
       await openMenu(page, true);
+      await (await switcherItem(page, 'Project settings')).click();
     } else {
       const name = await page.getByRole('heading', { level: 1 }).textContent();
       await page.getByRole('button', { name: `Project menu for ${name}`, exact: true }).click();
+      await page.getByRole('menuitem', { name: 'Project settings', exact: true }).click();
     }
-    await page.getByRole('menuitem', { name: 'Project settings', exact: true }).click();
   }
   // The general page edits the project in place.
   await expect(page.getByLabel('Project name', { exact: true })).toBeVisible();
@@ -159,15 +165,13 @@ test('switch projects and workspaces; restore the last project on reload and fir
   const gardenUrl = page.url();
   await selectProject(page, 'Kitchen', isMobile);
   await selectProject(page, 'Garden', isMobile);
-  await openMenu(page, isMobile);
-  await page.getByRole('menuitem', { name: 'New workspace', exact: true }).click();
+  await workspaceItem(page, 'New workspace', isMobile);
   await page.getByLabel('Workspace name').fill('Work');
   await page.getByRole('button', { name: 'Create', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Work');
   await addProject(page, 'Launch', isMobile);
   const launchUrl = page.url();
-  await openMenu(page, isMobile);
-  await page.getByRole('menuitem', { name: 'Rename workspace', exact: true }).click();
+  await workspaceItem(page, 'Rename workspace', isMobile);
   await page.getByLabel('Workspace name').fill('Studio');
   await page.getByRole('button', { name: 'Save changes' }).click();
   await expect
@@ -249,7 +253,7 @@ test('cross-project board and settings are reachable from the shell', async ({
   await addProject(page, 'Kitchen', isMobile);
   if (isMobile) {
     await openMenu(page, true);
-    await page.getByRole('menuitem', { name: 'All projects', exact: true }).click();
+    await (await switcherItem(page, 'All projects')).click();
   } else await page.getByRole('link', { name: 'All projects', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Active', exact: true })).toBeVisible({
     timeout: APP_LOAD_TIMEOUT,
@@ -263,7 +267,7 @@ test('cross-project board and settings are reachable from the shell', async ({
   }
   if (isMobile) {
     await openMenu(page, true);
-    await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
+    await (await switcherItem(page, 'Settings')).click();
   } else await page.getByRole('link', { name: 'Settings', exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/general$/);
   await page.getByRole('button', { name: 'Dark', exact: true }).click();
@@ -303,9 +307,9 @@ test('the collapsed rail names its icons in Throw tooltips, and a tap shows none
   if (isMobile) {
     await signUp(page);
     await addProject(page, 'Garden', isMobile);
-    // A finger opens the menu it pressed, never a hint.
+    // A finger opens the switcher it pressed, never a hint.
     await openMenu(page, isMobile);
-    await expect(page.getByRole('menu')).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Projects', exact: true })).toBeVisible();
     await expect(page.getByRole('tooltip')).toHaveCount(0);
     return;
   }

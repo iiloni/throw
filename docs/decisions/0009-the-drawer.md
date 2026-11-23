@@ -1,7 +1,7 @@
 # 0009: The drawer
 
-Status: accepted (2026-10-15), amended 2026-10-17 for quick capture's card and 2026-10-19
-for the move drawer
+Status: accepted (2026-10-15), amended 2026-10-17 for quick capture's card, 2026-10-19
+for the move drawer and 2026-11-23 for the project switcher
 
 ## Context
 
@@ -104,6 +104,12 @@ and the tag manager are centred dialogs.
   on phones, not into their own sheets or full-screen overlays. Capture is the drawer's card
   and dock.
 - The prototype shares the Board components, so it gets the drawer too.
+- **The project switcher is drawer content (2026-11-23).** On a phone the page title opens
+  the shell's `ProjectSwitcher` as a page that fits its content, in the board's drawer or the
+  shell's own: the workspace's projects as tinted tiles, a workspace row that opens a
+  Workspaces view (Back returns to the projects), and settings and the trash as a footer.
+  Pulling down from the top of a board opens the same page (`SwitcherPull`). The desktop
+  rail keeps its workspace menu.
 - **Exception: app-level prompts (2026-11-18).** The update prompts (`AppUpdatePrompt`,
   `WebUpdatePrompt`) stay centred dialogs at every width. They can appear over any screen,
   including a board whose drawer is open with its own content, and must not replace that

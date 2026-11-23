@@ -11,9 +11,11 @@ import {
 } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
-import { type ReactElement, type ReactNode, useCallback, useEffect, useState } from 'react';
+import { type ReactElement, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
+import { ProjectSwitcher } from '@/components/AppShell/ProjectSwitcher';
 import { ShellMenu } from '@/components/AppShell/ShellMenu';
+import { SwitcherPull } from '@/components/AppShell/SwitcherPull';
 import {
   navigationSchema,
   type ProjectView,
@@ -88,6 +90,10 @@ export function AppShell() {
     created?: boolean;
   } | null>(null);
   const [form, setForm] = useState<ShellForm | null>(null);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const closeSwitcher = useCallback(() => setSwitcherOpen(false), []);
+  const openSwitcher = useCallback(() => setSwitcherOpen(true), []);
+  const mainRef = useRef<HTMLElement>(null);
   const formOpen = form !== null;
   useEffect(() => (formOpen ? holdUpdateReload() : undefined), [formOpen]);
   const workspaces = [...allWorkspaces].sort((a, b) => comparePositions(a.position, b.position));
@@ -114,6 +120,10 @@ export function AppShell() {
     (mode: PaletteMode = 'search', seed = '') => setPalette({ mode, seed }),
     [],
   );
+  // A desktop switches from the rail; a phone that grows into one puts its switcher away.
+  useEffect(() => {
+    if (desktop) setSwitcherOpen(false);
+  }, [desktop]);
   // On a desktop board, search is the bar over the live board; elsewhere it is the palette,
   // as it is while a board is on its way out and its page's code still loading.
   const boardSearch = desktop && fullBoard && !navigating;
@@ -258,6 +268,7 @@ export function AppShell() {
     selectProject,
     selectWorkspace,
     openForm: setForm,
+    switcher: desktop ? null : { open: switcherOpen, show: openSwitcher },
     goBoard,
     openPalette,
     search,
@@ -437,6 +448,7 @@ export function AppShell() {
           <div className="flex min-w-0 flex-1 flex-col pr-[var(--safe-right)]">
             {!fullBoard && <PageHeader desktop={desktop} />}
             <main
+              ref={mainRef}
               id="main-content"
               tabIndex={-1}
               className={cn(
@@ -465,6 +477,17 @@ export function AppShell() {
         <AppUpdatePrompt />
         <WebUpdatePrompt />
         <ShellForms form={form} onClose={() => setForm(null)} />
+        {!desktop && (
+          <>
+            <ProjectSwitcher open={switcherOpen} onClose={closeSwitcher} />
+            {/* A pull from the top of a phone board opens the switcher, as the title does. */}
+            <SwitcherPull
+              surface={mainRef}
+              enabled={fullBoard && !navigating && !switcherOpen && !form && !palette}
+              onOpen={openSwitcher}
+            />
+          </>
+        )}
         <NewTagHost />
       </ManagementSurfaceProvider>
     </ShellContext.Provider>

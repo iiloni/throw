@@ -1,9 +1,8 @@
-import { Check, ChevronDown, Columns3, Layers, Pencil, Plus, Settings, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, Layers, Pencil, Plus, Trash2 } from 'lucide-react';
 import { DropdownMenu } from 'radix-ui';
-import type { ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { useShell } from '@/components/AppShell/shell';
 import { Hint } from '@/components/Hint/Hint';
-import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { cn } from '@/lib/utils';
 
 const itemClass =
@@ -26,55 +25,64 @@ export function ShellMenu({
         ? 'All projects'
         : (shell.project?.name ?? shell.workspace?.name ?? 'Throw')
     : (shell.workspace?.name ?? 'Throw');
-  return (
-    <DropdownMenu.Root>
-      {/*
-        The label names the action, so the hint gives the name it acts on: always to a screen
-        reader, and on screen where the rail hides it or the title is cut short.
-      */}
-      <DropdownMenu.Trigger asChild>
-        <Hint
-          label={title}
-          side={phone ? 'bottom' : 'right'}
-          whenTruncated={phone || expanded}
-          describe
-        >
-          <button
-            type="button"
-            data-shell-menu
-            data-shell-title={phone ? '' : undefined}
-            aria-label={phone ? 'Switch project or workspace' : 'Switch workspace'}
+  const trigger = (
+    <button
+      type="button"
+      data-shell-menu
+      data-shell-title={phone ? '' : undefined}
+      aria-label={phone ? 'Switch project or workspace' : 'Switch workspace'}
+      aria-haspopup={phone ? 'dialog' : undefined}
+      aria-expanded={phone ? (shell.switcher?.open ?? false) : undefined}
+      onClick={phone ? () => shell.switcher?.show() : undefined}
+      className={
+        phone
+          ? 'flex min-h-11 max-w-full items-center gap-2 rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring'
+          : 'flex h-12 w-full items-center gap-3 rounded-2xl px-2 outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring'
+      }
+    >
+      {!phone && (
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-foreground/[0.08]">
+          <Layers className="size-5" aria-hidden />
+        </span>
+      )}
+      {(phone || expanded) && (
+        <>
+          <span
             className={
               phone
-                ? 'flex min-h-11 max-w-full items-center gap-2 rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring'
-                : 'flex h-12 w-full items-center gap-3 rounded-2xl px-2 outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring'
+                ? cn(
+                    'truncate font-display font-extrabold text-[clamp(1.5rem,6vw,2.625rem)] leading-tight tracking-[-0.03em]',
+                    titleClassName,
+                  )
+                : 'min-w-0 flex-1 truncate text-left font-semibold text-sm'
             }
           >
-            {!phone && (
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-foreground/[0.08]">
-                <Layers className="size-5" aria-hidden />
-              </span>
-            )}
-            {(phone || expanded) && (
-              <>
-                <span
-                  className={
-                    phone
-                      ? cn(
-                          'truncate font-display font-extrabold text-[clamp(1.5rem,6vw,2.625rem)] leading-tight tracking-[-0.03em]',
-                          titleClassName,
-                        )
-                      : 'min-w-0 flex-1 truncate text-left font-semibold text-sm'
-                  }
-                >
-                  {title}
-                </span>
-                <ChevronDown aria-hidden className="size-4 shrink-0 text-muted-foreground" />
-              </>
-            )}
-          </button>
-        </Hint>
-      </DropdownMenu.Trigger>
+            {title}
+          </span>
+          <ChevronDown aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+        </>
+      )}
+    </button>
+  );
+  /*
+    The label names the action, so the hint gives the name it acts on: always to a screen
+    reader, and on screen where the rail hides it or the title is cut short.
+  */
+  const hinted = (control: ReactElement) => (
+    <Hint
+      label={title}
+      side={phone ? 'bottom' : 'right'}
+      whenTruncated={phone || expanded}
+      describe
+    >
+      {control}
+    </Hint>
+  );
+  // A phone switches in its drawer (the shell's ProjectSwitcher), low where a thumb reaches.
+  if (phone) return hinted(trigger);
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>{hinted(trigger)}</DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content
           align="start"
@@ -114,56 +122,6 @@ export function ShellMenu({
               <Trash2 aria-hidden className="size-4" />
               Workspace trash
             </MenuItem>
-          )}
-          {phone && (
-            <>
-              <DropdownMenu.Separator className="my-2 border-t" />
-              <DropdownMenu.Label className="px-3 pb-1 text-xs text-muted-foreground">
-                Projects
-              </DropdownMenu.Label>
-              {shell.projects.map((project) => (
-                <MenuItem
-                  key={project.id}
-                  onSelect={() => shell.selectProject(project.workspaceId, project.id)}
-                >
-                  <span
-                    data-color={project.color}
-                    className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-tint text-tint-accent"
-                  >
-                    <ProjectIcon name={project.icon} className="size-4" />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate">{project.name}</span>
-                  {shell.project?.id === project.id && <Check aria-hidden className="size-4" />}
-                </MenuItem>
-              ))}
-              {shell.workspace && (
-                <MenuItem
-                  onSelect={() =>
-                    shell.openForm({ kind: 'new-project', workspace: shell.workspace! })
-                  }
-                >
-                  <Plus aria-hidden className="size-4" />
-                  New project
-                </MenuItem>
-              )}
-              {shell.workspace && (
-                <MenuItem onSelect={shell.goBoard}>
-                  <Columns3 aria-hidden className="size-4" />
-                  All projects
-                </MenuItem>
-              )}
-              {shell.project && (
-                <MenuItem onSelect={() => shell.goProjectSettings(shell.project!)}>
-                  <Pencil aria-hidden className="size-4" />
-                  Project settings
-                </MenuItem>
-              )}
-              <DropdownMenu.Separator className="my-2 border-t" />
-              <MenuItem onSelect={shell.goSettings}>
-                <Settings aria-hidden className="size-4" />
-                Settings
-              </MenuItem>
-            </>
           )}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { cardIds, fixture } from './board-helpers';
-import { APP_LOAD_TIMEOUT, shapeRows, waitForCachedProject } from './helpers';
+import { APP_LOAD_TIMEOUT, shapeRows, switcherItem, waitForCachedProject } from './helpers';
 import { newTag, tagTaskUpdate } from './tag-helpers';
 
 async function openBacklog(page: Page, isMobile: boolean) {
@@ -362,7 +362,7 @@ test('rails, galleries, board settings and the phone tray keep their distinct la
   const openSettings = async () => {
     if (isMobile) {
       await page.getByRole('button', { name: 'Switch project or workspace', exact: true }).click();
-      await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
+      await (await switcherItem(page, 'Settings')).click();
     } else await page.getByRole('link', { name: 'Settings', exact: true }).click();
     await expect(page).toHaveURL(/\/settings\/general$/);
   };

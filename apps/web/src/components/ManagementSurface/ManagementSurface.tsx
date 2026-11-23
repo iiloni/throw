@@ -114,6 +114,7 @@ export function ManagementSurface({
   onClose,
   initialFocusRef,
   fit = false,
+  dismiss,
 }: {
   open: boolean;
   title: string;
@@ -123,6 +124,8 @@ export function ManagementSurface({
   fit?: boolean;
   /** The field the surface opens on, so typing can start at once. */
   initialFocusRef?: RefObject<HTMLElement | null>;
+  /** On a phone, steps back within the surface before Back or Escape closes it. */
+  dismiss?: () => boolean;
 }) {
   const host = useContext(SurfaceContext);
   const desktop = useDesktop();
@@ -135,6 +138,7 @@ export function ManagementSurface({
         key: id,
         title,
         fit,
+        dismiss,
         focus: initialFocusRef,
         content: (
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[calc(var(--safe-bottom)+1.5rem)]">
@@ -145,7 +149,7 @@ export function ManagementSurface({
       onClose,
     );
     return () => host.hide(id);
-  }, [open, desktop, host, id, title, children, onClose, initialFocusRef, fit]);
+  }, [open, desktop, host, id, title, children, onClose, initialFocusRef, fit, dismiss]);
   if (!desktop && host) return null;
   return (
     <BottomSheet

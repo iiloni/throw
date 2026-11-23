@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { APP_LOAD_TIMEOUT, signUp } from './helpers';
+import { APP_LOAD_TIMEOUT, signUp, switcherItem } from './helpers';
 
 test('settings pages switch from the side list or the phone dock, and the account renames', async ({
   page,
@@ -171,7 +171,7 @@ test('unified settings hub lists the active project alongside User settings and 
   const addProject = async (name: string) => {
     if (isMobile) {
       await page.getByRole('button', { name: 'Switch project or workspace', exact: true }).click();
-      await page.getByRole('menuitem', { name: 'New project', exact: true }).click();
+      await (await switcherItem(page, 'New project')).click();
     } else await page.getByRole('button', { name: 'New project', exact: true }).click();
     await page.getByLabel('Project name', { exact: true }).fill(name);
     await page.getByRole('button', { name: 'Create', exact: true }).click();
@@ -184,7 +184,7 @@ test('unified settings hub lists the active project alongside User settings and 
 
   if (isMobile) {
     await page.getByRole('button', { name: 'Switch project or workspace', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
+    await (await switcherItem(page, 'Settings')).click();
   } else await page.getByRole('link', { name: 'Settings', exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/general$/);
 

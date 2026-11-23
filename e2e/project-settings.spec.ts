@@ -1,6 +1,13 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { centre, finger } from './board-helpers';
-import { APP_LOAD_TIMEOUT, shapeRows, signUp, waitForDeviceSync, waitForShapeRow } from './helpers';
+import {
+  APP_LOAD_TIMEOUT,
+  shapeRows,
+  signUp,
+  switcherItem,
+  waitForDeviceSync,
+  waitForShapeRow,
+} from './helpers';
 
 // Outbox writes settle in order and can wait for the stream before the next request.
 const synced = expect.configure({ timeout: 60_000 });
@@ -9,7 +16,7 @@ async function setup(page: Page, isMobile: boolean) {
   const account = await signUp(page);
   if (isMobile) {
     await page.getByRole('button', { name: 'Switch project or workspace', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'New project', exact: true }).click();
+    await (await switcherItem(page, 'New project')).click();
   } else await page.getByRole('button', { name: 'New project', exact: true }).click();
   await page.getByLabel('Project name', { exact: true }).fill('Workshop');
   await page.getByRole('button', { name: 'Create', exact: true }).click();
@@ -31,8 +38,11 @@ async function setup(page: Page, isMobile: boolean) {
     .toBe('WOR');
   if (isMobile) {
     await page.getByRole('button', { name: 'Switch project or workspace', exact: true }).click();
-  } else await page.getByRole('button', { name: 'Project menu for Workshop', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Project settings', exact: true }).click();
+    await (await switcherItem(page, 'Project settings')).click();
+  } else {
+    await page.getByRole('button', { name: 'Project menu for Workshop', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Project settings', exact: true }).click();
+  }
   await expect.poll(() => new URL(page.url()).pathname).toBe(`${board}/settings`);
   return {
     ...account,
@@ -492,8 +502,11 @@ test('opening a task while settings are still loading goes to its project board'
   });
   if (isMobile) {
     await page.getByRole('button', { name: 'Switch project or workspace', exact: true }).click();
-  } else await page.getByRole('button', { name: 'Project menu for Workshop', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Project settings', exact: true }).click();
+    await (await switcherItem(page, 'Project settings')).click();
+  } else {
+    await page.getByRole('button', { name: 'Project menu for Workshop', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Project settings', exact: true }).click();
+  }
   await expect.poll(() => new URL(page.url()).pathname).toBe(fixture.settings);
   await page.keyboard.press('ControlOrMeta+k');
   await page.getByRole('combobox', { name: /^Search tasks/ }).fill('Open while loading');
