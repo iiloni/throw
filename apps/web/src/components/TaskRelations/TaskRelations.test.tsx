@@ -104,7 +104,7 @@ afterEach(() => {
 describe('relation groups', () => {
   it('groups as the task sees them, open work first, and hides empty groups', () => {
     const groups = relationGroups('me', fake.relations, fake.tasks, fake.projects, fake.statuses);
-    expect(groups.map((group) => group.label)).toEqual(['Blocked by', 'Duplicate of']);
+    expect(groups.map((group) => group.label)).toEqual(['Blocked by', 'Duplicates']);
     expect(groups[0]!.items.map((item) => item.identifier)).toEqual([
       'APP-2',
       'OPS-7',
@@ -134,7 +134,7 @@ describe('the task view', () => {
       expect.objectContaining({ id: 'other-project' }),
       expect.any(HTMLLIElement),
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Remove duplicate of APP-3' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove duplicates APP-3' }));
     expect(fake.remove).toHaveBeenCalledWith('r3');
   });
 

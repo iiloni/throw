@@ -27,7 +27,7 @@ export type TaskRelationRole = z.infer<typeof taskRelationRoleSchema>;
 export const relationRoleLabel: Record<TaskRelationRole, string> = {
   blocked_by: 'Blocked by',
   blocks: 'Blocks',
-  duplicates: 'Duplicate of',
+  duplicates: 'Duplicates',
   duplicated_by: 'Duplicated by',
   relates_to: 'Relates to',
 };

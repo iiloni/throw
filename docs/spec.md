@@ -210,14 +210,14 @@ one (2026-11-22). A link is one of three kinds, and each task sees it from its o
 | Kind | One side reads | The other side reads |
 | --- | --- | --- |
 | Blocks | Blocks | Blocked by |
-| Duplicates | Duplicate of | Duplicated by |
+| Duplicates | Duplicates | Duplicated by |
 | Relates to | Relates to | Relates to |
 
 - Relations are informational, like subtasks: a blocked task can still be moved, edited and
   closed, and closing a duplicate closes nothing else.
 - A pair is linked once per kind. A task cannot be linked to itself, and a directed link
   cannot be added beside its reverse: if B blocks A, A cannot also block B.
-- The task view lists them in groups (Blocked by, Blocks, Duplicate of, Duplicated by,
+- The task view lists them in groups (Blocked by, Blocks, Duplicates, Duplicated by,
   Relates to), empty groups left out. On wide desktop panes (620 px and wider) they live in
   the side column ([ADR 0012](decisions/0012-task-side-column.md)); on narrower panes and
   phones they live in a third **Links** tab beside Comments and History, with a count and a
@@ -232,7 +232,7 @@ one (2026-11-22). A link is one of three kinds, and each task sees it from its o
   task. Each row has a remove button, always shown since a touch screen has no hover.
 - The dock's link control opens a picker. Its controls sit at the bottom for reachability
   (directly above the desktop dock, and riding above the safe area or keyboard on a phone):
-  the relation kind as one segmented control (Blocked by, Blocks, Duplicate of, Relates to)
+  the relation kind as one segmented control (Blocked by, Blocks, Duplicates, Relates to)
   with a sentence below saying which way it reads (“THR-21 waits until the task you pick is
   done.”), and the search field at the foot. Above them, before anything is typed, are a few
   open tasks of the task's own project that are not linked to it yet, work in progress first;
