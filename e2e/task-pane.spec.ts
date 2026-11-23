@@ -637,11 +637,14 @@ test('tags are picked from the task controls and listed on the task', async ({
   // The Primary / Secondary tab selector sits at the bottom of the panel, below the picker content.
   const roleTabs = tagsPanel().getByRole('tablist', { name: 'Tag role', exact: true });
   await expect(roleTabs).toBeVisible();
-  const primaryBox = (await tagsPanel()
-    .getByRole('button', { name: 'No color tag', exact: true })
-    .boundingBox())!;
-  const tabsBox = (await roleTabs.boundingBox())!;
-  expect(tabsBox.y).toBeGreaterThanOrEqual(primaryBox.y + primaryBox.height);
+  // Measured once the panel has come to rest: it grows as the new tags reach the device.
+  const below = async (above: Locator) => {
+    const box = (await above.boundingBox())!;
+    return (await roleTabs.boundingBox())!.y - (box.y + box.height);
+  };
+  await expect
+    .poll(() => below(tagsPanel().getByRole('button', { name: 'No color tag', exact: true })))
+    .toBeGreaterThanOrEqual(0);
   await tagsPanel().getByRole('tab', { name: 'Secondary', exact: true }).click();
   await expect(
     tagsPanel().getByRole('checkbox', { name: 'Launch / Video', exact: true }),
@@ -666,7 +669,8 @@ test('tags are picked from the task controls and listed on the task', async ({
   await launchButton.click();
   const picker = tagsPanel();
   // Switching role swaps the views above the role tabs, and the panel springs between their
-  // heights rather than jumping (the phone's drawer follows it frame by frame).
+  // heights rather than jumping (the phone's drawer follows it frame by frame). The spring
+  // starts with the tab, not once the leaving view has gone.
   const roles = picker.getByRole('tablist', { name: 'Tag role', exact: true });
   const views = roles.locator('xpath=../preceding-sibling::*[1]');
   await expect(views).toBeVisible();
@@ -691,6 +695,9 @@ test('tags are picked from the task controls and listed on the task', async ({
   const [from, to] = [sampled[0]!, sampled.at(-1)!];
   expect(to - from).toBeGreaterThan(20);
   expect(sampled.filter((h) => h > from + 4 && h < to - 4).length).toBeGreaterThan(2);
+  expect(sampled.findIndex((h) => h !== from)).toBeLessThanOrEqual(3);
+  const steps = sampled.slice(1).map((h, i) => Math.abs(h - sampled[i]!));
+  expect(Math.max(...steps)).toBeLessThan((to - from) / 2);
   await expect(picker.getByRole('tab', { name: 'Secondary', exact: true })).toHaveAttribute(
     'aria-selected',
     'true',
@@ -699,11 +706,9 @@ test('tags are picked from the task controls and listed on the task', async ({
   // Tags take several choices, so the picker stays open until it is dismissed, with tabs pinned below.
   await expect(picker).toBeVisible();
   await expect(picker.getByRole('tab', { name: 'Secondary · 1', exact: true })).toBeVisible();
-  const searchBox = (await picker.getByRole('textbox', { name: 'Find tags' }).boundingBox())!;
-  const bottomTabsBox = (await picker
-    .getByRole('tablist', { name: 'Tag role', exact: true })
-    .boundingBox())!;
-  expect(bottomTabsBox.y).toBeGreaterThanOrEqual(searchBox.y + searchBox.height);
+  await expect
+    .poll(() => below(picker.getByRole('textbox', { name: 'Find tags' })))
+    .toBeGreaterThanOrEqual(0);
   await page.screenshot({ path: test.info().outputPath('tag-picker.png') });
   await page.keyboard.press('Escape');
   await expect(picker).toHaveCount(0);
@@ -804,7 +809,11 @@ test('the unified tags panel makes a tag in either tab’s corner and assigns it
 
   // The Secondary tab's corner adds the new tag to the task's other tags, and returns there on mobile.
   await panel.getByRole('tab', { name: 'Secondary', exact: true }).click();
-  await newTag.click();
+  // The Primary view is still fading out beside it, so this names the arriving one's corner.
+  const secondaryNewTag = panel
+    .getByRole('tabpanel', { name: /^Secondary/ })
+    .getByRole('button', { name: 'New tag', exact: true });
+  await secondaryNewTag.click();
   await expect(form.getByRole('combobox', { name: 'Parent tag' })).toHaveValue('');
   await form.getByRole('textbox', { name: 'Name' }).fill('Docs');
   await form.getByRole('button', { name: 'Save tag', exact: true }).click();
@@ -812,7 +821,7 @@ test('the unified tags panel makes a tag in either tab’s corner and assigns it
   const docs = panel.getByRole('checkbox', { name: 'Docs', exact: true });
   await expect(docs).toBeChecked();
   await expect(docs).toBeInViewport({ ratio: 1 });
-  if (!isMobile) await expect(newTag).toBeFocused();
+  if (!isMobile) await expect(secondaryNewTag).toBeFocused();
   await page.screenshot({ path: test.info().outputPath('tags-new-tag.png') });
   await page.keyboard.press('Escape');
   await expect(panel).toHaveCount(0);

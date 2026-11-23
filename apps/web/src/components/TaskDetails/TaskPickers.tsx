@@ -259,7 +259,11 @@ const tabPages: Variants = {
   }),
 };
 
-/** One tab's view. A leaving one is inert, so focus and the keyboard only reach the new one. */
+/**
+ * One tab's view. A leaving one lifts out of the flow, pinned to the tabs it sits on, so the
+ * arriving view sets the panel's height from the moment the tab changes; it is inert, so focus
+ * and the keyboard only reach the new one.
+ */
 function TagTabView({
   direction,
   onShown,
@@ -281,6 +285,7 @@ function TagTabView({
         if (definition === 'shown') onShown();
       }}
       inert={!isPresent}
+      className={cn(!isPresent && 'absolute inset-x-0 bottom-0')}
     >
       {children}
     </motion.div>
@@ -341,59 +346,61 @@ export function TagOptions({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <AnimatedHeight follow={!swapping}>
-        <AnimatePresence initial={false} mode="wait" custom={reducedMotion ? 0 : direction}>
-          <TagTabView
-            key={activeTab}
-            direction={reducedMotion ? 0 : direction}
-            onShown={() => setSwapping(false)}
-          >
-            {activeTab === 'primary' ? (
-              <div
-                role="tabpanel"
-                id={`${ids}-primary`}
-                aria-labelledby={`${ids}-primary-tab`}
-                className="max-h-[calc(var(--tags-max,min(26rem,55dvh))-4.5rem-1px)] overflow-y-auto overscroll-contain [scrollbar-width:thin]"
-              >
-                {loadingPrimary ? (
-                  <div className="px-3 pt-1 pb-1">{loadingTags}</div>
-                ) : (
-                  <ColorTagPicker
-                    tags={tags}
-                    primaryTagId={primaryTagId}
-                    onChange={onPrimaryChange}
-                    initialBranch={initialBranch}
-                    onNewTag={onNewPrimaryTag}
-                    className="w-full pt-1 pb-1"
-                  />
-                )}
-              </div>
-            ) : (
-              <div
-                role="tabpanel"
-                id={`${ids}-secondary`}
-                aria-labelledby={`${ids}-secondary-tab`}
-                className="flex max-h-[calc(var(--tags-max,min(26rem,55dvh))-4.5rem-1px)] flex-col overflow-hidden px-3 pt-2 pb-1"
-              >
-                {onNewSecondaryTag && (
-                  <div className="mb-1 flex min-h-11 shrink-0 items-center justify-between gap-2">
-                    <p className="px-1 font-medium text-sm">Secondary tags</p>
-                    {!loadingSecondary && <NewTagButton onClick={onNewSecondaryTag} />}
-                  </div>
-                )}
-                {loadingSecondary ? (
-                  loadingTags
-                ) : (
-                  <TagPicker
-                    tags={tags}
-                    primaryTagId={primaryTagId}
-                    secondaryTagIds={secondaryTagIds}
-                    onChange={onSecondaryChange}
-                  />
-                )}
-              </div>
-            )}
-          </TagTabView>
-        </AnimatePresence>
+        <div className="relative">
+          <AnimatePresence initial={false} custom={reducedMotion ? 0 : direction}>
+            <TagTabView
+              key={activeTab}
+              direction={reducedMotion ? 0 : direction}
+              onShown={() => setSwapping(false)}
+            >
+              {activeTab === 'primary' ? (
+                <div
+                  role="tabpanel"
+                  id={`${ids}-primary`}
+                  aria-labelledby={`${ids}-primary-tab`}
+                  className="max-h-[calc(var(--tags-max,min(26rem,55dvh))-4.5rem-1px)] overflow-y-auto overscroll-contain [scrollbar-width:thin]"
+                >
+                  {loadingPrimary ? (
+                    <div className="px-3 pt-1 pb-1">{loadingTags}</div>
+                  ) : (
+                    <ColorTagPicker
+                      tags={tags}
+                      primaryTagId={primaryTagId}
+                      onChange={onPrimaryChange}
+                      initialBranch={initialBranch}
+                      onNewTag={onNewPrimaryTag}
+                      className="w-full pt-1 pb-1"
+                    />
+                  )}
+                </div>
+              ) : (
+                <div
+                  role="tabpanel"
+                  id={`${ids}-secondary`}
+                  aria-labelledby={`${ids}-secondary-tab`}
+                  className="flex max-h-[calc(var(--tags-max,min(26rem,55dvh))-4.5rem-1px)] flex-col overflow-hidden px-3 pt-2 pb-1"
+                >
+                  {onNewSecondaryTag && (
+                    <div className="mb-1 flex min-h-11 shrink-0 items-center justify-between gap-2">
+                      <p className="px-1 font-medium text-sm">Secondary tags</p>
+                      {!loadingSecondary && <NewTagButton onClick={onNewSecondaryTag} />}
+                    </div>
+                  )}
+                  {loadingSecondary ? (
+                    loadingTags
+                  ) : (
+                    <TagPicker
+                      tags={tags}
+                      primaryTagId={primaryTagId}
+                      secondaryTagIds={secondaryTagIds}
+                      onChange={onSecondaryChange}
+                    />
+                  )}
+                </div>
+              )}
+            </TagTabView>
+          </AnimatePresence>
+        </div>
       </AnimatedHeight>
       {/* The role switch stays under both views, as the reminder panel's actions do in Catch. */}
       <div className="mt-1 shrink-0 border-foreground/10 border-t px-3 pt-2 pb-2">
