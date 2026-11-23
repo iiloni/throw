@@ -695,7 +695,7 @@ sidebar between the rail and the backlog instead of floating, so nothing sits ov
 (2026-11-22). The scrolling column above the search field surfaces the full sort and filter
 controls directly — Sort, Size, and Tags (including nested tags, Any/All matching and Untagged,
 or Projects on the cross-project board) — without a popup filter card, sharing an elevated
-rounded surface that connects directly to the active Search button in the navigation rail
+full-height surface that connects directly to the active Search button in the navigation rail
 (2026-11-23). Clicking Search in the navigation rail again collapses the sidebar without
 clearing active filters or sort (the rail button indicates when filters remain active); the
 search field's close button clears them as it closes. The active chips and Clear all sit above

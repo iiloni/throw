@@ -228,7 +228,7 @@ export function BoardSearchSidebar() {
             data-docked=""
             onKeyDown={onKeyDown}
             style={{ width: SIDEBAR_WIDTH }}
-            className="mt-[calc(var(--safe-top)+1.25rem)] mb-[max(1.5rem,calc(var(--safe-bottom)+0.75rem))] flex min-h-0 flex-1 flex-col rounded-r-3xl bg-[var(--search-surface)] px-4 pt-4 pb-3.5"
+            className="flex min-h-0 flex-1 flex-col bg-[var(--search-surface)] px-4 pt-[calc(var(--safe-top)+1.25rem)] pb-[max(1.5rem,calc(var(--safe-bottom)+0.75rem))]"
           >
             <ScrollArea edges className="-mx-1 flex-1 [--scrollbar-inset:0.5rem]">
               <ScrollAreaViewport>
