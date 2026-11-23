@@ -258,6 +258,8 @@
 
   /* Frosted material for the dock, the navigation rail and sheets. */
   --glass: light-dark(oklch(0.99 0.005 85 / 0.66), oklch(0.29 0.012 70 / 0.6));
+  /* Opaque surface shared by the docked search sidebar and its connected nav-rail button. */
+  --search-surface: light-dark(oklch(0.935 0.009 85), oklch(0.3 0.012 70));
   /* Menus, dialogs and sheets hold text over content, so they need to be thicker. */
   --glass-thick: light-dark(oklch(0.99 0.005 85 / 0.9), oklch(0.27 0.012 70 / 0.92));
   --glass-border: light-dark(oklch(0 0 0 / 0.07), oklch(1 0 0 / 0.1));
@@ -789,6 +791,40 @@ body:has(section.board-column[data-column-color]) .column-strip {
  */
 .board-rail {
   background-color: var(--background);
+}
+
+/*
+ * Joins the active Search button in the navigation rail seamlessly into the docked search
+ * sidebar at the same opaque elevation, with concave fillets curving into the seam.
+ */
+.search-rail-connected {
+  background-color: var(--search-surface);
+  border-radius: 1rem 0 0 1rem;
+}
+.search-rail-connected::before,
+.search-rail-connected::after {
+  position: absolute;
+  right: 0;
+  width: 0.75rem;
+  height: 0.75rem;
+  pointer-events: none;
+  content: "";
+}
+.search-rail-connected::before {
+  bottom: 100%;
+  background: radial-gradient(
+    circle at 0 0,
+    transparent calc(0.75rem - 0.5px),
+    var(--search-surface) 0.75rem
+  );
+}
+.search-rail-connected::after {
+  top: 100%;
+  background: radial-gradient(
+    circle at 0 100%,
+    transparent calc(0.75rem - 0.5px),
+    var(--search-surface) 0.75rem
+  );
 }
 
 /*
