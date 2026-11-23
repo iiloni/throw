@@ -14,7 +14,7 @@ import {
   type TaskRelationRole,
   taskIdentifier,
 } from '@throw/shared';
-import { Search, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { StatusGlyph } from '@/components/Board/glyphs';
@@ -391,8 +391,12 @@ export function RelationPicker({ task, onPicked }: { task: Task; onPicked(): voi
             {PICKABLE.find((option) => option.role === role)!.explain(key)}
           </p>
         </div>
-        <div className="flex h-11 shrink-0 items-center gap-2 rounded-xl bg-foreground/[0.05] pr-1 pl-3 focus-within:ring-2 focus-within:ring-ring/60">
-          <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <div
+          className={cn(
+            'flex h-10 shrink-0 items-center gap-1 rounded-xl border border-border bg-background/40 pl-3 focus-within:ring-2 focus-within:ring-ring focus-within:ring-inset',
+            query ? 'pr-1' : 'pr-3',
+          )}
+        >
           <input
             ref={input}
             type="text"
@@ -426,13 +430,13 @@ export function RelationPicker({ task, onPicked }: { task: Task; onPicked(): voi
                 if (chosen) pick(chosen.row.task);
               }
             }}
-            className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+            className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
           {query && (
             <IconButton
               label="Clear search"
               tooltip={false}
-              className="size-9 shrink-0 text-muted-foreground [&_svg]:size-4"
+              className="size-8 shrink-0 text-muted-foreground [&_svg]:size-4"
               onPointerDown={(event) => event.preventDefault()}
               onClick={() => {
                 setQuery('');
