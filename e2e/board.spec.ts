@@ -496,7 +496,7 @@ test('desktop selection sends tasks through the selection bar while retaining th
   await expect(page.getByText('2 selected', { exact: true })).toBeVisible();
   await page
     .getByRole('toolbar', { name: 'Selected tasks' })
-    .getByRole('button', { name: /^Status: Build/ })
+    .getByRole('button', { name: 'Change status' })
     .click();
   await page
     .getByRole('region', { name: 'Status', exact: true })

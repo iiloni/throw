@@ -48,7 +48,7 @@ test.describe('desktop', () => {
 
     // Priority and size apply to every card and keep the selection.
     const bar = toolbar(page);
-    await bar.getByRole('button', { name: /^Priority: Default/ }).click();
+    await bar.getByRole('button', { name: 'Change priority' }).click();
     await page
       .getByRole('region', { name: 'Priority' })
       .getByRole('radio', { name: 'High' })
@@ -57,12 +57,13 @@ test.describe('desktop', () => {
       .poll(async () => (await rows(page, board.headers, ids)).map((row) => row?.priority))
       .toEqual(['2', '2']);
     await expect(page.getByText('2 selected', { exact: true })).toBeVisible();
-    await bar.getByRole('button', { name: /^Size: none/ }).click();
+    await bar.getByRole('button', { name: 'Change size' }).click();
     await page.getByRole('region', { name: 'Size' }).getByText('M', { exact: true }).click();
     await expect
       .poll(async () => (await rows(page, board.headers, ids)).map((row) => row?.size))
       .toEqual(['3', '3']);
-    await expect(bar.getByRole('button', { name: /^Size: M/ })).toBeVisible();
+    // The controls keep one face whatever the cards share.
+    await expect(bar.getByRole('button', { name: 'Change size' })).toBeVisible();
 
     // Tags: one color for all, and a secondary tag checked for all.
     await bar.getByRole('button', { name: 'Change tags' }).click();
@@ -81,7 +82,7 @@ test.describe('desktop', () => {
     await expect(page.getByText('2 selected', { exact: true })).toBeVisible();
 
     // Status moves them all and lets the selection go.
-    await bar.getByRole('button', { name: /^Status: Build/ }).click();
+    await bar.getByRole('button', { name: 'Change status' }).click();
     await page
       .getByRole('region', { name: 'Status' })
       .locator(`[data-drop-status="${board.status('Review')}"]`)
@@ -188,11 +189,15 @@ test.describe('phone', () => {
     await touch.tap(card(page, titles[1]!));
     await expect(page.getByText('2 selected')).toBeVisible();
     const bar = toolbar(page);
-    // The move grid shows first, colored by status, as before.
-    await expect(page.locator(`[data-drop-status="${board.status('Review')}"]`)).toBeVisible();
+    // Selecting opens the controls alone; the move grid waits for Status.
+    const review = page.locator(`[data-drop-status="${board.status('Review')}"]`);
+    await expect(bar).toBeVisible();
+    await expect(review).toHaveCount(0);
+    await touch.tap(bar.getByRole('button', { name: 'Change status' }));
+    await expect(review).toBeVisible();
 
     await page.screenshot({ path: testInfo.outputPath('phone-status.png') });
-    await touch.tap(bar.getByRole('button', { name: /^Priority: Default/ }));
+    await touch.tap(bar.getByRole('button', { name: 'Change priority' }));
     await page.screenshot({ path: testInfo.outputPath('phone-priority.png') });
     await touch.tap(
       page.getByRole('region', { name: 'Priority' }).getByText('High', { exact: true }),
@@ -200,11 +205,12 @@ test.describe('phone', () => {
     await expect
       .poll(async () => (await rows(page, board.headers, ids)).map((row) => row?.priority))
       .toEqual(['2', '2']);
-    // Picking returns to the move grid, keeping the selection.
-    await expect(page.locator(`[data-drop-status="${board.status('Review')}"]`)).toBeVisible();
+    // Picking closes the picker and keeps the selection.
+    await expect(page.getByRole('region', { name: 'Priority' })).toHaveCount(0);
+    await expect(review).toHaveCount(0);
     await expect(page.getByText('2 selected')).toBeVisible();
 
-    await touch.tap(bar.getByRole('button', { name: /^Size: none/ }));
+    await touch.tap(bar.getByRole('button', { name: 'Change size' }));
     await touch.tap(page.getByRole('region', { name: 'Size' }).getByText('L', { exact: true }));
     await expect
       .poll(async () => (await rows(page, board.headers, ids)).map((row) => row?.size))

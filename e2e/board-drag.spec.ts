@@ -379,6 +379,11 @@ test.describe('phone', () => {
     await expect(page.getByText('1 selected')).toBeVisible();
     await touch.tap(card(page, 'Later position'));
     await expect(page.getByText('2 selected')).toBeVisible();
+    await touch.tap(
+      page
+        .getByRole('toolbar', { name: 'Selected tasks' })
+        .getByRole('button', { name: 'Change status' }),
+    );
     await touch.tap(tile(page, board.status('Review')));
     await expect
       .poll(async () =>

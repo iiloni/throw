@@ -200,6 +200,11 @@ test.describe('phone', () => {
     await touch.press(card(page, 'Bake bread'));
     await touch.lift();
     await expect(page.getByText('1 selected')).toBeVisible();
+    await touch.tap(
+      page
+        .getByRole('toolbar', { name: 'Selected tasks' })
+        .getByRole('button', { name: 'Change status' }),
+    );
     await expect(page.locator(`[data-drop-status="${board.statusIds.Tasting}"]`)).toBeVisible();
     await expect(page.locator(`[data-drop-status="${board.statusIds.Growing}"]`)).toHaveCount(0);
     // A Garden card joins: the drawer offers categories.

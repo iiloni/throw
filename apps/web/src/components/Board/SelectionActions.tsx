@@ -1,15 +1,12 @@
-import { sizeLabel } from '@throw/shared';
 import { CircleDashed, Flag, Scaling, Tag, Trash2 } from 'lucide-react';
 import { type ReactNode, useContext } from 'react';
 import { type ControlProps, DockControl } from '@/components/DockControl/DockControl';
 import { feelStatusChange } from '@/lib/haptics';
-import { PriorityIcon, StatusGlyph } from './glyphs';
 import {
   byCategory,
   CATEGORIES,
   categoryTarget,
   type Project,
-  priorityName,
   projectOf,
   type Status,
   statusById,
@@ -160,44 +157,21 @@ export function SelectionControls({
   const { project } = current(state);
   const selected = selectedTasks(state);
   const own = selectionProject(project, selected);
-  const status = own && statusById(own, shared(selected.map((task) => task.statusId)) ?? '');
-  const priority = shared(selected.map((task) => task.priority));
-  const size = shared(selected.map((task) => task.size));
+  // Only the tags control tints with a shared color; the others keep one face however many
+  // cards are selected, so the bar does not shift as the selection grows or shrinks.
   const color = shared(selected.map((task) => taskColor(own ?? project, task)));
   const icons: Record<SelectionTab, ReactNode> = {
-    status: status ? (
-      <StatusGlyph category={status.category} color={status.color} />
-    ) : (
-      <CircleDashed />
-    ),
-    priority:
-      priority !== undefined && priority !== 3 ? <PriorityIcon priority={priority} /> : <Flag />,
-    size:
-      size !== undefined && size !== null ? (
-        <span className="font-semibold text-sm">{sizeLabel(size)}</span>
-      ) : (
-        <Scaling />
-      ),
+    status: <CircleDashed />,
+    priority: <Flag />,
+    size: <Scaling />,
     tags: <Tag data-color={color ?? undefined} className={color ? 'text-tint-accent' : ''} />,
-  };
-  const labels: Record<SelectionTab, string> = {
-    status: status ? `Status: ${status.name}. Change` : 'Change status',
-    priority:
-      priority !== undefined
-        ? `Priority: ${priorityName(own ?? project, priority)}. Change`
-        : 'Change priority',
-    size:
-      size !== undefined
-        ? `Size: ${size === null ? 'none' : sizeLabel(size)}. Change`
-        : 'Change size',
-    tags: 'Change tags',
   };
   return (
     <div className="grid h-full w-full auto-cols-fr grid-flow-col gap-1 p-1">
       {tabs.map((tab) => (
         <DockControl
           key={tab}
-          label={labels[tab]}
+          label={selectionControlLabel[tab]}
           tooltip={tooltips}
           {...controlProps(tab)}
           onOpen={(element) => onOpen(tab, element)}
@@ -218,6 +192,13 @@ export function SelectionControls({
     </div>
   );
 }
+
+const selectionControlLabel: Record<SelectionTab, string> = {
+  status: 'Change status',
+  priority: 'Change priority',
+  size: 'Change size',
+  tags: 'Change tags',
+};
 
 /** One tab's content: the move grid here, the rest from the boundary. */
 export function SelectionTabContent({ tab, onDone }: { tab: SelectionTab; onDone: () => void }) {

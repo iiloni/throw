@@ -669,15 +669,15 @@ function CardStack({ count }: { count: number }) {
 /**
  * Where a held card is sent anywhere, wherever it came from: the drawer's header, which opens
  * into a grid of every status when the card is brought onto it and closes when it leaves.
- * With cards selected it is open, and tapping a status moves them (ADR 0009). The selection's
- * controls sit above the grid as an open task's dock does, and switch it to their pickers.
+ * With cards selected it holds the selection's controls, as an open task's dock does: Status
+ * opens the grid, where tapping a status moves them (ADR 0009), and the others their pickers.
  */
 export function MovePanel({ pick }: { pick: boolean }) {
   const state = board.use();
   const held = drag.use();
   const content = useContext(SelectionContentContext);
   const { project, tasks } = current(state);
-  const [chosen, setChosen] = useState<SelectionTab>('status');
+  const [chosen, setChosen] = useState<SelectionTab | null>(null);
   const selected = selectedTasks(state);
   const moving = held?.ids ?? state.selection;
   const statuses = moveTargets(
@@ -685,8 +685,16 @@ export function MovePanel({ pick }: { pick: boolean }) {
     tasks.filter((task) => moving.includes(task.id)),
   );
   const tabs = selectionTabs(project, selected, content);
-  // A tab the selection no longer allows, such as tags once it spans projects, falls back.
-  const tab = pick && tabs.includes(chosen) ? chosen : 'status';
+  // A selection opens on its controls alone, as an open task's dock does, until one is tapped;
+  // a tab the selection no longer allows, such as tags once it spans projects, closes. Without
+  // the boundary's controls (the prototype) the move grid is all there is, so it stays open.
+  const tab: SelectionTab | null = !pick
+    ? 'status'
+    : !content
+      ? 'status'
+      : chosen && tabs.includes(chosen)
+        ? chosen
+        : null;
   const open = pick || (held?.phase === 'dragging' && held.over);
   return (
     <motion.div
@@ -706,43 +714,39 @@ export function MovePanel({ pick }: { pick: boolean }) {
         </div>
       )}
       {pick && content && (
-        <div
-          role="toolbar"
-          aria-label="Selected tasks"
-          className="-mx-1 mb-1.5 h-[var(--dock-height)]"
-        >
+        <div role="toolbar" aria-label="Selected tasks" className="-mx-1 h-[var(--dock-height)]">
           <SelectionControls
             tabs={tabs}
-            onOpen={(next) => setChosen(next === tab ? 'status' : next)}
+            onOpen={(next) => setChosen(next === tab ? null : next)}
             controlProps={(name) => ({ 'aria-expanded': name === tab })}
             tooltips={false}
           />
         </div>
       )}
-      {open ? (
-        tab === 'status' ? (
+      {!open ? (
+        <p className="flex h-10 items-center justify-center font-medium text-muted-foreground text-xs">
+          Move to a status
+        </p>
+      ) : tab === 'status' ? (
+        <div className={cn(pick && content && 'mt-1.5')}>
           <StatusTargets
             statuses={statuses}
             onPick={pick ? (statusId) => sendSelection(statusId) : undefined}
           />
-        ) : (
-          <section
-            aria-label={selectionTabTitle[tab]}
-            className={cn(
-              '-mx-2 [--tags-max:min(24rem,48dvh)]',
-              tab === 'tags'
-                ? 'flex max-h-[min(24rem,48dvh)] flex-col overflow-hidden'
-                : 'max-h-[min(24rem,48dvh)] overflow-y-auto overscroll-contain',
-            )}
-          >
-            <SelectionTabContent tab={tab} onDone={() => setChosen('status')} />
-          </section>
-        )
-      ) : (
-        <p className="flex h-10 items-center justify-center font-medium text-muted-foreground text-xs">
-          Move to a status
-        </p>
-      )}
+        </div>
+      ) : tab ? (
+        <section
+          aria-label={selectionTabTitle[tab]}
+          className={cn(
+            '-mx-2 mt-1.5 [--tags-max:min(24rem,48dvh)]',
+            tab === 'tags'
+              ? 'flex max-h-[min(24rem,48dvh)] flex-col overflow-hidden'
+              : 'max-h-[min(24rem,48dvh)] overflow-y-auto overscroll-contain',
+          )}
+        >
+          <SelectionTabContent tab={tab} onDone={() => setChosen(null)} />
+        </section>
+      ) : null}
     </motion.div>
   );
 }
