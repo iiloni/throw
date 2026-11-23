@@ -1,11 +1,12 @@
 import { sizeLabel, type Tag, taskTagColor } from '@throw/shared';
 import { Plus, Search, SearchX, SlidersHorizontal, Tag as TagGlyph, X } from 'lucide-react';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, animate, motion, useReducedMotion } from 'motion/react';
 import {
   type KeyboardEvent,
   type RefObject,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -518,38 +519,75 @@ function ResultCard({ search, row }: { search: SearchState; row: SearchState['re
 const MOVING_RESULTS = 10;
 
 /**
- * The results as Catch's search lists them: a card rises in, a card leaving shrinks away, and
- * the rest slide to their new places. Only the cards in view move, and they are measured only
- * when the order changes: a layout animation measures every card on each render, and the
- * active card follows the pointer, so moving every card cost more than the cards in view.
+ * The results as Catch's search lists them: a card rises in and the rest slide to their new
+ * places. A card leaving goes at once: shrinking it away in place, as Catch's page does, left it
+ * overlapping the cards sliding in beneath it, since the drawer anchors the list at its foot.
+ * Only the cards in view move, and they are measured only when the order changes: a layout
+ * animation measures every card on each render, and the active card follows the pointer.
  */
 function ResultList({ search }: { search: SearchState }) {
   const reduced = useReducedMotion();
   const { results } = search;
   const order = results.map((row) => row.task.id).join(' ');
   return (
-    // Positioned, so a card leaving is held in place as the others close the gap.
-    <ul className="relative flex flex-col gap-2">
-      <AnimatePresence initial={false} mode="popLayout">
-        {results.map((row, index) => {
-          const moving = !reduced && index < MOVING_RESULTS;
-          return (
-            <motion.li
-              key={row.task.id}
-              layout={moving && 'position'}
-              layoutDependency={order}
-              initial={moving ? { opacity: 0, y: 8 } : false}
-              animate={{ opacity: 1, y: 0 }}
-              exit={moving ? { opacity: 0, scale: 0.97 } : undefined}
-              transition={springs.smooth}
-            >
-              <ResultCard search={search} row={row} />
-            </motion.li>
-          );
-        })}
-      </AnimatePresence>
+    <ul className="flex flex-col gap-2">
+      {results.map((row, index) => {
+        const moving = !reduced && index < MOVING_RESULTS;
+        return (
+          <motion.li
+            key={row.task.id}
+            layout={moving && 'position'}
+            layoutDependency={order}
+            initial={moving ? { opacity: 0, y: 8 } : false}
+            animate={{ opacity: 1, y: 0 }}
+            transition={springs.smooth}
+          >
+            <ResultCard search={search} row={row} />
+          </motion.li>
+        );
+      })}
     </ul>
   );
+}
+
+/**
+ * Keeps the results above the open filter card rather than under it: the list is anchored at
+ * the drawer's foot, where the card covers it, and what showed of it was a strip flickering in
+ * the gap above the field as the filters changed it. The results' scroller ends where the card
+ * begins, following its height as its sections change, and the list slides up and back as the
+ * card opens and closes.
+ */
+function useFilterRoom(open: boolean) {
+  const reduced = useReducedMotion();
+  const area = useRef<HTMLDivElement>(null);
+  const card = useRef<HTMLDivElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const host = area.current;
+    const room = card.current;
+    const content = list.current;
+    if (!host || !room || !content) return;
+    let slide = !reduced;
+    function lift(px: number) {
+      if (!host || !content) return;
+      const before = content.getBoundingClientRect().top;
+      host.style.setProperty('--filter-room', `${px}px`);
+      const by = before - content.getBoundingClientRect().top;
+      if (slide && by) animate(content, { y: [by, 0] }, springs.smooth);
+      slide = false;
+    }
+    if (!open) {
+      lift(0);
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      // The card's own height, and the gap between it and the field.
+      if (room.offsetHeight) lift(room.offsetHeight + 12);
+    });
+    observer.observe(room);
+    return () => observer.disconnect();
+  }, [open, reduced]);
+  return { area, card, list };
 }
 
 export function SearchResults({ search }: { search: SearchState }) {
@@ -688,24 +726,31 @@ export function PhoneSearchContent({
   /** A close button of its own, for a surface without one; the drawer's title row has it. */
   onClose?: () => void;
 }) {
+  const room = useFilterRoom(search.filtersOpen);
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* A size container, so the filter card can fit the room above the field however the
           keyboard leaves it. */}
-      <div className="relative flex min-h-0 flex-1 flex-col [container-type:size]">
-        <ScrollArea edges className="flex-1 [--scrollbar-inset:0.5rem]">
+      <div ref={room.area} className="relative flex min-h-0 flex-1 flex-col [container-type:size]">
+        <ScrollArea edges className="mb-[var(--filter-room,0px)] flex-1 [--scrollbar-inset:0.5rem]">
           <ScrollAreaViewport ref={search.list}>
             {/* Few results sit by the field; more scroll from the best one down. The drawer is
                 glass already: chips drawn on it skip a blur of their own, which every frame of
                 the results moving would have redrawn. */}
-            <div className="mt-auto px-4 pt-2 pb-3 [&_.glass-badge]:[backdrop-filter:none]">
+            <div
+              ref={room.list}
+              className="mt-auto px-4 pt-2 pb-3 [&_.glass-badge]:[backdrop-filter:none]"
+            >
               <SearchResults search={search} />
             </div>
           </ScrollAreaViewport>
           <ScrollBar />
         </ScrollArea>
-        {/* As in Catch, the filter card covers the results rather than pushing them away. */}
-        <div className="pointer-events-none absolute inset-x-3 bottom-3 flex flex-col justify-end">
+        {/* The filter card floats over the results' foot, and they make room for it above. */}
+        <div
+          ref={room.card}
+          className="pointer-events-none absolute inset-x-3 bottom-3 flex flex-col justify-end"
+        >
           <AnimatePresence initial={false}>
             {search.filtersOpen && (
               // The board's filter sections fit what is left above their tabs.
