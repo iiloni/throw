@@ -319,7 +319,12 @@ test('a task links another project’s task as its blocker, which shows on its c
   const pane = page.getByLabel('Task', { exact: true });
   await expect(pane).toBeVisible();
 
-  await controls(page).getByRole('button', { name: 'Link a task', exact: true }).click();
+  // Link a task lives inline in the Links tab (and in More), not as a separate primary dock slot.
+  await expect(
+    controls(page).getByRole('button', { name: 'Link a task', exact: true }),
+  ).toHaveCount(0);
+  await pane.getByRole('tab', { name: 'Links', exact: true }).click();
+  await pane.getByRole('button', { name: 'Link a task', exact: true }).click();
   await page.getByRole('radio', { name: 'Blocked by', exact: true }).click();
   await page.getByRole('combobox', { name: 'Find a task' }).fill('OPS-1');
   const results = page.getByRole('listbox', { name: 'Tasks to link' });
@@ -382,7 +387,7 @@ test('a wide desktop pane lists relations in its side column, which shuts with t
   test.skip(isMobile, 'A phone keeps its stacked layout (ADR 0009)');
   const account = await signUp(page);
   const { headers } = account;
-  const { workspaceId, app, blocked, sibling } = await workspace(page.request, headers);
+  const { workspaceId, app, blocked } = await workspace(page.request, headers);
   await page.goto(`/w/${workspaceId}/p/${app.id}?view=board&task=${blocked}`);
   const pane = page.getByLabel('Task', { exact: true });
   await expect(pane.getByRole('textbox', { name: 'Task title' })).toHaveValue('Ship the release', {
@@ -399,14 +404,23 @@ test('a wide desktop pane lists relations in its side column, which shuts with t
   // Once wide enough for the side column, the third tab leaves the tab strip.
   await expect(pane.getByRole('tab', { name: /^Links/ })).toHaveCount(0);
 
-  const link = relation(sibling, blocked, 'duplicates');
-  expect((await page.request.post('/api/task-relations', { headers, data: link })).status()).toBe(
-    201,
-  );
-  // The synced link goes straight to the column; the tab copy cannot be reached.
-  await expect(column.getByRole('region', { name: 'Relations' })).toContainText('Duplicated by');
+  // On a wide empty pane, More -> Link a task opens the picker and springs the side column open.
+  await controls(page).getByRole('button', { name: 'More task actions', exact: true }).click();
+  await page.getByRole('button', { name: 'Link a task', exact: true }).click();
+  await page.getByRole('radio', { name: 'Duplicates', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Find a task' }).fill('APP-2');
+  const results = page.getByRole('listbox', { name: 'Tasks to link' });
+  await results.getByRole('option', { name: /APP-2/ }).click();
+  await expect(results).toHaveCount(0);
+  // The linked task goes straight to the column alongside its inline Link a task slot.
+  await expect(column.getByRole('region', { name: 'Relations' })).toContainText('Duplicates');
   await expect(pane.getByRole('region', { name: 'Relations' })).toHaveCount(1);
-  await column.getByRole('button', { name: 'Remove duplicated by APP-2' }).click();
+  await expect(column.getByRole('button', { name: 'Link a task', exact: true })).toBeVisible();
+  await column.getByRole('button', { name: 'Link a task', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Link a task', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(column.getByRole('button', { name: 'Link a task', exact: true })).toBeFocused();
+  await column.getByRole('button', { name: 'Remove duplicates APP-2' }).click();
   await expect(column).toHaveCount(0);
 
   // Narrowing back below the breakpoint brings the Links tab back.

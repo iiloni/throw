@@ -33,10 +33,11 @@ column waits until someone widens the pane for it. Narrower panes and phones (AD
 the stacked layout.
 
 **It shows only when there is something in it.** A task's first tag, subtask or relation
-springs it open and removing the last springs it shut. Relations are added from the dock,
-so they have no inline slot. The card narrows or widens on the spring rather than
-jumping. While it is shut, “Add subtask” stays inline below the description, so it can always
-be reached. A subtask added there opens as a task of its own, and its parent shows the column
+springs it open and removing the last springs it shut. While it is open, it includes an
+inline “Link a task” slot beneath its relations; while it is shut, “Add subtask” stays inline
+below the description and “Link a task” remains reachable from the dock's More panel (and
+from the Links tab on narrower panes and phones). The card narrows or widens on the spring rather than
+jumping. A subtask added there opens as a task of its own, and its parent shows the column
 when Back returns there. A new extra goes straight to the open column rather than showing
 inline first. The column stays mounted while it is shut, inert and hidden from assistive
 technology, so the last removal can animate it shut.

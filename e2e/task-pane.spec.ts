@@ -628,42 +628,93 @@ test('tags are picked from the task controls and listed on the task', async ({
   };
   const launch = await tag('Launch', null);
   const press = await tag('Press', launch);
-  // Enough children that the color picker's list is taller than its swatches.
+  // Enough children that the primary tag's list is taller than its swatches.
   for (const name of ['Blog', 'Events', 'Partners', 'Social', 'Video']) await tag(name, launch);
+  const tagsPanel = () =>
+    page.getByRole(isMobile ? 'dialog' : 'region', { name: 'Tags', exact: true });
   // The children reach the device after the root; the picker can only open what it has.
   await controls(page).getByRole('button', { name: 'Tags: none. Change', exact: true }).click();
+  // The Primary / Secondary tab selector sits at the bottom of the panel, below the picker content.
+  const roleTabs = tagsPanel().getByRole('tablist', { name: 'Tag role', exact: true });
+  await expect(roleTabs).toBeVisible();
+  // Measured once the panel has come to rest: it grows as the new tags reach the device.
+  const below = async (above: Locator) => {
+    const box = (await above.boundingBox())!;
+    return (await roleTabs.boundingBox())!.y - (box.y + box.height);
+  };
+  await expect
+    .poll(() => below(tagsPanel().getByRole('button', { name: 'No color tag', exact: true })))
+    .toBeGreaterThanOrEqual(0);
+  await tagsPanel().getByRole('tab', { name: 'Secondary', exact: true }).click();
   await expect(
-    page
-      .getByRole(isMobile ? 'dialog' : 'region', { name: 'Tags', exact: true })
-      .getByRole('checkbox', { name: 'Launch / Video', exact: true }),
+    tagsPanel().getByRole('checkbox', { name: 'Launch / Video', exact: true }),
   ).toBeAttached();
-  await page.keyboard.press('Escape');
-  // The color picks the primary tag, as Catch's palette does, and opens its children.
-  await controls(page).getByRole('button', { name: 'Color: none. Change', exact: true }).click();
-  const color = page.getByRole(isMobile ? 'dialog' : 'region', { name: 'Color', exact: true });
-  await color.getByRole('button', { name: 'Amber: Launch', exact: true }).click();
+  // The Primary tab picks the primary tag by color and opens its children.
+  await tagsPanel().getByRole('tab', { name: 'Primary', exact: true }).click();
+  await tagsPanel().getByRole('button', { name: 'Amber: Launch', exact: true }).click();
   // On a phone the drawer grows with the picker's child list, so all of it is on screen; the
   // desktop panel keeps its height and scrolls.
-  const last = color.getByRole('button', { name: 'Launch / Video', exact: true });
+  const last = tagsPanel().getByRole('button', { name: 'Launch / Video', exact: true });
   if (isMobile) await expect(last).toBeInViewport({ ratio: 1 });
   else await expect(last).toBeVisible();
   await page.screenshot({ path: test.info().outputPath('color-picker.png') });
   await page.keyboard.press('Escape');
-  await expect(color).toHaveCount(0);
-  await expect(
-    controls(page).getByRole('button', { name: 'Color: Launch. Change', exact: true }),
-  ).toBeFocused();
-  await controls(page).getByRole('button', { name: 'Tags: none. Change', exact: true }).click();
-  const picker = page.getByRole(isMobile ? 'dialog' : 'region', { name: 'Tags', exact: true });
+  await expect(tagsPanel()).toHaveCount(0);
+  const launchButton = controls(page).getByRole('button', {
+    name: 'Tags: Launch. Change',
+    exact: true,
+  });
+  await expect(launchButton).toBeFocused();
+  await expect(launchButton.locator('[data-color="amber"]')).toBeVisible();
+  await launchButton.click();
+  const picker = tagsPanel();
+  // Switching role swaps the views above the role tabs, and the panel springs between their
+  // heights rather than jumping (the phone's drawer follows it frame by frame). The spring
+  // starts with the tab, not once the leaving view has gone.
+  const roles = picker.getByRole('tablist', { name: 'Tag role', exact: true });
+  const views = roles.locator('xpath=../preceding-sibling::*[1]');
+  await expect(views).toBeVisible();
+  // Clicked from the page so the samples start with the click, not after Playwright's wait for
+  // the drawer to come to rest.
+  const sampled = await roles.evaluate(
+    (tabs, views) =>
+      new Promise<number[]>((resolve) => {
+        const seen: number[] = [];
+        const step = () => {
+          seen.push(Math.round(views.getBoundingClientRect().height));
+          // Done once it has held still for a while after moving.
+          const still = seen.length > 20 && new Set(seen.slice(-15)).size === 1;
+          if ((still && seen.at(-1) !== seen[0]) || seen.length >= 180) resolve(seen);
+          else requestAnimationFrame(step);
+        };
+        tabs.querySelector<HTMLElement>('[role="tab"]:not([aria-selected="true"])')?.click();
+        requestAnimationFrame(step);
+      }),
+    await views.elementHandle(),
+  );
+  const [from, to] = [sampled[0]!, sampled.at(-1)!];
+  expect(to - from).toBeGreaterThan(20);
+  expect(sampled.filter((h) => h > from + 4 && h < to - 4).length).toBeGreaterThan(2);
+  expect(sampled.findIndex((h) => h !== from)).toBeLessThanOrEqual(3);
+  const steps = sampled.slice(1).map((h, i) => Math.abs(h - sampled[i]!));
+  expect(Math.max(...steps)).toBeLessThan((to - from) / 2);
+  await expect(picker.getByRole('tab', { name: 'Secondary', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
   await picker.getByRole('checkbox', { name: 'Launch / Press', exact: true }).check();
-  // Tags take several choices, so the picker stays open until it is dismissed.
+  // Tags take several choices, so the picker stays open until it is dismissed, with tabs pinned below.
   await expect(picker).toBeVisible();
+  await expect(picker.getByRole('tab', { name: 'Secondary · 1', exact: true })).toBeVisible();
+  await expect
+    .poll(() => below(picker.getByRole('textbox', { name: 'Find tags' })))
+    .toBeGreaterThanOrEqual(0);
   await page.screenshot({ path: test.info().outputPath('tag-picker.png') });
   await page.keyboard.press('Escape');
   await expect(picker).toHaveCount(0);
   await expect(pane).toBeVisible();
   await expect(
-    controls(page).getByRole('button', { name: 'Tags: Press. Change', exact: true }),
+    controls(page).getByRole('button', { name: 'Tags: Launch, Press. Change', exact: true }),
   ).toBeFocused();
   const listed = pane.getByRole('region', { name: 'Task tags' });
   await expect(listed).toContainText('Launch');
@@ -681,7 +732,7 @@ test('tags are picked from the task controls and listed on the task', async ({
   await expect(card.getByText('Press', { exact: true })).toBeVisible();
 });
 
-test('the color and tags panels make a tag in their corner and assign it at once', async ({
+test('the unified tags panel makes a tag in either tab’s corner and assigns it at once', async ({
   page,
   isMobile,
 }) => {
@@ -700,15 +751,13 @@ test('the color and tags panels make a tag in their corner and assign it at once
   await tag('Press', launch, null);
   // On a phone the picker is a page of the drawer and the form takes its place there; on
   // desktop the picker is a panel of the dock and the form is a centred dialog over it.
-  const panel = (name: string) =>
-    page.getByRole(isMobile ? 'dialog' : 'region', { name, exact: true });
+  const panel = page.getByRole(isMobile ? 'dialog' : 'region', { name: 'Tags', exact: true });
   const form = page.getByRole('dialog', { name: 'New tag', exact: true });
-  const newTag = (name: string) =>
-    panel(name).getByRole('button', { name: 'New tag', exact: true });
+  const newTag = panel.getByRole('button', { name: 'New tag', exact: true });
 
   // A top-level tag starts with the first color no root holds, and becomes the primary.
-  await controls(page).getByRole('button', { name: 'Color: none. Change', exact: true }).click();
-  await newTag('Color').click();
+  await controls(page).getByRole('button', { name: 'Tags: none. Change', exact: true }).click();
+  await newTag.click();
   await expect(form.getByRole('textbox', { name: 'Name' })).toBeFocused();
   if (isMobile) {
     // The open task raises the drawer, whose dock rides up on the keyboard; the form's page
@@ -735,47 +784,50 @@ test('the color and tags panels make a tag in their corner and assign it at once
   await page.screenshot({ path: test.info().outputPath('new-tag-form.png') });
   await form.getByRole('button', { name: 'Save tag', exact: true }).click();
   await expect(form).toHaveCount(0);
-  const roadmap = panel('Color').getByRole('button', { name: 'Orange: Roadmap', exact: true });
+  const roadmap = panel.getByRole('button', { name: 'Orange: Roadmap', exact: true });
   await expect(roadmap).toHaveAttribute('aria-pressed', 'true');
   await expect(roadmap).toBeInViewport({ ratio: 1 });
-  if (!isMobile) await expect(newTag('Color')).toBeFocused();
+  if (!isMobile) await expect(newTag).toBeFocused();
   await page.screenshot({ path: test.info().outputPath('color-new-tag.png') });
 
   // In a color's children, it makes another child there, and Back returns to that list.
-  await panel('Color').getByRole('button', { name: 'Red: Launch', exact: true }).click();
-  await expect(panel('Color').getByRole('button', { name: 'Back from Launch' })).toBeVisible();
-  await newTag('Color').click();
+  await panel.getByRole('button', { name: 'Red: Launch', exact: true }).click();
+  await expect(panel.getByRole('button', { name: 'Back from Launch' })).toBeVisible();
+  await newTag.click();
   await expect(form.getByRole('combobox', { name: 'Parent tag' })).toHaveValue(launch);
   await page.keyboard.press('Escape');
   await expect(form).toHaveCount(0);
-  await expect(panel('Color').getByRole('button', { name: 'Back from Launch' })).toBeVisible();
-  await newTag('Color').click();
+  await expect(panel.getByRole('button', { name: 'Back from Launch' })).toBeVisible();
+  await newTag.click();
   await form.getByRole('textbox', { name: 'Name' }).fill('Video');
   await form.getByRole('button', { name: 'Save tag', exact: true }).click();
   await expect(form).toHaveCount(0);
-  await expect(
-    panel('Color').getByRole('button', { name: 'Launch / Video', exact: true }),
-  ).toHaveAttribute('aria-pressed', 'true');
-  await page.keyboard.press('Escape');
-  await expect(panel('Color')).toHaveCount(0);
-  await expect(
-    controls(page).getByRole('button', { name: 'Color: Video. Change', exact: true }),
-  ).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Launch / Video', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
 
-  // The tags panel's corner adds the new tag to the task's other tags.
-  await controls(page).getByRole('button', { name: 'Tags: none. Change', exact: true }).click();
-  await newTag('Tags').click();
+  // The Secondary tab's corner adds the new tag to the task's other tags, and returns there on mobile.
+  await panel.getByRole('tab', { name: 'Secondary', exact: true }).click();
+  // The Primary view is still fading out beside it, so this names the arriving one's corner.
+  const secondaryNewTag = panel
+    .getByRole('tabpanel', { name: /^Secondary/ })
+    .getByRole('button', { name: 'New tag', exact: true });
+  await secondaryNewTag.click();
   await expect(form.getByRole('combobox', { name: 'Parent tag' })).toHaveValue('');
   await form.getByRole('textbox', { name: 'Name' }).fill('Docs');
   await form.getByRole('button', { name: 'Save tag', exact: true }).click();
   await expect(form).toHaveCount(0);
-  const docs = panel('Tags').getByRole('checkbox', { name: 'Docs', exact: true });
+  const docs = panel.getByRole('checkbox', { name: 'Docs', exact: true });
   await expect(docs).toBeChecked();
   await expect(docs).toBeInViewport({ ratio: 1 });
-  if (!isMobile) await expect(newTag('Tags')).toBeFocused();
+  if (!isMobile) await expect(secondaryNewTag).toBeFocused();
   await page.screenshot({ path: test.info().outputPath('tags-new-tag.png') });
   await page.keyboard.press('Escape');
-  await expect(panel('Tags')).toHaveCount(0);
+  await expect(panel).toHaveCount(0);
+  await expect(
+    controls(page).getByRole('button', { name: 'Tags: Video, Docs. Change', exact: true }),
+  ).toBeVisible();
   await expect(pane.getByRole('region', { name: 'Task tags' })).toContainText('Docs');
 
   await expect
@@ -1044,10 +1096,10 @@ test('a wide desktop pane keeps tags and subtasks in a column that opens and shu
     ).status(),
   ).toBe(201);
   const full = await width();
-  await controls(page).getByRole('button', { name: 'Color: none. Change', exact: true }).click();
-  const color = page.getByRole('region', { name: 'Color', exact: true });
+  await controls(page).getByRole('button', { name: 'Tags: none. Change', exact: true }).click();
+  const tagsPanel = page.getByRole('region', { name: 'Tags', exact: true });
   let room = await columnRoom(page, () =>
-    color.getByRole('button', { name: 'Amber: Launch', exact: true }).click(),
+    tagsPanel.getByRole('button', { name: 'Amber: Launch', exact: true }).click(),
   );
   await expect(column).toBeVisible();
   await expect.poll(width).toBe(full - 268);
@@ -1059,19 +1111,19 @@ test('a wide desktop pane keeps tags and subtasks in a column that opens and shu
   await expect(column.getByRole('region', { name: 'Task tags' })).toContainText('Launch');
   await expect(addSubtask).toHaveCount(1);
   await expect(column.getByRole('button', { name: 'Add subtask', exact: true })).toBeVisible();
-  if (await color.count()) await page.keyboard.press('Escape');
-  await expect(color).toHaveCount(0);
+  if (await tagsPanel.count()) await page.keyboard.press('Escape');
+  await expect(tagsPanel).toHaveCount(0);
 
   // Removing the last tag springs it shut, and the slot comes back inline.
-  await controls(page).getByRole('button', { name: 'Color: Launch. Change', exact: true }).click();
+  await controls(page).getByRole('button', { name: 'Tags: Launch. Change', exact: true }).click();
   room = await columnRoom(page, () =>
-    color.getByRole('button', { name: 'No color tag', exact: true }).click(),
+    tagsPanel.getByRole('button', { name: 'No color tag', exact: true }).click(),
   );
   await expect(column).toHaveCount(0);
   await expect.poll(width).toBe(full);
   expect(sprung(room)).toBeGreaterThanOrEqual(3);
-  if (await color.count()) await page.keyboard.press('Escape');
-  await expect(color).toHaveCount(0);
+  if (await tagsPanel.count()) await page.keyboard.press('Escape');
+  await expect(tagsPanel).toHaveCount(0);
   await expect(card.getByRole('button', { name: 'Add subtask', exact: true })).toBeVisible();
 
   // A subtask left untouched is discarded on the way back, and never opens the column.
@@ -1133,13 +1185,14 @@ test('task size picker and optional card badge work on both boards', async ({ pa
   const account = await fixture(page);
   await newTag(page.request, account, account.projectId, { name: 'Design', color: 'teal' });
   const dock = controls(page);
-  await expect(dock.getByRole('button', { name: 'Color: none. Change' })).toBeVisible();
+  await expect(dock.getByRole('button', { name: 'Tags: none. Change' })).toBeVisible();
+  await expect(dock.getByRole('button')).toHaveCount(5);
   const sizeButton = (size: string) => dock.getByRole('button', { name: `Size: ${size}. Change` });
   const picker = page.getByRole('radiogroup', { name: 'Size', exact: true });
   const sizeOption = (size: string) => picker.getByRole('radio', { name: size, exact: true });
   if (isMobile) {
     const target = await sizeButton('none').boundingBox();
-    expect(target?.width).toBeGreaterThanOrEqual(44);
+    expect(target?.width).toBeGreaterThanOrEqual(56);
     expect(target?.height).toBeGreaterThanOrEqual(44);
   }
   await sizeButton('none').click();
@@ -1389,4 +1442,143 @@ test('trashing a task or subtask closes the task view with an Undo toast', async
   await expect(topToast).toBeVisible();
   await topToast.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(topCard).toBeVisible();
+});
+
+test('desktop task split-pane width persists across projects, workspace board, and reload', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'The split pane is the desktop board’s');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { headers, workspaceId, projectId, pane } = await fixture(page);
+
+  // Create a second project with its own task to verify width carries across projects and the
+  // cross-project workspace board.
+  const otherProjectId = randomUUID();
+  const otherStatusId = randomUUID();
+  const otherTaskId = randomUUID();
+  expect(
+    (
+      await page.request.post('/api/projects', {
+        headers,
+        data: {
+          id: otherProjectId,
+          workspaceId,
+          name: 'Second project',
+          key: 'SEC',
+          color: 'orange',
+          icon: null,
+          position: 'a1',
+          statuses: [
+            {
+              id: randomUUID(),
+              name: 'Backlog',
+              category: 'backlog',
+              position: 'a0',
+              isDefault: true,
+            },
+            {
+              id: otherStatusId,
+              name: 'Working',
+              category: 'active',
+              position: 'a0',
+              isDefault: true,
+            },
+            { id: randomUUID(), name: 'Done', category: 'done', position: 'a0', isDefault: true },
+            {
+              id: randomUUID(),
+              name: 'Cancelled',
+              category: 'cancelled',
+              position: 'a0',
+              isDefault: true,
+            },
+          ],
+        },
+      })
+    ).status(),
+  ).toBe(201);
+  expect(
+    (
+      await page.request.post('/api/tasks', {
+        headers,
+        data: {
+          id: otherTaskId,
+          projectId: otherProjectId,
+          title: 'Second project task',
+          statusId: otherStatusId,
+          priority: 3,
+          position: 'a0',
+          parentId: null,
+          description: null,
+          descriptionVersion: null,
+        },
+      })
+    ).status(),
+  ).toBe(201);
+
+  const handle = page.getByRole('separator', { name: 'Resize task' });
+  await expect(handle).toHaveAttribute('aria-valuenow', '440');
+
+  // Drag the split handle left by 160px to widen the pane to 600px.
+  const grip = (await handle.boundingBox())!;
+  const x = grip.x + grip.width / 2;
+  const y = grip.y + grip.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x - 160, y, { steps: 6 });
+  await expect(handle).toHaveAttribute('aria-valuenow', '600');
+  // Dragging does not write to localStorage until release.
+  expect(await page.evaluate(() => localStorage.getItem('throw-task-pane-width'))).toBeNull();
+  await page.mouse.up();
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem('throw-task-pane-width')))
+    .toBe('600');
+  await expect.poll(async () => Math.round((await pane.boundingBox())!.width)).toBe(600);
+
+  // Switching to another project keeps the resized width.
+  await page.goto(`/w/${workspaceId}/p/${otherProjectId}?view=board`);
+  const secondCard = page.getByRole('article', {
+    name: 'SEC-1 Second project task',
+    exact: true,
+  });
+  await expect(secondCard).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
+  await secondCard.click();
+  await expect(pane).toBeVisible();
+  await expect(handle).toHaveAttribute('aria-valuenow', '600');
+  await expect.poll(async () => Math.round((await pane.boundingBox())!.width)).toBe(600);
+
+  // Switching to the cross-project workspace board shares the same persisted width.
+  await page.goto(`/w/${workspaceId}/board`);
+  const workspaceCard = page.getByRole('article', {
+    name: 'TASK-1 Write the launch plan',
+    exact: true,
+  });
+  await expect(workspaceCard).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
+  await workspaceCard.click();
+  await expect(pane).toBeVisible();
+  await expect(handle).toHaveAttribute('aria-valuenow', '600');
+
+  // Reloading preserves the persisted width.
+  await page.goto(`/w/${workspaceId}/p/${projectId}?view=board`);
+  await page.reload();
+  const reloadedCard = page.getByRole('article', {
+    name: 'TASK-1 Write the launch plan',
+    exact: true,
+  });
+  await expect(reloadedCard).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
+  await reloadedCard.click();
+  await expect(pane).toBeVisible();
+  await expect(handle).toHaveAttribute('aria-valuenow', '600');
+
+  // Narrowing the viewport clamps the rendered width without clobbering the stored preference.
+  await page.setViewportSize({ width: 900, height: 900 });
+  await expect
+    .poll(async () => Number(await handle.getAttribute('aria-valuenow')))
+    .toBeLessThan(600);
+  expect(await page.evaluate(() => localStorage.getItem('throw-task-pane-width'))).toBe('600');
+
+  // Widening restores the stored width.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(handle).toHaveAttribute('aria-valuenow', '600');
+  await expect.poll(async () => Math.round((await pane.boundingBox())!.width)).toBe(600);
 });

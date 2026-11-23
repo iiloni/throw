@@ -1,16 +1,18 @@
 import type { Status, Task } from '@throw/shared';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
+import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { projectOf } from '@/components/Board/model';
 import { board, current } from '@/components/Board/state';
 import { useBackHandler } from '@/lib/backButton';
 import { springs } from '@/lib/motion';
 import {
+  type DockPanel,
   panelTitle,
   TaskControls,
   TaskDockRow,
   type TaskPanel,
   TaskPanelContent,
+  useOpenTaskPanel,
 } from './TaskControls';
 
 /**
@@ -22,14 +24,28 @@ import {
 export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] }) {
   const [panel, setPanel] = useState<TaskPanel | null>(null);
   const root = useRef<HTMLDivElement>(null);
-  const trigger = useRef<HTMLButtonElement | null>(null);
+  const trigger = useRef<HTMLElement | null>(null);
   const id = useId();
   const reduced = useReducedMotion();
   const project = projectOf(current(board.use()).project, task);
   const collapse = useCallback(() => {
     setPanel(null);
-    trigger.current?.focus({ preventScroll: true });
+    if (trigger.current?.isConnected) trigger.current.focus({ preventScroll: true });
   }, []);
+  useOpenTaskPanel(
+    task.id,
+    useCallback(
+      (next, element) => {
+        if (panel === next && element && trigger.current === element) {
+          collapse();
+          return;
+        }
+        if (element) trigger.current = element;
+        setPanel(next);
+      },
+      [panel, collapse],
+    ),
+  );
   useBackHandler(panel !== null, collapse);
   useEffect(() => {
     if (!panel) return;
@@ -41,8 +57,10 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
       collapse();
     }
     function outside(event: PointerEvent) {
+      const target = event.target as Node;
       if (
-        !root.current?.contains(event.target as Node) &&
+        !root.current?.contains(target) &&
+        !trigger.current?.contains(target) &&
         !document.querySelector('[role="dialog"][aria-labelledby]')
       )
         setPanel(null);
@@ -54,7 +72,7 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
       document.removeEventListener('pointerdown', outside, true);
     };
   }, [panel, collapse]);
-  function toggle(next: TaskPanel, element: HTMLButtonElement) {
+  function toggle(next: DockPanel, element: HTMLButtonElement) {
     trigger.current = element;
     setPanel(panel === next ? null : next);
   }
@@ -84,24 +102,21 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
             />
           </TaskDockRow>
         </div>
+        {/* As Catch's note toolbar: each panel grows out of the dock on its own, so moving to
+            another folds the last one away as the next one opens. */}
         <AnimatePresence initial={false}>
           {panel && (
-            <motion.div
+            <DockPanelFrame
               key={panel}
               id={`${id}-${panel}`}
-              role="region"
-              aria-label={panelTitle[panel]}
-              className="flex flex-col justify-end overflow-hidden"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={reduced ? { duration: 0 } : springs.smooth}
+              label={panelTitle[panel]}
+              reduced={!!reduced}
             >
               <div
                 className={
-                  panel === 'relations'
-                    ? 'flex max-h-[min(55dvh,28rem)] shrink-0 flex-col overflow-hidden'
-                    : 'max-h-[min(55dvh,28rem)] shrink-0 overflow-y-auto overscroll-contain [scrollbar-width:thin]'
+                  panel === 'relations' || panel === 'tags'
+                    ? 'flex max-h-[min(55dvh,28rem)] flex-col overflow-hidden [--tags-max:min(55dvh,28rem)]'
+                    : 'max-h-[min(55dvh,28rem)] overflow-y-auto overscroll-contain [scrollbar-width:thin]'
                 }
               >
                 <TaskPanelContent
@@ -110,12 +125,44 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
                   statuses={statuses}
                   project={project}
                   onDone={collapse}
+                  onLink={() => setPanel('relations')}
+                  onClose={collapse}
                 />
               </div>
-            </motion.div>
+            </DockPanelFrame>
           )}
         </AnimatePresence>
       </div>
     </div>
+  );
+}
+
+/** One panel of the dock. A leaving one is inert, so Tab and clicks only reach the next one. */
+function DockPanelFrame({
+  id,
+  label,
+  reduced,
+  children,
+}: {
+  id: string;
+  label: string;
+  reduced: boolean;
+  children: ReactNode;
+}) {
+  const isPresent = useIsPresent();
+  return (
+    <motion.div
+      id={id}
+      role="region"
+      aria-label={label}
+      inert={!isPresent}
+      className="flex flex-col justify-end overflow-hidden [&>*]:shrink-0"
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: 'auto', opacity: 1 }}
+      exit={{ height: 0, opacity: 0 }}
+      transition={reduced ? { duration: 0 } : springs.smooth}
+    >
+      {children}
+    </motion.div>
   );
 }

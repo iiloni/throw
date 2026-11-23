@@ -3,13 +3,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockBoards } from './mockData';
 import {
   board,
+  clampTaskPaneWidth,
   current,
+  DEFAULT_TASK_PANE_WIDTH,
   foldingColumnOf,
   initialBoard,
   openSubtask,
   setSubtasksAsCards,
+  setTaskPaneWidth,
   update,
   useCollapsedColumns,
+  useTaskPaneWidth,
 } from './state';
 
 describe('subtasks as cards', () => {
@@ -125,5 +129,60 @@ describe('task trail', () => {
     openSubtask(a!.id);
     expect(board.get().openTaskId).toBe(a!.id);
     expect(board.get().taskTrail).toEqual([]);
+  });
+});
+
+describe('task split-pane width', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('defaults to 440 when nothing or invalid data is stored', () => {
+    const { result } = renderHook(() => useTaskPaneWidth());
+    expect(result.current[0]).toBe(DEFAULT_TASK_PANE_WIDTH);
+
+    for (const bad of ['{', '0', '-120', '"wide"', 'null']) {
+      localStorage.setItem('throw-task-pane-width', bad);
+      const next = renderHook(() => useTaskPaneWidth());
+      expect(next.result.current[0]).toBe(DEFAULT_TASK_PANE_WIDTH);
+    }
+  });
+
+  it('persists rounded positive widths in localStorage and shares them across readers', () => {
+    const first = renderHook(() => useTaskPaneWidth());
+    const second = renderHook(() => useTaskPaneWidth());
+
+    act(() => setTaskPaneWidth(612.4));
+    expect(first.result.current[0]).toBe(612);
+    expect(second.result.current[0]).toBe(612);
+    expect(localStorage.getItem('throw-task-pane-width')).toBe('612');
+
+    // Non-positive or non-finite values are ignored without clobbering the stored width.
+    act(() => {
+      setTaskPaneWidth(0);
+      setTaskPaneWidth(-50);
+      setTaskPaneWidth(Number.NaN);
+      setTaskPaneWidth(Number.POSITIVE_INFINITY);
+    });
+    expect(first.result.current[0]).toBe(612);
+    expect(localStorage.getItem('throw-task-pane-width')).toBe('612');
+  });
+
+  it('clamps to the frame bounds without clobbering stored widths on narrow or unmeasured frames', () => {
+    act(() => setTaskPaneWidth(680));
+    const { result } = renderHook(() => useTaskPaneWidth());
+
+    // Initial mount before ResizeObserver measures the frame: keep the stored width.
+    expect(clampTaskPaneWidth(result.current[0], 0, 340)).toBe(680);
+    // Transient narrow viewport clamps rendered width to 62% of frameWidth.
+    expect(clampTaskPaneWidth(result.current[0], 900, 340)).toBeCloseTo(558, 5);
+    // Very narrow viewport clamps to PANE_MIN.
+    expect(clampTaskPaneWidth(result.current[0], 400, 340)).toBe(340);
+    // Stored width is untouched, so widening restores the preference.
+    expect(localStorage.getItem('throw-task-pane-width')).toBe('680');
+    expect(clampTaskPaneWidth(result.current[0], 1440, 340)).toBe(680);
+    // Sub-minimum stored values still render at least PANE_MIN.
+    expect(clampTaskPaneWidth(200, 0, 340)).toBe(340);
+    expect(clampTaskPaneWidth(200, 1440, 340)).toBe(340);
   });
 });
