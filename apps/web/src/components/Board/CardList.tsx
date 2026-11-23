@@ -6,7 +6,6 @@ import { cn } from '@/lib/utils';
 import { CARD_SPACING, drag, makingWay } from './drag';
 import { hasPriorityIcon, PriorityIcon } from './glyphs';
 import { groupByPriority, type Priority, priorityName, taskColor } from './model';
-import { SwipeReveal } from './SwipeReveal';
 import {
   board,
   createTask,
@@ -145,7 +144,6 @@ export function CardList({
                             delay={entryDelay(column + (rows.get(task.id) ?? 0))}
                             skip={!!held || revealed}
                           >
-                            <SwipeReveal taskId={task.id} />
                             <TaskCard task={task} showStatus={showStatus} />
                           </EnteringCard>
                         </div>
@@ -238,7 +236,6 @@ export function CardList({
                               delay={entryDelay(column + (rows.get(task.id) ?? 0))}
                               skip={!!held || revealed}
                             >
-                              <SwipeReveal taskId={task.id} />
                               <TaskCard task={task} showStatus={showStatus} />
                             </EnteringCard>
                           </div>

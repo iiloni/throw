@@ -170,6 +170,33 @@ function expandColumnOf(state: BoardState, taskId: string) {
 /** A side zone is a strip, a single column, or a gallery across the whole board. */
 export type ZoneState = 'strip' | 'panel' | 'full';
 
+/**
+ * How wide each desktop rail is open as a panel, when its edge has been dragged; null is the
+ * single column. Kept on the device, as the task pane's split is in Catch.
+ */
+const railWidthsSchema = z.object({
+  backlog: z.number().positive().nullable().default(null),
+  closed: z.number().positive().nullable().default(null),
+});
+export type RailWidths = z.infer<typeof railWidthsSchema>;
+const RAIL_WIDTHS_KEY = 'throw-board-rail-widths';
+
+export function useRailWidths() {
+  return usePersistentState(RAIL_WIDTHS_KEY, railWidthsSchema, railWidthsSchema.parse({}));
+}
+
+export function setRailWidth(zone: keyof RailWidths, width: number | null) {
+  const widths = readPreference(RAIL_WIDTHS_KEY, railWidthsSchema, railWidthsSchema.parse({}));
+  const value = width === null ? null : Math.round(width);
+  if (widths[zone] !== value) writePreference(RAIL_WIDTHS_KEY, { ...widths, [zone]: value });
+}
+
+/**
+ * A rail whose edge is held, and the width it is dragged to. The board lays out around it
+ * from this, without springs, until it is let go.
+ */
+export const railResize = createStore<{ zone: keyof RailWidths; width: number } | null>(null);
+
 export type BoardState = {
   boards: BoardData[];
   /** Null only in the mock prototype. The drag step will extend this boundary. */

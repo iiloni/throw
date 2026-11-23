@@ -1,14 +1,21 @@
+import { linkOptions } from '@tanstack/react-router';
+import type { Project } from '@throw/shared';
 import {
+  ArrowUpDown,
   CircleUser,
+  Columns3,
   DatabaseBackup,
   Download,
   KeyRound,
   type LucideIcon,
   SlidersHorizontal,
+  Tags,
+  Trash2,
   Webhook,
 } from 'lucide-react';
 import { z } from 'zod';
 import { authClient } from './auth';
+import { type SettingsSection as ProjectSection, settingsSectionSchema } from './projectSettings';
 
 /**
  * The pages of Settings, in the order they are listed, as Catch lists its own. Each has a
@@ -31,6 +38,41 @@ export const SETTINGS_TABS = [
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 export type SettingsPath = SettingsTab['path'];
 
+const PROJECT_PAGES = {
+  general: { label: 'General', icon: SlidersHorizontal },
+  statuses: { label: 'Statuses', icon: Columns3 },
+  priorities: { label: 'Priorities', icon: ArrowUpDown },
+  tags: { label: 'Tags', icon: Tags },
+} as const satisfies Record<ProjectSection, { label: string; icon: LucideIcon }>;
+
+export type ProjectSettingsPage = ProjectSection | 'trash';
+
+export function projectSettingsPageKey(projectId: string, page: ProjectSettingsPage) {
+  return `project:${projectId}:${page}`;
+}
+
+/** A project's pages in the unified settings list, in the order they appear. */
+export function projectSettingsPages(project: Project) {
+  const params = { workspaceId: project.workspaceId, projectId: project.id };
+  return [
+    ...settingsSectionSchema.options.map((section) => ({
+      key: projectSettingsPageKey(project.id, section),
+      ...PROJECT_PAGES[section],
+      link: linkOptions({
+        to: '/w/$workspaceId/p/$projectId/settings',
+        params,
+        search: section === 'general' ? {} : { section },
+      }),
+    })),
+    {
+      key: projectSettingsPageKey(project.id, 'trash'),
+      label: 'Trash',
+      icon: Trash2,
+      link: linkOptions({ to: '/w/$workspaceId/p/$projectId/trash', params }),
+    },
+  ];
+}
+
 const pageOf = (tab: SettingsTab) => ({ ...tab, key: tab.path, link: { to: tab.path } });
 
 /** Pages listed only once the server answers that it has their API. */
@@ -46,6 +88,7 @@ export function settingsGroupsFor(
   return (['User', 'Admin'] as const)
     .filter((section) => section === 'User' || isAdmin)
     .map((label) => ({
+      key: label.toLowerCase(),
       label,
       pages: SETTINGS_TABS.filter(
         (tab) => tab.section === label && (!optional(tab.path) || available[tab.path] === true),

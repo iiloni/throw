@@ -47,7 +47,12 @@ actions in `lib/taskRelations.ts`, the pane's list, dock picker and card blocked
 The task pane shows comments, server history and (on narrow desktop panes and phones,
 moving to the ADR 0012 side column when wide) task links under `SegmentedTabs`.
 Touch screens swipe between them with `useTabSwipe`. Refused changes have a quiet task-only
-notice and description recovery links. Desktop columns on both boards fold to a strip, as Catch's deck does
+notice and description recovery links. The desktop backlog and closed rails are one masonry grid at any width (`Board/Gallery.tsx`
+on `lib/masonry.ts`, Catch's `NoteGrid` springs): a single column, a width their inner edge
+was dragged to (`SplitHandle`, kept by `useRailWidths` in `Board/state.ts`) or a gallery across
+the board. `railGeometry` and `useRailSpring` in `Board/SideZone.tsx` spring a rail only when
+its state changes and track its width exactly as the row or its edge is resized.
+Desktop columns on both boards fold to a strip, as Catch's deck does
 (`Board/BoardColumn.tsx`, remembered per project by `useCollapsedColumns` in `Board/state.ts`).
 Both boards narrow in place: the board store holds a filter and a temporary sort
 (`Board/filter.ts`, applied by `listTasks` and `countIn`), set from the desktop boards'
@@ -55,7 +60,7 @@ search bar (`components/BoardSearch`, docked as a sidebar on wide boards) or the
 search; Ctrl/⌘K opens the palette only away from boards. A sorted list is `data-drop-send`:
 drops there send. The Updated sort reads each task's activity log (`updatedAtByTask`).
 Cards move on both boards by drag, keyboard,
-phone long press, the move drawer and a rightward swipe to close (ADR 0008).
+phone long press and the move drawer (ADR 0008).
 Settings (`/settings/*`) and project settings (`/w/:workspaceId/p/:projectId/settings`,
 with project trash beside it at `/trash`) share Catch's `SettingsLayout`: pages listed
 beside the open one on wide screens, and a dock page picker on phones
@@ -69,7 +74,7 @@ mock data and shares the components and the drag engine (`Board/drag.ts`) with t
 project board. `Board/ProjectBoard.tsx` adapts collections and task actions at the boundary;
 `Board/selection.ts` selects visible rows. `Board/state.ts` holds incoming sync while a card
 is held and turns drops into `moveTask` and `sendTask` calls; `Board/carry.ts` is the
-keyboard carry and `Board/swipe.ts` the phone's swipe to close. The collection hooks hold
+keyboard carry. The collection hooks hold
 their last rows through a reconnect's full snapshot (`lib/steadyRows.ts`), so the board
 does not unmount while a shape reloads.
 

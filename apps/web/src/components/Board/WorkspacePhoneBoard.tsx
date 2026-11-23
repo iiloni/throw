@@ -1,16 +1,14 @@
-import { ChevronDown, ChevronUp, Plus, Search, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, Search } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { type ReactNode, useContext, useLayoutEffect, useRef, useState } from 'react';
+import { type ReactNode, useContext, useLayoutEffect, useRef } from 'react';
 import { NarrowedBar } from '@/components/BoardSearch/BoardFilters';
-import { Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
-import { IconButton } from '@/components/IconButton/IconButton';
+import { Drawer } from '@/components/Drawer/Drawer';
 import { boardDrawerPage } from '@/components/ManagementSurface/ManagementSurface';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
-import { BoardSettingsContent } from './BoardSettingsPanel';
 import { drag, holding, makingWay, pageStride } from './drag';
 import { CATEGORIES, type Category, categoryTarget, priorityName } from './model';
 import {
@@ -23,7 +21,6 @@ import {
   pageClass,
 } from './PhoneBoard';
 import { CATEGORY_NAMES } from './StatusMenu';
-import { SwipeReveal } from './SwipeReveal';
 import {
   bandsOf,
   board,
@@ -72,13 +69,12 @@ export function WorkspacePhoneBoard({
   const reduced = useReducedMotion();
   const pagerRef = useRef<HTMLDivElement>(null);
   const [page, pager, quietPager] = usePagerPage(FIRST_PAGE);
-  const [settings, setSettings] = useState(false);
   const task = useContext(TaskContentContext)?.drawer;
   const lent = boardDrawerPage.use();
   const raised = useTaskSurfaceShown();
   const dragging = held?.phase === 'dragging';
   const pick = state.selection.length > 0 && !dragging && !fingerDown;
-  const covered = settings || state.openTaskId !== null;
+  const covered = state.openTaskId !== null;
   useBackHandler(state.selection.length > 0, () => update({ selection: [] }));
 
   useLayoutEffect(() => {
@@ -94,16 +90,6 @@ export function WorkspacePhoneBoard({
       behavior: reduced ? 'instant' : 'smooth',
     });
   }
-
-  const settingsPage: DrawerPage = {
-    key: 'settings',
-    title: 'Board settings',
-    content: (
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[calc(var(--safe-bottom)+1.5rem)]">
-        <BoardSettingsContent crossBoard />
-      </div>
-    ),
-  };
 
   const dock = (
     <div className="flex items-center gap-2">
@@ -145,9 +131,6 @@ export function WorkspacePhoneBoard({
         <div className="flex h-16 items-center gap-2 pr-3 pl-5">
           {title}
           <span className="flex-1" />
-          <IconButton label="Board settings" className="size-10" onClick={() => setSettings(true)}>
-            <SlidersHorizontal />
-          </IconButton>
         </div>
         {syncIndicator && (
           <div className="px-5 text-muted-foreground empty:hidden">{syncIndicator}</div>
@@ -160,7 +143,6 @@ export function WorkspacePhoneBoard({
         <div
           ref={pagerRef}
           data-pager=""
-          data-selecting={state.selection.length > 0 ? '' : undefined}
           {...pager}
           className="phone-pager flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
         >
@@ -187,8 +169,8 @@ export function WorkspacePhoneBoard({
         onDetent={() => {}}
         move={!task && (makingWay(held) || pick) ? <MovePanel pick={pick} /> : null}
         gesturesDisabled={held !== null || fingerDown || (!!task && !task.page)}
-        page={lent ? lent.page : task ? task.page : settings ? settingsPage : null}
-        onClosePage={lent ? lent.close : task ? task.closePage : () => setSettings(false)}
+        page={lent ? lent.page : task ? task.page : null}
+        onClosePage={lent ? lent.close : task ? task.closePage : () => {}}
         raised={!!task || raised}
       >
         {null}
@@ -217,13 +199,11 @@ function CategoryPage({ category }: { category: Category }) {
   // A folded page opens under a held card. A phone shows one page at a time, so nothing beside
   // it moves, as a folded desktop column, which stays a strip, would make its neighbours do.
   const hidden = foldable !== null && folded[foldable] && !dragging;
-  const open = category === 'backlog' || category === 'active';
   return (
     <section
       aria-label={name}
       data-drop-status={target}
       data-status-home={target}
-      data-swipe-close={open ? '' : undefined}
       className={cn(
         'board-column flex min-h-0 flex-1 flex-col rounded-3xl',
         aimed && held?.origin !== category && 'bg-accent/60',
@@ -267,7 +247,6 @@ function CategoryPage({ category }: { category: Category }) {
                   )}
                   {band.tasks.map((task) => (
                     <div key={task.id} data-slot={task.id} className="relative pb-3">
-                      {open && <SwipeReveal taskId={task.id} />}
                       <TaskCard task={task} showStatus />
                     </div>
                   ))}

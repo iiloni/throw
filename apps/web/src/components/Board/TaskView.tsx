@@ -8,6 +8,7 @@ import {
 } from 'motion/react';
 import { Dialog } from 'radix-ui';
 import {
+  type CSSProperties,
   type PointerEvent,
   type ReactNode,
   useContext,
@@ -333,16 +334,41 @@ function PaneStepLayer({
   );
 }
 
-/** The grip between the board and an open task. Drag it, or use the arrow keys, to resize both. */
+/** Arrow keys move a split this far; with Shift, four times as far. */
+const KEY_STEP = 32;
+
+/**
+ * The grip between the board and an open task, or on a rail's inner edge. Drag it, or use
+ * the arrow keys (Home and End for the limits), to resize what it holds.
+ */
 export function SplitHandle({
   width,
+  min = PANE_MIN,
+  keyMin = min,
   max,
+  grows = 'left',
+  label = 'Resize task',
+  subtle = false,
+  className,
+  style,
   onResize,
   onActive,
 }: {
   width: number;
+  /** The narrowest a pointer can take it. */
+  min?: number;
+  /** The narrowest the keys take it, where a pointer may go further to snap shut. */
+  keyMin?: number;
   max: number;
-  onResize: (width: number) => void;
+  /** The way the pointer moves to widen it: a pane on the right grows to the left. */
+  grows?: 'left' | 'right';
+  label?: string;
+  /** A fainter grip, for a rail's edge, which is there whether or not it is used. */
+  subtle?: boolean;
+  className?: string;
+  style?: CSSProperties;
+  /** `keyboard` is set for a step from the keys, which lands at once rather than following. */
+  onResize: (width: number, keyboard: boolean) => void;
   /** Told while the grip is held, so the pane can follow the pointer without easing. */
   onActive: (active: boolean) => void;
 }) {
@@ -352,7 +378,7 @@ export function SplitHandle({
     onActive(value);
   };
   const start = useRef<{ x: number; width: number } | null>(null);
-  const resize = (next: number) => onResize(Math.min(max, Math.max(PANE_MIN, next)));
+  const direction = grows === 'left' ? -1 : 1;
 
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return;
@@ -362,6 +388,7 @@ export function SplitHandle({
     setDragging(true);
   }
   function end() {
+    if (!start.current) return;
     start.current = null;
     setDragging(false);
   }
@@ -370,31 +397,50 @@ export function SplitHandle({
     <div
       role="separator"
       aria-orientation="vertical"
-      aria-label="Resize task"
-      aria-valuemin={PANE_MIN}
+      aria-label={label}
+      aria-valuemin={Math.round(keyMin)}
       aria-valuemax={Math.round(max)}
       aria-valuenow={Math.round(width)}
       tabIndex={0}
       onPointerDown={onPointerDown}
       onPointerMove={(event) => {
-        if (start.current) resize(start.current.width + start.current.x - event.clientX);
+        if (!start.current) return;
+        const next = start.current.width + (event.clientX - start.current.x) * direction;
+        onResize(Math.min(max, Math.max(min, next)), false);
       }}
       onPointerUp={end}
       onPointerCancel={end}
       onKeyDown={(event) => {
-        const step = event.shiftKey ? 128 : 32;
-        if (event.key === 'ArrowLeft') resize(width + step);
-        else if (event.key === 'ArrowRight') resize(width - step);
-        else return;
+        const step = event.shiftKey ? KEY_STEP * 4 : KEY_STEP;
+        const next =
+          event.key === 'ArrowLeft'
+            ? width - step * direction
+            : event.key === 'ArrowRight'
+              ? width + step * direction
+              : event.key === 'Home'
+                ? keyMin
+                : event.key === 'End'
+                  ? max
+                  : null;
+        if (next === null) return;
         event.preventDefault();
+        onResize(Math.min(max, Math.max(keyMin, next)), true);
       }}
-      className="group flex w-6 shrink-0 cursor-col-resize touch-none select-none items-center justify-center outline-none"
+      style={style}
+      className={cn(
+        'group flex w-6 shrink-0 cursor-col-resize touch-none select-none items-center justify-center outline-none',
+        className,
+      )}
     >
       <motion.span
         aria-hidden
         className={cn(
           'w-1.5 rounded-full transition-colors group-focus-visible:ring-2 group-focus-visible:ring-ring/70',
-          dragging ? 'bg-brand' : 'bg-foreground/25 group-hover:bg-foreground/40',
+          dragging
+            ? 'bg-brand'
+            : subtle
+              ? 'bg-foreground/10 group-hover:bg-foreground/35'
+              : 'bg-foreground/25 group-hover:bg-foreground/40',
         )}
         initial={false}
         animate={{ height: dragging ? 72 : 48 }}

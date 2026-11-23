@@ -1,8 +1,9 @@
 # 0008: The board's drag model
 
 Status: accepted (2026-10-13); amended 2026-10-19 when the project board was wired to task
-actions, 2026-11-19 when the board learned to wait for a lifted card to move, and 2026-11-22
-when desktop columns learned to fold
+actions, 2026-11-19 when the board learned to wait for a lifted card to move, 2026-11-22
+when desktop columns learned to fold, and 2026-11-23 when mobile swipe-to-close on board
+cards was removed
 
 ## Context
 
@@ -160,18 +161,29 @@ flashes back into the column it left. A move that cannot be queued (its status o
 was deleted meanwhile) reverts to the synced board. A move the server refuses is replaced by
 the server's row when sync brings it back.
 
-**The full-width backlog places with a caret.** The gallery reads left to right, then down,
-in a band per priority, and the engine treats a list marked `data-layout="grid"` by rows: the
-place is the number of cards in earlier rows plus those in the pointer's row whose centre is
-to its left. A caret in the gutter shows the place, the held card stays faded where it was,
-and the column count is frozen while it is held. A parting gap was prototyped too; a whole
-grid reflowing under the pointer was too busy for an overview, so the owner chose the caret.
+**The backlog gallery makes room as Catch's does.** The gallery reads left to right, then
+down, in a band per priority. It is Catch's masonry (`lib/masonry.ts`): each card goes to the
+top of the shortest column. A list marked `data-layout="masonry"` describes its columns, bands
+and the heights of the cards a held one is placed among in a `data-masonry` element, and the
+engine places the card at the slot nearest it in the layout those cards would have with it
+there (Catch's `dropIndex`, with its hysteresis), so cards still springing to their places do
+not change the answer. The gallery shows that layout as the card moves: a gap where it would
+land and the others springing aside, as Catch's gallery does, at one column in the rail or
+many across the board. The column count is frozen while a card is held. Its priorities show
+as labels while a card is placed, as a column does in Full; the rail does not fold them into
+rails.
 
-**On a phone a card swipes right to close.** A rightward swipe that starts on a card in a
-board page closes it into the default done status; leftward swipes and any that start outside
-a card stay with the pager. The card's `touch-action: pan-y pan-right` is what lets the
-browser hand over the rightward finger and keep scrolling otherwise. A long press that
-completes first is a drag, as before.
+This replaces a caret in the gutter with nothing moving until the drop, chosen on
+2026-10-19 when a parting gap in a CSS grid read as too busy. With Catch's springs and its
+slot hysteresis, the owner chose live reflow on 2026-11-22.
+
+**On a phone, horizontal swipes over cards turn between columns (2026-11-23).** Board cards
+previously swiped right to close into the default done status, with `touch-action: pan-y
+pan-right` handing rightward swipes to the card gesture. In practice, swiping horizontally
+between active columns triggered swipe-to-close accidentally far too easily. Cards no longer
+intercept horizontal swipes, so swipes starting anywhere on a card turn the pager cleanly in
+both directions; closing a card uses long-press drag (including to the done pocket), the move
+drawer, or the task dock's Close action.
 
 ## Consequences
 
@@ -187,7 +199,5 @@ completes first is a drag, as before.
   never written over, so the cost is only how current the board looks while a card is held.
 - Two settings (zone labels, Compact or Full) exist because of this model and are part of
   the settings page.
-- The full-width closed gallery stays masonry: closed work is ordered by time and is never
-  placed.
-- Swipe to close has no undo beyond moving the card back from the closed tasks; the swipe
-  needs about two fifths of a card's width, or a flick, to close.
+- The closed gallery is masonry too, newest first across the top row: closed work is ordered
+  by time and is never placed.

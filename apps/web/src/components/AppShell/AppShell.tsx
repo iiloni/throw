@@ -7,8 +7,7 @@ import {
   PanelLeftOpen,
   Plus,
   Search,
-  Settings2,
-  Trash2,
+  Settings,
 } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
@@ -23,7 +22,6 @@ import {
   viewSchema,
 } from '@/components/AppShell/shell';
 import { AppUpdatePrompt } from '@/components/AppUpdatePrompt/AppUpdatePrompt';
-import { BoardSettingsPanel } from '@/components/Board/BoardSettingsPanel';
 import {
   board,
   closeSearch,
@@ -39,6 +37,7 @@ import { ManagementSurfaceProvider } from '@/components/ManagementSurface/Manage
 import { NewTagHost } from '@/components/NewTag/NewTagHost';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
+import { SettingsHub } from '@/components/SettingsLayout/SettingsHub';
 import { type ShellForm, ShellForms } from '@/components/ShellForms/ShellForms';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
@@ -123,7 +122,16 @@ export function AppShell() {
     else setPalette({ mode: 'search', seed: '' });
   }, [boardSearch]);
   const boardState = board.use();
-  const settings = routeId?.startsWith('/_app/settings') ?? false;
+  const isAppSettings = routeId?.startsWith('/_app/settings') ?? false;
+  const isProjectSettings =
+    routeId === '/_app/w/$workspaceId/p/$projectId_/settings' ||
+    routeId === '/_app/w/$workspaceId/p/$projectId_/trash';
+  const settings = isAppSettings || isProjectSettings;
+  const inSettingsHub = isAppSettings || (isProjectSettings && !!project);
+  const hubProject =
+    project ??
+    projects.find((item) => item.id === remembered.projects[workspace?.id ?? '']) ??
+    projects[0];
 
   useEffect(() => {
     if (navigating || !workspace || !params.workspaceId) return;
@@ -329,7 +337,7 @@ export function AppShell() {
                       label={item.name}
                       href={`/w/${item.workspaceId}/p/${item.id}?view=board`}
                       expanded={expanded}
-                      active={project?.id === item.id}
+                      active={projectBoard && project?.id === item.id}
                       tint={item.color}
                       className={expanded ? 'pr-11' : undefined}
                       onClick={() => selectProject(item.workspaceId, item.id)}
@@ -397,21 +405,11 @@ export function AppShell() {
                 )}
               </nav>
               <div className="mt-3 flex flex-col gap-2 px-3">
-                {workspace && (
-                  <RailButton
-                    label="Workspace trash"
-                    expanded={expanded}
-                    onClick={() => context.goTrash()}
-                  >
-                    <Trash2 aria-hidden className="size-5" />
-                  </RailButton>
-                )}
                 {fullBoard && (
                   <div className="px-2">
                     <SyncIndicator />
                   </div>
                 )}
-                {fullBoard && <BoardSettingsPanel expanded={expanded} crossBoard={crossBoard} />}
 
                 <RailButton
                   label="Settings"
@@ -420,7 +418,7 @@ export function AppShell() {
                   active={settings}
                   onClick={context.goSettings}
                 >
-                  <Settings2 aria-hidden className="size-5" />
+                  <Settings aria-hidden className="size-5" />
                 </RailButton>
                 <RailButton
                   label={expanded ? 'Collapse navigation' : 'Expand navigation'}
@@ -446,7 +444,13 @@ export function AppShell() {
                 fullBoard ? 'h-dvh flex-none' : 'pb-[var(--dock-space)] md:pb-8',
               )}
             >
-              <Outlet />
+              {inSettingsHub ? (
+                <SettingsHub project={isProjectSettings ? project : hubProject}>
+                  <Outlet />
+                </SettingsHub>
+              ) : (
+                <Outlet />
+              )}
             </main>
           </div>
         </div>
