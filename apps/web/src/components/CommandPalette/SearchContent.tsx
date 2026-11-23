@@ -1,11 +1,12 @@
 import { sizeLabel, type Tag, taskTagColor } from '@throw/shared';
 import { Plus, Search, SearchX, SlidersHorizontal, Tag as TagGlyph, X } from 'lucide-react';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, animate, motion, useReducedMotion } from 'motion/react';
 import {
   type KeyboardEvent,
   type RefObject,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -25,6 +26,7 @@ import {
   useBoardSettings,
 } from '@/components/Board/state';
 import { ActiveFilters, BoardFilters } from '@/components/BoardSearch/BoardFilters';
+import { FilterCard, keepFocus } from '@/components/BoardSearch/FilterCard';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { Hint } from '@/components/Hint/Hint';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
@@ -46,6 +48,7 @@ import {
 } from '@/lib/taskSearch';
 import { cn } from '@/lib/utils';
 import { backlogOf, type Dismiss, focusPaletteInput, type PaletteActions } from './actions';
+import { useCoverBoard } from './coverBoard';
 import { ProjectBadge, ProjectOptions } from './ProjectOptions';
 
 export type SearchState = ReturnType<typeof useSearch>;
@@ -510,47 +513,116 @@ function ResultCard({ search, row }: { search: SearchState; row: SearchState['re
   );
 }
 
-export function SearchResults({ search }: { search: SearchState }) {
+/**
+ * How many of the first results move as Catch's do. A change of words scrolls the list back to
+ * its best match, so these are the cards in view; the rest change in place, out of sight.
+ */
+const MOVING_RESULTS = 10;
+
+/**
+ * The results as Catch's search lists them: a card rises in and the rest slide to their new
+ * places. A card leaving goes at once: shrinking it away in place, as Catch's page does, left it
+ * overlapping the cards sliding in beneath it, since the drawer anchors the list at its foot.
+ * Only the cards in view move, and they are measured only when the order changes: a layout
+ * animation measures every card on each render, and the active card follows the pointer.
+ */
+function ResultList({ search }: { search: SearchState }) {
   const reduced = useReducedMotion();
+  const { results } = search;
+  const order = results.map((row) => row.task.id).join(' ');
+  return (
+    <ul className="flex flex-col gap-2">
+      {results.map((row, index) => {
+        const moving = !reduced && index < MOVING_RESULTS;
+        return (
+          <motion.li
+            key={row.task.id}
+            layout={moving && 'position'}
+            layoutDependency={order}
+            initial={moving ? { opacity: 0, y: 8 } : false}
+            animate={{ opacity: 1, y: 0 }}
+            transition={springs.smooth}
+          >
+            <ResultCard search={search} row={row} />
+          </motion.li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/**
+ * Keeps the results above the open filter card rather than under it: the list is anchored at
+ * the drawer's foot, where the card covers it, and what showed of it was a strip flickering in
+ * the gap above the field as the filters changed it. The results' scroller ends where the card
+ * begins, following its height as its sections change, and the list slides up and back as the
+ * card opens and closes.
+ */
+function useFilterRoom(open: boolean) {
+  const reduced = useReducedMotion();
+  const area = useRef<HTMLDivElement>(null);
+  const card = useRef<HTMLDivElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const host = area.current;
+    const room = card.current;
+    const content = list.current;
+    if (!host || !room || !content) return;
+    let slide = !reduced;
+    function lift(px: number) {
+      if (!host || !content) return;
+      const before = content.getBoundingClientRect().top;
+      host.style.setProperty('--filter-room', `${px}px`);
+      const by = before - content.getBoundingClientRect().top;
+      if (slide && by) animate(content, { y: [by, 0] }, springs.smooth);
+      slide = false;
+    }
+    if (!open) {
+      lift(0);
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      // The card's own height, and the gap between it and the field.
+      if (room.offsetHeight) lift(room.offsetHeight + 12);
+    });
+    observer.observe(room);
+    return () => observer.disconnect();
+  }, [open, reduced]);
+  return { area, card, list };
+}
+
+export function SearchResults({ search }: { search: SearchState }) {
   const { scope, title, results, projects, actions, destination, backlog } = search;
-  const listMotion = reduced
-    ? {}
-    : {
-        initial: { opacity: 0, y: 8 },
-        animate: { opacity: 1, y: 0 },
-        exit: { opacity: 0, scale: 0.97 },
-        transition: springs.smooth,
-      };
   return (
     <>
-      {search.onBoard && <ActiveFilters state={search.onBoard} className="pb-4 empty:hidden" />}
-      <AnimatePresence initial={false}>
-        {scope && !search.onBoard && (
-          <motion.div
-            key="scope"
-            className="overflow-hidden"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={reduced ? { duration: 0 } : springs.smooth}
+      {search.onBoard && (
+        // Removing a chip leaves the keyboard as it was, as the filter card does.
+        <div {...keepFocus}>
+          <ActiveFilters state={search.onBoard} className="pb-4 empty:hidden" />
+        </div>
+      )}
+      {/* In place, fading in on the chip itself (a fading parent would cut its blur off from
+          what is behind it): growing its height would re-lay out every result each frame. */}
+      {scope && !search.onBoard && (
+        <div className="flex flex-wrap items-center gap-2 pb-4">
+          <motion.button
+            key={scope.id}
+            type="button"
+            data-color={scope.color}
+            aria-label={`Remove ${scope.name} filter`}
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={search.clearScope}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={curves.fade}
+            className="glass-badge flex min-h-9 items-center gap-2 rounded-md px-2.5 font-medium text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
           >
-            <div className="flex flex-wrap items-center gap-2 pb-4">
-              <button
-                type="button"
-                data-color={scope.color}
-                aria-label={`Remove ${scope.name} filter`}
-                onPointerDown={(event) => event.preventDefault()}
-                onClick={search.clearScope}
-                className="glass-badge flex min-h-9 items-center gap-2 rounded-md px-2.5 font-medium text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-              >
-                <ProjectIcon name={scope.icon} className="size-3.5 text-tint-accent" />
-                {scope.name}
-                <X className="size-3.5" aria-hidden />
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <ProjectIcon name={scope.icon} className="size-3.5 text-tint-accent" />
+            {scope.name}
+            <X className="size-3.5" aria-hidden />
+          </motion.button>
+        </div>
+      )}
       <div id={`${search.id}-results`} role="listbox" aria-label="Tasks, projects and capture">
         {!title && !search.browsing ? (
           <p className="px-1 pb-5 text-muted-foreground text-sm">
@@ -568,15 +640,7 @@ export function SearchResults({ search }: { search: SearchState }) {
                 : `${results.length} ${results.length === 1 ? 'task' : 'tasks'}`}
               {search.browsing && ' on the board'}
             </p>
-            <ul className="flex flex-col gap-2">
-              <AnimatePresence initial={false} mode="popLayout">
-                {results.map((row) => (
-                  <motion.li key={row.task.id} layout={!reduced} {...listMotion}>
-                    <ResultCard search={search} row={row} />
-                  </motion.li>
-                ))}
-              </AnimatePresence>
-            </ul>
+            <ResultList search={search} />
           </section>
         ) : (
           projects.length === 0 && (
@@ -663,50 +727,53 @@ export function PhoneSearchContent({
   /** A close button of its own, for a surface without one; the drawer's title row has it. */
   onClose?: () => void;
 }) {
-  const reduced = useReducedMotion();
+  const room = useFilterRoom(search.filtersOpen);
+  const page = useRef<HTMLDivElement>(null);
+  useCoverBoard(page);
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div ref={page} className="flex h-full min-h-0 flex-col">
       {/* A size container, so the filter card can fit the room above the field however the
           keyboard leaves it. */}
-      <div className="relative flex min-h-0 flex-1 flex-col [container-type:size]">
-        <ScrollArea edges className="flex-1 [--scrollbar-inset:0.5rem]">
+      <div ref={room.area} className="relative flex min-h-0 flex-1 flex-col [container-type:size]">
+        <ScrollArea edges className="mb-[var(--filter-room,0px)] flex-1 [--scrollbar-inset:0.5rem]">
           <ScrollAreaViewport ref={search.list}>
-            {/* Few results sit by the field; more scroll from the best one down. */}
-            <div className="mt-auto px-4 pt-2 pb-3">
+            {/* Few results sit by the field; more scroll from the best one down. The drawer is
+                glass already: chips drawn on it skip a blur of their own, which every frame of
+                the results moving would have redrawn. */}
+            <div
+              ref={room.list}
+              className="mt-auto px-4 pt-2 pb-3 [&_.glass-badge]:[backdrop-filter:none]"
+            >
               <SearchResults search={search} />
             </div>
           </ScrollAreaViewport>
           <ScrollBar />
         </ScrollArea>
-        {/* As in Catch, the filter card covers the results rather than pushing them away. */}
-        <div className="pointer-events-none absolute inset-x-3 bottom-3 flex flex-col justify-end">
+        {/* The filter card floats over the results' foot, and they make room for it above. */}
+        <div
+          ref={room.card}
+          className="pointer-events-none absolute inset-x-3 bottom-3 flex flex-col justify-end"
+        >
           <AnimatePresence initial={false}>
             {search.filtersOpen && (
-              <motion.div
+              // The board's filter sections fit what is left above their tabs.
+              <FilterCard
                 key="filters"
-                // Opens from its foot, the tabs first, as Catch's card does.
-                className="pointer-events-auto flex shrink-0 flex-col justify-end overflow-hidden rounded-[var(--dock-radius)] shadow-[0_10px_30px_-10px_var(--glass-shadow)] [&>*]:shrink-0"
-                initial={{ height: 0 }}
-                animate={{ height: 'auto' }}
-                exit={{ height: 0, transition: reduced ? { duration: 0 } : curves.fold }}
-                // No bounce: the card clips, so dipping below its height would cut off its top.
-                transition={reduced ? { duration: 0 } : springs.pane}
+                solid
+                className="flex max-h-[calc(100cqh-1.5rem)] flex-col overflow-hidden rounded-[var(--dock-radius)] shadow-[0_10px_30px_-10px_var(--glass-shadow)] [--board-filter-view-max:min(24rem,calc(100cqh-6.75rem))]"
               >
-                {/* The board's filter sections fit what is left above their tabs. */}
-                <div className="glass-thick flex max-h-[calc(100cqh-1.5rem)] flex-col overflow-hidden rounded-[var(--dock-radius)] [--board-filter-view-max:min(24rem,calc(100cqh-6.75rem))]">
-                  <ScrollArea
-                    edges
-                    className="flex min-h-0 flex-1 flex-col [--scrollbar-inset:0.75rem]"
-                  >
-                    <ScrollAreaViewport className="h-auto w-full min-h-0 flex-1">
-                      <div className="p-3">
-                        <FilterOptions search={search} />
-                      </div>
-                    </ScrollAreaViewport>
-                    <ScrollBar />
-                  </ScrollArea>
-                </div>
-              </motion.div>
+                <ScrollArea
+                  edges
+                  className="flex min-h-0 flex-1 flex-col [--scrollbar-inset:0.75rem]"
+                >
+                  <ScrollAreaViewport className="h-auto w-full min-h-0 flex-1">
+                    <div className="p-3">
+                      <FilterOptions search={search} />
+                    </div>
+                  </ScrollAreaViewport>
+                  <ScrollBar />
+                </ScrollArea>
+              </FilterCard>
             )}
           </AnimatePresence>
         </div>

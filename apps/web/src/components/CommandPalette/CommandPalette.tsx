@@ -1,6 +1,7 @@
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { Dialog } from 'radix-ui';
 import { useEffect, useLayoutEffect, useRef } from 'react';
+import { FilterCard } from '@/components/BoardSearch/FilterCard';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
 import { useDesktop } from '@/lib/media';
@@ -174,36 +175,36 @@ function DesktopSearch({ dismiss, onClose, onCaptureTitle, actions }: InnerProps
             <ScrollBar />
           </ScrollArea>
         </motion.div>
-        <ScopePanel search={search} />
-        <motion.div
-          className="pointer-events-auto flex shrink-0 items-end gap-3"
-          initial={{ opacity: 0, y: reduced ? 0 : 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={reduced ? { duration: 0 } : springs.smooth}
-        >
-          <SearchField search={search} disabled={!present} onClose={onClose} />
-          {(!search.scoped || search.onBoard) && <FilterButton search={search} />}
-        </motion.div>
+        <div className="relative shrink-0">
+          <ScopePanel search={search} />
+          <motion.div
+            className="pointer-events-auto flex items-end gap-3"
+            initial={{ opacity: 0, y: reduced ? 0 : 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={reduced ? { duration: 0 } : springs.smooth}
+          >
+            <SearchField search={search} disabled={!present} onClose={onClose} />
+            {(!search.scoped || search.onBoard) && <FilterButton search={search} />}
+          </motion.div>
+        </div>
       </div>
     </motion.div>
   );
 }
 
-/** Catch's filter panel: glass rising above the field. */
+/**
+ * Catch's filter panel: glass rising above the field. As in Catch, it covers the results
+ * rather than pushing them up, so opening it lays nothing else out again.
+ */
 function ScopePanel({ search }: { search: SearchState }) {
-  const reduced = useReducedMotion();
   return (
-    <AnimatePresence initial={false}>
-      {search.filtersOpen && (
-        <motion.div
-          key="filters"
-          className="pointer-events-auto shrink-0 overflow-hidden"
-          initial={{ height: 0, opacity: 0 }}
-          animate={{ height: 'auto', opacity: 1 }}
-          exit={{ height: 0, opacity: 0 }}
-          transition={reduced ? { duration: 0 } : springs.smooth}
-        >
-          <div className="glass mb-3 flex max-h-[50dvh] flex-col overflow-hidden rounded-[var(--dock-radius)]">
+    <div className="absolute inset-x-0 bottom-full">
+      <AnimatePresence initial={false}>
+        {search.filtersOpen && (
+          <FilterCard
+            key="filters"
+            className="mb-3 flex max-h-[50dvh] flex-col overflow-hidden rounded-[var(--dock-radius)]"
+          >
             <ScrollArea edges className="flex min-h-0 flex-1 flex-col [--scrollbar-inset:0.75rem]">
               <ScrollAreaViewport className="h-auto w-full min-h-0 flex-1">
                 <div className="p-3">
@@ -212,10 +213,10 @@ function ScopePanel({ search }: { search: SearchState }) {
               </ScrollAreaViewport>
               <ScrollBar />
             </ScrollArea>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+          </FilterCard>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
