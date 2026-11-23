@@ -138,7 +138,6 @@ function BulkTags({ tasks, project }: { tasks: Task[]; project: Project }) {
       onSecondaryChange={(id, present) => setSecondaryTags(ids, id, present)}
       loadingPrimary={awaiting}
       loadingSecondary={awaiting}
-      fill
     />
   );
 }

@@ -333,7 +333,6 @@ export function TagOptions({
   onNewSecondaryTag,
   loadingPrimary = false,
   loadingSecondary = false,
-  fill = false,
 }: {
   tags: readonly Tag[];
   primaryTagId: string | null;
@@ -347,12 +346,6 @@ export function TagOptions({
   onNewSecondaryTag?: () => void;
   loadingPrimary?: boolean;
   loadingSecondary?: boolean;
-  /**
-   * For a host of a fixed height: the role switch sits at its foot, so changing tab moves only
-   * the views above it and never the host, which would otherwise spring after the views' own
-   * height spring and fall out of step with it.
-   */
-  fill?: boolean;
 }) {
   const [internalTab, setInternalTab] = useState<TagTab>('primary');
   const activeTab = tab ?? internalTab;
@@ -434,12 +427,7 @@ export function TagOptions({
         </div>
       </AnimatedHeight>
       {/* The role switch stays under both views, as the reminder panel's actions do in Catch. */}
-      <div
-        className={cn(
-          'mt-1 shrink-0 border-foreground/10 border-t px-3 pt-2 pb-2',
-          fill && 'mt-auto',
-        )}
-      >
+      <div className="mt-1 shrink-0 border-foreground/10 border-t px-3 pt-2 pb-2">
         <SegmentedTabs
           label="Tag role"
           value={activeTab}

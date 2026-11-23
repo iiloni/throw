@@ -224,26 +224,36 @@ test.describe('phone', () => {
     await touch.tap(bar.getByRole('button', { name: 'Change tags' }));
     const tags = page.getByRole('region', { name: 'Tags' });
     await touch.tap(tags.getByRole('button', { name: 'Red: Fragile' }));
-    // Switching between the tag roles moves only the panel's views: the drawer stays where it
-    // rests instead of chasing their height frame by frame.
+    // Switching between the tag roles resizes the drawer as an open task's Tags page does: it
+    // follows the views' own height frame by frame, so the panel's foot never leaves the bottom
+    // of the screen, rather than chasing it with a second spring.
     const drawer = page.locator('[data-drawer]');
     const top = async () => Math.round((await drawer.boundingBox())!.y);
-    await expect.poll(async () => [await top(), await top()]).toEqual([await top(), await top()]);
-    const resting = await top();
+    const settledTop = async () => {
+      await expect.poll(async () => [await top(), await top()]).toEqual([await top(), await top()]);
+      return top();
+    };
+    const rests = [await settledTop()];
     for (const role of ['Secondary', 'Primary']) {
       await touch.tap(tags.getByRole('tab', { name: new RegExp(`^${role}`) }));
-      const seen = await page.evaluate(async () => {
-        const element = document.querySelector('[data-drawer]')!;
-        const tops: number[] = [];
+      const feet = await page.evaluate(async () => {
+        const panel = document.querySelector('[data-move-view]')!;
+        const seen: number[] = [];
         for (let frame = 0; frame < 40; frame++) {
-          tops.push(Math.round(element.getBoundingClientRect().y));
+          // Read once the frame is drawn, after the drawer has followed the views' layout.
           await new Promise(requestAnimationFrame);
+          await new Promise((resolve) => setTimeout(resolve));
+          seen.push(Math.round(panel.getBoundingClientRect().bottom));
         }
-        return tops;
+        return seen;
       });
-      expect(new Set(seen)).toEqual(new Set([resting]));
+      expect(Math.max(...feet) - Math.min(...feet)).toBeLessThanOrEqual(1);
+      rests.push(await settledTop());
       await page.screenshot({ path: testInfo.outputPath(`phone-tags-${role.toLowerCase()}.png`) });
     }
+    // Secondary's longer list raises the drawer, and Primary lowers it again.
+    expect(rests[1]).toBeLessThan(rests[0]!);
+    expect(rests[2]).toBe(rests[0]);
     await expect
       .poll(async () => (await rows(page, board.headers, ids)).map((row) => row?.primary_tag_id))
       .toEqual([fragile.id, fragile.id]);

@@ -291,12 +291,29 @@ export function Drawer({
   }, [paged, page?.fit, page?.key, y]);
 
   // The move target opens into a grid and closes again under the card; the drawer rises and
-  // falls with it so exactly the target shows.
+  // falls with it so exactly the target shows. A target that names its view
+  // (`data-move-view`), as a selection's pickers do, is treated as a fitted page is: a new view
+  // springs the drawer to its height, and a change within one, such as a picker moving between
+  // its tabs, is followed frame by frame rather than chased by a second spring.
   // biome-ignore lint/correctness/useExhaustiveDependencies: offsets reads refs
   useLayoutEffect(() => {
     const element = head.current;
     if (!moveInHead || !element) return;
-    const observer = new ResizeObserver(() => slide(offsets().closed, springs.snappy));
+    const viewOf = () =>
+      element.querySelector('[data-move-view]')?.getAttribute('data-move-view') ?? null;
+    let view = viewOf();
+    const observer = new ResizeObserver(() => {
+      const next = viewOf();
+      if (next !== null && next === view) {
+        const to = offsets().closed;
+        y.stop();
+        y.jump(to);
+        // Drawn now, in the frame the view changed height: the value alone is drawn a frame
+        // later, and the drawer would trail the view's own spring by that frame.
+        if (surface.current) surface.current.style.transform = `translateY(${to}px)`;
+      } else slide(offsets().closed, next === null ? springs.snappy : springs.smooth);
+      view = next;
+    });
     observer.observe(element);
     return () => observer.disconnect();
   }, [moveInHead, reduced, y]);
