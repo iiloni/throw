@@ -18,7 +18,8 @@ type Delivery = typeof webhookDeliveries.$inferSelect;
 async function claim(): Promise<Delivery[]> {
   const rows = await db.execute<{ id: string }>(sql`
     UPDATE ${webhookDeliveries} AS d
-    SET attempts = d.attempts + 1, next_attempt_at = now() + ${LEASE}
+    -- A claimed delivery never folds again, so the field values its fold kept go now.
+    SET attempts = d.attempts + 1, next_attempt_at = now() + ${LEASE}, fold = NULL
     FROM (
       SELECT id FROM ${webhookDeliveries}
       WHERE status = 'pending' AND next_attempt_at <= now()

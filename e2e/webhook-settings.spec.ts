@@ -55,6 +55,10 @@ test('create, test, turn off and delete a webhook in Settings', async ({ page, i
     await expect(
       page.getByText(/Personal · All projects · 1 minute quiet window · Delivered/),
     ).toBeVisible();
+    await page.reload();
+    await expect(
+      page.getByText(/Personal · All projects · 1 minute quiet window · Delivered/),
+    ).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
 
     const toggle = page.getByRole('switch', { name: 'Deliver to Agent wake-up' });
     await toggle.click();

@@ -30,7 +30,8 @@ export const MAX_WEBHOOK_URL_LENGTH = 2048;
 
 /**
  * A webhook may wait until changes pause before it sends (ADR 0015). Each change to a task or
- * a project's structure restarts the wait; status moves, comments and purges are sent at once.
+ * a project's structure restarts the wait, status moves included. Comments and purges are
+ * sent at once.
  */
 export const MAX_WEBHOOK_QUIET_WINDOW_SECONDS = 600;
 export const WEBHOOK_QUIET_WINDOW_PRESETS = [0, 30, 60, 120, 300, 600] as const;

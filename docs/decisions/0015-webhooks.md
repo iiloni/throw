@@ -97,6 +97,8 @@ With a window, task and structure changes wait for a pause:
   with no description or tags, and nothing changed since) or that is in the trash sends
   nothing for now; naming or restoring it announces it as created after the window. A task
   created and purged within the window was never announced and its delivery is removed.
+  Held deliveries last a day (below), so a task first named later than that is announced as
+  `task.updated`; `list_changes` still has its creation.
 - **At once.** Comments are written on purpose and are never folded: each comment event is
   sent at once and leaves the task's waiting delivery as it is. A purge (`task.deleted`) is
   final, so it folds in (replacing whatever was waiting) and is sent at once.
@@ -105,7 +107,8 @@ With a window, task and structure changes wait for a pause:
 
 A delivery with nothing to send for now is `held`: not sent, but still open to later changes,
 which compare with the same starting point. Held deliveries are deleted after a day like
-finished ones; a change after that starts afresh. Changing a webhook's window applies to what
+finished ones; a change after that starts afresh. The fold keeps field values (titles among
+them) only while the delivery waits: the worker clears it when it claims the delivery. Changing a webhook's window applies to what
 is already waiting when it shortens it: nothing waits longer than the new window from now, so
 setting 0 sends waiting deliveries at once. A longer window leaves them on their schedule,
 and held deliveries stay held. Turning a window off does not unfold anything: later changes
@@ -117,7 +120,7 @@ or `held`, never attempted) delivery per webhook and key. A write locks the wait
 next round when a concurrent write inserted first. The worker claims with `SKIP LOCKED`, so it
 skips a row being folded; a claimed row has an attempt, leaves the index and is never changed,
 so a change after the claim starts a new delivery. After three contended rounds the change is
-queued on its own rather than lost.
+queued on its own rather than lost, even one that would have been held.
 
 Every queueing or folding commit notifies the worker, which then sleeps until the earliest
 due delivery (at most the 30-second poll), so windows shorter than the poll and deliveries

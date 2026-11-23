@@ -184,7 +184,7 @@ test('creates a webhook with a quiet window', async () => {
     'Wait 10 minutes',
   ]);
   fireEvent.change(quiet, { target: { value: '60' } });
-  expect(screen.getByText(/new tasks nobody has named, send nothing/)).toBeInTheDocument();
+  expect(screen.getByText(/waits until it is named or changed/)).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Agent' } });
   fireEvent.change(screen.getByLabelText('Receiver URL'), {
     target: { value: 'https://hooks.example.com/throw' },

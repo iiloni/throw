@@ -430,7 +430,6 @@ test('a quiet window folds a burst into one notice and drops what was undone @ap
   const done = project.statuses.find((status) => status.category === 'done')!;
   const receiver = await startReceiver();
   const window = 2;
-  const settle = () => new Promise((resolve) => setTimeout(resolve, (window + 1.5) * 1000));
   const createTask = async (title: string) => {
     const id = randomUUID();
     const response = await request.post('/api/tasks', {
@@ -455,6 +454,15 @@ test('a quiet window folds a burst into one notice and drops what was undone @ap
       data: { changeId: randomUUID(), changes },
     });
     expect(response.status(), await response.text()).toBe(200);
+  };
+  /**
+   * Waits for a task created now, with the same window, to be announced. The worker claims
+   * deliveries in the order they fall due and sends each batch before claiming the next, so
+   * by then anything queued earlier that was going to be sent has been.
+   */
+  const sentinel = async () => {
+    const id = await createTask('Sentinel');
+    await receiver.next(({ payload }) => payload.event === 'task.created' && payload.taskId === id);
   };
   const about = (taskId: string) =>
     receiver.received.filter((hook) => hook.payload.taskId === taskId);
@@ -497,7 +505,7 @@ test('a quiet window folds a burst into one notice and drops what was undone @ap
       statusTo: { id: backlog.id },
     });
     expect(created.body).not.toContain('Wake the agent');
-    await settle();
+    await sentinel();
     expect(about(named)).toHaveLength(1);
     expect(about(blank)).toHaveLength(0);
     expect(about(mistake)).toHaveLength(0);
@@ -520,13 +528,13 @@ test('a quiet window folds a burst into one notice and drops what was undone @ap
     );
     expect(updated.payload).toMatchObject({ kind: 'updated', changedFields: ['priority'] });
     expect(updated.payload).not.toHaveProperty('statusTo');
-    await settle();
+    await sentinel();
     expect(about(mistake)).toHaveLength(0);
     expect(about(named)).toHaveLength(2);
 
     await change(named, { statusId: { before: backlog.id, after: done.id } });
     await change(named, { statusId: { before: done.id, after: backlog.id } });
-    await settle();
+    await sentinel();
     expect(about(named)).toHaveLength(2);
 
     // A comment is sent at once, ahead of the edit still waiting out its window.
@@ -555,8 +563,19 @@ test('a quiet window folds a burst into one notice and drops what was undone @ap
     expect(webhookResponseSchema.parse(await patched.json()).webhook.quietWindowSeconds).toBe(600);
     const waiting = receiver.received.length;
     await change(named, { title: { before: 'Wake it', after: 'Wake it now' } });
-    await settle();
-    expect(receiver.received.length).toBe(waiting);
+    // A comment is sent at once: by the time it arrives, an edit sent at once would have too.
+    expect(
+      (
+        await request.post('/api/comments', {
+          headers: account.headers,
+          data: { id: randomUUID(), taskId: named, body: paragraph('Still there?') },
+        })
+      ).status(),
+    ).toBe(201);
+    await receiver.next(({ payload }) => payload.event === 'comment.created', waiting);
+    expect(receiver.received.slice(waiting).map(({ payload }) => payload.event)).toEqual([
+      'comment.created',
+    ]);
     expect(
       (
         await request.patch(`/api/webhooks/${webhook.id}`, {

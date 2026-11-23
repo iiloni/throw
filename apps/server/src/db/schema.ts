@@ -555,7 +555,10 @@ export const webhookDeliveries = pgTable(
      * never folded: comments, and webhooks that send at once.
      */
     coalesceKey: text(),
-    /** What a quiet window has folded so far, to tell net changes from undone ones. */
+    /**
+     * What a quiet window has folded so far, to tell net changes from undone ones. It holds
+     * field values, such as titles, so it is cleared when the worker claims the delivery.
+     */
     fold: jsonb().$type<WebhookFold>(),
   },
   (table) => [

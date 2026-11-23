@@ -169,13 +169,12 @@ async function queueWaiting(tx: Transaction, targets: Target[], key: string, fol
     const done = new Set(inserted.map((row) => row.webhookId));
     pending = missing.filter((target) => !done.has(target.id));
   }
-  // Never lose a change to contention: announce it on its own instead.
+  // Never lose a change to contention: announce it on its own instead, even one that would
+  // have been held, since a held row out of the index could never be folded into later.
   const rows = pending.flatMap((target) => {
     const id = uuidv7();
     const { payload, outcome } = foldInto(undefined, id);
-    return outcome === 'drop' || outcome === 'hold'
-      ? []
-      : [{ id, webhookId: target.id, event: payload.event, payload }];
+    return outcome === 'drop' ? [] : [{ id, webhookId: target.id, event: payload.event, payload }];
   });
   if (rows.length) await tx.insert(webhookDeliveries).values(rows);
 }
