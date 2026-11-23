@@ -485,7 +485,9 @@ function ResultCard({ search, row }: { search: SearchState; row: SearchState['re
         ))}
         <span className="flex-1" />
         <span className="flex min-w-0 items-center gap-1">
-          {status && <StatusGlyph category={status.category} className="size-3" />}
+          {status && (
+            <StatusGlyph category={status.category} color={status.color} className="size-3" />
+          )}
           <span className="truncate">{status?.name ?? 'No status'}</span>
         </span>
         {settings.cardSize && task.size !== null && (

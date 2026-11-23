@@ -127,7 +127,7 @@ export function TaskCardFace({
             <span
               className={statusAsControl ? CARD_STATUS_CONTROL : 'flex min-w-0 items-center gap-1'}
             >
-              <StatusGlyph category={status.category} className="size-3" />
+              <StatusGlyph category={status.category} color={status.color} className="size-3" />
               <span className="truncate">{status.name}</span>
             </span>
           ))}

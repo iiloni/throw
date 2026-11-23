@@ -137,7 +137,7 @@ export function ControlButtons({
         {...controlProps('status')}
         onClick={(event) => onOpen('status', event.currentTarget)}
       >
-        <StatusGlyph category={status?.category ?? 'backlog'} />
+        <StatusGlyph category={status?.category ?? 'backlog'} color={status?.color} />
       </IconButton>
       <IconButton
         label={`Priority: ${priorityName(project, priority)}. Change`}

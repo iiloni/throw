@@ -97,7 +97,7 @@ export function BoardColumn({
         <span
           aria-hidden
           data-column-stripe=""
-          className="pointer-events-none absolute inset-x-3 top-1 h-1 rounded-full bg-[var(--column-accent)]"
+          className="pointer-events-none absolute inset-x-4 top-2 h-1 rounded-full bg-[var(--column-accent)]"
         />
       )}
       <motion.div

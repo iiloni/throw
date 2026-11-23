@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 import { CardList } from './CardList';
 import { drag, makingWay } from './drag';
 import { BacklogGallery } from './Gallery';
-import { PriorityIcon } from './glyphs';
+import { PriorityIcon, StatusGlyph } from './glyphs';
 import { type Category, groupByPriority, priorityName, type Status } from './model';
 import { StatusTile } from './StatusTile';
 import {
@@ -274,6 +274,13 @@ export function StatusFilter({
                   : 'border-transparent bg-foreground/[0.06] text-foreground/75 hover:bg-foreground/[0.1]',
             )}
           >
+            {status.color && (
+              <StatusGlyph
+                category={status.category}
+                color={status.color}
+                className="-ml-0.5 mr-1.5"
+              />
+            )}
             {status.name}
           </button>
         );

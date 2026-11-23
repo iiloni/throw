@@ -639,3 +639,27 @@ test('status colours render on the board and can be cleared', async ({ page, isM
   await backToBoard(page);
   await expect(page.locator('[data-column-color="mint"]')).toHaveCount(0);
 });
+
+test('status colours mark backlog statuses on their cards and filters', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'The phone backlog draws the same cards and filters');
+  const fixture = await setup(page, isMobile);
+  await backToBoard(page);
+  const task = await page.evaluate(async (projectId) => {
+    const { createStatus } = await import('/src/lib/statuses.ts');
+    const { createTask } = await import('/src/lib/tasks.ts');
+    const statusId = createStatus(projectId, 'Icebox', 'backlog', 'amber');
+    return createTask(projectId, { title: 'Frozen', statusId });
+  }, fixture.projectId);
+  const card = page.locator(`[data-card-id="${task}"]`);
+  await expect(card).toBeVisible();
+  await expect(card).not.toHaveAttribute('data-color');
+  await expect(card.locator('svg[data-column-color="amber"]')).toBeVisible();
+  const filter = page.getByRole('button', { name: 'Icebox', exact: true });
+  await expect(filter.locator('svg[data-column-color="amber"]')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Backlog', exact: true }).locator('svg'),
+  ).toHaveCount(0);
+});
