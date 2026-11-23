@@ -1390,3 +1390,142 @@ test('trashing a task or subtask closes the task view with an Undo toast', async
   await topToast.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(topCard).toBeVisible();
 });
+
+test('desktop task split-pane width persists across projects, workspace board, and reload', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'The split pane is the desktop board’s');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { headers, workspaceId, projectId, pane } = await fixture(page);
+
+  // Create a second project with its own task to verify width carries across projects and the
+  // cross-project workspace board.
+  const otherProjectId = randomUUID();
+  const otherStatusId = randomUUID();
+  const otherTaskId = randomUUID();
+  expect(
+    (
+      await page.request.post('/api/projects', {
+        headers,
+        data: {
+          id: otherProjectId,
+          workspaceId,
+          name: 'Second project',
+          key: 'SEC',
+          color: 'orange',
+          icon: null,
+          position: 'a1',
+          statuses: [
+            {
+              id: randomUUID(),
+              name: 'Backlog',
+              category: 'backlog',
+              position: 'a0',
+              isDefault: true,
+            },
+            {
+              id: otherStatusId,
+              name: 'Working',
+              category: 'active',
+              position: 'a0',
+              isDefault: true,
+            },
+            { id: randomUUID(), name: 'Done', category: 'done', position: 'a0', isDefault: true },
+            {
+              id: randomUUID(),
+              name: 'Cancelled',
+              category: 'cancelled',
+              position: 'a0',
+              isDefault: true,
+            },
+          ],
+        },
+      })
+    ).status(),
+  ).toBe(201);
+  expect(
+    (
+      await page.request.post('/api/tasks', {
+        headers,
+        data: {
+          id: otherTaskId,
+          projectId: otherProjectId,
+          title: 'Second project task',
+          statusId: otherStatusId,
+          priority: 3,
+          position: 'a0',
+          parentId: null,
+          description: null,
+          descriptionVersion: null,
+        },
+      })
+    ).status(),
+  ).toBe(201);
+
+  const handle = page.getByRole('separator', { name: 'Resize task' });
+  await expect(handle).toHaveAttribute('aria-valuenow', '440');
+
+  // Drag the split handle left by 160px to widen the pane to 600px.
+  const grip = (await handle.boundingBox())!;
+  const x = grip.x + grip.width / 2;
+  const y = grip.y + grip.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x - 160, y, { steps: 6 });
+  await expect(handle).toHaveAttribute('aria-valuenow', '600');
+  // Dragging does not write to localStorage until release.
+  expect(await page.evaluate(() => localStorage.getItem('throw-task-pane-width'))).toBeNull();
+  await page.mouse.up();
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem('throw-task-pane-width')))
+    .toBe('600');
+  await expect.poll(async () => Math.round((await pane.boundingBox())!.width)).toBe(600);
+
+  // Switching to another project keeps the resized width.
+  await page.goto(`/w/${workspaceId}/p/${otherProjectId}?view=board`);
+  const secondCard = page.getByRole('article', {
+    name: 'SEC-1 Second project task',
+    exact: true,
+  });
+  await expect(secondCard).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
+  await secondCard.click();
+  await expect(pane).toBeVisible();
+  await expect(handle).toHaveAttribute('aria-valuenow', '600');
+  await expect.poll(async () => Math.round((await pane.boundingBox())!.width)).toBe(600);
+
+  // Switching to the cross-project workspace board shares the same persisted width.
+  await page.goto(`/w/${workspaceId}/board`);
+  const workspaceCard = page.getByRole('article', {
+    name: 'TASK-1 Write the launch plan',
+    exact: true,
+  });
+  await expect(workspaceCard).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
+  await workspaceCard.click();
+  await expect(pane).toBeVisible();
+  await expect(handle).toHaveAttribute('aria-valuenow', '600');
+
+  // Reloading preserves the persisted width.
+  await page.goto(`/w/${workspaceId}/p/${projectId}?view=board`);
+  await page.reload();
+  const reloadedCard = page.getByRole('article', {
+    name: 'TASK-1 Write the launch plan',
+    exact: true,
+  });
+  await expect(reloadedCard).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
+  await reloadedCard.click();
+  await expect(pane).toBeVisible();
+  await expect(handle).toHaveAttribute('aria-valuenow', '600');
+
+  // Narrowing the viewport clamps the rendered width without clobbering the stored preference.
+  await page.setViewportSize({ width: 900, height: 900 });
+  await expect
+    .poll(async () => Number(await handle.getAttribute('aria-valuenow')))
+    .toBeLessThan(600);
+  expect(await page.evaluate(() => localStorage.getItem('throw-task-pane-width'))).toBe('600');
+
+  // Widening restores the stored width.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(handle).toHaveAttribute('aria-valuenow', '600');
+  await expect.poll(async () => Math.round((await pane.boundingBox())!.width)).toBe(600);
+});
