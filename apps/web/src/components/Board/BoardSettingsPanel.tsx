@@ -4,7 +4,7 @@ import { Popover } from 'radix-ui';
 import type { ReactNode } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { haptics } from '@/lib/haptics';
-import { useDesktop } from '@/lib/media';
+import { useDesktop, useMedia } from '@/lib/media';
 import { springs } from '@/lib/motion';
 import { useThemePreference } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -121,50 +121,23 @@ export function BoardSettingsContent({
 }
 
 /**
- * Board preferences on desktop, opened from the shell rail or the prototype frame. A phone
- * opens them in the drawer instead (ADR 0009). The panel is held to the window and scrolls
+ * Board preferences in the dev-only `/prototype/board` desktop frame. The app's own boards
+ * expose the same controls in Settings -> General. The panel is held to the window and scrolls
  * inside it, so a short window never cuts it off.
  */
 export function BoardSettingsPanel({
   onReset,
-  expanded,
   crossBoard = false,
 }: {
   onReset?: () => void;
-  expanded?: boolean;
   /** The workspace board has no status columns or side rails, so their settings stay away. */
   crossBoard?: boolean;
 }) {
   return (
     <Popover.Root>
       <Popover.Trigger asChild>
-        <IconButton
-          label="Board settings"
-          // On the rail it is a rail row: named beside the rail while collapsed, and by its
-          // own text while expanded.
-          tooltip={!expanded}
-          tooltipSide={expanded === undefined ? undefined : 'right'}
-          className={cn(
-            'size-10',
-            expanded !== undefined &&
-              'h-12 w-full justify-start gap-3 rounded-2xl px-2 font-normal text-muted-foreground hover:bg-accent/60',
-          )}
-        >
-          {expanded === undefined ? (
-            <SlidersHorizontal />
-          ) : (
-            <>
-              <span className="flex size-10 shrink-0 items-center justify-center">
-                <SlidersHorizontal className="size-5" />
-              </span>
-              <span
-                aria-hidden={!expanded}
-                className={cn('truncate transition-opacity duration-150', !expanded && 'opacity-0')}
-              >
-                Board settings
-              </span>
-            </>
-          )}
+        <IconButton label="Board settings" tooltip className="size-10">
+          <SlidersHorizontal />
         </IconButton>
       </Popover.Trigger>
       <Popover.Portal>
@@ -196,6 +169,8 @@ export function BoardSettingsControls({
   const [theme, setTheme] = useThemePreference();
   // Columns and side rails are desktop layout; a phone has neither to change.
   const phone = !useDesktop();
+  // ScrollBar hides itself on coarse pointers (`pointer-coarse:hidden`), so this toggle would be a no-op there.
+  const coarsePointer = useMedia('(pointer: coarse)');
   const set = <K extends keyof BoardSettings>(key: K, value: BoardSettings[K]) =>
     setSettings({ ...settings, [key]: value });
   return (
@@ -237,13 +212,15 @@ export function BoardSettingsControls({
           />
         </Row>
       )}
-      <Row label="Scrollbars" hint="Off, a faded edge shows where a list goes on.">
-        <Switch
-          label="Scrollbars"
-          checked={settings.scrollbars}
-          onChange={(value) => set('scrollbars', value)}
-        />
-      </Row>
+      {!coarsePointer && (
+        <Row label="Scrollbars" hint="Off, a faded edge shows where a list goes on.">
+          <Switch
+            label="Scrollbars"
+            checked={settings.scrollbars}
+            onChange={(value) => set('scrollbars', value)}
+          />
+        </Row>
+      )}
       {!crossBoard && (
         <>
           <Row

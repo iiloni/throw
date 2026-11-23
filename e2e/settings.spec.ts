@@ -14,6 +14,8 @@ test('settings pages switch from the side list or the phone dock, and the accoun
   if (isMobile) {
     await page.getByRole('button', { name: 'Settings page: General' }).click();
     const picker = page.getByRole('dialog', { name: 'Settings', exact: true });
+    // Empty workspace has no project section or Back to board link.
+    await expect(picker.getByRole('link', { name: 'Back to board' })).toHaveCount(0);
     await expect(picker.getByRole('link', { name: 'Account', exact: true })).toBeVisible();
     await page.screenshot({ path: test.info().outputPath('settings-pages.png') });
     await picker.getByRole('link', { name: 'Account', exact: true }).click();
@@ -21,6 +23,7 @@ test('settings pages switch from the side list or the phone dock, and the accoun
     await expect(page.getByRole('button', { name: 'Settings page: Account' })).toBeVisible();
   } else {
     const nav = page.getByRole('navigation', { name: 'Settings pages' });
+    await expect(nav.getByRole('link', { name: 'Back to board' })).toHaveCount(0);
     await expect(nav.getByRole('link', { name: 'Backups' })).toHaveCount(0);
     await nav.getByRole('link', { name: 'Account', exact: true }).click();
     await expect(nav.getByRole('link', { name: 'Account', exact: true })).toHaveAttribute(
@@ -158,4 +161,69 @@ test('a dev build switches its app icon and restores the choice before the app l
     'true',
     { timeout: APP_LOAD_TIMEOUT },
   );
+});
+
+test('unified settings hub lists the active project alongside User settings and returns to its board', async ({
+  page,
+  isMobile,
+}) => {
+  await signUp(page);
+  const addProject = async (name: string) => {
+    if (isMobile) {
+      await page.getByRole('button', { name: 'Switch project or workspace', exact: true }).click();
+      await page.getByRole('menuitem', { name: 'New project', exact: true }).click();
+    } else await page.getByRole('button', { name: 'New project', exact: true }).click();
+    await page.getByLabel('Project name', { exact: true }).fill(name);
+    await page.getByRole('button', { name: 'Create', exact: true }).click();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(name, {
+      timeout: APP_LOAD_TIMEOUT,
+    });
+  };
+  await addProject('Kitchen');
+  await addProject('Garden');
+
+  if (isMobile) {
+    await page.getByRole('button', { name: 'Switch project or workspace', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
+  } else await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await expect(page).toHaveURL(/\/settings\/general$/);
+
+  const openList = async (currentLabel: string) => {
+    if (isMobile) {
+      await page.getByRole('button', { name: `Settings page: ${currentLabel}` }).click();
+      return page.getByRole('dialog', { name: 'Settings', exact: true });
+    }
+    return page.getByRole('navigation', { name: 'Settings pages' });
+  };
+
+  const list = await openList('General');
+  const gardenGroup = list.getByRole('region', { name: 'Garden' });
+  for (const label of ['General', 'Statuses', 'Priorities', 'Tags', 'Trash']) {
+    await expect(gardenGroup.getByRole('link', { name: label, exact: true })).toBeVisible();
+  }
+  await expect(list.getByRole('region', { name: 'User' })).toBeVisible();
+  await gardenGroup.getByRole('link', { name: 'Statuses', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Statuses', exact: true })).toBeVisible();
+
+  const listOnStatuses = await openList('Statuses');
+  await listOnStatuses.getByRole('link', { name: 'Account', exact: true }).click();
+  await expect(page).toHaveURL(/\/settings\/account$/);
+
+  const listOnAccount = await openList('Account');
+  await listOnAccount.getByRole('link', { name: 'Back to board', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Garden');
+
+  if (!isMobile) {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    const rail = page.getByRole('complementary', { name: 'Navigation rail' });
+    await rail.getByRole('button', { name: 'Project menu for Kitchen', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Project settings', exact: true }).click();
+    const nav = page.getByRole('navigation', { name: 'Settings pages' });
+    await expect(nav.getByRole('region', { name: 'Kitchen' })).toBeVisible();
+    await expect(nav.getByRole('region', { name: 'User' })).toBeVisible();
+    await expect(rail.getByRole('link', { name: 'Settings', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  }
 });

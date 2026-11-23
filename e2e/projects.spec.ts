@@ -67,7 +67,7 @@ test('create, edit and confirm deletion of a project from the shell', async ({
   await page.getByLabel('Project name', { exact: true }).fill('New kitchen');
   await page.getByRole('button', { name: 'Blue', exact: true }).click();
   await page.getByRole('button', { name: 'Home icon', exact: true }).click();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('New kitchen');
+  await expect(page.getByText('New kitchen', { exact: true }).first()).toBeVisible();
   expect(new URL(page.url()).pathname).toBe(`${new URL(projectUrl).pathname}/settings`);
   await expect
     .poll(async () =>
@@ -79,7 +79,7 @@ test('create, edit and confirm deletion of a project from the shell', async ({
     )
     .toEqual([{ name: 'New kitchen', color: 'blue', icon: 'house' }]);
   await page.reload();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('New kitchen', {
+  await expect(page.getByLabel('Project name', { exact: true })).toHaveValue('New kitchen', {
     timeout: APP_LOAD_TIMEOUT,
   });
   await editProject(page, isMobile);
@@ -112,7 +112,7 @@ test('create, edit and confirm deletion of a project from the shell', async ({
     .toEqual([null]);
 });
 
-test('rail project menu opens the selected project settings and keeps board settings on boards', async ({
+test('rail project menu opens the selected project settings and keeps settings unified', async ({
   page,
   isMobile,
 }) => {
@@ -122,29 +122,30 @@ test('rail project menu opens the selected project settings and keeps board sett
   await addProject(page, 'Kitchen', false);
   await addProject(page, 'Garden', false);
   const rail = page.getByRole('complementary', { name: 'Navigation rail' });
+  await expect(rail.getByRole('button', { name: 'Workspace trash', exact: true })).toHaveCount(0);
+  await expect(rail.getByRole('button', { name: 'Board settings', exact: true })).toHaveCount(0);
   await rail.getByRole('button', { name: 'Project menu for Kitchen', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Project settings', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'General', exact: true })).toBeVisible({
     timeout: APP_LOAD_TIMEOUT,
   });
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Kitchen');
+  const nav = page.getByRole('navigation', { name: 'Settings pages' });
+  await expect(nav.getByRole('region', { name: 'Kitchen' })).toBeVisible();
+  await expect(nav.getByRole('region', { name: 'User' })).toBeVisible();
   await page.getByLabel('Project name', { exact: true }).fill('Kitchen refit');
   await page.getByLabel('Project name', { exact: true }).press('Enter');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Kitchen refit');
+  await expect(nav.getByRole('region', { name: 'Kitchen refit' })).toBeVisible();
   await page.getByRole('link', { name: 'Back to board', exact: true }).click();
-  const boardSettings = rail.getByRole('button', { name: 'Board settings', exact: true });
-  await boardSettings.click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Kitchen refit');
+  await rail.getByRole('link', { name: 'Settings', exact: true }).click();
+  await expect(page).toHaveURL(/\/settings\/general$/);
   const subtasks = page.getByRole('switch', { name: 'Subtasks as cards', exact: true });
   await expect(subtasks).not.toBeChecked();
   await subtasks.click();
   await expect(subtasks).toBeChecked();
-  await page.keyboard.press('Escape');
-  await expect(boardSettings).toBeFocused();
   // The choice is kept on the device.
   await page.reload();
-  await expect(boardSettings).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
-  await boardSettings.click();
-  await expect(subtasks).toBeChecked();
+  await expect(subtasks).toBeChecked({ timeout: APP_LOAD_TIMEOUT });
 });
 
 test('switch projects and workspaces; restore the last project on reload and first load', async ({
@@ -372,7 +373,7 @@ test('offline workspace and project edits survive reload and replay in order', a
   await page.getByRole('button', { name: 'Launch icon', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('unsaved', { timeout: 40_000 });
   await page.reload();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Edited offline', {
+  await expect(page.getByLabel('Project name', { exact: true })).toHaveValue('Edited offline', {
     timeout: APP_LOAD_TIMEOUT,
   });
   await selectWorkspace(page, 'Personal', false);

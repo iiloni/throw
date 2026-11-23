@@ -118,14 +118,14 @@ test('boards cross-fade, ordered pages slide, and the rail and dock stay put', a
 
   count = (await transitions(page)).length;
   if (isMobile) {
-    await page.getByRole('button', { name: 'Project settings page: General' }).click();
+    await page.getByRole('button', { name: 'Settings page: General' }).click();
     await page
-      .getByRole('dialog', { name: 'Project settings', exact: true })
+      .getByRole('dialog', { name: 'Settings', exact: true })
       .getByRole('link', { name: 'Tags', exact: true })
       .click();
   } else
     await page
-      .getByRole('navigation', { name: 'Project settings pages' })
+      .getByRole('navigation', { name: 'Settings pages' })
       .getByRole('link', { name: 'Tags', exact: true })
       .click();
   const page2 = await nextTransition(page, count);
@@ -138,6 +138,29 @@ test('boards cross-fade, ordered pages slide, and the rail and dock stay put', a
     expect(page2.animations.some((name) => name.includes('(root) page-'))).toBe(false);
   }
   await expect(page.getByRole('heading', { name: 'Tags', exact: true })).toBeVisible();
+
+  // Switching from a project page to a User page in the unified hub keeps the same inner/slide motion.
+  count = (await transitions(page)).length;
+  if (isMobile) {
+    await page.getByRole('button', { name: 'Settings page: Tags' }).click();
+    await page
+      .getByRole('dialog', { name: 'Settings', exact: true })
+      .getByRole('link', { name: 'Account', exact: true })
+      .click();
+  } else
+    await page
+      .getByRole('navigation', { name: 'Settings pages' })
+      .getByRole('link', { name: 'Account', exact: true })
+      .click();
+  const page3 = await nextTransition(page, count);
+  if (isMobile) {
+    expect(page3.types).toEqual(['forward']);
+    expect(page3.names).toContain('dock');
+  } else {
+    expect(page3.types).toEqual(['inner']);
+    expect(page3.animations).toContain('::view-transition-new(settings-page) page-rise');
+  }
+  await expect(page.getByRole('heading', { name: 'Account', exact: true })).toBeVisible();
 
   // Settings pages replace one another in history, so Back leaves them in one step.
   count = (await transitions(page)).length;

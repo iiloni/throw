@@ -31,9 +31,11 @@ default cross-fade of every navigation, opening tasks too. The types:
   slides back.
 - **`enter`: a page with no place in that order** (the workspace trash, or one project's
   settings to another's) fades in with the content entry's 10 px settle.
-- **`inner`: settings side by side.** On a desktop the page list stays put while only the open
-  page beside it changes (`data-settings-page` in `SettingsLayout`), entering as `enter` does.
-  Catch leaves these unanimated; Throw's owner asked that pages not snap.
+- **`inner`: settings side by side.** On a desktop the unified page list (project, User and
+  Admin sections) stays put while only the open page beside it changes (`data-settings-page` in
+  `SettingsLayout`), entering as `enter` does. Switching from one project's settings directly to
+  another project's uses `enter`, since the project section itself changes. Catch leaves these
+  unanimated; Throw's owner asked that pages not snap.
 
 Changes to the search params of the same page get no page transition: opening or closing a
 task, the backlog and the view have their own motion (`TaskScreenSurface`, the drawer), which a

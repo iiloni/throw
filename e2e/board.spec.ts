@@ -288,14 +288,14 @@ test('a task created offline appears immediately, survives reload and gains its 
     ]);
 });
 
-test('board settings opens in the drawer on a phone and in a panel held to the window on desktop', async ({
+test('prototype board settings opens in the drawer on a phone and in a panel held to the window on desktop', async ({
   page,
   isMobile,
 }) => {
   const height = 568;
   await page.setViewportSize({ width: isMobile ? 320 : 1024, height });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await fixture(page, true);
+  await page.goto('/prototype/board');
   const trigger = page.getByRole('button', { name: 'Board settings', exact: true });
   const settings = page.getByRole('dialog', { name: 'Board settings', exact: true });
   const theme = settings.getByRole('group', { name: 'Theme', exact: true });
@@ -358,28 +358,43 @@ test('rails, galleries, board settings and the phone tray keep their distinct la
   browserName,
 }) => {
   await fixture(page);
-  await page.getByRole('button', { name: 'Board settings', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Board settings', exact: true })).toHaveCount(0);
+  const openSettings = async () => {
+    if (isMobile) {
+      await page.getByRole('button', { name: 'Switch project or workspace', exact: true }).click();
+      await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
+    } else await page.getByRole('link', { name: 'Settings', exact: true }).click();
+    await expect(page).toHaveURL(/\/settings\/general$/);
+  };
+  const backToBoard = async () => {
+    if (isMobile) await page.getByRole('button', { name: 'Settings page: General' }).click();
+    await page.getByRole('link', { name: 'Back to board', exact: true }).click();
+  };
+  await openSettings();
   await page.getByRole('switch', { name: 'Priority labels', exact: true }).click();
   await page.getByRole('switch', { name: 'Priority on cards', exact: true }).click();
-  await page.getByRole('switch', { name: 'Scrollbars', exact: true }).click();
   const backlogRail = page
     .getByRole('group', { name: 'Backlog', exact: true })
     .getByRole('button', { name: 'With board' });
   if (isMobile) {
-    // A phone has no columns or side rails for these to change.
+    // A phone has no columns, side rails or overlay scrollbars for these to change.
     await expect(backlogRail).toHaveCount(0);
     await expect(page.getByRole('switch', { name: 'Column backgrounds' })).toHaveCount(0);
-  } else await backlogRail.click();
-  await page.keyboard.press('Escape');
-  await expect(page.locator('html')).not.toHaveAttribute('data-hide-scrollbars');
+    await expect(page.getByRole('switch', { name: 'Scrollbars' })).toHaveCount(0);
+  } else {
+    await page.getByRole('switch', { name: 'Scrollbars', exact: true }).click();
+    await backlogRail.click();
+  }
+  await backToBoard();
+  if (!isMobile) await expect(page.locator('html')).not.toHaveAttribute('data-hide-scrollbars');
   await page.reload();
-  await page.getByRole('button', { name: 'Board settings', exact: true }).click();
+  await openSettings();
   await expect(page.getByRole('switch', { name: 'Priority labels', exact: true })).toHaveAttribute(
     'aria-checked',
     'true',
   );
   if (!isMobile) await expect(backlogRail).toHaveAttribute('aria-pressed', 'true');
-  await page.keyboard.press('Escape');
+  await backToBoard();
   await openBacklog(page, isMobile);
   if (isMobile) {
     const tray = page.getByRole('region', { name: 'Backlog', exact: true });

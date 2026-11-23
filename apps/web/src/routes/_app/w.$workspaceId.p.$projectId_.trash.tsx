@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useShell } from '@/components/AppShell/shell';
-import { ProjectSettingsFrame } from '@/components/ProjectSettings/ProjectSettings';
 import { Trash } from '@/components/Trash/Trash';
 import { useLocalRowsReady, useProjects } from '@/lib/collections';
 import { useLaunchScreenReady } from '@/lib/launchScreen';
@@ -37,9 +36,5 @@ function Page() {
     return (
       <p className="p-6">Project unavailable. Choose another project from the navigation menu.</p>
     );
-  return (
-    <ProjectSettingsFrame project={shell.project} current="trash">
-      <Trash key={shell.project.id} projectId={shell.project.id} embedded />
-    </ProjectSettingsFrame>
-  );
+  return <Trash key={shell.project.id} projectId={shell.project.id} embedded />;
 }
