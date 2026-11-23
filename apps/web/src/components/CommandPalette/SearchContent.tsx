@@ -29,6 +29,7 @@ import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { Hint } from '@/components/Hint/Hint';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { TaskTags } from '@/components/TaskTags/TaskTags';
+import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useAllTags, useAllTaskTags, useTasks } from '@/lib/collections';
 import { curves, springs } from '@/lib/motion';
 import { useAwaitingSync } from '@/lib/syncStatus';
@@ -666,15 +667,15 @@ export function PhoneSearchContent({
       {/* A size container, so the filter card can fit the room above the field however the
           keyboard leaves it. */}
       <div className="relative flex min-h-0 flex-1 flex-col [container-type:size]">
-        <div
-          ref={search.list}
-          className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pt-2 pb-3"
-        >
-          {/* Few results sit by the field; more scroll from the best one down. */}
-          <div className="mt-auto">
-            <SearchResults search={search} />
-          </div>
-        </div>
+        <ScrollArea edges className="flex-1 [--scrollbar-inset:0.5rem]">
+          <ScrollAreaViewport ref={search.list}>
+            {/* Few results sit by the field; more scroll from the best one down. */}
+            <div className="mt-auto px-4 pt-2 pb-3">
+              <SearchResults search={search} />
+            </div>
+          </ScrollAreaViewport>
+          <ScrollBar />
+        </ScrollArea>
         {/* As in Catch, the filter card covers the results rather than pushing them away. */}
         <div className="pointer-events-none absolute inset-x-3 bottom-3 flex flex-col justify-end">
           <AnimatePresence initial={false}>
@@ -690,8 +691,18 @@ export function PhoneSearchContent({
                 transition={reduced ? { duration: 0 } : springs.pane}
               >
                 {/* The board's filter sections fit what is left above their tabs. */}
-                <div className="glass-thick max-h-[calc(100cqh-1.5rem)] overflow-y-auto overscroll-contain rounded-[var(--dock-radius)] p-3 [--board-filter-view-max:min(24rem,calc(100cqh-6.75rem))]">
-                  <FilterOptions search={search} />
+                <div className="glass-thick flex max-h-[calc(100cqh-1.5rem)] flex-col overflow-hidden rounded-[var(--dock-radius)] [--board-filter-view-max:min(24rem,calc(100cqh-6.75rem))]">
+                  <ScrollArea
+                    edges
+                    className="flex min-h-0 flex-1 flex-col [--scrollbar-inset:0.75rem]"
+                  >
+                    <ScrollAreaViewport className="h-auto w-full min-h-0 flex-1">
+                      <div className="p-3">
+                        <FilterOptions search={search} />
+                      </div>
+                    </ScrollAreaViewport>
+                    <ScrollBar />
+                  </ScrollArea>
                 </div>
               </motion.div>
             )}

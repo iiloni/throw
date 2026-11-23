@@ -25,6 +25,7 @@ import {
   visibleIds,
 } from '@/components/Board/state';
 import { Hint } from '@/components/Hint/Hint';
+import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { haptics } from '@/lib/haptics';
 import { curves, springs } from '@/lib/motion';
 import { createTask } from '@/lib/tasks';
@@ -209,9 +210,14 @@ export function BoardSearchSidebar() {
             style={{ width: SIDEBAR_WIDTH }}
             className="flex h-full flex-col pt-[calc(var(--safe-top)+1.25rem)] pb-[max(1.5rem,calc(var(--safe-bottom)+0.75rem))] pl-5"
           >
-            <div className="-mr-1 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 pb-3">
-              <QuickFilters />
-            </div>
+            <ScrollArea edges className="-mr-1 flex-1 [--scrollbar-inset:0.5rem]">
+              <ScrollAreaViewport>
+                <div className="pr-1 pb-3">
+                  <QuickFilters />
+                </div>
+              </ScrollAreaViewport>
+              <ScrollBar />
+            </ScrollArea>
             <div className="relative">
               {/* Over the tags, rising from just above what sits at the foot. */}
               <div className="absolute inset-x-0 bottom-full">

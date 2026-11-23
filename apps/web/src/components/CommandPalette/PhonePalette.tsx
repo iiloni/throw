@@ -9,6 +9,7 @@ import type { DrawerCard, DrawerPage } from '@/components/Drawer/Drawer';
 import { TagPicker } from '@/components/TagPicker/TagPicker';
 import { ControlButtons, panelTitle } from '@/components/TaskDetails/TaskControls';
 import { PriorityOptions, StatusOptions } from '@/components/TaskDetails/TaskPickers';
+import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useStatuses, useTags } from '@/lib/collections';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
@@ -117,15 +118,23 @@ export function usePhonePalette({
               fit: true,
               dock: true,
               content: (
-                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[calc(var(--safe-bottom)+1rem)]">
-                  <CapturePanelContent
-                    panel={panel}
-                    draft={draft}
-                    project={project}
-                    onChange={change}
-                    onDone={() => setPanel(null)}
-                  />
-                </div>
+                <ScrollArea
+                  edges
+                  className="flex min-h-0 flex-1 flex-col [--scrollbar-inset:0.5rem]"
+                >
+                  <ScrollAreaViewport className="h-auto w-full min-h-0 flex-1">
+                    <div className="pb-[calc(var(--safe-bottom)+1rem)]">
+                      <CapturePanelContent
+                        panel={panel}
+                        draft={draft}
+                        project={project}
+                        onChange={change}
+                        onDone={() => setPanel(null)}
+                      />
+                    </div>
+                  </ScrollAreaViewport>
+                  <ScrollBar />
+                </ScrollArea>
               ),
             }
           : null,
