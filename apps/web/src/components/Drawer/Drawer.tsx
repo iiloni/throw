@@ -4,13 +4,16 @@ import {
   animate,
   type MotionStyle,
   motion,
+  useIsPresent,
   useMotionValue,
   useReducedMotion,
   useTransform,
 } from 'motion/react';
 import {
   type CSSProperties,
+  type FocusEventHandler,
   type ReactNode,
+  type Ref,
   type RefObject,
   useEffect,
   useLayoutEffect,
@@ -494,18 +497,24 @@ export function Drawer({
           style={{ '--drawer-hidden': `${hidden + footerHeight}px` } as CSSProperties}
         >
           {shown ? (
-            // biome-ignore lint/a11y/noStaticElementInteractions: notes where focus went, without handling it
-            <div
-              ref={body}
-              key={shown.key}
-              inert={!page}
-              onFocus={(event) => {
-                if (carded && page && typing(event.target)) setTypingInPage(true);
-              }}
-              className={cn('flex min-h-0 flex-col', shown.fit ? 'max-h-full' : 'flex-1')}
-            >
-              {shown.content}
-            </div>
+            // One page taking another's place, as the dock's tabs do, fades across on the
+            // drawer's own spring while the drawer moves to the new page's height, as Catch's
+            // note toolbar fades its panels with their height. The leaving page lifts out of
+            // the flow so the drawer measures only the new one.
+            <AnimatePresence initial={false} mode="popLayout">
+              <PageBody
+                key={shown.key}
+                bodyRef={body}
+                live={!!page}
+                reduced={!!reduced}
+                onFocus={(event) => {
+                  if (carded && page && typing(event.target)) setTypingInPage(true);
+                }}
+                className={cn('flex min-h-0 flex-col', shown.fit ? 'max-h-full' : 'flex-1')}
+              >
+                {shown.content}
+              </PageBody>
+            </AnimatePresence>
           ) : (
             children
           )}
@@ -523,6 +532,58 @@ export function Drawer({
         </div>
       </motion.section>
     </>
+  );
+}
+
+/** A page's content. Only the page arriving or shown is the drawer's body; a leaving one is inert. */
+function PageBody({
+  ref,
+  bodyRef,
+  live,
+  reduced,
+  onFocus,
+  className,
+  children,
+}: {
+  ref?: Ref<HTMLDivElement>;
+  bodyRef: RefObject<HTMLDivElement | null>;
+  live: boolean;
+  reduced: boolean;
+  onFocus: FocusEventHandler<HTMLDivElement>;
+  className: string;
+  children: ReactNode;
+}) {
+  const isPresent = useIsPresent();
+  const own = useRef<HTMLDivElement>(null);
+  // Before the drawer's own layout effects, which measure the body to place the drawer.
+  useLayoutEffect(() => {
+    if (!isPresent) return;
+    bodyRef.current = own.current;
+    return () => {
+      if (bodyRef.current === own.current) bodyRef.current = null;
+    };
+  }, [isPresent, bodyRef]);
+  return (
+    <motion.div
+      ref={(element: HTMLDivElement | null) => {
+        own.current = element;
+        if (typeof ref === 'function') ref(element);
+        else if (ref) ref.current = element;
+      }}
+      inert={!live || !isPresent}
+      onFocus={onFocus}
+      className={className}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      // Gone quickly, as Catch's reminder pages leave, so the two never read as one muddle.
+      exit={{
+        opacity: 0,
+        transition: reduced ? { duration: 0 } : { duration: 0.16, ease: 'easeIn' },
+      }}
+      transition={reduced ? { duration: 0 } : springs.smooth}
+    >
+      {children}
+    </motion.div>
   );
 }
 
