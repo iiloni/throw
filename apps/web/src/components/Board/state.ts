@@ -197,6 +197,41 @@ export function setRailWidth(zone: keyof RailWidths, width: number | null) {
  */
 export const railResize = createStore<{ zone: keyof RailWidths; width: number } | null>(null);
 
+/**
+ * How wide the desktop task split pane is, without its grip and margin. Kept on the device
+ * and shared across project boards and the cross-project board.
+ */
+export const DEFAULT_TASK_PANE_WIDTH = 440;
+const taskPaneWidthSchema = z.number().finite().positive();
+const TASK_PANE_WIDTH_KEY = 'throw-task-pane-width';
+
+export function useTaskPaneWidth() {
+  return usePersistentState(TASK_PANE_WIDTH_KEY, taskPaneWidthSchema, DEFAULT_TASK_PANE_WIDTH);
+}
+
+export function setTaskPaneWidth(width: number) {
+  if (!Number.isFinite(width) || width <= 0) return;
+  const value = Math.round(width);
+  if (readPreference(TASK_PANE_WIDTH_KEY, taskPaneWidthSchema, DEFAULT_TASK_PANE_WIDTH) !== value)
+    writePreference(TASK_PANE_WIDTH_KEY, value);
+}
+
+/**
+ * Clamps a task pane width to the frame's limits without altering the stored preference.
+ * Before the frame has been measured (`frameWidth <= 0`), only the minimum applies.
+ */
+export function clampTaskPaneWidth(width: number, frameWidth: number, min: number) {
+  if (frameWidth <= 0) return Math.max(min, width);
+  const max = Math.max(min, frameWidth * 0.62);
+  return Math.min(max, Math.max(min, width));
+}
+
+/**
+ * The task pane's width while its split handle is held, or null at rest. Kept in a store so
+ * the board beside it tracks the drag without writing to storage on every frame.
+ */
+export const taskPaneResize = createStore<number | null>(null);
+
 export type BoardState = {
   boards: BoardData[];
   /** Null only in the mock prototype. The drag step will extend this boundary. */

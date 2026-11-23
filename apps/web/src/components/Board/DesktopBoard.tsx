@@ -20,7 +20,6 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { springs } from '@/lib/motion';
-import { createStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 import { BoardColumn, ColumnHeader } from './BoardColumn';
 import { BoardSettingsPanel } from './BoardSettingsPanel';
@@ -40,16 +39,20 @@ import { StatusTile } from './StatusTile';
 import {
   type BoardState,
   board,
+  clampTaskPaneWidth,
   countIn,
   current,
   railResize,
   selectProject,
   sendTasks,
   setSubtasksAsCards,
+  setTaskPaneWidth,
+  taskPaneResize,
   update,
   useBoardSettings,
   useCollapsedColumns,
   useRailWidths,
+  useTaskPaneWidth,
 } from './state';
 import { PANE_MIN, SplitHandle, TaskPane } from './TaskView';
 import { TaskPaneWidthContext } from './taskMotionContext';
@@ -146,7 +149,7 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
   const [row, rowWidth] = useWidth();
   // The row and the task pane together, which keep their width while the pane slides.
   const [split, splitWidth] = useWidth();
-  const paneSpace = usePaneSpace(state);
+  const paneSpace = usePaneSpace(state, frameWidth);
   const [railWidths] = useRailWidths();
   const resizing = railResize.use();
   const active = project.statuses.filter((status) => status.category === 'active');
@@ -386,12 +389,16 @@ function StatusColumn({ status, index }: { status: Status; index: number }) {
   );
 }
 
-/** The open task pane's width, without its grip and margin; shared with the board beside it. */
-const paneWidthStore = createStore(440);
-
 function openTaskOf(state: BoardState) {
   const data = current(state);
   return [...data.tasks, ...(data.hiddenTasks ?? [])].find((task) => task.id === state.openTaskId);
+}
+
+/** The effective task pane width: live drag width if held, otherwise stored, clamped to the frame. */
+function useEffectivePaneWidth(frameWidth: number) {
+  const [storedWidth] = useTaskPaneWidth();
+  const liveWidth = taskPaneResize.use();
+  return clampTaskPaneWidth(liveWidth ?? storedWidth, frameWidth, PANE_MIN);
 }
 
 /**
@@ -399,8 +406,8 @@ function openTaskOf(state: BoardState) {
  * board lays its galleries out for at once, as Catch's page takes its width beside a note, so
  * their cards move once instead of on every frame of the slide.
  */
-function usePaneSpace(state: BoardState) {
-  const paneWidth = paneWidthStore.use();
+function usePaneSpace(state: BoardState, frameWidth: number) {
+  const paneWidth = useEffectivePaneWidth(frameWidth);
   return openTaskOf(state) ? paneWidth + HANDLE_WIDTH + PANE_MARGIN : 0;
 }
 
@@ -409,9 +416,39 @@ function usePaneSpace(state: BoardState) {
  */
 export function OpenTaskPane({ frameWidth }: { frameWidth: number }) {
   const state = board.use();
-  const paneWidth = paneWidthStore.use();
+  const paneWidth = useEffectivePaneWidth(frameWidth);
   const [resizing, setResizing] = useState(false);
   const openTask = openTaskOf(state);
+
+  useEffect(() => {
+    if (!openTask) {
+      taskPaneResize.set(null);
+      setResizing(false);
+    }
+  }, [openTask]);
+
+  useEffect(() => () => taskPaneResize.set(null), []);
+
+  function resize(width: number, keyboard: boolean) {
+    if (keyboard) {
+      taskPaneResize.set(null);
+      setTaskPaneWidth(width);
+      return;
+    }
+    taskPaneResize.set(width);
+  }
+
+  function hold(active: boolean) {
+    if (active) {
+      setResizing(true);
+      return;
+    }
+    const live = taskPaneResize.get();
+    if (live !== null) setTaskPaneWidth(live);
+    taskPaneResize.set(null);
+    setResizing(false);
+  }
+
   return (
     <AnimatePresence initial={false}>
       {openTask && (
@@ -426,8 +463,8 @@ export function OpenTaskPane({ frameWidth }: { frameWidth: number }) {
           <SplitHandle
             width={paneWidth}
             max={Math.max(PANE_MIN, frameWidth * 0.62)}
-            onResize={(width) => paneWidthStore.set(width)}
-            onActive={setResizing}
+            onResize={resize}
+            onActive={hold}
           />
           <div className="min-w-0 flex-1" style={{ width: paneWidth }}>
             <TaskPaneWidthContext value={paneWidth}>
