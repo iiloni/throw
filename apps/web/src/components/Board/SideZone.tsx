@@ -153,7 +153,7 @@ export function SideZone({ zone, fullWidth }: { zone: Zone; fullWidth: number })
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
-            <div className="flex h-14 shrink-0 items-center gap-2 pr-2.5 pl-5">
+            <div className="column-head flex h-14 shrink-0 items-center gap-2 pr-2.5 pl-5">
               <h2 className="font-display font-semibold text-lg tracking-[-0.01em]">{title}</h2>
               <span className="flex-1 text-muted-foreground text-sm tabular-nums">{count}</span>
               {zone === 'backlog' && state.actions && (

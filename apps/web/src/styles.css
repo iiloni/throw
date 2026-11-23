@@ -615,6 +615,17 @@
 }
 /* The column that would take the card. */
 /* An active column sits on a faint surface of its own, which sets it apart from its neighbours. */
+/*
+ * A colored status draws a stripe above its header. While any column on the board has one,
+ * every header and strip makes room for it, so titles and first cards stay in line.
+ */
+body:has(section.board-column[data-column-color]) .column-head {
+  height: 4.125rem;
+  padding-top: 0.625rem;
+}
+body:has(section.board-column[data-column-color]) .column-strip {
+  padding-top: 1.8125rem;
+}
 .board-column[data-surface] {
   --column: color-mix(in oklab, var(--foreground) 3.5%, transparent);
 }

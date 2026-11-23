@@ -97,7 +97,7 @@ export function BoardColumn({
         <span
           aria-hidden
           data-column-stripe=""
-          className="pointer-events-none absolute inset-x-4 top-2 h-1 rounded-full bg-[var(--column-accent)]"
+          className="pointer-events-none absolute inset-x-4 top-2 z-10 h-1 rounded-full bg-[var(--column-accent)]"
         />
       )}
       <motion.div
@@ -164,7 +164,7 @@ function ColumnStrip({
           data-over={over ? '' : undefined}
           onClick={onExpand}
           className={cn(
-            'board-column flex min-h-0 flex-1 flex-col items-center gap-3 rounded-3xl pt-[1.1875rem] pb-4 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60',
+            'board-column column-strip flex min-h-0 flex-1 flex-col items-center gap-3 rounded-3xl pt-[1.1875rem] pb-4 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60',
             over && 'text-foreground',
           )}
         >
@@ -204,7 +204,7 @@ export function ColumnHeader({
   const held = drag.use();
   const holding = makingWay(held);
   return (
-    <div className="flex h-14 shrink-0 items-center px-2.5 group-data-[column-color]/column:h-[4.125rem] group-data-[column-color]/column:pt-2.5">
+    <div className="column-head flex h-14 shrink-0 items-center px-2.5">
       <h2 className="min-w-0 flex-1">
         <Hint label={`Collapse ${name} column`} side="bottom" disabled={holding}>
           <button
