@@ -327,6 +327,27 @@ export function exposeChanges(changes: ActivityChange[]) {
   });
 }
 
+/** One task's summary as a relation endpoint, for replayed relation responses. */
+export async function relationTargetOf(actor: McpActor, taskId: string) {
+  const [target] = await db
+    .select({
+      id: tasks.id,
+      key,
+      projectId: tasks.projectId,
+      title: tasks.title,
+      category: statuses.category,
+      effectivelyTrashed: sql<boolean>`${trashed}`,
+    })
+    .from(tasks)
+    .innerJoin(projects, eq(tasks.projectId, projects.id))
+    .innerJoin(statuses, eq(tasks.statusId, statuses.id))
+    .leftJoin(parent, eq(tasks.parentId, parent.id))
+    .where(and(eq(tasks.id, taskId), inArray(tasks.workspaceId, workspacesFor(actor))))
+    .limit(1);
+  if (!target) throw new ToolError('Task not found.');
+  return target;
+}
+
 /** A task's relations, as it sees them, with the tasks on their other ends. */
 export async function taskRelationsOf(actor: McpActor, taskId: string) {
   const rows = await db

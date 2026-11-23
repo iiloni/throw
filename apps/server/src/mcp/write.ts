@@ -22,6 +22,7 @@ import { markdownToBlocks } from './markdown';
 import {
   exposeChanges,
   findTask,
+  relationTargetOf,
   requireProject,
   requireTask,
   ToolError,
@@ -175,10 +176,18 @@ export async function addTaskRelationTool(
     throw new ToolError(
       `${relationConflictMessage.reverse}. Remove it first if this direction is the right one.`,
     );
+  const relation =
+    'removed' in result && result.removed
+      ? {
+          id: result.relation.id,
+          relation: input.relation,
+          task: await relationTargetOf(actor, other.id),
+        }
+      : await relationOf(actor, task, result.relation.id);
   return {
     operationId,
     outcome: result.relation.id === id ? 'added' : 'existing',
-    relation: await relationOf(actor, task, result.relation.id),
+    relation,
   };
 }
 

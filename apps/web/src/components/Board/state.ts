@@ -237,15 +237,21 @@ export function update(
   }
 }
 
-/** A subtask opened from its parent's pane goes back to that pane when it is left. */
+/**
+ * A subtask or related task opened from a pane goes back to that pane when left. Following a
+ * relation back to a task already earlier in the trail unwinds to it instead of stacking a
+ * duplicate screen key.
+ */
 export function openSubtask(taskId: string, origin?: HTMLElement | null) {
-  update(
-    (state) => ({
+  update((state) => {
+    if (state.openTaskId === taskId) return {};
+    const at = state.taskTrail.indexOf(taskId);
+    if (at >= 0) return { openTaskId: taskId, taskTrail: state.taskTrail.slice(0, at) };
+    return {
       openTaskId: taskId,
       taskTrail: state.openTaskId ? [...state.taskTrail, state.openTaskId] : [],
-    }),
-    origin,
-  );
+    };
+  }, origin);
 }
 
 /** A subtask just added from its parent's pane, until the board has its row to open. */

@@ -6,7 +6,7 @@ import {
   deleteTaskRelation,
   findTaskRelation,
 } from '../lib/taskRelationWrites';
-import { requireTask, taskRelationsOf } from './read';
+import { relationTargetOf, requireTask, taskRelationsOf } from './read';
 import { addTaskRelationTool, removeTaskRelationTool } from './write';
 
 vi.mock('../lib/commentWrites', () => ({ createComment: vi.fn() }));
@@ -18,6 +18,7 @@ vi.mock('../lib/taskRelationWrites', () => ({
 }));
 vi.mock('./read', () => ({
   findTask: vi.fn(),
+  relationTargetOf: vi.fn(),
   requireProject: vi.fn(),
   requireTask: vi.fn(),
   taskRelationsOf: vi.fn(),
@@ -170,5 +171,35 @@ describe('MCP relation tools', () => {
     );
     expect(again).toMatchObject({ outcome: 'absent', relationId });
     expect(mcpTools.remove_task_relation.input.safeParse({ task: 'THR-34' }).success).toBe(false);
+  });
+
+  test('answers as the first call did when retrying an operationId after removal', async () => {
+    vi.mocked(createTaskRelation).mockImplementationOnce(async (_, input) => ({
+      txid: null,
+      removed: true,
+      relation: { ...input, workspaceId: actor.workspaceId, createdAt: new Date() },
+    }));
+    vi.mocked(relationTargetOf).mockResolvedValueOnce({
+      ...blocker,
+      projectId: uuidv7(),
+      title: 'Blocker',
+      category: 'active',
+      effectivelyTrashed: false,
+    });
+    const result = await addTaskRelationTool(
+      actor,
+      mcpTools.add_task_relation.input.parse({
+        task: 'THR-34',
+        relation: 'blocked_by',
+        other: 'OPS-3',
+        operationId,
+      }),
+    );
+    expect(result).toMatchObject({
+      operationId,
+      outcome: 'added',
+      relation: { relation: 'blocked_by', task: { id: blocker.id, key: 'OPS-3' } },
+    });
+    expect(taskRelationsOf).not.toHaveBeenCalled();
   });
 });

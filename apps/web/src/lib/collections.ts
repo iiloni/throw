@@ -822,8 +822,10 @@ const emptyRelations: TaskRelation[] = [];
 
 /** Every task relation in the user's workspaces, for board cards and the task view. */
 export function useTaskRelations() {
-  const { data, isLoading } = useLiveQuery((q) => q.from({ relation: taskRelationsCollection }));
-  return { relations: data ?? emptyRelations, isLoading };
+  const { data = emptyRelations, isLoading } = useLiveQuery((q) =>
+    q.from({ relation: taskRelationsCollection }),
+  );
+  return { relations: useSteadyRows(data), isLoading };
 }
 
 /** A reload must wait for in-flight writes to reach durable storage or the server. */

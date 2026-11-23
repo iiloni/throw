@@ -6,6 +6,7 @@ import {
   current,
   foldingColumnOf,
   initialBoard,
+  openSubtask,
   setSubtasksAsCards,
   update,
   useCollapsedColumns,
@@ -103,5 +104,26 @@ describe('folded columns', () => {
       active: true,
       cancelled: true,
     });
+  });
+});
+
+describe('task trail', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    board.set(initialBoard(mockBoards()));
+  });
+
+  it('unwinds instead of stacking a duplicate when following a relation back into the trail', () => {
+    const [a, b, c] = current().tasks;
+    update({ openTaskId: a!.id });
+    openSubtask(b!.id);
+    openSubtask(c!.id);
+    expect(board.get().taskTrail).toEqual([a!.id, b!.id]);
+    expect(board.get().openTaskId).toBe(c!.id);
+
+    // Following a link back to A unwinds B and C rather than pushing C onto [A, B] with A open.
+    openSubtask(a!.id);
+    expect(board.get().openTaskId).toBe(a!.id);
+    expect(board.get().taskTrail).toEqual([]);
   });
 });

@@ -195,6 +195,10 @@ test('relations link tasks across projects, replay safely and refuse reverse lin
   expect(
     await (await request.delete(`/api/task-relations/${blocks.id}`, { headers })).json(),
   ).toEqual({ txid: null });
+  // Replaying the original create after removal must not resurrect the deleted relation.
+  const resurrected = await request.post('/api/task-relations', { headers, data: blocks });
+  expect(resurrected.status()).toBe(200);
+  expect(await resurrected.json()).toEqual({ txid: null });
   // Purging a task takes its links with it.
   await request.patch(`/api/tasks/${sibling}`, {
     headers,
@@ -290,6 +294,8 @@ test('MCP agents add, read and remove relations by key, and follow them in the f
     expect(
       (await call(client, 'remove_task_relation', { relationId: added.relation.id })).outcome,
     ).toBe('absent');
+    // Retrying the original add after removal answers as before without resurrecting the link.
+    expect((await call(client, 'add_task_relation', args)).relation.id).toBe(added.relation.id);
     expect((await call(client, 'get_task', { task: 'APP-1' })).relations).toEqual([]);
   } finally {
     await client.close();

@@ -110,16 +110,17 @@ async function recordRelation(
 
 export type CreateRelationResult =
   | { txid: number; relation: RelationRow }
-  /** A replay, or the same link made by another relation; `relation` is the stored one. */
-  | { txid: null; relation: RelationRow }
+  /** A replay (including after removal), or the same link made by another relation. */
+  | { txid: null; relation: RelationRow; removed?: boolean }
   | 'not-found'
   | 'other-workspace'
   | 'taken'
   | 'reverse';
 
 /**
- * Links two tasks of one workspace. A create resent with its id answers as before, and one
- * for a link that already exists under another id (two devices offline) changes nothing.
+ * Links two tasks of one workspace. A create resent with its id answers as before (without
+ * resurrecting a relation that was removed meanwhile), and one for a link that already exists
+ * under another id (two devices offline) changes nothing.
  */
 export function createTaskRelation(
   actor: WriteActor,
@@ -129,28 +130,70 @@ export function createTaskRelation(
     const ends = await lockPair(tx, actor, input.sourceTaskId, input.targetTaskId);
     if (!ends.source || !ends.target) return 'not-found';
     if (ends.source.workspaceId !== ends.target.workspaceId) return 'other-workspace';
+    const workspaces = memberWorkspaces(tx, actor.userId, actor.workspaceId);
     const pairRows = await tx
       .select()
       .from(taskRelations)
       .where(
-        or(
-          and(
-            eq(taskRelations.sourceTaskId, input.sourceTaskId),
-            eq(taskRelations.targetTaskId, input.targetTaskId),
-          ),
-          and(
-            eq(taskRelations.sourceTaskId, input.targetTaskId),
-            eq(taskRelations.targetTaskId, input.sourceTaskId),
+        and(
+          inArray(taskRelations.workspaceId, workspaces),
+          or(
+            and(
+              eq(taskRelations.sourceTaskId, input.sourceTaskId),
+              eq(taskRelations.targetTaskId, input.targetTaskId),
+            ),
+            and(
+              eq(taskRelations.sourceTaskId, input.targetTaskId),
+              eq(taskRelations.targetTaskId, input.sourceTaskId),
+            ),
           ),
         ),
       );
-    const [byId] = await tx.select().from(taskRelations).where(eq(taskRelations.id, input.id));
+    const [byId] = await tx
+      .select()
+      .from(taskRelations)
+      .where(and(eq(taskRelations.id, input.id), inArray(taskRelations.workspaceId, workspaces)));
     if (byId) {
       const same =
         byId.sourceTaskId === input.sourceTaskId &&
         byId.targetTaskId === input.targetTaskId &&
         byId.kind === input.kind;
       return same ? { txid: null, relation: byId } : 'taken';
+    }
+    // A replayed create for a relation already removed must not resurrect it or duplicate history.
+    const [prior] = await tx
+      .select({ changes: taskActivity.changes, createdAt: taskActivity.createdAt })
+      .from(taskActivity)
+      .where(
+        and(
+          eq(taskActivity.taskId, input.sourceTaskId),
+          inArray(taskActivity.workspaceId, workspaces),
+          sql`${taskActivity.changes} @> ${JSON.stringify([{ field: 'relations', relationId: input.id }])}::jsonb`,
+        ),
+      )
+      .limit(1);
+    if (prior) {
+      const same = prior.changes.some(
+        (change) =>
+          change.field === 'relations' &&
+          change.relationId === input.id &&
+          change.relation === input.kind &&
+          (change.requested === input.targetTaskId || change.previous === input.targetTaskId),
+      );
+      return same
+        ? {
+            txid: null,
+            removed: true,
+            relation: {
+              id: input.id,
+              workspaceId: ends.source.workspaceId,
+              sourceTaskId: input.sourceTaskId,
+              targetTaskId: input.targetTaskId,
+              kind: input.kind,
+              createdAt: prior.createdAt,
+            },
+          }
+        : 'taken';
     }
     const conflict = relationConflict(pairRows, input);
     if (conflict === 'exists') {
@@ -172,9 +215,11 @@ export function createTaskRelation(
         targetTaskId: input.targetTaskId,
         kind: input.kind,
       })
+      .onConflictDoNothing({ target: taskRelations.id })
       .returning();
-    await recordRelation(tx, actor, relation!, { source: ends.source, target: ends.target }, true);
-    return { txid: await currentTxid(tx), relation: relation! };
+    if (!relation) return 'taken';
+    await recordRelation(tx, actor, relation, { source: ends.source, target: ends.target }, true);
+    return { txid: await currentTxid(tx), relation };
   });
 }
 
