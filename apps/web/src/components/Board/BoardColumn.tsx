@@ -204,7 +204,7 @@ export function ColumnHeader({
   const held = drag.use();
   const holding = makingWay(held);
   return (
-    <div className="flex h-14 shrink-0 items-center px-2.5">
+    <div className="flex h-14 shrink-0 items-center px-2.5 group-data-[column-color]/column:h-[4.125rem] group-data-[column-color]/column:pt-2.5">
       <h2 className="min-w-0 flex-1">
         <Hint label={`Collapse ${name} column`} side="bottom" disabled={holding}>
           <button
