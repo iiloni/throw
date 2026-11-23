@@ -178,15 +178,16 @@ test('search finds a task by its tag or the tag above it, and shows the tag', as
     primaryTagId: garden.id,
   });
   await expect(page.getByRole('article', { name: /Weed the beds/ })).toBeVisible();
-  for (const [query, tag] of [
-    ['garden', 'Garden'],
-    ['home', 'Home'],
+  // Garden shows as the card's badge; Home, above it, is named beside the identifier.
+  for (const [query, tag, named] of [
+    ['garden', 'Garden', 0],
+    ['home', 'Home', 1],
   ] as const) {
     await open(page);
     await input(page).fill(query);
     const result = palette(page).getByRole('option', { name: /Weed the beds/ });
     await expect(result).toBeVisible();
-    await expect(result.getByLabel('Tag')).toHaveCount(1);
+    await expect(result.getByLabel('Tag')).toHaveCount(named);
     await expect(result).toContainText(tag);
     await page.keyboard.press('Escape');
     await expect(palette(page)).toHaveCount(0);

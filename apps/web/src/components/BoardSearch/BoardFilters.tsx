@@ -207,10 +207,10 @@ export function BoardFilters({ className }: { className?: string }) {
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
-                      transition={reduced ? { duration: 0 } : springs.smooth}
+                      transition={reduced ? { duration: 0 } : springs.pane}
                     >
+                      {/* One row for every field, so its pill slides to the new default. */}
                       <Choice
-                        key={order.field}
                         className="mt-1.5"
                         label="Order"
                         value={order.direction}
@@ -422,7 +422,8 @@ function FilterTabContents({ children, tab }: { children: ReactNode; tab: Filter
       return;
     }
     let cancelled = false;
-    const animation = animate(surface, { height: [from, to] }, springs.smooth);
+    // No bounce: the surface clips, so dipping below the new height would cut off the top.
+    const animation = animate(surface, { height: [from, to] }, springs.pane);
     void animation.then(() => {
       if (!cancelled) surface.style.removeProperty('height');
     });

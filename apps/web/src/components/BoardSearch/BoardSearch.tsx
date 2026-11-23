@@ -251,7 +251,8 @@ function FilterPanel({ open }: { open: boolean }) {
           initial={{ height: 0 }}
           animate={{ height: 'auto' }}
           exit={{ height: 0, transition: reduced ? { duration: 0 } : curves.fold }}
-          transition={reduced ? { duration: 0 } : springs.smooth}
+          // No bounce: the card clips, so dipping below its height would cut off its top.
+          transition={reduced ? { duration: 0 } : springs.pane}
         >
           <section
             id="board-filter-panel"

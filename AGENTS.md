@@ -351,7 +351,8 @@ Throw moves as Catch does (Catch's `docs/decisions/0003-design-system-and-motion
     reflowing.
   - `springs.bouncy` (0.45 s, bounce 0.28): surfaces that should feel thrown or pop open.
   - `springs.pane` (0.45 s, no bounce): edge-docked panes and side columns, where bounce
-    would pull them off the screen edge.
+    would pull them off the screen edge, and clipped surfaces changing height, where a bounce
+    below the new height would cut off their content.
 - `curves` (`EASE_EMPHASIZED = [0.2, 0, 0, 1]`) are for what a spring's overshoot would
   break: full-screen container transforms (`expand`, `collapse`), startup and entry settles
   (`enter`), and surfaces folding to zero (`fold`, where bounce dips below zero).

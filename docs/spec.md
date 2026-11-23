@@ -655,7 +655,9 @@ Search runs on synced device data, offline too. Every literal query word must ap
 the title, current identifier, description text or tag names, ignoring case and accents. A
 task's tags are its primary and secondary tags with their ancestors' names, so a task tagged
 Garden under Home is found by either, and a result found by a tag shows the tag that matched
-(2026-11-18). Exact identifiers rank first, then
+(2026-11-18). Results are drawn as the board's cards are, with their color, tag badges, status,
+size and priority (2026-11-23); a tag that matched above the card's own tags is named beside
+its identifier. Exact identifiers rank first, then
 exact titles, title prefixes, all-title matches, and description/tag matches. Ties favor the
 current project, then project name, title and task UUID. A bare number prefers the current
 project when several projects have that number. In the palette, up to 30 tasks and eight project jumps are

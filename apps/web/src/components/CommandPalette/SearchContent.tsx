@@ -1,3 +1,4 @@
+import { sizeLabel, type Tag, taskTagColor } from '@throw/shared';
 import { Plus, Search, SearchX, SlidersHorizontal, Tag as TagGlyph, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
@@ -11,17 +12,22 @@ import {
 } from 'react';
 import { type ShellState, useShell } from '@/components/AppShell/shell';
 import { matchingIds } from '@/components/Board/filter';
+import { PriorityGlyph, StatusGlyph } from '@/components/Board/glyphs';
+import { DEFAULT_PRIORITY_NAMES } from '@/components/Board/model';
+import { secondaryTagsByTask } from '@/components/Board/selection';
 import {
   type BoardState,
   board as boardStore,
   current,
   narrowed,
   setFilter,
+  useBoardSettings,
 } from '@/components/Board/state';
 import { ActiveFilters, BoardFilters } from '@/components/BoardSearch/BoardFilters';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { Hint } from '@/components/Hint/Hint';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
+import { TaskTags } from '@/components/TaskTags/TaskTags';
 import { useAllTags, useAllTaskTags, useTasks } from '@/lib/collections';
 import { curves, springs } from '@/lib/motion';
 import { useAwaitingSync } from '@/lib/syncStatus';
@@ -92,6 +98,18 @@ export function useSearch({
   const { tags } = useAllTags();
   const { taskTags } = useAllTaskTags();
   const tagNames = useMemo(() => taskTagNames(tasks, tags, taskTags), [tasks, tags, taskTags]);
+  // What a result card shows, as the board's cards do: each project's tags, and each task's
+  // secondary tags.
+  const tagsByProject = useMemo(() => {
+    const byProject = new Map<string, Tag[]>();
+    for (const tag of tags) {
+      const list = byProject.get(tag.projectId);
+      if (list) list.push(tag);
+      else byProject.set(tag.projectId, [tag]);
+    }
+    return byProject;
+  }, [tags]);
+  const secondaryTags = useMemo(() => secondaryTagsByTask(taskTags), [taskTags]);
   const indexed = useMemo(
     () => indexTasks(tasks, shell.projects, actions.statuses, shell.workspace?.id ?? '', tagNames),
     [tasks, shell.projects, actions.statuses, shell.workspace?.id, tagNames],
@@ -171,6 +189,8 @@ export function useSearch({
     query,
     title,
     results,
+    tagsByProject,
+    secondaryTags,
     projects,
     awaiting,
     scope,
@@ -377,9 +397,103 @@ export function ScopeOptions({ search }: { search: SearchState }) {
 }
 
 /** The scope chip, task cards, project jumps and Create, inside the caller's scroller. */
+const NO_TAGS: readonly Tag[] = [];
+const NO_IDS: readonly string[] = [];
+
+/**
+ * A task found, drawn as its board card is: tinted by its primary tag's root, with its tags,
+ * status, size and priority. Across projects it is tinted by its project and its tags go
+ * uncolored, as on the cross-project board. The words searched for are highlighted.
+ */
+function ResultCard({ search, row }: { search: SearchState; row: SearchState['results'][number] }) {
+  const [settings] = useBoardSettings();
+  const { task, project, status } = row;
+  const { query } = search;
+  const tags = search.tagsByProject.get(project.id) ?? NO_TAGS;
+  const color = search.scoped ? taskTagColor(task, tags) : project.color;
+  const snippet = descriptionSnippet(task.description, query);
+  const secondaryTagIds = search.secondaryTags.get(task.id) ?? NO_IDS;
+  // A tag the search matched shows on its badge; one above the card's tags (Home, for a card
+  // tagged Garden under it) is named beside the identifier instead, so the card says why.
+  const badges = new Set(
+    tags
+      .filter((tag) => tag.id === task.primaryTagId || secondaryTagIds.includes(tag.id))
+      .map((tag) => tag.name),
+  );
+  const ancestors = matchedTags(row.tags, query).filter((name) => !badges.has(name));
+  return (
+    <button
+      type="button"
+      {...search.optionProps(task.id)}
+      onClick={() => search.actions.openTask(project.id, task.id)}
+      data-color={color ?? undefined}
+      className={cn(
+        'flex w-full flex-col rounded-2xl border px-4 pt-3.5 pb-3 text-left text-card-foreground outline-none',
+        'shadow-[0_1px_2px_oklch(0_0_0/0.06)] transition-shadow duration-150 data-active:ring-[3px] data-active:ring-ring/50',
+        color ? 'border-transparent bg-tint' : 'border-border bg-card',
+      )}
+    >
+      <span className="line-clamp-4 font-medium text-[0.9375rem] leading-snug [overflow-wrap:anywhere] max-md:text-base">
+        {task.title ? <Highlighted segments={highlight(task.title, query)} /> : 'Untitled task'}
+      </span>
+      {snippet && (
+        <span className="mt-1 line-clamp-2 text-muted-foreground text-sm">
+          <Highlighted segments={snippet} />
+        </span>
+      )}
+      <TaskTags
+        tags={tags}
+        primaryTagId={task.primaryTagId}
+        secondaryTagIds={secondaryTagIds}
+        card
+        colored={search.scoped}
+        className="mt-2.5"
+      />
+      <span className="mt-3 flex min-h-5 w-full min-w-0 items-center gap-2.5 text-foreground/55 text-xs max-md:text-[0.8125rem]">
+        <span className="shrink-0 font-medium tabular-nums">
+          {row.identifier ? <Highlighted segments={highlight(row.identifier, query)} /> : 'Pending'}
+        </span>
+        {!search.scoped && (
+          <span data-color={project.color} className="flex min-w-0 items-center gap-1">
+            <ProjectIcon name={project.icon} className="size-3.5 shrink-0 text-tint-accent" />
+            <span className="truncate">{project.name}</span>
+          </span>
+        )}
+        {ancestors.map((name) => (
+          <span key={name} className="flex min-w-0 items-center gap-1">
+            <TagGlyph className="size-3 shrink-0" aria-label="Tag" />
+            <span className="truncate">
+              <Highlighted segments={highlight(name, query)} />
+            </span>
+          </span>
+        ))}
+        <span className="flex-1" />
+        <span className="flex min-w-0 items-center gap-1">
+          {status && <StatusGlyph category={status.category} className="size-3" />}
+          <span className="truncate">{status?.name ?? 'No status'}</span>
+        </span>
+        {settings.cardSize && task.size !== null && (
+          <span className="shrink-0 rounded-md bg-foreground/[0.06] px-1.5 font-medium">
+            <span className="sr-only">Size </span>
+            {sizeLabel(task.size)}
+          </span>
+        )}
+        {settings.cardPriority && task.closedAt === null && (
+          <PriorityGlyph
+            priority={task.priority}
+            name={
+              project.priorityNames[task.priority - 1] || DEFAULT_PRIORITY_NAMES[task.priority - 1]!
+            }
+          />
+        )}
+      </span>
+    </button>
+  );
+}
+
 export function SearchResults({ search }: { search: SearchState }) {
   const reduced = useReducedMotion();
-  const { scope, title, results, projects, actions, destination, backlog, query } = search;
+  const { scope, title, results, projects, actions, destination, backlog } = search;
   const listMotion = reduced
     ? {}
     : {
@@ -436,63 +550,11 @@ export function SearchResults({ search }: { search: SearchState }) {
             </p>
             <ul className="flex flex-col gap-2">
               <AnimatePresence initial={false} mode="popLayout">
-                {results.map((row) => {
-                  const snippet = descriptionSnippet(row.task.description, query);
-                  const tags = matchedTags(row.tags, query);
-                  return (
-                    <motion.li key={row.task.id} layout={!reduced} {...listMotion}>
-                      <button
-                        type="button"
-                        {...search.optionProps(row.task.id)}
-                        onClick={() => actions.openTask(row.project.id, row.task.id)}
-                        className="flex w-full flex-col gap-1 rounded-2xl border bg-card px-3.5 py-3 text-left text-card-foreground outline-none transition-shadow duration-150 data-active:ring-[3px] data-active:ring-ring/50"
-                      >
-                        <span className="font-display font-semibold text-[0.9375rem] leading-snug tracking-[-0.01em] [overflow-wrap:anywhere]">
-                          {row.task.title ? (
-                            <Highlighted segments={highlight(row.task.title, query)} />
-                          ) : (
-                            'Untitled task'
-                          )}
-                        </span>
-                        {snippet && (
-                          <span className="line-clamp-2 text-muted-foreground text-sm">
-                            <Highlighted segments={snippet} />
-                          </span>
-                        )}
-                        <span className="mt-1 flex min-w-0 items-center gap-2.5 text-foreground/55 text-xs">
-                          <span className="shrink-0 font-medium tabular-nums">
-                            {row.identifier ? (
-                              <Highlighted segments={highlight(row.identifier, query)} />
-                            ) : (
-                              'Pending'
-                            )}
-                          </span>
-                          {!search.scoped && (
-                            <span
-                              data-color={row.project.color}
-                              className="flex min-w-0 items-center gap-1 text-tint-accent"
-                            >
-                              <ProjectIcon name={row.project.icon} className="size-3.5" />
-                              <span className="truncate">{row.project.name}</span>
-                            </span>
-                          )}
-                          {tags.map((name) => (
-                            <span key={name} className="flex min-w-0 items-center gap-1">
-                              <TagGlyph className="size-3 shrink-0" aria-label="Tag" />
-                              <span className="truncate">
-                                <Highlighted segments={highlight(name, query)} />
-                              </span>
-                            </span>
-                          ))}
-                          <span className="flex-1" />
-                          <span className="shrink-0 rounded-full bg-foreground/[0.08] px-2 py-0.5 font-medium text-[0.6875rem] text-muted-foreground">
-                            {row.status?.name ?? 'No status'}
-                          </span>
-                        </span>
-                      </button>
-                    </motion.li>
-                  );
-                })}
+                {results.map((row) => (
+                  <motion.li key={row.task.id} layout={!reduced} {...listMotion}>
+                    <ResultCard search={search} row={row} />
+                  </motion.li>
+                ))}
               </AnimatePresence>
             </ul>
           </section>
@@ -605,7 +667,8 @@ export function PhoneSearchContent({
                 initial={{ height: 0 }}
                 animate={{ height: 'auto' }}
                 exit={{ height: 0, transition: reduced ? { duration: 0 } : curves.fold }}
-                transition={reduced ? { duration: 0 } : springs.smooth}
+                // No bounce: the card clips, so dipping below its height would cut off its top.
+                transition={reduced ? { duration: 0 } : springs.pane}
               >
                 {/* The board's filter sections fit what is left above their tabs. */}
                 <div className="glass-thick max-h-[calc(100cqh-1.5rem)] overflow-y-auto overscroll-contain rounded-[var(--dock-radius)] p-3 [--board-filter-view-max:min(24rem,calc(100cqh-6.75rem))]">
