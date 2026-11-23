@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { springs } from '@/lib/motion';
+import { createStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 import { BoardColumn, ColumnHeader } from './BoardColumn';
 import { BoardSettingsPanel } from './BoardSettingsPanel';
@@ -37,6 +38,7 @@ import {
 import { StatusMenu } from './StatusMenu';
 import { StatusTile } from './StatusTile';
 import {
+  type BoardState,
   board,
   countIn,
   current,
@@ -142,6 +144,9 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
   const closedBound = settings.closedRail === 'bound';
   const [frame, frameWidth] = useWidth();
   const [row, rowWidth] = useWidth();
+  // The row and the task pane together, which keep their width while the pane slides.
+  const [split, splitWidth] = useWidth();
+  const paneSpace = usePaneSpace(state);
   const [railWidths] = useRailWidths();
   const resizing = railResize.use();
   const active = project.statuses.filter((status) => status.category === 'active');
@@ -151,6 +156,7 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
   const covered = state.backlog === 'full' || state.closed === 'full';
   const rails = railGeometry({
     rowWidth,
+    restWidth: splitWidth > 0 ? splitWidth - paneSpace : rowWidth,
     views: { backlog: state.backlog, closed: state.closed },
     widths: railWidths,
     resize: resizing,
@@ -262,64 +268,66 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
         {/* No title row: the rail names the project, and the board keeps the height. */}
         <div className="flex min-h-0 flex-1">
           {docked && <BoardSearchSidebar />}
-          <div ref={row} className="relative flex min-w-0 flex-1">
-            {!backlogBound && backlogRail}
-            <div className="absolute inset-0 flex">
-              {/* The columns carry the top and bottom margin, so a rail in here runs full height. */}
-              <ScrollArea className="flex-1">
-                <ScrollAreaViewport
-                  data-origin="active"
-                  data-autoscroll-x=""
-                  data-inset-start={backlogBound ? 0 : rails.backlog.drawn}
-                  data-inset-end={closedBound ? 0 : rails.closed.drawn}
-                  className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3"
-                >
-                  {backlogBound ? (
-                    <>
-                      {backlogRail}
-                      <RailGap />
-                    </>
-                  ) : (
-                    <ColumnsEdge geometry={rails.backlog} />
-                  )}
-                  {covered
-                    ? dragging && (
-                        <motion.div
-                          className="mt-[calc(var(--safe-top)+1.25rem)] mb-6 flex shrink-0 flex-col gap-2.5 p-1"
-                          style={{ width: TILES_WIDTH }}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                        >
-                          <p className="px-1 pt-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
-                            Active
-                          </p>
-                          {active.map((status) => (
-                            <StatusTile key={status.id} status={status} />
-                          ))}
-                        </motion.div>
-                      )
-                    : active.map((status, index) => (
-                        <StatusColumn key={status.id} status={status} index={index} />
-                      ))}
-                  {closedBound ? (
-                    <>
-                      <RailGap />
-                      {closedRail}
-                    </>
-                  ) : (
-                    <ColumnsEdge geometry={rails.closed} trailing />
-                  )}
-                </ScrollAreaViewport>
-                <ScrollBar orientation="horizontal" />
-              </ScrollArea>
+          <div ref={split} className="flex min-w-0 flex-1">
+            <div ref={row} className="relative flex min-w-0 flex-1">
+              {!backlogBound && backlogRail}
+              <div className="absolute inset-0 flex">
+                {/* The columns carry the top and bottom margin, so a rail in here runs full height. */}
+                <ScrollArea className="flex-1">
+                  <ScrollAreaViewport
+                    data-origin="active"
+                    data-autoscroll-x=""
+                    data-inset-start={backlogBound ? 0 : rails.backlog.drawn}
+                    data-inset-end={closedBound ? 0 : rails.closed.drawn}
+                    className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3"
+                  >
+                    {backlogBound ? (
+                      <>
+                        {backlogRail}
+                        <RailGap />
+                      </>
+                    ) : (
+                      <ColumnsEdge geometry={rails.backlog} />
+                    )}
+                    {covered
+                      ? dragging && (
+                          <motion.div
+                            className="mt-[calc(var(--safe-top)+1.25rem)] mb-6 flex shrink-0 flex-col gap-2.5 p-1"
+                            style={{ width: TILES_WIDTH }}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                          >
+                            <p className="px-1 pt-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
+                              Active
+                            </p>
+                            {active.map((status) => (
+                              <StatusTile key={status.id} status={status} />
+                            ))}
+                          </motion.div>
+                        )
+                      : active.map((status, index) => (
+                          <StatusColumn key={status.id} status={status} index={index} />
+                        ))}
+                    {closedBound ? (
+                      <>
+                        <RailGap />
+                        {closedRail}
+                      </>
+                    ) : (
+                      <ColumnsEdge geometry={rails.closed} trailing />
+                    )}
+                  </ScrollAreaViewport>
+                  <ScrollBar orientation="horizontal" />
+                </ScrollArea>
+              </div>
+              {/* Keeps a sticky closed rail at the far edge when the backlog is not beside it. */}
+              <span aria-hidden className="pointer-events-none flex-1" />
+              {!closedBound && closedRail}
+              {!docked && <BoardSearch />}
             </div>
-            {/* Keeps a sticky closed rail at the far edge when the backlog is not beside it. */}
-            <span aria-hidden className="pointer-events-none flex-1" />
-            {!closedBound && closedRail}
-            {!docked && <BoardSearch />}
-          </div>
 
-          <OpenTaskPane frameWidth={frameWidth} />
+            <OpenTaskPane frameWidth={frameWidth} />
+          </div>
         </div>
       </div>
 
@@ -376,17 +384,32 @@ function StatusColumn({ status, index }: { status: Status; index: number }) {
   );
 }
 
+/** The open task pane's width, without its grip and margin; shared with the board beside it. */
+const paneWidthStore = createStore(440);
+
+function openTaskOf(state: BoardState) {
+  const data = current(state);
+  return [...data.tasks, ...(data.hiddenTasks ?? [])].find((task) => task.id === state.openTaskId);
+}
+
+/**
+ * The width the open task pane takes from the board once it has slid open (or shut): what the
+ * board lays its galleries out for at once, as Catch's page takes its width beside a note, so
+ * their cards move once instead of on every frame of the slide.
+ */
+function usePaneSpace(state: BoardState) {
+  const paneWidth = paneWidthStore.use();
+  return openTaskOf(state) ? paneWidth + HANDLE_WIDTH + PANE_MARGIN : 0;
+}
+
 /**
  * The open task beside the board, taking width from it, with a handle to adjust the split.
  */
 export function OpenTaskPane({ frameWidth }: { frameWidth: number }) {
   const state = board.use();
-  const data = current(state);
-  const [paneWidth, setPaneWidth] = useState(440);
+  const paneWidth = paneWidthStore.use();
   const [resizing, setResizing] = useState(false);
-  const openTask = [...data.tasks, ...(data.hiddenTasks ?? [])].find(
-    (task) => task.id === state.openTaskId,
-  );
+  const openTask = openTaskOf(state);
   return (
     <AnimatePresence initial={false}>
       {openTask && (
@@ -401,7 +424,7 @@ export function OpenTaskPane({ frameWidth }: { frameWidth: number }) {
           <SplitHandle
             width={paneWidth}
             max={Math.max(PANE_MIN, frameWidth * 0.62)}
-            onResize={setPaneWidth}
+            onResize={(width) => paneWidthStore.set(width)}
             onActive={setResizing}
           />
           <div className="min-w-0 flex-1" style={{ width: paneWidth }}>

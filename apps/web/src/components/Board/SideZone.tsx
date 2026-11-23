@@ -51,6 +51,11 @@ export const RAIL_SNAP = 72;
  * scroller, so scrolled columns pass through this space and on under the rail.
  */
 export const ZONE_GAP = 20;
+/**
+ * How far the rail's resize grip (24 px wide) reaches past its edge, to sit centred between
+ * the rail's cards, inset by the gallery's padding, and the column a zone gap beyond.
+ */
+const EDGE_GRIP_OUTSET = 12 + (ZONE_GAP - GALLERY_INSET) / 2;
 /** The active statuses' dropzones, which take this much of a gallery while a card is held. */
 export const TILES_WIDTH = 176;
 
@@ -80,6 +85,7 @@ export type RailGeometry = {
  */
 export function railGeometry({
   rowWidth,
+  restWidth = rowWidth,
   views,
   widths,
   resize,
@@ -87,6 +93,11 @@ export function railGeometry({
   origin,
 }: {
   rowWidth: number;
+  /**
+   * The row's width once the task pane has finished sliding: the rails' cards are laid out
+   * for it at once, while the rails themselves follow the row as it goes.
+   */
+  restWidth?: number;
   views: Record<Zone, ZoneState>;
   widths: RailWidths;
   resize: { zone: Zone; width: number } | null;
@@ -95,41 +106,48 @@ export function railGeometry({
   /** The zone the held card came from. */
   origin: string | null;
 }) {
-  const fullWidth = Math.max(
-    0,
-    rowWidth - STRIP_WIDTH - ZONE_GAP * 2 - (holding ? TILES_WIDTH : 0),
-  );
-  const room = (other: number) => rowWidth - ZONE_GAP * 2 - other;
-  const panel = (zone: Zone, max: number) =>
-    clamp(widths[zone] ?? PANEL_WIDTH, PANEL_WIDTH, max - RAIL_SNAP);
-  // What each rail would take beside a strip: the room the other has is what it leaves.
-  const natural = (zone: Zone) =>
-    views[zone] === 'full'
-      ? fullWidth
-      : views[zone] === 'panel'
-        ? panel(zone, room(STRIP_WIDTH))
-        : STRIP_WIDTH;
-  const geometry = (zone: Zone, other: Zone): RailGeometry => {
+  const holdingWidth = holding ? TILES_WIDTH : 0;
+  // Each rail's width in a row this wide, and the widest its edge could take it.
+  const widthsIn = (row: number) => {
+    const fullWidth = Math.max(0, row - STRIP_WIDTH - ZONE_GAP * 2 - holdingWidth);
+    const room = (other: number) => row - ZONE_GAP * 2 - other;
+    const panel = (zone: Zone, max: number) =>
+      clamp(widths[zone] ?? PANEL_WIDTH, PANEL_WIDTH, max - RAIL_SNAP);
+    // What each rail would take beside a strip: the room the other has is what it leaves.
+    const natural = (zone: Zone) =>
+      views[zone] === 'full'
+        ? fullWidth
+        : views[zone] === 'panel'
+          ? panel(zone, room(STRIP_WIDTH))
+          : STRIP_WIDTH;
+    const of = (zone: Zone, other: Zone) => {
+      const view = views[zone];
+      const max = room(natural(other));
+      const live = resize?.zone === zone ? resize.width : null;
+      const width =
+        live ?? (view === 'full' ? fullWidth : view === 'panel' ? panel(zone, max) : STRIP_WIDTH);
+      return { width, max, live };
+    };
+    return { fullWidth, backlog: of('backlog', 'closed'), closed: of('closed', 'backlog') };
+  };
+  const now = widthsIn(rowWidth);
+  const rest = widthsIn(restWidth);
+  const geometry = (zone: Zone): RailGeometry => {
     const view = views[zone];
-    const max = room(natural(other));
-    const live = resize?.zone === zone ? resize.width : null;
-    const width =
-      live ?? (view === 'full' ? fullWidth : view === 'panel' ? panel(zone, max) : STRIP_WIDTH);
+    const { width, max, live } = now[zone];
     const tiles = holding && origin !== zone;
     return {
       zone: width,
       drawn: tiles && view === 'strip' && live === null ? HELD_STRIP_WIDTH : width,
-      content: Math.max(PANEL_WIDTH, width),
+      // A held edge lays the cards out as it goes; otherwise they are laid out once, for
+      // where the row is going.
+      content: Math.max(PANEL_WIDTH, live ?? rest[zone].width),
       max,
       mode: `${view}:${holding}:${tiles}:${widths[zone]}`,
       tracking: live !== null,
     };
   };
-  return {
-    fullWidth,
-    backlog: geometry('backlog', 'closed'),
-    closed: geometry('closed', 'backlog'),
-  };
+  return { fullWidth: now.fullWidth, backlog: geometry('backlog'), closed: geometry('closed') };
 }
 
 /** Where a rail's edge let go of at `width` settles: a strip, a panel that wide, or full. */
@@ -244,95 +262,98 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
       data-origin={zone}
       data-status-home={statuses.map((status) => status.id).join(' ')}
       data-side={start ? 'start' : 'end'}
-      className="board-rail relative z-20 flex min-h-0 shrink-0 flex-col overflow-hidden"
+      className="board-rail relative z-20 flex min-h-0 shrink-0 flex-col"
       style={{ width }}
     >
-      <AnimatePresence initial={false}>
-        {tiles ? (
-          // The rail keeps its width and turns into the targets: nothing on the board moves
-          // or is covered for a card that is only passing.
-          <motion.div
-            key="tiles"
-            className={cn(
-              'absolute inset-0 flex flex-col pt-[calc(var(--safe-top)+1.25rem)] pb-6',
-              view === 'strip' ? 'gap-2 px-1' : 'gap-2.5 px-3.5',
-            )}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.16 }}
-          >
-            {view !== 'strip' && (
-              <p className="px-1.5 pt-1.5 pb-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
-                {title}
-              </p>
-            )}
-            {statuses.map((status) => (
-              <StatusTile
-                key={status.id}
-                status={status}
-                shape={view === 'strip' ? 'narrow' : 'block'}
-              />
-            ))}
-          </motion.div>
-        ) : view === 'strip' && !geometry.tracking ? (
-          <motion.button
-            key="strip"
-            type="button"
-            aria-label={`Open ${title.toLowerCase()}, ${count} tasks`}
-            onClick={() => setView('panel')}
-            className="group absolute inset-0 flex flex-col items-center gap-4 pt-[calc(var(--safe-top)+2.375rem)] text-muted-foreground outline-none transition-colors hover:bg-foreground/[0.04] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60 focus-visible:ring-inset"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.16 }}
-          >
-            <Icon className="size-5" aria-hidden />
-            <span className="font-display font-semibold text-sm [writing-mode:vertical-rl]">
-              {title}
-            </span>
-            <span className="text-xs tabular-nums">{count}</span>
-          </motion.button>
-        ) : (
-          <motion.div
-            key="open"
-            className="absolute inset-y-0 flex min-h-0 flex-col pt-[calc(var(--safe-top)+1.25rem)]"
-            // Laid out at its resting width from the start, so opening the rail reveals the
-            // cards, and widening it fans them out into columns, rather than re-wrapping them
-            // at every width on the way.
-            style={{ width: geometry.content, [start ? 'left' : 'right']: 0 }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <div className="flex h-14 shrink-0 items-center gap-2 pr-2.5 pl-5">
-              <h2 className="font-display font-semibold text-lg tracking-[-0.01em]">{title}</h2>
-              <span className="flex-1 text-muted-foreground text-sm tabular-nums">{count}</span>
-              {zone === 'backlog' && state.actions && (
-                <IconButton label="New task in the backlog" onClick={() => createTask()}>
-                  <Plus />
-                </IconButton>
+      {/* Clips the rail's content as it springs; the edge's grip reaches out past it. */}
+      <div className="absolute inset-0 overflow-hidden">
+        <AnimatePresence initial={false}>
+          {tiles ? (
+            // The rail keeps its width and turns into the targets: nothing on the board moves
+            // or is covered for a card that is only passing.
+            <motion.div
+              key="tiles"
+              className={cn(
+                'absolute inset-0 flex flex-col pt-[calc(var(--safe-top)+1.25rem)] pb-6',
+                view === 'strip' ? 'gap-2 px-1' : 'gap-2.5 px-3.5',
               )}
-              <IconButton
-                label={view === 'full' ? 'Back to a column' : 'Open as a gallery'}
-                onClick={() => setView(view === 'full' ? 'panel' : 'full')}
-              >
-                {view === 'full' ? <Minimize2 /> : <Maximize2 />}
-              </IconButton>
-              <IconButton label={`Close ${title.toLowerCase()}`} onClick={() => setView('strip')}>
-                {start ? <PanelLeftClose /> : <PanelRightClose />}
-              </IconButton>
-            </div>
-            <StatusFilter zone={zone} />
-            <ZoneGallery
-              zone={zone}
-              width={geometry.content - GALLERY_INSET * 2}
-              anchor={start ? 'start' : 'end'}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.16 }}
+            >
+              {view !== 'strip' && (
+                <p className="px-1.5 pt-1.5 pb-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
+                  {title}
+                </p>
+              )}
+              {statuses.map((status) => (
+                <StatusTile
+                  key={status.id}
+                  status={status}
+                  shape={view === 'strip' ? 'narrow' : 'block'}
+                />
+              ))}
+            </motion.div>
+          ) : view === 'strip' && !geometry.tracking ? (
+            <motion.button
+              key="strip"
+              type="button"
+              aria-label={`Open ${title.toLowerCase()}, ${count} tasks`}
+              onClick={() => setView('panel')}
+              className="group absolute inset-0 flex flex-col items-center gap-4 pt-[calc(var(--safe-top)+2.375rem)] text-muted-foreground outline-none transition-colors hover:bg-foreground/[0.04] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60 focus-visible:ring-inset"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.16 }}
+            >
+              <Icon className="size-5" aria-hidden />
+              <span className="font-display font-semibold text-sm [writing-mode:vertical-rl]">
+                {title}
+              </span>
+              <span className="text-xs tabular-nums">{count}</span>
+            </motion.button>
+          ) : (
+            <motion.div
+              key="open"
+              className="absolute inset-y-0 flex min-h-0 flex-col pt-[calc(var(--safe-top)+1.25rem)]"
+              // Laid out at its resting width from the start, so opening the rail reveals the
+              // cards, and widening it fans them out into columns, rather than re-wrapping them
+              // at every width on the way.
+              style={{ width: geometry.content, [start ? 'left' : 'right']: 0 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className="flex h-14 shrink-0 items-center gap-2 pr-2.5 pl-5">
+                <h2 className="font-display font-semibold text-lg tracking-[-0.01em]">{title}</h2>
+                <span className="flex-1 text-muted-foreground text-sm tabular-nums">{count}</span>
+                {zone === 'backlog' && state.actions && (
+                  <IconButton label="New task in the backlog" onClick={() => createTask()}>
+                    <Plus />
+                  </IconButton>
+                )}
+                <IconButton
+                  label={view === 'full' ? 'Back to a column' : 'Open as a gallery'}
+                  onClick={() => setView(view === 'full' ? 'panel' : 'full')}
+                >
+                  {view === 'full' ? <Minimize2 /> : <Maximize2 />}
+                </IconButton>
+                <IconButton label={`Close ${title.toLowerCase()}`} onClick={() => setView('strip')}>
+                  {start ? <PanelLeftClose /> : <PanelRightClose />}
+                </IconButton>
+              </div>
+              <StatusFilter zone={zone} />
+              <ZoneGallery
+                zone={zone}
+                width={geometry.content - GALLERY_INSET * 2}
+                anchor={start ? 'start' : 'end'}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
       {!tiles && (view !== 'strip' || geometry.tracking) && (
         <SplitHandle
           width={geometry.zone}
@@ -342,10 +363,9 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
           grows={start ? 'right' : 'left'}
           label={`Resize ${title.toLowerCase()}`}
           subtle
-          className={cn(
-            'absolute bottom-0 z-10 w-3 top-[calc(var(--safe-top)+4.75rem)]',
-            start ? 'right-0' : 'left-0',
-          )}
+          className="absolute bottom-0 z-10 top-[calc(var(--safe-top)+4.75rem)]"
+          // Centred in the space between the rail's cards and the column beside it.
+          style={{ [start ? 'right' : 'left']: -EDGE_GRIP_OUTSET }}
           onResize={resize}
           onActive={hold}
         />

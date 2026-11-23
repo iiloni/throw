@@ -1,10 +1,9 @@
 import { animate, type MotionValue, motion, motionValue, useReducedMotion } from 'motion/react';
-import { useCallback, useLayoutEffect, useReducer, useRef } from 'react';
+import { memo, useCallback, useLayoutEffect, useReducer, useRef } from 'react';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { entryDelayForTop, useEntryMotion } from '@/lib/entryMotion';
 import { bandMasonry, GAP, gridFor, type Point } from '@/lib/masonry';
 import { afterPaint, springs } from '@/lib/motion';
-import { cn } from '@/lib/utils';
 import { drag, makingWay } from './drag';
 import { PriorityIcon } from './glyphs';
 import { groupByPriority, type Priority, priorityName, type Task } from './model';
@@ -21,11 +20,15 @@ export const RESIZE_SETTLE_MS = 150;
 
 /** The grid's padding inside the rail: the column's `px-3.5`. */
 export const GALLERY_INSET = 14;
+/**
+ * The surface a held card lights up stands this far in from the rail's edges, so it reads as
+ * a surface rather than the rail itself. The cards keep their inset; its 24 px corners sit
+ * round the cards' 16 px ones.
+ */
+const SURFACE_MARGIN = 6;
 
 /** A card's height before it has been measured: about a one-line card. */
 const ESTIMATE = 88;
-/** Room an empty priority keeps while a card is placed in it from across the gallery. */
-const EMPTY_BAND = 80;
 
 /** Card heights by task id, and the column width each was measured at, kept across mounts. */
 const measured = new Map<string, { width: number; height: number }>();
@@ -64,11 +67,13 @@ export type MasonryData = {
  * grid at two widths, so opening the gallery fans the cards out into their columns and
  * closing it gathers them back, each card springing from where it is (Catch's motion).
  *
- * The backlog keeps a band per priority. In one column a held card parts the others, as a
- * column does; across several it is placed with a caret and nothing moves until it is
- * dropped, the owner's choice for an overview (ADR 0008).
+ * The backlog keeps a band per priority. A held card leaves a gap where it would land and the
+ * other cards spring aside to make room as it moves, as in Catch's gallery (ADR 0008).
+ *
+ * Memoized: the board renders on every frame of the task pane sliding, and the grid, which
+ * is laid out once for where the pane is going, need not.
  */
-export function ZoneGallery({
+export const ZoneGallery = memo(function ZoneGallery({
   zone,
   width,
   anchor,
@@ -98,7 +103,6 @@ export function ZoneGallery({
   else frozen.current ??= columnsNow;
   const grid = gridFor(Math.max(0, width), frozen.current ?? columnsNow);
   const { columnWidth } = grid;
-  const single = grid.columns === 1;
 
   // A card from the backlog placed back into it. Before it has moved, its place is its own.
   const placingHere =
@@ -108,10 +112,8 @@ export function ZoneGallery({
     placingHere && held.target?.kind === 'place' && held.target.listId === 'backlog'
       ? held.target
       : null;
-  // One column closes up around its held card and opens a gap where it would land; several
-  // keep it, faded, where it was.
-  const parting = single && placingHere;
-  const away = (id: string) => parting && held.ids.includes(id);
+  // The grid closes up around the held card and opens a gap where it would land.
+  const away = (id: string) => placingHere && held.ids.includes(id);
 
   const groups: { priority: Priority | null; tasks: Task[] }[] = banded
     ? groupByPriority(tasks)
@@ -119,9 +121,9 @@ export function ZoneGallery({
   const bands = groups.map(({ priority, tasks: zoneTasks }) => {
     // The cards a held one is placed among: every card of the band but itself.
     const peers = placingHere ? zoneTasks.filter((task) => !held.ids.includes(task.id)) : zoneTasks;
-    const items: Item[] = (parting ? peers : zoneTasks).map((task) => ({ kind: 'card', task }));
+    const items: Item[] = peers.map((task) => ({ kind: 'card', task }));
     const at = target && target.priority === priority ? target.index : null;
-    if (parting && at !== null) items.splice(Math.min(at, items.length), 0, { kind: 'gap' });
+    if (at !== null) items.splice(Math.min(at, items.length), 0, { kind: 'gap' });
     // A gallery names its priorities; a single column only if the person asks, as columns do.
     // Every priority shows while a card is placed, so an empty one can take it.
     const heading =
@@ -139,7 +141,6 @@ export function ZoneGallery({
               item.kind === 'gap' ? gapHeight : heightOf(item.task.id),
             ),
             heading: band.heading,
-            minHeight: !parting && band.at !== null && band.peers.length === 0 ? EMPTY_BAND : 0,
           })),
           grid,
         )
@@ -360,10 +361,11 @@ export function ZoneGallery({
       data-layout={backlog ? 'masonry' : undefined}
       data-over={over ? '' : undefined}
       className="board-column relative flex min-h-0 min-w-0 flex-1 flex-col rounded-3xl"
+      style={{ marginInline: SURFACE_MARGIN, marginBottom: SURFACE_MARGIN }}
     >
       <ScrollArea edges className="card-scroller flex-1 [--scrollbar-inset:0.5rem]">
         <ScrollAreaViewport data-autoscroll="">
-          <div className="pt-1 pb-4" style={{ paddingInline: GALLERY_INSET }}>
+          <div className="pt-1 pb-4" style={{ paddingInline: GALLERY_INSET - SURFACE_MARGIN }}>
             {empty && (
               <p className="px-1 py-10 text-center text-muted-foreground text-sm">
                 {state.awaitingTasks
@@ -398,40 +400,19 @@ export function ZoneGallery({
                   );
                 })}
               {gapSlot && (
-                <div
+                // Where the held card would land: a soft well that moves with the cards.
+                <motion.div
                   aria-hidden
                   data-gap=""
                   className="absolute top-0 left-0 rounded-2xl bg-foreground/[0.07]"
-                  style={{
-                    transform: `translate(${gapSlot.x}px, ${gapSlot.y}px)`,
-                    width: columnWidth,
-                    height: gapHeight,
-                  }}
+                  style={{ width: columnWidth, height: gapHeight }}
+                  initial={{ x: gapSlot.x, y: gapSlot.y }}
+                  animate={{ x: gapSlot.x, y: gapSlot.y }}
+                  transition={reducedMotion ? { duration: 0 } : springs.smooth}
                 />
               )}
-              {layout &&
-                !parting &&
-                bands.map((band, index) =>
-                  band.at !== null && band.peers.length === 0 ? (
-                    <div
-                      key={`empty-${band.priority}`}
-                      aria-hidden
-                      className="absolute left-0 h-20 rounded-2xl border-2 border-brand border-dashed"
-                      style={{ top: layout.bands[index]?.cards ?? 0, width: columnWidth }}
-                    />
-                  ) : null,
-                )}
               {bands.map((band) =>
                 band.tasks.map((task) => {
-                  const index = band.peers.indexOf(task);
-                  const caret =
-                    placing && !parting && band.at !== null && index >= 0
-                      ? band.at === index
-                        ? 'start'
-                        : band.at === band.peers.length && index === band.peers.length - 1
-                          ? 'end'
-                          : null
-                      : null;
                   const slot = slotOf.get(task.id);
                   return (
                     <GridCard
@@ -444,7 +425,6 @@ export function ZoneGallery({
                       skipEntry={Boolean(held)}
                       carried={state.carrying?.taskId === task.id}
                       showStatus={showStatus}
-                      caret={caret}
                       register={register}
                     />
                   );
@@ -457,7 +437,7 @@ export function ZoneGallery({
       </ScrollArea>
     </section>
   );
-}
+});
 
 function BandHeading({
   priority,
@@ -506,7 +486,6 @@ function GridCard({
   skipEntry,
   carried,
   showStatus,
-  caret,
   register,
 }: {
   task: Task;
@@ -517,7 +496,6 @@ function GridCard({
   skipEntry: boolean;
   carried: boolean;
   showStatus: boolean;
-  caret: 'start' | 'end' | null;
   register: (id: string, element: HTMLElement | null) => void;
 }) {
   const opening = useTaskCardHidden(task.id);
@@ -543,26 +521,9 @@ function GridCard({
         visibility: placed ? undefined : 'hidden',
       }}
     >
-      {caret && <Caret side={caret} />}
       <motion.div style={entry}>
         <TaskCard task={task} showStatus={showStatus} />
       </motion.div>
     </motion.div>
-  );
-}
-
-/** A bar in the gutter beside a card: where the held one would go. */
-function Caret({ side }: { side: 'start' | 'end' }) {
-  return (
-    <motion.span
-      aria-hidden
-      layoutId="gallery-caret"
-      transition={springs.snappy}
-      className={cn(
-        'absolute top-1 bottom-1 z-10 w-1 rounded-full bg-brand',
-        // Centred in the gap between two columns.
-        side === 'start' ? '-left-2' : '-right-2',
-      )}
-    />
   );
 }

@@ -201,10 +201,11 @@ test.describe('desktop rails', () => {
     // beside the closed strip and the gaps either side.
     const frames = page.evaluate(
       () =>
-        new Promise<{ width: number; room: number }[]>((resolve) => {
+        new Promise<{ width: number; room: number; card: number }[]>((resolve) => {
           const aside = document.querySelector<HTMLElement>('aside[data-origin="backlog"]')!;
           const row = aside.parentElement!;
-          const seen: { width: number; room: number }[] = [];
+          const last = [...aside.querySelectorAll<HTMLElement>('[data-slot]')].at(-1)!;
+          const seen: { width: number; room: number; card: number }[] = [];
           const started = performance.now();
           // Read once each frame has been laid out and drawn, not part way through one.
           const sample = (now: number) =>
@@ -212,6 +213,7 @@ test.describe('desktop rails', () => {
               seen.push({
                 width: aside.getBoundingClientRect().width,
                 room: row.getBoundingClientRect().width - 64 - 40,
+                card: last.getBoundingClientRect().left,
               });
               if (now - started < 1200) requestAnimationFrame(sample);
               else resolve(seen);
@@ -229,6 +231,16 @@ test.describe('desktop rails', () => {
     for (const frame of seen) expect(Math.abs(frame.width - frame.room)).toBeLessThan(1);
     for (let index = 1; index < seen.length; index++)
       expect(seen[index]!.width).toBeLessThanOrEqual(seen[index - 1]!.width + 0.5);
+    // The cards are laid out once for the narrower gallery, as Catch's are beside a note, so
+    // each springs one way to its new place instead of being re-aimed on every frame.
+    const moves = seen.map((frame) => frame.card);
+    const direction = Math.sign(moves.at(-1)! - moves[0]!);
+    // A spring's own bounce turns back by a pixel or two; a re-aimed layout turned back by a
+    // column.
+    let back = 0;
+    for (let index = 1; index < moves.length; index++)
+      back += Math.max(0, (moves[index - 1]! - moves[index]!) * direction);
+    expect(back).toBeLessThan(8);
     // The cards follow: still side by side in the narrower gallery once the pane is open.
     const [one, two] = await Promise.all(
       ['Pane one', 'Pane two'].map(

@@ -64,6 +64,17 @@ describe('railGeometry', () => {
     );
   });
 
+  it('lays the cards out once for where the row is going, while the rail follows it', () => {
+    const sliding = railGeometry({
+      ...base,
+      views: { backlog: 'full', closed: 'strip' },
+      rowWidth: 1100,
+      restWidth: 800,
+    });
+    expect(sliding.backlog.zone).toBe(1100 - STRIP_WIDTH - 2 * ZONE_GAP);
+    expect(sliding.backlog.content).toBe(800 - STRIP_WIDTH - 2 * ZONE_GAP);
+  });
+
   it('widens a strip under a held card from elsewhere, without moving the columns', () => {
     const strip = railGeometry({ ...base, holding: true, origin: 'active' }).closed;
     expect(strip.zone).toBe(STRIP_WIDTH);

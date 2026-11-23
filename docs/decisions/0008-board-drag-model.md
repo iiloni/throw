@@ -160,18 +160,21 @@ flashes back into the column it left. A move that cannot be queued (its status o
 was deleted meanwhile) reverts to the synced board. A move the server refuses is replaced by
 the server's row when sync brings it back.
 
-**The full-width backlog places with a caret.** The gallery reads left to right, then down,
-in a band per priority. It is Catch's masonry (`lib/masonry.ts`): each card goes to the top of
-the shortest column. A list marked `data-layout="masonry"` describes its columns, bands and
-the heights of the cards a held one is placed among in a `data-masonry` element, and the
+**The backlog gallery makes room as Catch's does.** The gallery reads left to right, then
+down, in a band per priority. It is Catch's masonry (`lib/masonry.ts`): each card goes to the
+top of the shortest column. A list marked `data-layout="masonry"` describes its columns, bands
+and the heights of the cards a held one is placed among in a `data-masonry` element, and the
 engine places the card at the slot nearest it in the layout those cards would have with it
-there (Catch's `dropIndex`), so cards still springing to their places do not change the
-answer. Across several columns a caret in the gutter shows the place, the held card stays
-faded where it was, and the column count is frozen while it is held. A parting gap was
-prototyped too; a whole grid reflowing under the pointer was too busy for an overview, so the
-owner chose the caret. The desktop backlog rail is the same grid at one column, where the
-others part around a gap as in a column. Its priorities show as labels while a card is placed,
-as a column does in Full; it does not fold them into rails (2026-11-22).
+there (Catch's `dropIndex`, with its hysteresis), so cards still springing to their places do
+not change the answer. The gallery shows that layout as the card moves: a gap where it would
+land and the others springing aside, as Catch's gallery does, at one column in the rail or
+many across the board. The column count is frozen while a card is held. Its priorities show
+as labels while a card is placed, as a column does in Full; the rail does not fold them into
+rails.
+
+This replaces a caret in the gutter with nothing moving until the drop, chosen on
+2026-10-19 when a parting gap in a CSS grid read as too busy. With Catch's springs and its
+slot hysteresis, the owner chose live reflow on 2026-11-22.
 
 **On a phone a card swipes right to close.** A rightward swipe that starts on a card in a
 board page closes it into the default done status; leftward swipes and any that start outside

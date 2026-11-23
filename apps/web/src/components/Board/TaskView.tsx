@@ -8,6 +8,7 @@ import {
 } from 'motion/react';
 import { Dialog } from 'radix-ui';
 import {
+  type CSSProperties,
   type PointerEvent,
   type ReactNode,
   useContext,
@@ -349,6 +350,7 @@ export function SplitHandle({
   label = 'Resize task',
   subtle = false,
   className,
+  style,
   onResize,
   onActive,
 }: {
@@ -364,6 +366,7 @@ export function SplitHandle({
   /** A fainter grip, for a rail's edge, which is there whether or not it is used. */
   subtle?: boolean;
   className?: string;
+  style?: CSSProperties;
   /** `keyboard` is set for a step from the keys, which lands at once rather than following. */
   onResize: (width: number, keyboard: boolean) => void;
   /** Told while the grip is held, so the pane can follow the pointer without easing. */
@@ -423,6 +426,7 @@ export function SplitHandle({
         event.preventDefault();
         onResize(Math.min(max, Math.max(keyMin, next)), true);
       }}
+      style={style}
       className={cn(
         'group flex w-6 shrink-0 cursor-col-resize touch-none select-none items-center justify-center outline-none',
         className,

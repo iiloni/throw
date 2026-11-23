@@ -322,8 +322,9 @@ motion.
   into targets for changing status. The closed zone is ordered by time, so cards are sent to
   it and never placed in it.
 - The full-width backlog gallery reads left to right, then down, in a band per priority, so
-  a place between two cards reads as it does in a sentence. A card held there is placed with
-  a caret in the gutter between cards, and nothing moves until it is dropped. Every priority
+  a place between two cards reads as it does in a sentence. A card held there opens a gap
+  where it would land, and the other cards spring aside to make room as it moves, as in
+  Catch's gallery. Every priority
   shows a band while a card is placed, so an empty one can take it. Cards from elsewhere are
   sent to a backlog status through its filters, never placed in the mixed gallery.
 - On a desktop, an active column folds to a narrow strip and opens again, as a column of
@@ -897,10 +898,11 @@ little as possible; it is not the normal way to use the app (ADR 0005).
    was wanted, what stood and why. A refused description links to the existing draft
    recovery and review controls; another device can recover its document from the log.
    Dismissal does not delete the history or a recovery draft.
-6. **Reordering the full-width backlog — settled (2026-10-19).** The gallery reads left to
-   right, then down, in a band per priority, and a held card is placed with a caret; nothing
-   reflows until the drop. A gap that parted the cards was prototyped and was too busy for
-   an overview; see [The project board](#the-project-board).
+6. **Reordering the full-width backlog — settled (2026-11-22).** The gallery reads left to
+   right, then down, in a band per priority, and the cards make room for a held card as it
+   moves, as Catch's masonry gallery does. A caret with nothing moving until the drop was
+   chosen first (2026-10-19), when a parting gap in a CSS grid read as too busy; Catch's
+   springs and slot hysteresis replaced it. See [The project board](#the-project-board).
 7. **The task view — settled for the first version (2026-11-18).** It holds what
    [The task view](#the-task-view) lists: the title and identifier, status, priority and
    tags, the description, subtasks, relations, and its comments and history, each under its
