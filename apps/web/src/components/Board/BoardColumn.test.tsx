@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import type { Color } from '@throw/shared';
 import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BoardColumn, ColumnHeader } from './BoardColumn';
@@ -6,6 +7,7 @@ import { type DragState, drag } from './drag';
 
 function Column({
   collapsed,
+  color,
   onToggle = () => {},
   children = (revealed: boolean) => (
     <div>
@@ -15,12 +17,14 @@ function Column({
   ),
 }: {
   collapsed: boolean;
+  color?: Color | null;
   onToggle?: (collapsed: boolean) => void;
   children?: (revealed: boolean) => React.ReactNode;
 }) {
   return (
     <BoardColumn
       columnId="status-review"
+      color={color}
       name="Review"
       category="active"
       count={3}
@@ -37,6 +41,16 @@ function Column({
 afterEach(() => drag.set(null));
 
 describe('a board column', () => {
+  it('keeps the status color on the shared surface through folding and clearing', () => {
+    const { container, rerender } = render(<Column collapsed={false} color="mint" />);
+    const surface = container.querySelector('[data-column="status-review"]');
+    expect(surface).toHaveAttribute('data-column-color', 'mint');
+    rerender(<Column collapsed color="mint" />);
+    expect(surface).toHaveAttribute('data-column-color', 'mint');
+    rerender(<Column collapsed color={null} />);
+    expect(surface).not.toHaveAttribute('data-column-color');
+  });
+
   it('folds to a strip that names the column, counts its cards and opens it', () => {
     const onToggle = vi.fn();
     render(<Column collapsed onToggle={onToggle} />);

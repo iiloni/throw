@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import { BoardSettingsContent } from './BoardSettingsPanel';
 import { CardList } from './CardList';
 import { drag, holding, makingWay, pageStride } from './drag';
+import { StatusGlyph } from './glyphs';
 import {
   byCategory,
   CATEGORIES,
@@ -182,7 +183,13 @@ export function PhoneBoard({
           className="phone-pager flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
         >
           {active.map((status) => (
-            <div key={status.id} data-page="" data-origin="active" className={pageClass}>
+            <div
+              key={status.id}
+              data-page=""
+              data-origin="active"
+              data-column-color={status.color ?? undefined}
+              className={cn(pageClass, 'bg-[var(--column-wash,transparent)]')}
+            >
               <CardList
                 listId={`status:${status.id}`}
                 endSpace={DOCK_SPACE}
@@ -250,6 +257,7 @@ export function FlowTrack({
         <AnimatePresence mode="popLayout" initial={false} custom={direction}>
           <motion.h2
             key={status.id}
+            data-column-color={status.color ?? undefined}
             className="flex min-w-0 items-baseline gap-2"
             custom={direction}
             variants={{
@@ -261,7 +269,13 @@ export function FlowTrack({
             exit="exit"
             transition={springs.snappy}
           >
-            <span className="truncate font-bold font-display text-xl tracking-[-0.01em]">
+            {status.color && (
+              <StatusGlyph
+                category={status.category}
+                className="size-4 self-center text-[color:var(--column-accent)]"
+              />
+            )}
+            <span className="truncate font-bold font-display text-xl text-[color:var(--column-label,currentColor)] tracking-[-0.01em]">
               {status.name}
             </span>
             <span className="text-muted-foreground text-sm tabular-nums">
@@ -287,21 +301,22 @@ export function FlowTrack({
             key={item.id}
             type="button"
             aria-label={item.name}
+            data-column-color={item.color ?? undefined}
             aria-current={index === page ? 'page' : undefined}
             onClick={() => onTurn(index)}
             className="flex h-6 min-w-0 flex-1 items-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
           >
-            <span className="relative h-1.5 w-full overflow-hidden rounded-full bg-foreground/10">
+            <span className="relative h-1.5 w-full overflow-hidden rounded-full bg-[color:var(--column-wash,color-mix(in_oklab,var(--foreground)_10%,transparent))]">
               <span
                 className={cn(
-                  'absolute inset-0 rounded-full bg-foreground/25 transition-opacity duration-300',
+                  'absolute inset-0 rounded-full bg-[color:var(--column-accent,color-mix(in_oklab,var(--foreground)_25%,transparent))] transition-opacity duration-300',
                   index < page ? 'opacity-100' : 'opacity-0',
                 )}
               />
               {index === page && (
                 <motion.span
                   layoutId="phone-flow"
-                  className="absolute inset-0 rounded-full bg-foreground"
+                  className="absolute inset-0 rounded-full bg-[color:var(--column-accent,var(--foreground))]"
                   transition={springs.snappy}
                 />
               )}

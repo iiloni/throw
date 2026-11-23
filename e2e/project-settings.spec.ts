@@ -526,3 +526,83 @@ test('opening a task from settings search returns to its project board', async (
     'Open from settings',
   );
 });
+
+test('status colours render on the board and can be cleared', async ({ page, isMobile }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  const fixture = await setup(page, isMobile);
+  await section(page, 'Statuses');
+  await page.getByRole('button', { name: 'Add status to Active', exact: true }).click();
+  await page.getByLabel('Status name', { exact: true }).fill('Verify');
+  const picker = page.getByRole('group', { name: 'Status color' });
+  await expect(picker.getByRole('button', { name: 'No color', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await picker.getByRole('button', { name: 'Mint', exact: true }).click();
+  await page.getByRole('button', { name: 'Save status', exact: true }).click();
+  const row = statusRow(page, 'Verify');
+  await expect(row.locator('[data-column-color="mint"]')).toBeVisible();
+  const syncedStatus = async () =>
+    (await shapeRows(page.request, 'statuses', fixture.headers)).find(
+      ({ name }) => name === 'Verify',
+    );
+  await synced.poll(syncedStatus).toMatchObject({ color: 'mint' });
+  const statusId = String((await syncedStatus())?.id);
+
+  await backToBoard(page);
+  if (isMobile) {
+    const tab = page
+      .getByRole('navigation', { name: 'Columns' })
+      .getByRole('button', { name: 'Verify', exact: true });
+    await expect(tab).toHaveAttribute('data-column-color', 'mint');
+    await tab.click();
+  }
+  const column = isMobile
+    ? page.locator('[data-page][data-column-color="mint"]')
+    : page.locator(`[data-column="${statusId}"]`);
+  await expect(column).toHaveAttribute('data-column-color', 'mint');
+  await expect(column).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  const lightWash = await column.evaluate((element) => getComputedStyle(element).backgroundColor);
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(column).not.toHaveCSS('background-color', lightWash);
+
+  if (!isMobile) {
+    await page.getByRole('button', { name: 'Collapse Verify column' }).click();
+    await expect(column).toHaveAttribute('data-collapsed', '');
+    await expect(column).toHaveAttribute('data-column-color', 'mint');
+    await page.getByRole('button', { name: 'Expand Verify column' }).click();
+  }
+  const cards = await page.evaluate(
+    async ({ projectId, statusId }) => {
+      const { createTag } = await import('/src/lib/tags.ts');
+      const { createTask } = await import('/src/lib/tasks.ts');
+      const primaryTagId = createTag(projectId, { name: 'Urgent', color: 'red' });
+      return {
+        plain: createTask(projectId, { title: 'No tag', statusId }),
+        tagged: createTask(projectId, { title: 'Colour tag', statusId, primaryTagId }),
+      };
+    },
+    { projectId: fixture.projectId, statusId },
+  );
+  const plain = page.locator(`[data-card-id="${cards.plain}"]`);
+  await expect(plain).toBeVisible();
+  await expect(plain).not.toHaveAttribute('data-color');
+  await expect(page.locator(`[data-card-id="${cards.tagged}"]`)).toHaveAttribute(
+    'data-color',
+    'red',
+  );
+
+  await page.goto(fixture.settings);
+  await section(page, 'Statuses');
+  await statusAction(page, 'Verify', 'Change color');
+  await expect(picker.getByRole('button', { name: 'Mint', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await picker.getByRole('button', { name: 'No color', exact: true }).click();
+  await page.getByRole('button', { name: 'Save color', exact: true }).click();
+  await expect(row.locator('[data-column-color]')).toHaveCount(0);
+  await synced.poll(syncedStatus).toMatchObject({ color: null });
+  await backToBoard(page);
+  await expect(page.locator('[data-column-color="mint"]')).toHaveCount(0);
+});

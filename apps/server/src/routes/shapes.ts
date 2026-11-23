@@ -35,7 +35,16 @@ const SHAPES: Record<string, { table: string; columns: string[]; where: string }
   },
   statuses: {
     table: 'statuses',
-    columns: ['id', 'workspace_id', 'project_id', 'name', 'category', 'position', 'is_default'],
+    columns: [
+      'id',
+      'workspace_id',
+      'project_id',
+      'name',
+      'category',
+      'position',
+      'is_default',
+      'color',
+    ],
     where: `workspace_id IN (${MEMBER_WORKSPACES})`,
   },
   tags: {

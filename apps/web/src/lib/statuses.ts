@@ -1,4 +1,5 @@
 import {
+  type Color,
   compareStatuses,
   positionBetween,
   type Status,
@@ -26,7 +27,12 @@ export function defaultStatus(
 }
 
 /** Adds a status at the end of its category. */
-export function createStatus(projectId: string, name: string, category: StatusCategory) {
+export function createStatus(
+  projectId: string,
+  name: string,
+  category: StatusCategory,
+  color?: Color,
+) {
   const siblings = statusesOf([...statusesCollection.values()], projectId);
   const first = siblings[0];
   if (!first) throw new Error('Project not found');
@@ -38,6 +44,7 @@ export function createStatus(projectId: string, name: string, category: StatusCa
     projectId,
     name,
     category,
+    color,
     position: positionBetween(last?.position ?? null, null),
     isDefault: false,
   });
@@ -50,6 +57,16 @@ export function renameStatus(id: string, name: string) {
   write(() =>
     statusesCollection.update(id, (status) => {
       status.name = valid;
+    }),
+  );
+}
+
+export function setStatusColor(id: string, color: Color | null) {
+  const current = statusesCollection.get(id);
+  if (!current || (current.color ?? null) === color) return;
+  write(() =>
+    statusesCollection.update(id, (status) => {
+      status.color = color;
     }),
   );
 }

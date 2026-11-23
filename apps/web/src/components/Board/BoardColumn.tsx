@@ -1,8 +1,8 @@
+import type { Color } from '@throw/shared';
 import { ChevronsRightLeft } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { type ReactNode, useLayoutEffect, useRef, useState } from 'react';
 import { Hint } from '@/components/Hint/Hint';
-import { IconButton } from '@/components/IconButton/IconButton';
 import { entryDelay, useEntryMotion } from '@/lib/entryMotion';
 import { cn } from '@/lib/utils';
 import { drag, makingWay } from './drag';
@@ -14,6 +14,7 @@ import { useBoardSettings } from './state';
 const CONTENT_FADE = { duration: 0.25, delay: 0.15, ease: 'easeOut' } as const;
 
 type Props = {
+  color?: Color | null;
   /** The status id, or the category target on the workspace board, that a strip sends to. */
   columnId: string;
   name: string;
@@ -36,13 +37,13 @@ type Props = {
  * A desktop column that folds to a strip and opens again, as a column of Catch's deck does.
  * The root keeps its surface and size through both states and springs between widths; only
  * what is inside is swapped, and fades in once the column has mostly resized, so no card is
- * seen squeezed into a strip's width. Later column decorations (an accent at the top edge,
- * `data-column-color`) belong on this root, which both states share.
+ * seen squeezed into a strip's width. Both states draw their status color from this root.
  *
  * A strip shows no cards, so a held card is sent to it (ADR 0008): it takes the card at its
  * column's default place without opening or moving under the pointer.
  */
 export function BoardColumn({
+  color,
   columnId,
   name,
   category,
@@ -83,6 +84,7 @@ export function BoardColumn({
       // Folded, the strip is all there is of the column; open, the column names itself.
       aria-label={collapsed ? name : undefined}
       data-column={columnId}
+      data-column-color={color ?? undefined}
       data-collapsed={collapsed ? '' : undefined}
       data-surface={settings.surfaces ? '' : undefined}
       className={cn(
@@ -159,8 +161,11 @@ function ColumnStrip({
             over && 'text-foreground',
           )}
         >
-          <StatusGlyph category={category} className="size-4" />
-          <span className="min-h-0 truncate font-display font-semibold text-base text-foreground tracking-[-0.01em] [writing-mode:vertical-rl]">
+          <StatusGlyph
+            category={category}
+            className="size-4 text-[color:var(--column-accent,currentColor)]"
+          />
+          <span className="min-h-0 truncate font-display font-semibold text-base text-[color:var(--column-label,var(--foreground))] tracking-[-0.01em] [writing-mode:vertical-rl]">
             {name}
           </span>
           <span className="rounded-full bg-foreground/[0.07] px-1.5 py-0.5 text-xs tabular-nums">
@@ -185,7 +190,7 @@ export function ColumnHeader({
 }: {
   name: string;
   count: number;
-  /** Shown beside the name where the columns are categories rather than statuses. */
+  /** Shown beside the name on category columns and colored status columns. */
   category?: Category;
   onCollapse: () => void;
 }) {
@@ -207,9 +212,12 @@ export function ColumnHeader({
             )}
           >
             {category && (
-              <StatusGlyph category={category} className="size-4 text-muted-foreground" />
+              <StatusGlyph
+                category={category}
+                className="size-4 text-[color:var(--column-accent,var(--muted-foreground))]"
+              />
             )}
-            <span className="truncate font-display font-semibold text-lg tracking-[-0.01em]">
+            <span className="truncate font-display font-semibold text-lg text-[color:var(--column-label,currentColor)] tracking-[-0.01em]">
               {name}
             </span>
             <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-muted-foreground text-xs tabular-nums">

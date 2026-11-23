@@ -169,7 +169,7 @@ async function statusView(tx: Transaction, actor: McpActor, id: string) {
 }
 
 export function createStatusTool(actor: McpActor, input: McpInput<'create_status'>) {
-  const { operationId, projectId, name, category } = input;
+  const { operationId, projectId, name, category, color } = input;
   return structureOperation(
     actor,
     'create_status',
@@ -188,6 +188,7 @@ export function createStatusTool(actor: McpActor, input: McpInput<'create_status
         projectId,
         name,
         category,
+        color,
         position,
         isDefault: false,
       });
@@ -215,6 +216,7 @@ export function updateStatusTool(actor: McpActor, input: McpInput<'update_status
       if (conflicts.length) return outcome(operationId, current, conflicts);
       await updateStatus(tx, actor, statusId, {
         ...(patch.name !== undefined ? { name: patch.name } : {}),
+        ...(patch.color !== undefined ? { color: patch.color } : {}),
         ...(patch.defaultStatusId !== undefined ? { isDefault: true } : {}),
       });
       return outcome(operationId, await statusView(tx, actor, statusId));
