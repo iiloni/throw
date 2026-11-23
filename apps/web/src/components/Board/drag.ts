@@ -19,15 +19,6 @@ import {
   toggleSelected,
   update,
 } from './state';
-import {
-  beginSwipe,
-  cancelSwipe,
-  canSwipe,
-  endSwipe,
-  moveSwipe,
-  settleSwipe,
-  swipe,
-} from './swipe';
 
 /**
  * The board's drag engine, on raw pointer events.
@@ -220,8 +211,6 @@ export function isPrimed() {
  */
 export function pressCard(event: ReactPointerEvent<HTMLElement>, taskId: string) {
   if (event.button !== 0 || drag.get() || press) return;
-  // A swipe still springing home or away lands now: this touch is a new one.
-  settleSwipe();
   if (event.target instanceof Element && event.target.closest('[data-no-drag]')) return;
   press = {
     taskId,
@@ -263,18 +252,12 @@ function onPointerMove(event: PointerEvent) {
   if (!press) return;
   pointer = { x: event.clientX, y: event.clientY };
   const distance = Math.hypot(pointer.x - press.x, pointer.y - press.y);
-  if (swipe.get()) return moveSwipe(pointer.x - press.x, pointer.x);
   if (!drag.get()) {
     if (press.touch) {
-      const dx = pointer.x - press.x;
-      const across = dx > 0 && dx > Math.abs(pointer.y - press.y) * 2;
-      // A touch that travels before the hold completes is a scroll, or a swipe to close.
+      // A touch that travels before the hold completes is a scroll.
       if (distance <= TOUCH_SLOP) return;
       if (primed) begin();
-      else if (across && canSwipe(press.element)) {
-        window.clearTimeout(longPress);
-        beginSwipe(press.taskId, press.element, pointer.x);
-      } else release();
+      else release();
     } else if (distance > MOUSE_SLOP) begin();
     return;
   }
@@ -283,11 +266,6 @@ function onPointerMove(event: PointerEvent) {
 
 function onPointerUp() {
   if (drag.get()) return finish(true);
-  if (swipe.get()) {
-    endSwipe();
-    swallowClick();
-    return release();
-  }
   // The hold already selected the card; the click that follows must not undo it.
   if (primed) swallowClick();
   release();
@@ -295,10 +273,7 @@ function onPointerUp() {
 
 function onPointerCancel() {
   if (drag.get()) finish(false);
-  else {
-    cancelSwipe();
-    release();
-  }
+  else release();
 }
 
 function onKeyDown(event: KeyboardEvent) {

@@ -180,7 +180,6 @@ export function PhoneBoard({
         <div
           ref={pagerRef}
           data-pager=""
-          data-selecting={state.selection.length > 0 ? '' : undefined}
           {...pager}
           className="phone-pager flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
         >

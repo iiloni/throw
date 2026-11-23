@@ -60,7 +60,7 @@ search bar (`components/BoardSearch`, docked as a sidebar on wide boards) or the
 search; Ctrl/⌘K opens the palette only away from boards. A sorted list is `data-drop-send`:
 drops there send. The Updated sort reads each task's activity log (`updatedAtByTask`).
 Cards move on both boards by drag, keyboard,
-phone long press, the move drawer and a rightward swipe to close (ADR 0008).
+phone long press and the move drawer (ADR 0008).
 Settings (`/settings/*`) and project settings (`/w/:workspaceId/p/:projectId/settings`,
 with project trash beside it at `/trash`) share Catch's `SettingsLayout`: pages listed
 beside the open one on wide screens, and a dock page picker on phones
@@ -74,7 +74,7 @@ mock data and shares the components and the drag engine (`Board/drag.ts`) with t
 project board. `Board/ProjectBoard.tsx` adapts collections and task actions at the boundary;
 `Board/selection.ts` selects visible rows. `Board/state.ts` holds incoming sync while a card
 is held and turns drops into `moveTask` and `sendTask` calls; `Board/carry.ts` is the
-keyboard carry and `Board/swipe.ts` the phone's swipe to close. The collection hooks hold
+keyboard carry. The collection hooks hold
 their last rows through a reconnect's full snapshot (`lib/steadyRows.ts`), so the board
 does not unmount while a shape reloads.
 

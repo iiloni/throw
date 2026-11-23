@@ -21,7 +21,6 @@ import {
   pageClass,
 } from './PhoneBoard';
 import { CATEGORY_NAMES } from './StatusMenu';
-import { SwipeReveal } from './SwipeReveal';
 import {
   bandsOf,
   board,
@@ -144,7 +143,6 @@ export function WorkspacePhoneBoard({
         <div
           ref={pagerRef}
           data-pager=""
-          data-selecting={state.selection.length > 0 ? '' : undefined}
           {...pager}
           className="phone-pager flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
         >
@@ -201,13 +199,11 @@ function CategoryPage({ category }: { category: Category }) {
   // A folded page opens under a held card. A phone shows one page at a time, so nothing beside
   // it moves, as a folded desktop column, which stays a strip, would make its neighbours do.
   const hidden = foldable !== null && folded[foldable] && !dragging;
-  const open = category === 'backlog' || category === 'active';
   return (
     <section
       aria-label={name}
       data-drop-status={target}
       data-status-home={target}
-      data-swipe-close={open ? '' : undefined}
       className={cn(
         'board-column flex min-h-0 flex-1 flex-col rounded-3xl',
         aimed && held?.origin !== category && 'bg-accent/60',
@@ -251,7 +247,6 @@ function CategoryPage({ category }: { category: Category }) {
                   )}
                   {band.tasks.map((task) => (
                     <div key={task.id} data-slot={task.id} className="relative pb-3">
-                      {open && <SwipeReveal taskId={task.id} />}
                       <TaskCard task={task} showStatus />
                     </div>
                   ))}

@@ -481,45 +481,37 @@ test.describe('phone', () => {
 test.describe('phone swipes', () => {
   test.skip(({ isMobile, browserName }) => !isMobile || browserName !== 'chromium', 'Touch input');
 
-  test('a card swiped right closes into done; a swipe left still turns the page', async ({
+  test('horizontal swipes starting on a card turn between columns without closing it', async ({
     page,
   }) => {
     const board = await fixture(page);
     const touch = await finger(page);
     const columns = page.getByRole('navigation', { name: 'Columns' });
-    // A short swipe springs back and writes nothing.
-    const later = await centre(await settled(card(page, 'Later position')));
-    await touch.press(later, 30);
-    await touch.move({ x: later.x + 60, y: later.y }, 200);
-    await touch.lift();
-    await page.waitForTimeout(600);
-    expect((await taskRow(page, board.headers, board.ids['Later position']!))?.status_id).toBe(
-      board.status('Build'),
-    );
-    // Far enough, and it closes.
-    const earlier = await centre(await settled(card(page, 'Earlier position')));
-    await touch.press(earlier, 30);
-    await touch.move({ x: earlier.x + 200, y: earlier.y }, 300);
-    await expect(page.locator('[data-swipe-reveal="armed"]')).toHaveText('Done');
-    await touch.lift();
-    await expect(card(page, 'Earlier position')).toHaveCount(0);
-    await expect
-      .poll(
-        async () => (await taskRow(page, board.headers, board.ids['Earlier position']!))?.status_id,
-      )
-      .toBe(board.status('Done'));
-    await expect(page.getByRole('button', { name: /^3 done this week/ })).toBeVisible();
-    // Leftwards over a card is still the page.
+    // Leftwards over a card turns to the next column.
     // From the card's right edge across most of the page, so the pager's snap cannot
     // settle back under a slow runner's late fling.
-    const box = (await (await settled(card(page, 'Low priority'))).boundingBox())!;
-    const low = { x: box.x + box.width - 24, y: box.y + box.height / 2 };
+    const buildBox = (await (await settled(card(page, 'Low priority'))).boundingBox())!;
+    const low = { x: buildBox.x + buildBox.width - 24, y: buildBox.y + buildBox.height / 2 };
     await touch.press(low, 30);
-    await touch.move({ x: box.x + 24, y: low.y }, 250);
+    await touch.move({ x: buildBox.x + 24, y: low.y }, 250);
     await touch.lift();
     await expect(columns.getByRole('button', { name: 'Review' })).toHaveAttribute(
       'aria-current',
       'page',
+    );
+    // Rightwards over a card turns back to the previous column instead of closing it into Done.
+    const reviewBox = (await (await settled(card(page, 'Review this'))).boundingBox())!;
+    const review = { x: reviewBox.x + 24, y: reviewBox.y + reviewBox.height / 2 };
+    await touch.press(review, 30);
+    await touch.move({ x: reviewBox.x + reviewBox.width - 24, y: review.y }, 250);
+    await touch.lift();
+    await expect(columns.getByRole('button', { name: 'Build' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await page.waitForTimeout(400);
+    expect((await taskRow(page, board.headers, board.ids['Review this']!))?.status_id).toBe(
+      board.status('Review'),
     );
   });
 });

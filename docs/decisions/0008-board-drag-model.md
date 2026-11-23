@@ -1,8 +1,9 @@
 # 0008: The board's drag model
 
 Status: accepted (2026-10-13); amended 2026-10-19 when the project board was wired to task
-actions, 2026-11-19 when the board learned to wait for a lifted card to move, and 2026-11-22
-when desktop columns learned to fold
+actions, 2026-11-19 when the board learned to wait for a lifted card to move, 2026-11-22
+when desktop columns learned to fold, and 2026-11-23 when mobile swipe-to-close on board
+cards was removed
 
 ## Context
 
@@ -176,11 +177,13 @@ This replaces a caret in the gutter with nothing moving until the drop, chosen o
 2026-10-19 when a parting gap in a CSS grid read as too busy. With Catch's springs and its
 slot hysteresis, the owner chose live reflow on 2026-11-22.
 
-**On a phone a card swipes right to close.** A rightward swipe that starts on a card in a
-board page closes it into the default done status; leftward swipes and any that start outside
-a card stay with the pager. The card's `touch-action: pan-y pan-right` is what lets the
-browser hand over the rightward finger and keep scrolling otherwise. A long press that
-completes first is a drag, as before.
+**On a phone, horizontal swipes over cards turn between columns (2026-11-23).** Board cards
+previously swiped right to close into the default done status, with `touch-action: pan-y
+pan-right` handing rightward swipes to the card gesture. In practice, swiping horizontally
+between active columns triggered swipe-to-close accidentally far too easily. Cards no longer
+intercept horizontal swipes, so swipes starting anywhere on a card turn the pager cleanly in
+both directions; closing a card uses long-press drag (including to the done pocket), the move
+drawer, or the task dock's Close action.
 
 ## Consequences
 
@@ -198,5 +201,3 @@ completes first is a drag, as before.
   the settings page.
 - The closed gallery is masonry too, newest first across the top row: closed work is ordered
   by time and is never placed.
-- Swipe to close has no undo beyond moving the card back from the closed tasks; the swipe
-  needs about two fifths of a card's width, or a flick, to close.
