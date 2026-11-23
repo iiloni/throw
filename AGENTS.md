@@ -39,10 +39,12 @@ The activity log syncs to devices and comments are built (`lib/comments.ts`), wi
 timeline query in `collections.ts` and a task history view in `TaskDetails/TaskTimeline.tsx`.
 Tags have their data layer and reusable controls in `components/Tag*`, with a real-data `/prototype/tags` workshop in
 development only. The board color helper is `taskTagColor` in `@throw/shared`. The task
-pane picks and lists tags, and its Color and Tags panels make new tags through the shell's
-`NewTagHost` (`components/NewTag`); project settings mounts tag management.
+pane picks and lists tags, and its unified Tags panel (Primary / Secondary tabs) makes new
+tags through the shell's `NewTagHost` (`components/NewTag`); project settings mounts tag
+management.
 Task relations (blocks, duplicates, relates to) link tasks across a workspace's projects:
-actions in `lib/taskRelations.ts`, the pane's list, dock picker and card blocked mark in
+actions in `lib/taskRelations.ts`, the pane's list, relation picker (opened inline from the
+Links tab / open side column or from the dock's More panel) and card blocked mark in
 `components/TaskRelations` (cards read `Board/blockers.ts`, which the prototype leaves empty).
 The task pane shows comments, server history and (on narrow desktop panes and phones,
 moving to the ADR 0012 side column when wide) task links under `SegmentedTabs`.

@@ -230,7 +230,9 @@ one (2026-11-22). A link is one of three kinds, and each task sees it from its o
   returns, or on its own project's board. On a phone the task grows out of its exact opener
   row and dissolves back into it once settled, never crossing to a subtask card of the same
   task. Each row has a remove button, always shown since a touch screen has no hover.
-- The dock's link control opens a picker. Its controls sit at the bottom for reachability
+- The inline “Link a task” slot (in the Links tab on narrow panes and phones, or in the open
+  side column on wide desktop panes) and “Link a task” inside the dock's More panel open a
+  picker. Its controls sit at the bottom for reachability
   (directly above the desktop dock, and riding above the safe area or keyboard on a phone):
   the relation kind as one segmented control (Blocked by, Blocks, Duplicates, Relates to)
   with a sentence below saying which way it reads (“THR-21 waits until the task you pick is
@@ -593,20 +595,23 @@ view), comments and activity.
   drawer. It opens out of its card and closes back into it, on the card's color. Pulling it
   down from the top closes it too.
 - While a task is open on a phone, the dock (the collapsed [drawer](#the-drawer)) holds
-  that task's actions, as it does for a note in Catch: Status, Priority, Color and Tags
-  (once the project has any), Link a task (see [Relations](#relations)) and More (close or
+  that task's primary actions, capped at five spacious controls so touch targets stay
+  comfortable on narrow screens: Status, Priority, Size (when supported), Tags (once the
+  project has any, tinted with the primary tag's color) and More (link a task, close or
   reopen, copy link). The controls act as
   tabs: each opens its panel in the drawer beneath the dock, which stays as the panel's
   header, and the drawer holds still until a panel is open. The status panel is the
-  board's grid of statuses by category. As Catch keeps a note's color and tags apart
-  (2026-11-19), Color picks the primary tag: each colored top-level tag is a swatch,
-  picking one opens its children to pick a more specific one, and uncolored top-level
-  tags sit one step away. Tags lists the secondary tags with the primary marked, since a
-  tag may hold both roles. Both pickers stay open for further choices. As in Catch, each
-  has a "+" in its top-right corner that makes a tag and assigns it at once (2026-11-20):
-  in Color, a top-level tag starting with a color no root holds yet, or a child of the
-  open tag, either becoming the primary; in Tags, a secondary tag. On a phone the form is
-  a drawer page in place of the picker, and Back returns to the picker; on desktop it is a
+  board's grid of statuses by category. The unified Tags panel switches between **Primary**
+  and **Secondary** tabs (2026-11-22): Primary picks the primary tag by color (each colored
+  top-level tag is a swatch, picking one opens its children to pick a more specific one, and
+  uncolored top-level tags sit one step away), and Secondary lists the secondary tags with
+  the primary marked, since a tag may hold both roles. The picker stays open for further
+  choices. As in Catch, each tab has a "+" in its top-right corner that makes a tag and
+  assigns it at once (2026-11-20): in Primary, a top-level tag starting with a color no root
+  holds yet, or a child of the open tag, either becoming the primary; in Secondary, a
+  secondary tag. On a phone the form is
+  a drawer page in place of the picker, and Back returns to the picker's same tab and
+  branch; on desktop it is a
   centred dialog over the open panel. The task's tags are listed under its title. On desktop the pane follows Catch's split view (2026-11-19):
   the navigation and trash toolbars sit above the task's card, lined up with its edges, and
   the same controls are a glass dock below it. A panel opens above the dock over the

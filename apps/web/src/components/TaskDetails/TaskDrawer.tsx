@@ -6,11 +6,13 @@ import { board, current } from '@/components/Board/state';
 import { useBackHandler } from '@/lib/backButton';
 import { springs } from '@/lib/motion';
 import {
+  type DockPanel,
   panelTitle,
   TaskControls,
   TaskDockRow,
   type TaskPanel,
   TaskPanelContent,
+  useOpenTaskPanel,
 } from './TaskControls';
 
 /**
@@ -22,14 +24,28 @@ import {
 export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] }) {
   const [panel, setPanel] = useState<TaskPanel | null>(null);
   const root = useRef<HTMLDivElement>(null);
-  const trigger = useRef<HTMLButtonElement | null>(null);
+  const trigger = useRef<HTMLElement | null>(null);
   const id = useId();
   const reduced = useReducedMotion();
   const project = projectOf(current(board.use()).project, task);
   const collapse = useCallback(() => {
     setPanel(null);
-    trigger.current?.focus({ preventScroll: true });
+    if (trigger.current?.isConnected) trigger.current.focus({ preventScroll: true });
   }, []);
+  useOpenTaskPanel(
+    task.id,
+    useCallback(
+      (next, element) => {
+        if (panel === next && element && trigger.current === element) {
+          collapse();
+          return;
+        }
+        if (element) trigger.current = element;
+        setPanel(next);
+      },
+      [panel, collapse],
+    ),
+  );
   useBackHandler(panel !== null, collapse);
   useEffect(() => {
     if (!panel) return;
@@ -41,8 +57,10 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
       collapse();
     }
     function outside(event: PointerEvent) {
+      const target = event.target as Node;
       if (
-        !root.current?.contains(event.target as Node) &&
+        !root.current?.contains(target) &&
+        !trigger.current?.contains(target) &&
         !document.querySelector('[role="dialog"][aria-labelledby]')
       )
         setPanel(null);
@@ -54,7 +72,7 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
       document.removeEventListener('pointerdown', outside, true);
     };
   }, [panel, collapse]);
-  function toggle(next: TaskPanel, element: HTMLButtonElement) {
+  function toggle(next: DockPanel, element: HTMLButtonElement) {
     trigger.current = element;
     setPanel(panel === next ? null : next);
   }
@@ -99,7 +117,7 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
             >
               <div
                 className={
-                  panel === 'relations'
+                  panel === 'relations' || panel === 'tags'
                     ? 'flex max-h-[min(55dvh,28rem)] shrink-0 flex-col overflow-hidden'
                     : 'max-h-[min(55dvh,28rem)] shrink-0 overflow-y-auto overscroll-contain [scrollbar-width:thin]'
                 }
@@ -110,6 +128,8 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
                   statuses={statuses}
                   project={project}
                   onDone={collapse}
+                  onLink={() => setPanel('relations')}
+                  onClose={collapse}
                 />
               </div>
             </motion.div>

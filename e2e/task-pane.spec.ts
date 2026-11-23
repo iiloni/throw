@@ -628,42 +628,46 @@ test('tags are picked from the task controls and listed on the task', async ({
   };
   const launch = await tag('Launch', null);
   const press = await tag('Press', launch);
-  // Enough children that the color picker's list is taller than its swatches.
+  // Enough children that the primary tag's list is taller than its swatches.
   for (const name of ['Blog', 'Events', 'Partners', 'Social', 'Video']) await tag(name, launch);
+  const tagsPanel = () =>
+    page.getByRole(isMobile ? 'dialog' : 'region', { name: 'Tags', exact: true });
   // The children reach the device after the root; the picker can only open what it has.
   await controls(page).getByRole('button', { name: 'Tags: none. Change', exact: true }).click();
+  await tagsPanel().getByRole('tab', { name: 'Secondary', exact: true }).click();
   await expect(
-    page
-      .getByRole(isMobile ? 'dialog' : 'region', { name: 'Tags', exact: true })
-      .getByRole('checkbox', { name: 'Launch / Video', exact: true }),
+    tagsPanel().getByRole('checkbox', { name: 'Launch / Video', exact: true }),
   ).toBeAttached();
-  await page.keyboard.press('Escape');
-  // The color picks the primary tag, as Catch's palette does, and opens its children.
-  await controls(page).getByRole('button', { name: 'Color: none. Change', exact: true }).click();
-  const color = page.getByRole(isMobile ? 'dialog' : 'region', { name: 'Color', exact: true });
-  await color.getByRole('button', { name: 'Amber: Launch', exact: true }).click();
+  // The Primary tab picks the primary tag by color and opens its children.
+  await tagsPanel().getByRole('tab', { name: 'Primary', exact: true }).click();
+  await tagsPanel().getByRole('button', { name: 'Amber: Launch', exact: true }).click();
   // On a phone the drawer grows with the picker's child list, so all of it is on screen; the
   // desktop panel keeps its height and scrolls.
-  const last = color.getByRole('button', { name: 'Launch / Video', exact: true });
+  const last = tagsPanel().getByRole('button', { name: 'Launch / Video', exact: true });
   if (isMobile) await expect(last).toBeInViewport({ ratio: 1 });
   else await expect(last).toBeVisible();
   await page.screenshot({ path: test.info().outputPath('color-picker.png') });
   await page.keyboard.press('Escape');
-  await expect(color).toHaveCount(0);
-  await expect(
-    controls(page).getByRole('button', { name: 'Color: Launch. Change', exact: true }),
-  ).toBeFocused();
-  await controls(page).getByRole('button', { name: 'Tags: none. Change', exact: true }).click();
-  const picker = page.getByRole(isMobile ? 'dialog' : 'region', { name: 'Tags', exact: true });
+  await expect(tagsPanel()).toHaveCount(0);
+  const launchButton = controls(page).getByRole('button', {
+    name: 'Tags: Launch. Change',
+    exact: true,
+  });
+  await expect(launchButton).toBeFocused();
+  await expect(launchButton.locator('[data-color="amber"]')).toBeVisible();
+  await launchButton.click();
+  const picker = tagsPanel();
+  await picker.getByRole('tab', { name: 'Secondary', exact: true }).click();
   await picker.getByRole('checkbox', { name: 'Launch / Press', exact: true }).check();
   // Tags take several choices, so the picker stays open until it is dismissed.
   await expect(picker).toBeVisible();
+  await expect(picker.getByRole('tab', { name: 'Secondary · 1', exact: true })).toBeVisible();
   await page.screenshot({ path: test.info().outputPath('tag-picker.png') });
   await page.keyboard.press('Escape');
   await expect(picker).toHaveCount(0);
   await expect(pane).toBeVisible();
   await expect(
-    controls(page).getByRole('button', { name: 'Tags: Press. Change', exact: true }),
+    controls(page).getByRole('button', { name: 'Tags: Launch, Press. Change', exact: true }),
   ).toBeFocused();
   const listed = pane.getByRole('region', { name: 'Task tags' });
   await expect(listed).toContainText('Launch');
@@ -681,7 +685,7 @@ test('tags are picked from the task controls and listed on the task', async ({
   await expect(card.getByText('Press', { exact: true })).toBeVisible();
 });
 
-test('the color and tags panels make a tag in their corner and assign it at once', async ({
+test('the unified tags panel makes a tag in either tab’s corner and assigns it at once', async ({
   page,
   isMobile,
 }) => {
@@ -700,15 +704,13 @@ test('the color and tags panels make a tag in their corner and assign it at once
   await tag('Press', launch, null);
   // On a phone the picker is a page of the drawer and the form takes its place there; on
   // desktop the picker is a panel of the dock and the form is a centred dialog over it.
-  const panel = (name: string) =>
-    page.getByRole(isMobile ? 'dialog' : 'region', { name, exact: true });
+  const panel = page.getByRole(isMobile ? 'dialog' : 'region', { name: 'Tags', exact: true });
   const form = page.getByRole('dialog', { name: 'New tag', exact: true });
-  const newTag = (name: string) =>
-    panel(name).getByRole('button', { name: 'New tag', exact: true });
+  const newTag = panel.getByRole('button', { name: 'New tag', exact: true });
 
   // A top-level tag starts with the first color no root holds, and becomes the primary.
-  await controls(page).getByRole('button', { name: 'Color: none. Change', exact: true }).click();
-  await newTag('Color').click();
+  await controls(page).getByRole('button', { name: 'Tags: none. Change', exact: true }).click();
+  await newTag.click();
   await expect(form.getByRole('textbox', { name: 'Name' })).toBeFocused();
   if (isMobile) {
     // The open task raises the drawer, whose dock rides up on the keyboard; the form's page
@@ -735,47 +737,46 @@ test('the color and tags panels make a tag in their corner and assign it at once
   await page.screenshot({ path: test.info().outputPath('new-tag-form.png') });
   await form.getByRole('button', { name: 'Save tag', exact: true }).click();
   await expect(form).toHaveCount(0);
-  const roadmap = panel('Color').getByRole('button', { name: 'Orange: Roadmap', exact: true });
+  const roadmap = panel.getByRole('button', { name: 'Orange: Roadmap', exact: true });
   await expect(roadmap).toHaveAttribute('aria-pressed', 'true');
   await expect(roadmap).toBeInViewport({ ratio: 1 });
-  if (!isMobile) await expect(newTag('Color')).toBeFocused();
+  if (!isMobile) await expect(newTag).toBeFocused();
   await page.screenshot({ path: test.info().outputPath('color-new-tag.png') });
 
   // In a color's children, it makes another child there, and Back returns to that list.
-  await panel('Color').getByRole('button', { name: 'Red: Launch', exact: true }).click();
-  await expect(panel('Color').getByRole('button', { name: 'Back from Launch' })).toBeVisible();
-  await newTag('Color').click();
+  await panel.getByRole('button', { name: 'Red: Launch', exact: true }).click();
+  await expect(panel.getByRole('button', { name: 'Back from Launch' })).toBeVisible();
+  await newTag.click();
   await expect(form.getByRole('combobox', { name: 'Parent tag' })).toHaveValue(launch);
   await page.keyboard.press('Escape');
   await expect(form).toHaveCount(0);
-  await expect(panel('Color').getByRole('button', { name: 'Back from Launch' })).toBeVisible();
-  await newTag('Color').click();
+  await expect(panel.getByRole('button', { name: 'Back from Launch' })).toBeVisible();
+  await newTag.click();
   await form.getByRole('textbox', { name: 'Name' }).fill('Video');
   await form.getByRole('button', { name: 'Save tag', exact: true }).click();
   await expect(form).toHaveCount(0);
-  await expect(
-    panel('Color').getByRole('button', { name: 'Launch / Video', exact: true }),
-  ).toHaveAttribute('aria-pressed', 'true');
-  await page.keyboard.press('Escape');
-  await expect(panel('Color')).toHaveCount(0);
-  await expect(
-    controls(page).getByRole('button', { name: 'Color: Video. Change', exact: true }),
-  ).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Launch / Video', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
 
-  // The tags panel's corner adds the new tag to the task's other tags.
-  await controls(page).getByRole('button', { name: 'Tags: none. Change', exact: true }).click();
-  await newTag('Tags').click();
+  // The Secondary tab's corner adds the new tag to the task's other tags, and returns there on mobile.
+  await panel.getByRole('tab', { name: 'Secondary', exact: true }).click();
+  await newTag.click();
   await expect(form.getByRole('combobox', { name: 'Parent tag' })).toHaveValue('');
   await form.getByRole('textbox', { name: 'Name' }).fill('Docs');
   await form.getByRole('button', { name: 'Save tag', exact: true }).click();
   await expect(form).toHaveCount(0);
-  const docs = panel('Tags').getByRole('checkbox', { name: 'Docs', exact: true });
+  const docs = panel.getByRole('checkbox', { name: 'Docs', exact: true });
   await expect(docs).toBeChecked();
   await expect(docs).toBeInViewport({ ratio: 1 });
-  if (!isMobile) await expect(newTag('Tags')).toBeFocused();
+  if (!isMobile) await expect(newTag).toBeFocused();
   await page.screenshot({ path: test.info().outputPath('tags-new-tag.png') });
   await page.keyboard.press('Escape');
-  await expect(panel('Tags')).toHaveCount(0);
+  await expect(panel).toHaveCount(0);
+  await expect(
+    controls(page).getByRole('button', { name: 'Tags: Video, Docs. Change', exact: true }),
+  ).toBeVisible();
   await expect(pane.getByRole('region', { name: 'Task tags' })).toContainText('Docs');
 
   await expect
@@ -1044,10 +1045,10 @@ test('a wide desktop pane keeps tags and subtasks in a column that opens and shu
     ).status(),
   ).toBe(201);
   const full = await width();
-  await controls(page).getByRole('button', { name: 'Color: none. Change', exact: true }).click();
-  const color = page.getByRole('region', { name: 'Color', exact: true });
+  await controls(page).getByRole('button', { name: 'Tags: none. Change', exact: true }).click();
+  const tagsPanel = page.getByRole('region', { name: 'Tags', exact: true });
   let room = await columnRoom(page, () =>
-    color.getByRole('button', { name: 'Amber: Launch', exact: true }).click(),
+    tagsPanel.getByRole('button', { name: 'Amber: Launch', exact: true }).click(),
   );
   await expect(column).toBeVisible();
   await expect.poll(width).toBe(full - 268);
@@ -1059,19 +1060,19 @@ test('a wide desktop pane keeps tags and subtasks in a column that opens and shu
   await expect(column.getByRole('region', { name: 'Task tags' })).toContainText('Launch');
   await expect(addSubtask).toHaveCount(1);
   await expect(column.getByRole('button', { name: 'Add subtask', exact: true })).toBeVisible();
-  if (await color.count()) await page.keyboard.press('Escape');
-  await expect(color).toHaveCount(0);
+  if (await tagsPanel.count()) await page.keyboard.press('Escape');
+  await expect(tagsPanel).toHaveCount(0);
 
   // Removing the last tag springs it shut, and the slot comes back inline.
-  await controls(page).getByRole('button', { name: 'Color: Launch. Change', exact: true }).click();
+  await controls(page).getByRole('button', { name: 'Tags: Launch. Change', exact: true }).click();
   room = await columnRoom(page, () =>
-    color.getByRole('button', { name: 'No color tag', exact: true }).click(),
+    tagsPanel.getByRole('button', { name: 'No color tag', exact: true }).click(),
   );
   await expect(column).toHaveCount(0);
   await expect.poll(width).toBe(full);
   expect(sprung(room)).toBeGreaterThanOrEqual(3);
-  if (await color.count()) await page.keyboard.press('Escape');
-  await expect(color).toHaveCount(0);
+  if (await tagsPanel.count()) await page.keyboard.press('Escape');
+  await expect(tagsPanel).toHaveCount(0);
   await expect(card.getByRole('button', { name: 'Add subtask', exact: true })).toBeVisible();
 
   // A subtask left untouched is discarded on the way back, and never opens the column.
@@ -1133,13 +1134,14 @@ test('task size picker and optional card badge work on both boards', async ({ pa
   const account = await fixture(page);
   await newTag(page.request, account, account.projectId, { name: 'Design', color: 'teal' });
   const dock = controls(page);
-  await expect(dock.getByRole('button', { name: 'Color: none. Change' })).toBeVisible();
+  await expect(dock.getByRole('button', { name: 'Tags: none. Change' })).toBeVisible();
+  await expect(dock.getByRole('button')).toHaveCount(5);
   const sizeButton = (size: string) => dock.getByRole('button', { name: `Size: ${size}. Change` });
   const picker = page.getByRole('radiogroup', { name: 'Size', exact: true });
   const sizeOption = (size: string) => picker.getByRole('radio', { name: size, exact: true });
   if (isMobile) {
     const target = await sizeButton('none').boundingBox();
-    expect(target?.width).toBeGreaterThanOrEqual(44);
+    expect(target?.width).toBeGreaterThanOrEqual(56);
     expect(target?.height).toBeGreaterThanOrEqual(44);
   }
   await sizeButton('none').click();

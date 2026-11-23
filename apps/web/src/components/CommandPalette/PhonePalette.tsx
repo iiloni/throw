@@ -4,11 +4,9 @@ import { motion } from 'motion/react';
 import { type ReactNode, type RefObject, useRef, useState } from 'react';
 import { useShell } from '@/components/AppShell/shell';
 import type { Project } from '@/components/Board/model';
-import { ColorTagPicker } from '@/components/ColorTagPicker/ColorTagPicker';
 import type { DrawerCard, DrawerPage } from '@/components/Drawer/Drawer';
-import { TagPicker } from '@/components/TagPicker/TagPicker';
 import { ControlButtons, panelTitle } from '@/components/TaskDetails/TaskControls';
-import { PriorityOptions, StatusOptions } from '@/components/TaskDetails/TaskPickers';
+import { PriorityOptions, StatusOptions, TagOptions } from '@/components/TaskDetails/TaskPickers';
 import { useStatuses, useTags } from '@/lib/collections';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
@@ -24,7 +22,7 @@ type Draft = {
   secondaryTagIds: string[];
 };
 
-export type CapturePanel = 'status' | 'priority' | 'color' | 'tags';
+export type CapturePanel = 'status' | 'priority' | 'tags';
 
 export type PhoneCapture = {
   /** The card above the dock while a task is being written. */
@@ -309,7 +307,7 @@ function CaptureControls({
         }
         // Opening a picker moves focus off the title, which puts the keyboard away.
         onOpen={(next) => {
-          if (next !== 'more' && next !== 'size' && next !== 'relations') onPanel(next);
+          if (next !== 'more' && next !== 'size') onPanel(next);
         }}
         controlProps={(next) => ({ 'aria-expanded': next === panel })}
         tooltips={false}
@@ -354,29 +352,19 @@ function CapturePanelContent({
         }}
       />
     );
-  if (panel === 'color')
-    return (
-      <ColorTagPicker
-        tags={tags}
-        primaryTagId={draft.primaryTagId}
-        onChange={(primaryTagId) => onChange({ primaryTagId })}
-        className="px-2 pb-2"
-      />
-    );
   return (
-    <div className="px-5 pt-1 pb-3">
-      <TagPicker
-        tags={tags}
-        primaryTagId={draft.primaryTagId}
-        secondaryTagIds={draft.secondaryTagIds}
-        onChange={(id, present) =>
-          onChange({
-            secondaryTagIds: present
-              ? [...new Set([...draft.secondaryTagIds, id])]
-              : draft.secondaryTagIds.filter((other) => other !== id),
-          })
-        }
-      />
-    </div>
+    <TagOptions
+      tags={tags}
+      primaryTagId={draft.primaryTagId}
+      secondaryTagIds={draft.secondaryTagIds}
+      onPrimaryChange={(primaryTagId) => onChange({ primaryTagId })}
+      onSecondaryChange={(id, present) =>
+        onChange({
+          secondaryTagIds: present
+            ? [...new Set([...draft.secondaryTagIds, id])]
+            : draft.secondaryTagIds.filter((other) => other !== id),
+        })
+      }
+    />
   );
 }

@@ -22,7 +22,7 @@ export function TagPicker({
 }) {
   const marker = useId();
   return (
-    <section aria-label="Secondary tags" className="min-w-0">
+    <section aria-label="Secondary tags" className="flex min-h-0 min-w-0 flex-1 flex-col">
       {!tags.length ? (
         <p className="px-1 py-3 text-muted-foreground text-sm">
           No tags yet. Create a tag to organise this project.
@@ -31,7 +31,7 @@ export function TagPicker({
         <TagTree
           tags={tags}
           searchPosition="bottom"
-          className="max-h-[min(20rem,45dvh)]"
+          className="min-h-0 max-h-[min(20rem,45dvh)] flex-1"
           renderTag={(tag, path) => {
             const label = path.map((item) => item.name).join(' / ');
             const root = path[0] ?? tag;

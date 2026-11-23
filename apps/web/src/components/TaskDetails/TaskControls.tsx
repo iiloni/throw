@@ -6,9 +6,14 @@ import {
   type Task,
   taskTagColor,
 } from '@throw/shared';
-import { Flag, Link2, MoreHorizontal, Palette, Scaling, Tag } from 'lucide-react';
+import { Flag, MoreHorizontal, Scaling, Tag } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import type { ButtonHTMLAttributes, KeyboardEventHandler, ReactNode } from 'react';
+import {
+  type ButtonHTMLAttributes,
+  type KeyboardEventHandler,
+  type ReactNode,
+  useEffect,
+} from 'react';
 import { PriorityGlyph, StatusGlyph } from '@/components/Board/glyphs';
 import { type Project, priorityName } from '@/components/Board/model';
 import { leaveTask } from '@/components/Board/state';
@@ -21,25 +26,54 @@ import { useTags, useTaskTags } from '@/lib/collections';
 import { useTaskSizeSupport } from '@/lib/compatibility';
 import { springs } from '@/lib/motion';
 import { TaskActions } from './TaskActions';
-import {
-  ColorTagsPicker,
-  PriorityPicker,
-  SizePicker,
-  StatusPicker,
-  TagsPicker,
-} from './TaskPickers';
+import { PriorityPicker, SizePicker, StatusPicker, TaskTagsPicker } from './TaskPickers';
 
-export type TaskPanel = 'status' | 'priority' | 'size' | 'color' | 'tags' | 'relations' | 'more';
+export type TaskPanel = 'status' | 'priority' | 'size' | 'tags' | 'relations' | 'more';
+export type DockPanel = Exclude<TaskPanel, 'relations'>;
 
 export const panelTitle: Record<TaskPanel, string> = {
   status: 'Status',
   priority: 'Priority',
   size: 'Size',
-  color: 'Color',
   tags: 'Tags',
   relations: 'Link a task',
   more: 'More',
 };
+
+const OPEN_PANEL_EVENT = 'throw:open-task-panel';
+
+type OpenPanelDetail = {
+  taskId: string;
+  panel: TaskPanel;
+  trigger?: HTMLElement | null;
+};
+
+/**
+ * Opens a task panel from outside the dock (for example, an inline “Link a task” button in the
+ * Links tab or side column). Both the desktop `TaskDrawer` and the phone drawer listen for it.
+ */
+export function openTaskPanel(taskId: string, panel: TaskPanel, trigger?: HTMLElement | null) {
+  window.dispatchEvent(
+    new CustomEvent<OpenPanelDetail>(OPEN_PANEL_EVENT, { detail: { taskId, panel, trigger } }),
+  );
+}
+
+/** Subscribes a task's dock host to `openTaskPanel` requests for that task. */
+export function useOpenTaskPanel(
+  taskId: string,
+  onRequest: (panel: TaskPanel, trigger?: HTMLElement | null) => void,
+) {
+  useEffect(() => {
+    const listener = (event: Event) => {
+      if (!(event instanceof CustomEvent)) return;
+      const detail = event.detail as OpenPanelDetail | undefined;
+      if (!detail || detail.taskId !== taskId) return;
+      onRequest(detail.panel, detail.trigger);
+    };
+    window.addEventListener(OPEN_PANEL_EVENT, listener);
+    return () => window.removeEventListener(OPEN_PANEL_EVENT, listener);
+  }, [taskId, onRequest]);
+}
 
 // As Catch's note toolbar: inset in the dock so their corners follow its corners, and only
 // the one whose panel is open takes a surface.
@@ -50,6 +84,14 @@ type ControlProps = Pick<
   ButtonHTMLAttributes<HTMLButtonElement>,
   'aria-expanded' | 'aria-controls'
 >;
+
+function tagSummary(tags: { primary: string | null; secondary: string[] }) {
+  const names = [
+    ...(tags.primary ? [tags.primary] : []),
+    ...tags.secondary.filter((name) => name !== tags.primary),
+  ];
+  return names.join(', ') || 'none';
+}
 
 /** The task's controls, as Catch's note toolbar: the pane drawer's header, or a phone's dock. */
 export function TaskControls({
@@ -63,8 +105,8 @@ export function TaskControls({
   task: Task;
   statuses: Status[];
   project: Project;
-  onOpen(panel: TaskPanel, element: HTMLButtonElement): void;
-  controlProps(panel: TaskPanel): ControlProps;
+  onOpen(panel: DockPanel, element: HTMLButtonElement): void;
+  controlProps(panel: DockPanel): ControlProps;
   tooltips?: boolean;
 }) {
   const sizeSupported = useTaskSizeSupport();
@@ -92,16 +134,15 @@ export function TaskControls({
       onOpen={onOpen}
       controlProps={controlProps}
       tooltips={tooltips}
-      relations
       more
     />
   );
 }
 
 /**
- * The control buttons themselves, for a task or one still being written: status, priority,
- * and when the project has tags, its color (the primary tag) and its other tags, as Catch
- * keeps a note's color and tags apart; optionally the rest of the task's actions.
+ * The control buttons themselves, for a task or one still being written: up to five spacious
+ * targets — status, priority, optional size, unified tags (tinted with the primary tag's color
+ * when the project has tags), and optional task actions.
  */
 export function ControlButtons({
   status,
@@ -112,7 +153,6 @@ export function ControlButtons({
   onOpen,
   controlProps,
   tooltips = true,
-  relations = false,
   more = false,
 }: {
   status: Status | undefined;
@@ -121,11 +161,9 @@ export function ControlButtons({
   project: Project;
   /** With no tags in the project there is nothing to pick; the tag manager makes the first. */
   tags: { primary: string | null; secondary: string[]; color: string | null } | null;
-  onOpen(panel: TaskPanel, element: HTMLButtonElement): void;
-  controlProps(panel: TaskPanel): ControlProps;
+  onOpen(panel: DockPanel, element: HTMLButtonElement): void;
+  controlProps(panel: DockPanel): ControlProps;
   tooltips?: boolean;
-  /** Links to other tasks, which a task still being written cannot have yet. */
-  relations?: boolean;
   more?: boolean;
 }) {
   return (
@@ -169,38 +207,16 @@ export function ControlButtons({
       )}
       {tags && (
         <IconButton
-          label={`Color: ${tags.primary ?? 'none'}. Change`}
-          className={control}
-          tooltip={tooltips}
-          {...controlProps('color')}
-          onClick={(event) => onOpen('color', event.currentTarget)}
-        >
-          <Palette
-            data-color={tags.color ?? undefined}
-            className={tags.color ? 'text-tint-accent' : ''}
-          />
-        </IconButton>
-      )}
-      {tags && (
-        <IconButton
-          label={`Tags: ${tags.secondary.join(', ') || 'none'}. Change`}
+          label={`Tags: ${tagSummary(tags)}. Change`}
           className={control}
           tooltip={tooltips}
           {...controlProps('tags')}
           onClick={(event) => onOpen('tags', event.currentTarget)}
         >
-          <Tag />
-        </IconButton>
-      )}
-      {relations && (
-        <IconButton
-          label="Link a task"
-          className={control}
-          tooltip={tooltips}
-          {...controlProps('relations')}
-          onClick={(event) => onOpen('relations', event.currentTarget)}
-        >
-          <Link2 />
+          <Tag
+            data-color={tags.color ?? undefined}
+            className={tags.color ? 'text-tint-accent' : ''}
+          />
         </IconButton>
       )}
       {more && (
@@ -224,26 +240,44 @@ export function TaskPanelContent({
   statuses,
   project,
   onDone,
+  onLink,
+  onClose,
 }: {
   panel: TaskPanel;
   task: Task;
   statuses: Status[];
   project: Project;
   onDone(): void;
+  onLink(): void;
+  /** Shown as a corner close button inside panels that have no dock tab (e.g. desktop relations). */
+  onClose?: () => void;
 }) {
   if (panel === 'status') return <StatusPicker task={task} statuses={statuses} onPicked={onDone} />;
   if (panel === 'priority')
     return <PriorityPicker task={task} project={project} onPicked={onDone} />;
   if (panel === 'size') return <SizePicker task={task} onPicked={onDone} />;
-  if (panel === 'color') return <ColorTagsPicker task={task} />;
-  if (panel === 'tags') return <TagsPicker task={task} />;
-  if (panel === 'relations') return <RelationPicker task={task} onPicked={onDone} />;
-  return <TaskActions task={task} statuses={statuses} onDone={onDone} />;
+  if (panel === 'tags') return <TaskTagsPicker task={task} />;
+  if (panel === 'relations')
+    return <RelationPicker task={task} onPicked={onDone} onClose={onClose} />;
+  return <TaskActions task={task} statuses={statuses} onDone={onDone} onLink={onLink} />;
+}
+
+/** Connects `openTaskPanel` requests to the phone drawer's `onPage` callback. */
+function TaskPanelBridge({
+  taskId,
+  onPage,
+}: {
+  taskId: string;
+  onPage(page: TaskPanel | null): void;
+}) {
+  useOpenTaskPanel(taskId, (panel) => onPage(panel));
+  return null;
 }
 
 /**
  * An open task on a phone, as the board's drawer shows it (ADR 0009): its controls are the
  * dock, and act as tabs over a page holding the picker or actions, with the dock above it.
+ * Non-tab pages such as Link a task open with the drawer's own titled header and close button.
  */
 export function taskDrawerContent({
   task,
@@ -262,6 +296,7 @@ export function taskDrawerContent({
   return {
     dock: (
       <div data-task-drawer="">
+        <TaskPanelBridge taskId={task.id} onPage={onPage} />
         <TaskDockRow
           onKeyDown={(event) => {
             // The dock belongs to the open task, so Escape there leaves it as it does in it. With
@@ -286,10 +321,10 @@ export function taskDrawerContent({
       key: page,
       title: panelTitle[page],
       fit: true,
-      dock: true,
+      dock: page !== 'relations',
       content:
-        page === 'relations' ? (
-          // Own scroller inside the picker so its bottom controls stay pinned above the safe
+        page === 'relations' || page === 'tags' ? (
+          // Own scroller inside the picker so its tabs/search controls stay pinned above the safe
           // area or keyboard and the sheet never clips off the top when the keyboard rises.
           <div className="flex max-h-[calc(100dvh-var(--keyboard)-var(--safe-top)-var(--dock-height)-2rem)] min-h-0 flex-1 flex-col pb-[max(0rem,calc(var(--safe-bottom)+0.25rem-var(--keyboard)))]">
             <TaskPanelContent
@@ -298,6 +333,7 @@ export function taskDrawerContent({
               statuses={statuses}
               project={project}
               onDone={closePage}
+              onLink={() => onPage('relations')}
             />
           </div>
         ) : (
@@ -308,6 +344,7 @@ export function taskDrawerContent({
               statuses={statuses}
               project={project}
               onDone={closePage}
+              onLink={() => onPage('relations')}
             />
           </div>
         ),
