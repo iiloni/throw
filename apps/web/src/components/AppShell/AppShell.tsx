@@ -24,7 +24,14 @@ import {
 } from '@/components/AppShell/shell';
 import { AppUpdatePrompt } from '@/components/AppUpdatePrompt/AppUpdatePrompt';
 import { BoardSettingsPanel } from '@/components/Board/BoardSettingsPanel';
-import { board, update } from '@/components/Board/state';
+import {
+  board,
+  closeSearch,
+  focusSearch,
+  narrowed,
+  openSearch,
+  update,
+} from '@/components/Board/state';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { CommandPalette, type PaletteMode } from '@/components/CommandPalette/CommandPalette';
 import { Hint } from '@/components/Hint/Hint';
@@ -75,7 +82,7 @@ export function AppShell() {
   const desktop = useDesktop();
   const expanded = railChoice ?? wide;
   const reduced = useReducedMotion();
-  const [palette, setPalette] = useState<PaletteMode | null>(null);
+  const [palette, setPalette] = useState<{ mode: PaletteMode; seed: string } | null>(null);
   const [pendingTask, setPendingTask] = useState<{
     projectId: string;
     taskId: string;
@@ -104,7 +111,17 @@ export function AppShell() {
   const projectBoard = !!project && routeId === '/_app/w/$workspaceId/p/$projectId';
   // Both boards fill the window under their own header and dock.
   const fullBoard = projectBoard || (crossBoard && !!workspace && projects.length > 0);
-  const openPalette = useCallback((mode: PaletteMode = 'search') => setPalette(mode), []);
+  const openPalette = useCallback(
+    (mode: PaletteMode = 'search', seed = '') => setPalette({ mode, seed }),
+    [],
+  );
+  // On a desktop board, search is the bar over the live board; elsewhere it is the palette,
+  // as it is while a board is on its way out and its page's code still loading.
+  const boardSearch = desktop && fullBoard && !navigating;
+  const search = useCallback(() => {
+    if (boardSearch) openSearch();
+    else setPalette({ mode: 'search', seed: '' });
+  }, [boardSearch]);
   const boardState = board.use();
   const settings = routeId?.startsWith('/_app/settings') ?? false;
 
@@ -166,12 +183,22 @@ export function AppShell() {
       )
         return;
       event.preventDefault();
-      if (!workspace || form || (document.querySelector('[role="dialog"]') && !palette)) return;
-      setPalette((before) => (before ? null : 'search'));
+      if (!workspace || form) return;
+      if (palette) return setPalette(null);
+      if (document.querySelector('[role="dialog"]')) return;
+      if (!boardSearch) return setPalette({ mode: 'search', seed: '' });
+      // The bar: open it, or take the caret back to it; from inside it, close an empty one.
+      const state = board.get();
+      const input = document.querySelector('[data-board-search-input]');
+      if (!state.searching) openSearch();
+      else if (document.activeElement === input && !narrowed(state)) {
+        closeSearch();
+        document.querySelector<HTMLElement>('#main-content')?.focus({ preventScroll: true });
+      } else focusSearch();
     }
     window.addEventListener('keydown', shortcut);
     return () => window.removeEventListener('keydown', shortcut);
-  }, [workspace, form, palette]);
+  }, [workspace, form, palette, boardSearch]);
   useEffect(() => {
     const here = crossBoard ? `workspace:${workspace?.id}` : pendingTask?.projectId;
     if (!pendingTask || boardState.projectId !== here || !boardState.actions) return;
@@ -192,7 +219,7 @@ export function AppShell() {
   // Old shell links still open the palette without replacing the board with a search page.
   useEffect(() => {
     if (view !== 'search' || !workspace) return;
-    setPalette('search');
+    search();
     if (project)
       void navigate({
         to: '/w/$workspaceId/p/$projectId',
@@ -207,7 +234,7 @@ export function AppShell() {
         search: { view: 'board' },
         replace: true,
       });
-  }, [view, workspace, project, navigate]);
+  }, [view, workspace, project, navigate, search]);
   const context: ShellState = {
     workspaces,
     workspace,
@@ -218,12 +245,14 @@ export function AppShell() {
     remembered,
     view,
     crossBoard,
+    board: fullBoard,
     settings,
     selectProject,
     selectWorkspace,
     openForm: setForm,
     goBoard,
     openPalette,
+    search,
     openTask: (projectId, taskId, created) => {
       if (!workspace) return;
       setPendingTask({ projectId, taskId, created });
@@ -285,11 +314,7 @@ export function AppShell() {
               </div>
               {workspace && (
                 <div className="mt-3 px-3">
-                  <RailButton
-                    label="Search"
-                    expanded={expanded}
-                    onClick={() => setPalette('search')}
-                  >
+                  <RailButton label="Search" expanded={expanded} onClick={search}>
                     <Search className="size-5" aria-hidden />
                   </RailButton>
                 </div>
@@ -427,9 +452,10 @@ export function AppShell() {
         </div>
         <CommandPalette
           key={workspace?.id ?? 'none'}
-          mode={palette}
+          mode={palette?.mode ?? null}
+          seed={palette?.seed ?? ''}
           onClose={() => setPalette(null)}
-          onModeChange={setPalette}
+          onModeChange={(mode, seed = '') => setPalette({ mode, seed })}
           onOpenTask={context.openTask}
         />
         <AppUpdatePrompt />

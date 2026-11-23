@@ -11,6 +11,7 @@ import {
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
 import { type ReactNode, useCallback, useContext, useRef, useState } from 'react';
+import { NarrowedBar } from '@/components/BoardSearch/BoardFilters';
 import { type PhoneCapture, usePhonePalette } from '@/components/CommandPalette/PhonePalette';
 import { type Detent, Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
 import { IconButton } from '@/components/IconButton/IconButton';
@@ -44,6 +45,7 @@ import {
   createTask,
   current,
   listTasks,
+  narrowed,
   selectProject,
   sendTasks,
   update,
@@ -168,6 +170,7 @@ export function PhoneBoard({
           <div className="px-5 text-muted-foreground empty:hidden">{syncIndicator}</div>
         )}
         <FlowTrack statuses={active} page={page} onTurn={turnTo} />
+        <NarrowedBar />
       </header>
 
       <div className="relative flex min-h-0 flex-1" inert={covered}>
@@ -502,6 +505,10 @@ function BoardDrawer({
           className={cn(dockButton, 'bg-foreground/[0.06] text-foreground')}
         >
           <Search className="size-6" aria-hidden />
+          {/* The board is narrowed by filters or sorted by size: its chips are above. */}
+          {narrowed(state) && (
+            <span aria-hidden className="absolute top-3 right-3 size-1.5 rounded-full bg-brand" />
+          )}
         </motion.button>
       )}
     </div>

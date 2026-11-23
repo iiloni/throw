@@ -1,4 +1,10 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import {
+  BoardSearch,
+  BoardSearchSidebar,
+  SEARCH_SIDEBAR_MIN,
+  SEARCH_SPACE,
+} from '@/components/BoardSearch/BoardSearch';
 import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { BoardColumn, ColumnHeader } from './BoardColumn';
@@ -9,7 +15,6 @@ import {
   CATEGORIES,
   type Category,
   categoryTarget,
-  groupByPriority,
   priorityName,
   projectOf,
   statusById,
@@ -18,6 +23,7 @@ import { moveTargets } from './PhoneBoard';
 import { CATEGORY_NAMES } from './StatusMenu';
 import { StatusTile } from './StatusTile';
 import {
+  bandsOf,
   board,
   countIn,
   current,
@@ -45,40 +51,45 @@ export function WorkspaceDesktopBoard() {
   const [frame, frameWidth] = useWidth();
   const { isCollapsed, setCollapsed } = useCollapsedColumns(project);
   const selected = tasks.filter((task) => state.selection.includes(task.id));
+  const docked = frameWidth >= SEARCH_SIDEBAR_MIN;
   return (
     <div className="flex h-full overflow-hidden">
       <div ref={frame} className="flex min-w-0 flex-1">
-        <ScrollArea className="min-w-0 flex-1">
-          <ScrollAreaViewport
-            data-autoscroll-x=""
-            className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3 [&>div]:px-6"
-          >
-            {CATEGORIES.map((category, index) => {
-              const target = categoryTarget(category);
-              return (
-                <BoardColumn
-                  key={category}
-                  columnId={target}
-                  name={CATEGORY_NAMES[category]}
-                  category={category}
-                  count={countIn(state, target)}
-                  collapsed={isCollapsed(target)}
-                  onToggle={(value) => setCollapsed(target, value)}
-                  index={index}
-                  className="min-w-[18rem] max-w-[200rem] grow basis-[18rem]"
-                >
-                  {() => (
-                    <CategoryColumn
-                      category={category}
-                      onCollapse={() => setCollapsed(target, true)}
-                    />
-                  )}
-                </BoardColumn>
-              );
-            })}
-          </ScrollAreaViewport>
-          <ScrollBar orientation="horizontal" />
-        </ScrollArea>
+        {docked && <BoardSearchSidebar />}
+        <div className="relative flex min-w-0 flex-1">
+          <ScrollArea className="min-w-0 flex-1">
+            <ScrollAreaViewport
+              data-autoscroll-x=""
+              className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3 [&>div]:px-6"
+            >
+              {CATEGORIES.map((category, index) => {
+                const target = categoryTarget(category);
+                return (
+                  <BoardColumn
+                    key={category}
+                    columnId={target}
+                    name={CATEGORY_NAMES[category]}
+                    category={category}
+                    count={countIn(state, target)}
+                    collapsed={isCollapsed(target)}
+                    onToggle={(value) => setCollapsed(target, value)}
+                    index={index}
+                    className="min-w-[18rem] max-w-[200rem] grow basis-[18rem]"
+                  >
+                    {() => (
+                      <CategoryColumn
+                        category={category}
+                        onCollapse={() => setCollapsed(target, true)}
+                      />
+                    )}
+                  </BoardColumn>
+                );
+              })}
+            </ScrollAreaViewport>
+            <ScrollBar orientation="horizontal" />
+          </ScrollArea>
+          {!docked && <BoardSearch />}
+        </div>
         <OpenTaskPane frameWidth={frameWidth} />
       </div>
       <SelectionBar>
@@ -126,7 +137,7 @@ function CategoryColumn({ category, onCollapse }: { category: Category; onCollap
     : [];
   const count = countIn(state, target);
   const name = CATEGORY_NAMES[category];
-  const bands = groupByPriority(listTasks(state, listId)).filter((band) => band.tasks.length > 0);
+  const bands = bandsOf(state, listTasks(state, listId));
 
   return (
     <section
@@ -139,15 +150,20 @@ function CategoryColumn({ category, onCollapse }: { category: Category; onCollap
       <ColumnHeader name={name} count={count} category={category} onCollapse={onCollapse} />
       <ScrollArea edges className="card-scroller min-h-0 flex-1 [--scrollbar-inset:0.5rem]">
         <ScrollAreaViewport data-autoscroll="">
-          <div className="flex flex-col px-3.5 pt-1 pb-3">
+          <div className="flex flex-col px-3.5 pt-1" style={{ paddingBottom: SEARCH_SPACE }}>
             {bands.map((band) => (
-              <section key={band.priority} aria-label={priorityName(project, band.priority)}>
-                <div className="zone-header" data-mode={settings.zoneLabels ? 'label' : 'hidden'}>
-                  <div className="zone-header-face">
-                    <span className="truncate">{priorityName(project, band.priority)}</span>
-                    <PriorityIcon priority={band.priority} className="zone-chevron" />
+              <section
+                key={band.priority ?? 'size'}
+                aria-label={band.priority ? priorityName(project, band.priority) : undefined}
+              >
+                {band.priority !== null && (
+                  <div className="zone-header" data-mode={settings.zoneLabels ? 'label' : 'hidden'}>
+                    <div className="zone-header-face">
+                      <span className="truncate">{priorityName(project, band.priority)}</span>
+                      <PriorityIcon priority={band.priority} className="zone-chevron" />
+                    </div>
                   </div>
-                </div>
+                )}
                 {/* Masonry once the column is wide enough for two cards abreast. */}
                 <div className="gap-3 [column-width:16rem]">
                   {band.tasks.map((task) => (

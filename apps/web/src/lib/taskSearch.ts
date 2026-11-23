@@ -120,34 +120,63 @@ export function indexTasks(
   return indexed;
 }
 
+/** A query as search compares it: its words, and the identifier it could be. */
+export type PreparedQuery = {
+  normalized: string;
+  words: string[];
+  identifier: { key: string | null; number: number } | null;
+};
+
+/** Null for a query with nothing to look for. */
+export function prepareQuery(query: string): PreparedQuery | null {
+  const normalized = normalizeSearch(query);
+  if (!normalized) return null;
+  return { normalized, words: normalized.split(/\s+/), identifier: parseTaskIdentifier(query) };
+}
+
+/**
+ * How well a task answers a query, best first: its exact identifier, its exact title, a title
+ * prefix, every word in the title, then words found across its text. Null when it does not.
+ * `title` and `text` are normalized; `text` holds the title, identifier, description and tags.
+ */
+export function rankMatch(
+  query: PreparedQuery,
+  task: { number: number | null; key: string | null; title: string; text: string },
+): number | null {
+  const { identifier, normalized, words } = query;
+  const exactIdentifier =
+    identifier &&
+    task.number === identifier.number &&
+    (identifier.key === null || task.key === identifier.key);
+  if (exactIdentifier) return 0;
+  if (!words.every((word) => task.text.includes(word))) return null;
+  return task.title === normalized
+    ? 1
+    : task.title.startsWith(normalized)
+      ? 2
+      : words.every((word) => task.title.includes(word))
+        ? 3
+        : 4;
+}
+
 /** Exact identifiers, exact titles, title prefixes, all-title words, then body/tag matches. */
 export function searchTasks(
   indexed: readonly IndexedTask[],
   query: string,
   { projectId = '', currentProjectId = '', limit = SEARCH_LIMIT } = {},
 ): IndexedTask[] {
-  const normalized = normalizeSearch(query);
-  if (!normalized) return [];
-  const identifier = parseTaskIdentifier(query);
-  const words = normalized.split(/\s+/);
+  const prepared = prepareQuery(query);
+  if (!prepared) return [];
   const results: { row: IndexedTask; rank: number }[] = [];
   for (const row of indexed) {
     if (projectId && row.project.id !== projectId) continue;
-    const exactIdentifier =
-      identifier &&
-      row.task.number === identifier.number &&
-      (identifier.key === null || row.project.key === identifier.key);
-    if (!exactIdentifier && !words.every((word) => row.text.includes(word))) continue;
-    const rank = exactIdentifier
-      ? 0
-      : row.title === normalized
-        ? 1
-        : row.title.startsWith(normalized)
-          ? 2
-          : words.every((word) => row.title.includes(word))
-            ? 3
-            : 4;
-    results.push({ row, rank });
+    const rank = rankMatch(prepared, {
+      number: row.task.number,
+      key: row.project.key,
+      title: row.title,
+      text: row.text,
+    });
+    if (rank !== null) results.push({ row, rank });
   }
   results.sort(
     (a, b) =>

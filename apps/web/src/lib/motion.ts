@@ -20,7 +20,8 @@ export const springs = {
   bouncy: { type: 'spring', visualDuration: 0.45, bounce: 0.28 },
   /**
    * The task pane and its side column sliding in beside the page. No bounce, which would
-   * pull them off the edge.
+   * pull them off the edge. Also a clipped surface changing height, such as the board's
+   * filter card, where a bounce below the new height would cut off its content.
    */
   pane: { type: 'spring', visualDuration: 0.45, bounce: 0 },
 } satisfies Record<string, Transition>;

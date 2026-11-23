@@ -1,3 +1,4 @@
+import { sizeLabel, type Tag, taskTagColor } from '@throw/shared';
 import { Plus, Search, SearchX, SlidersHorizontal, Tag as TagGlyph, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
@@ -9,12 +10,27 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useShell } from '@/components/AppShell/shell';
+import { type ShellState, useShell } from '@/components/AppShell/shell';
+import { isFiltering, matchingIds } from '@/components/Board/filter';
+import { PriorityGlyph, StatusGlyph } from '@/components/Board/glyphs';
+import { DEFAULT_PRIORITY_NAMES } from '@/components/Board/model';
+import { secondaryTagsByTask } from '@/components/Board/selection';
+import {
+  type BoardState,
+  board as boardStore,
+  current,
+  narrowed,
+  setFilter,
+  shownTasks,
+  useBoardSettings,
+} from '@/components/Board/state';
+import { ActiveFilters, BoardFilters } from '@/components/BoardSearch/BoardFilters';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { Hint } from '@/components/Hint/Hint';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
+import { TaskTags } from '@/components/TaskTags/TaskTags';
 import { useAllTags, useAllTaskTags, useTasks } from '@/lib/collections';
-import { springs } from '@/lib/motion';
+import { curves, springs } from '@/lib/motion';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import {
   descriptionSnippet,
@@ -32,6 +48,13 @@ import { backlogOf, type Dismiss, focusPaletteInput, type PaletteActions } from 
 import { ProjectBadge, ProjectOptions } from './ProjectOptions';
 
 export type SearchState = ReturnType<typeof useSearch>;
+
+/** The board on screen, when search was opened from one: its filters narrow the results too. */
+function useBoardOnScreen(shell: ShellState): BoardState | null {
+  const state = boardStore.use();
+  const id = shell.crossBoard ? `workspace:${shell.workspace?.id}` : shell.project?.id;
+  return shell.board && state.actions !== null && state.projectId === id ? state : null;
+}
 
 /**
  * Search's state and keyboard handling, apart from where it is drawn: the desktop palette
@@ -53,8 +76,21 @@ export function useSearch({
   const { tasks, isLoading } = useTasks();
   const [query, setQuery] = useState('');
   const board = shell.project;
-  const [chosenFilter, setProjectFilter] = useState('');
-  const projectFilter = board?.id ?? chosenFilter;
+  const [chosenFilter, setChosenFilter] = useState('');
+  const onBoard = useBoardOnScreen(shell);
+  // On the cross-project board the scope is the board's own, so it narrows the board as well.
+  const projectFilter = board?.id ?? (onBoard ? (onBoard.filter.projectId ?? '') : chosenFilter);
+  const setProjectFilter = (value: string) =>
+    onBoard ? setFilter({ projectId: value || null }) : setChosenFilter(value);
+  const boardData = onBoard && current(onBoard);
+  const boardFilter = onBoard?.filter;
+  // The board's sizes and tags narrow the results as they narrow its cards; the words are
+  // the search's own.
+  const allowed = useMemo(
+    () =>
+      boardData && boardFilter ? matchingIds(boardData, { ...boardFilter, query: '' }, true) : null,
+    [boardData, boardFilter],
+  );
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [error, setError] = useState('');
@@ -63,18 +99,42 @@ export function useSearch({
   const { tags } = useAllTags();
   const { taskTags } = useAllTaskTags();
   const tagNames = useMemo(() => taskTagNames(tasks, tags, taskTags), [tasks, tags, taskTags]);
+  // What a result card shows, as the board's cards do: each project's tags, and each task's
+  // secondary tags.
+  const tagsByProject = useMemo(() => {
+    const byProject = new Map<string, Tag[]>();
+    for (const tag of tags) {
+      const list = byProject.get(tag.projectId);
+      if (list) list.push(tag);
+      else byProject.set(tag.projectId, [tag]);
+    }
+    return byProject;
+  }, [tags]);
+  const secondaryTags = useMemo(() => secondaryTagsByTask(taskTags), [taskTags]);
   const indexed = useMemo(
     () => indexTasks(tasks, shell.projects, actions.statuses, shell.workspace?.id ?? '', tagNames),
     [tasks, shell.projects, actions.statuses, shell.workspace?.id, tagNames],
   );
-  const results = useMemo(
-    () =>
-      searchTasks(indexed, query, {
+  // With filters and no words, the results are what the board behind now shows, in its order,
+  // so choosing a tag shows its cards here rather than only behind the page.
+  const browsing =
+    !!onBoard && !query.trim() && !!boardFilter && isFiltering({ ...boardFilter, query: '' });
+  const results = useMemo(() => {
+    if (browsing && onBoard) {
+      const byId = new Map(indexed.map((row) => [row.task.id, row]));
+      return shownTasks(onBoard)
+        .flatMap((task) => byId.get(task.id) ?? [])
+        .slice(0, SEARCH_LIMIT);
+    }
+    return searchTasks(
+      allowed ? indexed.filter((row) => allowed.has(row.task.id)) : indexed,
+      query,
+      {
         projectId: projectFilter,
         currentProjectId: shell.project?.id,
-      }),
-    [indexed, query, projectFilter, shell.project?.id],
-  );
+      },
+    );
+  }, [browsing, onBoard, indexed, allowed, query, projectFilter, shell.project?.id]);
   const projects = useMemo(
     () => (board ? [] : searchProjects(shell.projects, query)),
     [board, shell.projects, query],
@@ -141,12 +201,18 @@ export function useSearch({
     list,
     query,
     title,
+    /** Listing the narrowed board, with filters chosen and no words typed. */
+    browsing,
     results,
+    tagsByProject,
+    secondaryTags,
     projects,
     awaiting,
     scope,
     /** Searching one project's board, with no other project to choose. */
     scoped: !!board,
+    /** The board search was opened from, whose filters and sort the filter button opens. */
+    onBoard,
     destination,
     backlog,
     projectFilter,
@@ -273,17 +339,22 @@ export function SearchField({
   );
 }
 
-/** Catch's filter button: opens the project scope, with a dot while one applies. */
+/**
+ * Catch's filter button. Over a board it opens the board's filters and sort; elsewhere, the
+ * project scope. A dot shows while either applies.
+ */
 export function FilterButton({ search }: { search: SearchState }) {
+  const label = search.onBoard ? 'Filter and sort' : 'Filter by project';
+  const active = search.onBoard ? narrowed(search.onBoard) : !!search.scope;
   return (
     // The label stays the action; the hint adds the project it is scoped to.
     <Hint
-      label={search.scope ? `Filter by project (${search.scope.name})` : 'Filter by project'}
-      describe={!!search.scope}
+      label={search.scope && !search.onBoard ? `${label} (${search.scope.name})` : label}
+      describe={!!search.scope && !search.onBoard}
     >
       <motion.button
         type="button"
-        aria-label="Filter by project"
+        aria-label={label}
         aria-expanded={search.filtersOpen}
         onPointerDown={(event) => event.preventDefault()}
         onClick={search.toggleFilters}
@@ -291,16 +362,21 @@ export function FilterButton({ search }: { search: SearchState }) {
         transition={springs.snappy}
         className={cn(
           'glass relative flex size-[var(--dock-height)] shrink-0 items-center justify-center rounded-[var(--dock-radius)] outline-none transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ring/70',
-          search.filtersOpen || search.scope ? 'text-brand-link' : 'text-foreground',
+          search.filtersOpen || active ? 'text-brand-link' : 'text-foreground',
         )}
       >
         <SlidersHorizontal className="size-7" strokeWidth={2.25} aria-hidden />
-        {search.scope && (
+        {active && (
           <span aria-hidden className="absolute top-3 right-3 size-1.5 rounded-full bg-brand" />
         )}
       </motion.button>
     </Hint>
   );
+}
+
+/** What the filter button opens: the board's filters over a board, else the project scope. */
+export function FilterOptions({ search }: { search: SearchState }) {
+  return search.onBoard ? <BoardFilters /> : <ScopeOptions search={search} />;
 }
 
 /** The project scope list: all projects or one of them. */
@@ -337,9 +413,103 @@ export function ScopeOptions({ search }: { search: SearchState }) {
 }
 
 /** The scope chip, task cards, project jumps and Create, inside the caller's scroller. */
+const NO_TAGS: readonly Tag[] = [];
+const NO_IDS: readonly string[] = [];
+
+/**
+ * A task found, drawn as its board card is: tinted by its primary tag's root, with its tags,
+ * status, size and priority. Across projects it is tinted by its project and its tags go
+ * uncolored, as on the cross-project board. The words searched for are highlighted.
+ */
+function ResultCard({ search, row }: { search: SearchState; row: SearchState['results'][number] }) {
+  const [settings] = useBoardSettings();
+  const { task, project, status } = row;
+  const { query } = search;
+  const tags = search.tagsByProject.get(project.id) ?? NO_TAGS;
+  const color = search.scoped ? taskTagColor(task, tags) : project.color;
+  const snippet = descriptionSnippet(task.description, query);
+  const secondaryTagIds = search.secondaryTags.get(task.id) ?? NO_IDS;
+  // A tag the search matched shows on its badge; one above the card's tags (Home, for a card
+  // tagged Garden under it) is named beside the identifier instead, so the card says why.
+  const badges = new Set(
+    tags
+      .filter((tag) => tag.id === task.primaryTagId || secondaryTagIds.includes(tag.id))
+      .map((tag) => tag.name),
+  );
+  const ancestors = matchedTags(row.tags, query).filter((name) => !badges.has(name));
+  return (
+    <button
+      type="button"
+      {...search.optionProps(task.id)}
+      onClick={() => search.actions.openTask(project.id, task.id)}
+      data-color={color ?? undefined}
+      className={cn(
+        'flex w-full flex-col rounded-2xl border px-4 pt-3.5 pb-3 text-left text-card-foreground outline-none',
+        'shadow-[0_1px_2px_oklch(0_0_0/0.06)] transition-shadow duration-150 data-active:ring-[3px] data-active:ring-ring/50',
+        color ? 'border-transparent bg-tint' : 'border-border bg-card',
+      )}
+    >
+      <span className="line-clamp-4 font-medium text-[0.9375rem] leading-snug [overflow-wrap:anywhere] max-md:text-base">
+        {task.title ? <Highlighted segments={highlight(task.title, query)} /> : 'Untitled task'}
+      </span>
+      {snippet && (
+        <span className="mt-1 line-clamp-2 text-muted-foreground text-sm">
+          <Highlighted segments={snippet} />
+        </span>
+      )}
+      <TaskTags
+        tags={tags}
+        primaryTagId={task.primaryTagId}
+        secondaryTagIds={secondaryTagIds}
+        card
+        colored={search.scoped}
+        className="mt-2.5"
+      />
+      <span className="mt-3 flex min-h-5 w-full min-w-0 items-center gap-2.5 text-foreground/55 text-xs max-md:text-[0.8125rem]">
+        <span className="shrink-0 font-medium tabular-nums">
+          {row.identifier ? <Highlighted segments={highlight(row.identifier, query)} /> : 'Pending'}
+        </span>
+        {!search.scoped && (
+          <span data-color={project.color} className="flex min-w-0 items-center gap-1">
+            <ProjectIcon name={project.icon} className="size-3.5 shrink-0 text-tint-accent" />
+            <span className="truncate">{project.name}</span>
+          </span>
+        )}
+        {ancestors.map((name) => (
+          <span key={name} className="flex min-w-0 items-center gap-1">
+            <TagGlyph className="size-3 shrink-0" aria-label="Tag" />
+            <span className="truncate">
+              <Highlighted segments={highlight(name, query)} />
+            </span>
+          </span>
+        ))}
+        <span className="flex-1" />
+        <span className="flex min-w-0 items-center gap-1">
+          {status && <StatusGlyph category={status.category} className="size-3" />}
+          <span className="truncate">{status?.name ?? 'No status'}</span>
+        </span>
+        {settings.cardSize && task.size !== null && (
+          <span className="shrink-0 rounded-md bg-foreground/[0.06] px-1.5 font-medium">
+            <span className="sr-only">Size </span>
+            {sizeLabel(task.size)}
+          </span>
+        )}
+        {settings.cardPriority && task.closedAt === null && (
+          <PriorityGlyph
+            priority={task.priority}
+            name={
+              project.priorityNames[task.priority - 1] || DEFAULT_PRIORITY_NAMES[task.priority - 1]!
+            }
+          />
+        )}
+      </span>
+    </button>
+  );
+}
+
 export function SearchResults({ search }: { search: SearchState }) {
   const reduced = useReducedMotion();
-  const { scope, title, results, projects, actions, destination, backlog, query } = search;
+  const { scope, title, results, projects, actions, destination, backlog } = search;
   const listMotion = reduced
     ? {}
     : {
@@ -350,8 +520,9 @@ export function SearchResults({ search }: { search: SearchState }) {
       };
   return (
     <>
+      {search.onBoard && <ActiveFilters state={search.onBoard} className="pb-4 empty:hidden" />}
       <AnimatePresence initial={false}>
-        {scope && (
+        {scope && !search.onBoard && (
           <motion.div
             key="scope"
             className="overflow-hidden"
@@ -378,7 +549,7 @@ export function SearchResults({ search }: { search: SearchState }) {
         )}
       </AnimatePresence>
       <div id={`${search.id}-results`} role="listbox" aria-label="Tasks, projects and capture">
-        {!title ? (
+        {!title && !search.browsing ? (
           <p className="px-1 pb-5 text-muted-foreground text-sm">
             Search titles, descriptions and tags, or go straight to a task with its identifier.
           </p>
@@ -392,66 +563,15 @@ export function SearchResults({ search }: { search: SearchState }) {
               {results.length === SEARCH_LIMIT
                 ? `First ${SEARCH_LIMIT} tasks`
                 : `${results.length} ${results.length === 1 ? 'task' : 'tasks'}`}
+              {search.browsing && ' on the board'}
             </p>
             <ul className="flex flex-col gap-2">
               <AnimatePresence initial={false} mode="popLayout">
-                {results.map((row) => {
-                  const snippet = descriptionSnippet(row.task.description, query);
-                  const tags = matchedTags(row.tags, query);
-                  return (
-                    <motion.li key={row.task.id} layout={!reduced} {...listMotion}>
-                      <button
-                        type="button"
-                        {...search.optionProps(row.task.id)}
-                        onClick={() => actions.openTask(row.project.id, row.task.id)}
-                        className="flex w-full flex-col gap-1 rounded-2xl border bg-card px-3.5 py-3 text-left text-card-foreground outline-none transition-shadow duration-150 data-active:ring-[3px] data-active:ring-ring/50"
-                      >
-                        <span className="font-display font-semibold text-[0.9375rem] leading-snug tracking-[-0.01em] [overflow-wrap:anywhere]">
-                          {row.task.title ? (
-                            <Highlighted segments={highlight(row.task.title, query)} />
-                          ) : (
-                            'Untitled task'
-                          )}
-                        </span>
-                        {snippet && (
-                          <span className="line-clamp-2 text-muted-foreground text-sm">
-                            <Highlighted segments={snippet} />
-                          </span>
-                        )}
-                        <span className="mt-1 flex min-w-0 items-center gap-2.5 text-foreground/55 text-xs">
-                          <span className="shrink-0 font-medium tabular-nums">
-                            {row.identifier ? (
-                              <Highlighted segments={highlight(row.identifier, query)} />
-                            ) : (
-                              'Pending'
-                            )}
-                          </span>
-                          {!search.scoped && (
-                            <span
-                              data-color={row.project.color}
-                              className="flex min-w-0 items-center gap-1 text-tint-accent"
-                            >
-                              <ProjectIcon name={row.project.icon} className="size-3.5" />
-                              <span className="truncate">{row.project.name}</span>
-                            </span>
-                          )}
-                          {tags.map((name) => (
-                            <span key={name} className="flex min-w-0 items-center gap-1">
-                              <TagGlyph className="size-3 shrink-0" aria-label="Tag" />
-                              <span className="truncate">
-                                <Highlighted segments={highlight(name, query)} />
-                              </span>
-                            </span>
-                          ))}
-                          <span className="flex-1" />
-                          <span className="shrink-0 rounded-full bg-foreground/[0.08] px-2 py-0.5 font-medium text-[0.6875rem] text-muted-foreground">
-                            {row.status?.name ?? 'No status'}
-                          </span>
-                        </span>
-                      </button>
-                    </motion.li>
-                  );
-                })}
+                {results.map((row) => (
+                  <motion.li key={row.task.id} layout={!reduced} {...listMotion}>
+                    <ResultCard search={search} row={row} />
+                  </motion.li>
+                ))}
               </AnimatePresence>
             </ul>
           </section>
@@ -459,9 +579,11 @@ export function SearchResults({ search }: { search: SearchState }) {
           projects.length === 0 && (
             <div className="pb-6">
               <EmptyState icon={SearchX} title="No matching tasks">
-                {scope && !search.scoped
-                  ? 'Try fewer words, or search all projects.'
-                  : 'Try fewer words, or type an identifier like 12.'}
+                {search.browsing
+                  ? 'Nothing on the board matches these filters.'
+                  : scope && !search.scoped
+                    ? 'Try fewer words, or search all projects.'
+                    : 'Try fewer words, or type an identifier like 12.'}
               </EmptyState>
             </div>
           )
@@ -541,35 +663,45 @@ export function PhoneSearchContent({
   const reduced = useReducedMotion();
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div
-        ref={search.list}
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pt-2 pb-3"
-      >
-        {/* Few results sit by the field; more scroll from the best one down. */}
-        <div className="mt-auto">
-          <SearchResults search={search} />
+      {/* A size container, so the filter card can fit the room above the field however the
+          keyboard leaves it. */}
+      <div className="relative flex min-h-0 flex-1 flex-col [container-type:size]">
+        <div
+          ref={search.list}
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pt-2 pb-3"
+        >
+          {/* Few results sit by the field; more scroll from the best one down. */}
+          <div className="mt-auto">
+            <SearchResults search={search} />
+          </div>
+        </div>
+        {/* As in Catch, the filter card covers the results rather than pushing them away. */}
+        <div className="pointer-events-none absolute inset-x-3 bottom-3 flex flex-col justify-end">
+          <AnimatePresence initial={false}>
+            {search.filtersOpen && (
+              <motion.div
+                key="filters"
+                // Opens from its foot, the tabs first, as Catch's card does.
+                className="pointer-events-auto flex shrink-0 flex-col justify-end overflow-hidden rounded-[var(--dock-radius)] shadow-[0_10px_30px_-10px_var(--glass-shadow)] [&>*]:shrink-0"
+                initial={{ height: 0 }}
+                animate={{ height: 'auto' }}
+                exit={{ height: 0, transition: reduced ? { duration: 0 } : curves.fold }}
+                // No bounce: the card clips, so dipping below its height would cut off its top.
+                transition={reduced ? { duration: 0 } : springs.pane}
+              >
+                {/* The board's filter sections fit what is left above their tabs. */}
+                <div className="glass-thick max-h-[calc(100cqh-1.5rem)] overflow-y-auto overscroll-contain rounded-[var(--dock-radius)] p-3 [--board-filter-view-max:min(24rem,calc(100cqh-6.75rem))]">
+                  <FilterOptions search={search} />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
-      <AnimatePresence initial={false}>
-        {search.filtersOpen && (
-          <motion.div
-            key="filters"
-            className="shrink-0 overflow-hidden"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={reduced ? { duration: 0 } : springs.smooth}
-          >
-            <div className="glass mx-3 mb-3 rounded-[var(--dock-radius)] p-3">
-              <ScopeOptions search={search} />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
       {/* Clear of the gesture bar with the keyboard down; just above the keyboard when up. */}
       <div className="flex shrink-0 items-end gap-3 px-3 pt-1 pb-[max(0.5rem,calc(var(--safe-bottom)+0.75rem-var(--keyboard)))]">
         <SearchField search={search} inputRef={inputRef} onClose={onClose} />
-        {!search.scoped && <FilterButton search={search} />}
+        {(!search.scoped || search.onBoard) && <FilterButton search={search} />}
       </div>
     </div>
   );

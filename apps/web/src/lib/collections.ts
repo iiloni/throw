@@ -20,6 +20,7 @@ import {
   useLiveQuery,
 } from '@tanstack/react-db';
 import {
+  type ActivityEntry,
   activityEntrySchema,
   type Comment,
   commentSchema,
@@ -839,6 +840,16 @@ export function useAllTaskTags() {
   return { taskTags: data ?? emptyTaskTags, isLoading };
 }
 const emptyTaskTags: TaskTag[] = [];
+
+/**
+ * Every synced activity entry, for the boards' Updated sort. The log always syncs, so reading
+ * all of it costs no extra sync, only the pass that finds each task's latest change.
+ */
+export function useActivity() {
+  const { data } = useLiveQuery((q) => q.from({ entry: activityCollection }));
+  return useSteadyRows(data ?? emptyActivity);
+}
+const emptyActivity: ActivityEntry[] = [];
 
 /** One project's secondary tag assignments, for its board's cards. */
 export function useProjectTaskTags(projectId: string) {

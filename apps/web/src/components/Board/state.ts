@@ -3,13 +3,24 @@ import { z } from 'zod';
 import { isDesktop } from '@/lib/media';
 import { readPreference, usePersistentState, writePreference } from '@/lib/storage';
 import { createStore } from '@/lib/store';
+import {
+  type BoardFilter,
+  type BoardSort,
+  compareByField,
+  EMPTY_FILTER,
+  isFiltering,
+  matchingIds,
+  sortOrder,
+} from './filter';
 import type { BoardData } from './model';
 import {
+  CATEGORIES,
   type Category,
   categoryTarget,
   compareClosed,
   compareTasks,
   DEFAULT_PRIORITY,
+  groupByPriority,
   isClosed,
   movedElsewhere,
   moveTo,
@@ -185,6 +196,12 @@ export type BoardState = {
   announcement: string;
   /** A task just created, whose title is waiting to be written. */
   newTaskId: string | null;
+  /** Search and filters narrowing the cards shown; view state, never kept. */
+  filter: BoardFilter;
+  /** The columns' order: the board's own, or the temporary size sort. */
+  sort: BoardSort;
+  /** The desktop search bar is open over the board. */
+  searching: boolean;
 };
 
 export function initialBoard(boards: BoardData[] = []): BoardState {
@@ -205,6 +222,9 @@ export function initialBoard(boards: BoardData[] = []): BoardState {
     carrying: null,
     announcement: '',
     newTaskId: null,
+    filter: EMPTY_FILTER,
+    sort: 'priority',
+    searching: false,
   };
 }
 
@@ -421,6 +441,8 @@ function setTasks(tasks: Task[]) {
 export function selectProject(projectId: string) {
   update({
     projectId,
+    filter: EMPTY_FILTER,
+    sort: 'priority',
     backlogFilter: null,
     closedFilter: null,
     selection: [],
@@ -452,6 +474,31 @@ function statusIdsIn(project: Project, categories: Category[], filter: string | 
     .map((status) => status.id);
 }
 
+/** The tasks the filter leaves on the board, or null when it shows them all. */
+export function visibleIds(state: BoardState) {
+  return matchingIds(current(state), state.filter, state.subtasksAsCards);
+}
+
+/**
+ * The board is sorted by size or time: within a column, cards keep no manual order, so they
+ * are sent rather than placed (ADR 0008).
+ */
+export function sortedByField(state: BoardState) {
+  return state.sort !== 'priority';
+}
+
+/**
+ * A list's cards in the bands a column draws: one per priority with cards in it, or a single
+ * unlabelled run (`priority: null`) while the board is sorted by a field.
+ */
+export function bandsOf(
+  state: BoardState,
+  tasks: Task[],
+): { priority: Priority | null; tasks: Task[] }[] {
+  if (sortedByField(state)) return tasks.length > 0 ? [{ priority: null, tasks }] : [];
+  return groupByPriority(tasks).filter((band) => band.tasks.length > 0);
+}
+
 /** The cards a list shows, in order. */
 export function listTasks(state: BoardState, listId: ListId): Task[] {
   const { project, tasks } = current(state);
@@ -464,25 +511,92 @@ export function listTasks(state: BoardState, listId: ListId): Task[] {
         : category
           ? statusIdsIn(project, [category], null)
           : [listStatusId(listId)];
+  const visible = visibleIds(state);
+  const order = sortOrder(state.sort);
+  const banded = category !== null && isClosed(category);
+  // The closed zone reads by when work was closed, whatever the columns are sorted by.
+  const compare =
+    listId === 'closed'
+      ? compareClosed
+      : order
+        ? (a: Task, b: Task) =>
+            compareByField(order.field, order.direction)(
+              a,
+              b,
+              banded ? compareBanded : compareTasks,
+            )
+        : banded
+          ? compareBanded
+          : compareTasks;
   return tasks
     .filter((task) => statusIds.includes(task.statusId))
     .filter((task) => state.subtasksAsCards || task.parentId === null)
-    .sort(
-      listId === 'closed'
-        ? compareClosed
-        : category && isClosed(category)
-          ? compareBanded
-          : compareTasks,
-    );
+    .filter((task) => visible === null || visible.has(task.id))
+    .sort(compare);
 }
 
-/** The cards in a status, or in every status of a category target. */
+/**
+ * Every card the board shows, column by column in its order: what a phone's search lists
+ * while filters narrow the board and no words are typed. The backlog's and closed zone's own
+ * status choices are left out, as they only scope what those zones draw.
+ */
+export function shownTasks(state: BoardState): Task[] {
+  const { project } = current(state);
+  const lists: ListId[] = project.members
+    ? CATEGORIES.map((category) => categoryTarget(category))
+    : project.statuses.map((status) => `status:${status.id}` as const);
+  return lists.flatMap((list) => listTasks(state, list));
+}
+
+/** The cards in a status, or in every status of a category target, as the filter leaves them. */
 export function countIn(state: BoardState, statusId: string) {
   const category = targetCategory(statusId);
   if (category) return listTasks(state, `category:${category}`).length;
+  const visible = visibleIds(state);
   return current(state).tasks.filter(
-    (task) => task.statusId === statusId && (state.subtasksAsCards || task.parentId === null),
+    (task) =>
+      task.statusId === statusId &&
+      (state.subtasksAsCards || task.parentId === null) &&
+      (visible === null || visible.has(task.id)),
   ).length;
+}
+
+/** Narrows the board. Choosing tags or Untagged takes the other away, as in Catch. */
+export function setFilter(change: Partial<BoardFilter>) {
+  update((state) => ({ filter: { ...state.filter, ...change } }));
+}
+
+export function setSort(sort: BoardSort) {
+  update({ sort });
+}
+
+/** Shows every card again in the board's own order. */
+export function clearFilters() {
+  update({ filter: EMPTY_FILTER, sort: 'priority' });
+}
+
+/** Search or a filter narrows the board, or a sort reorders it. */
+export function narrowed(state: BoardState) {
+  return isFiltering(state.filter) || state.sort !== 'priority';
+}
+
+/** Opens the desktop search bar over the board and puts the caret in it. */
+export function openSearch() {
+  if (!board.get().searching) update({ searching: true });
+  focusSearch();
+}
+
+export function focusSearch() {
+  requestAnimationFrame(() => {
+    const input = document.querySelector<HTMLInputElement>('[data-board-search-input]');
+    input?.focus({ preventScroll: true });
+    input?.select();
+  });
+}
+
+/** Closes the bar, and with it the search, its filters and the sort. */
+export function closeSearch() {
+  update({ searching: false, filter: EMPTY_FILTER, sort: 'priority' });
 }
 
 /**
@@ -496,6 +610,9 @@ export function placeInList(
   index: number,
 ): Place | null {
   const state = board.get();
+  // Sorted by a field, the cards beside a place are not its neighbours in manual order, and a
+  // position between them could fall anywhere, or be no position at all (ADR 0008).
+  if (sortedByField(state)) return null;
   // A carried card is placed as it was picked up, so carrying it back to where it started
   // finds its own position again rather than a new one beside it.
   const task =

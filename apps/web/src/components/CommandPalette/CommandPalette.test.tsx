@@ -133,7 +133,7 @@ it('hands a title search cannot place to the capture window', () => {
     'Choose a project',
   );
   fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true });
-  expect(onModeChange).toHaveBeenCalledWith('capture');
+  expect(onModeChange).toHaveBeenCalledWith('capture', 'Somewhere new');
   expect(mocks.create).not.toHaveBeenCalled();
 });
 it('holds an Enter pressed while tasks load, then opens the task it finds', () => {

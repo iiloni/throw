@@ -7,6 +7,7 @@ import { type TaskPanel, taskDrawerContent } from '@/components/TaskDetails/Task
 import { TaskDetails } from '@/components/TaskDetails/TaskDetails';
 import { useBlockersByTask } from '@/components/TaskRelations/TaskRelations';
 import {
+  useActivity,
   useAllTags,
   useAllTaskTags,
   useLocalRowsReady,
@@ -20,7 +21,7 @@ import { BoardAnnouncer } from './BoardAnnouncer';
 import { TaskBlockersContext } from './blockers';
 import { taskScreens, taskWrites, useBoardBoundary } from './boundary';
 import { DragOverlay } from './DragOverlay';
-import { secondaryTagsByTask, workspaceBoardData } from './selection';
+import { secondaryTagsByTask, updatedAtByTask, workspaceBoardData } from './selection';
 import { board, canOpenTask } from './state';
 import { TaskScreen } from './TaskView';
 import { TaskContentContext } from './taskContent';
@@ -64,12 +65,14 @@ export function WorkspaceBoard({
   const { tags } = useAllTags();
   const { taskTags } = useAllTaskTags();
   const secondaryTags = useMemo(() => secondaryTagsByTask(taskTags), [taskTags]);
+  const activity = useActivity();
+  const updates = useMemo(() => updatedAtByTask(activity), [activity]);
   const phone = !useDesktop();
   const blockers = useBlockersByTask();
   const state = board.use();
   const data = useMemo(
-    () => workspaceBoardData(workspaceId, projects, statuses, tasks, tags, secondaryTags),
-    [workspaceId, projects, statuses, tasks, tags, secondaryTags],
+    () => workspaceBoardData(workspaceId, projects, statuses, tasks, tags, secondaryTags, updates),
+    [workspaceId, projects, statuses, tasks, tags, secondaryTags, updates],
   );
   const awaiting = useAwaitingSync(loadingStatuses, data.project.statuses.length);
   const awaitingTasks = useAwaitingSync(loadingTasks, data.tasks.length);

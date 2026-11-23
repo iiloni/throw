@@ -8,6 +8,7 @@ import { type TaskPanel, taskDrawerContent } from '@/components/TaskDetails/Task
 import { TaskDetails } from '@/components/TaskDetails/TaskDetails';
 import { useBlockersByTask } from '@/components/TaskRelations/TaskRelations';
 import {
+  useActivity,
   useLocalRowsReady,
   useProjectTaskTags,
   useStatuses,
@@ -24,7 +25,7 @@ import { taskScreens, taskWrites, useBoardBoundary } from './boundary';
 import { DesktopBoard } from './DesktopBoard';
 import { DragOverlay } from './DragOverlay';
 import { PhoneBoard } from './PhoneBoard';
-import { projectBoardData, secondaryTagsByTask } from './selection';
+import { projectBoardData, secondaryTagsByTask, updatedAtByTask } from './selection';
 import { board, canOpenTask } from './state';
 import { TaskScreen } from './TaskView';
 import { TaskContentContext } from './taskContent';
@@ -45,12 +46,14 @@ export function ProjectBoard({
   const { tags } = useTags(project.id);
   const taskTags = useProjectTaskTags(project.id);
   const secondaryTags = useMemo(() => secondaryTagsByTask(taskTags), [taskTags]);
+  const activity = useActivity();
+  const updates = useMemo(() => updatedAtByTask(activity), [activity]);
   const phone = !useDesktop();
   const blockers = useBlockersByTask();
   const state = board.use();
   const data = useMemo(
-    () => projectBoardData(project, statuses, tasks, tags, secondaryTags),
-    [project, statuses, tasks, tags, secondaryTags],
+    () => projectBoardData(project, statuses, tasks, tags, secondaryTags, updates),
+    [project, statuses, tasks, tags, secondaryTags, updates],
   );
   const awaiting = useAwaitingSync(loadingStatuses, data.project.statuses.length);
   const awaitingTasks = useAwaitingSync(loadingTasks, data.tasks.length);

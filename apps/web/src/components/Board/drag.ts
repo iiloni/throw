@@ -37,6 +37,8 @@ import {
  * - `data-drop-list`: a column or gallery cards can be placed in. Inside it, `data-slot`
  *   wraps each card, `data-gap` marks where a card may land, `data-zone-header` starts a
  *   priority zone and `data-drop-rail` is a folded zone that takes the card when held over.
+ *   With `data-drop-send`, the list keeps no manual order (the board is sorted by size): a
+ *   card is sent to its status instead of placed, and the backlog takes none.
  * - `data-drop-status`: a tile that sends cards to a status without placing them.
  * - `data-drop-expand`: a surface that shows its targets only while the card is over it.
  * - `data-drop-block`: a surface over the board (a drawer, the dock) that hides what is
@@ -574,6 +576,21 @@ function resolve(pickup = false) {
   }
   const list = listAt(hit);
   const listId = list?.dataset.dropList as ListId | undefined;
+  if (list && listId && list.dataset.dropSend !== undefined) {
+    dwell = null;
+    folded = null;
+    keeping = false;
+    // A card is sent to the column's status, keeping its priority; one already there stays.
+    const statusId = listStatusId(listId);
+    const { tasks } = current();
+    const leaving = state.ids.some(
+      (id) => tasks.find((task) => task.id === id)?.statusId !== statusId,
+    );
+    return set({
+      target: statusId && leaving ? { kind: 'status', statusId } : null,
+      rail: null,
+    });
+  }
   // The backlog gallery mixes statuses, so only its own cards can be placed in it; a card
   // from elsewhere is sent to one of its statuses instead.
   if (!list || !listId || (listId === 'backlog' && state.origin !== 'backlog')) {

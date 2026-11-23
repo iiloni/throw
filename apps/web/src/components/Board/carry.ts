@@ -1,3 +1,5 @@
+import { sizeLabel } from '@throw/shared';
+import { SORT_FIELD_NAMES, sortOrder } from './filter';
 import {
   categoryTarget,
   identifier,
@@ -18,6 +20,7 @@ import {
   listTasks,
   placeInList,
   revealStatus,
+  sortedByField,
   startCarrying,
   update,
 } from './state';
@@ -27,7 +30,9 @@ import {
  * sets it down and Escape puts it back. Up and down cross priority zones the way a drag
  * does; left and right walk the project's statuses, opening a side zone to follow the card.
  * The card is shown where it is carried and written once, when it is set down, so a walk
- * across five columns is one move in the task's history, not five.
+ * across five columns is one move in the task's history, not five. While the board is sorted
+ * by size or time a column has no manual order, so up and down stay put and left and right send the
+ * card on with its priority, as a drop does then (ADR 0008).
  */
 
 function describe(taskId: string) {
@@ -39,11 +44,16 @@ function describe(taskId: string) {
   // On the workspace board a card's place is counted in the column it shows in, whose
   // closed columns are banded by priority as well.
   const workspace = project.members !== undefined;
-  const banded = workspace || !isClosed(status.category);
+  const resorted = sortedByField(state);
+  const banded = !resorted && (workspace || !isClosed(status.category));
   const list = workspace ? categoryTarget(status.category) : (listOf(taskId) ?? 'closed');
   const zone = listTasks(state, list).filter((item) => !banded || item.priority === task.priority);
   const place = zone.findIndex((item) => item.id === taskId) + 1;
-  const rank = banded ? `${priorityName(projectOf(project, task), task.priority)}, ` : '';
+  const rank = banded
+    ? `${priorityName(projectOf(project, task), task.priority)}, `
+    : state.sort.startsWith('size-')
+      ? `${task.size === null ? 'no size' : sizeLabel(task.size)}, `
+      : '';
   return `${identifier(project, task)}: ${status.name}, ${rank}${place} of ${zone.length}`;
 }
 
@@ -101,6 +111,13 @@ export function carryVertically(direction: -1 | 1) {
   if (!taskId || !listId) return;
   if (listId === 'closed') {
     update({ announcement: 'Closed work is ordered by when it was closed.' });
+    return;
+  }
+  const order = sortOrder(state.sort);
+  if (order) {
+    update({
+      announcement: `Sorted by ${SORT_FIELD_NAMES[order.field]}: cards keep no order within a column. Left and right move it.`,
+    });
     return;
   }
   const tasks = listTasks(state, listId);

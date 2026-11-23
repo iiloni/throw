@@ -1,6 +1,6 @@
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { Dialog } from 'radix-ui';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { useBackHandler } from '@/lib/backButton';
 import { useDesktop } from '@/lib/media';
 import { springs } from '@/lib/motion';
@@ -8,8 +8,8 @@ import { type Dismiss, focusPaletteInput, type PaletteActions, usePaletteActions
 import { CaptureContent } from './CaptureContent';
 import {
   FilterButton,
+  FilterOptions,
   PhoneSearchContent,
-  ScopeOptions,
   SearchField,
   SearchResults,
   type SearchState,
@@ -20,10 +20,12 @@ export type PaletteMode = 'search' | 'capture';
 
 type Props = {
   mode: PaletteMode | null;
+  /** Capture's title, as search or the board's search bar handed it over. */
+  seed?: string;
   onClose: () => void;
   onOpenTask: (projectId: string, taskId: string, created?: boolean) => void;
   /** Search hands a title it cannot place to capture, which can choose a project. */
-  onModeChange?: (mode: PaletteMode) => void;
+  onModeChange?: (mode: PaletteMode, seed?: string) => void;
 };
 
 type Destination = 'opener' | 'task' | 'project';
@@ -34,17 +36,13 @@ type Destination = 'opener' | 'task' | 'project';
  * or a card-colored capture window; on a phone, the drawer (ADR 0009). One dialog holds
  * whichever is open, takes Escape and Back, and returns focus to what opened it.
  */
-export function CommandPalette({ mode, onClose, onOpenTask, onModeChange }: Props) {
+export function CommandPalette({ mode, seed = '', onClose, onOpenTask, onModeChange }: Props) {
   const opener = useRef<HTMLElement | null>(null);
   const returnFocus = useRef<Destination>('opener');
   const dismiss: Dismiss = useRef(null);
-  const [seed, setSeed] = useState('');
   useBackHandler(mode !== null, () => {
     if (!dismiss.current?.()) onClose();
   });
-  useEffect(() => {
-    if (mode === null) setSeed('');
-  }, [mode]);
   // Noted before any child effect can move focus into the palette.
   const open = mode !== null;
   useLayoutEffect(() => {
@@ -95,10 +93,7 @@ export function CommandPalette({ mode, onClose, onOpenTask, onModeChange }: Prop
                 onAction={(destination) => {
                   returnFocus.current = destination;
                 }}
-                onCaptureTitle={(title) => {
-                  setSeed(title);
-                  onModeChange?.('capture');
-                }}
+                onCaptureTitle={(title) => onModeChange?.('capture', title)}
               />
             </Dialog.Content>
           </Dialog.Portal>
@@ -180,7 +175,7 @@ function DesktopSearch({ dismiss, onClose, onCaptureTitle, actions }: InnerProps
           transition={reduced ? { duration: 0 } : springs.smooth}
         >
           <SearchField search={search} disabled={!present} onClose={onClose} />
-          {!search.scoped && <FilterButton search={search} />}
+          {(!search.scoped || search.onBoard) && <FilterButton search={search} />}
         </motion.div>
       </div>
     </motion.div>
@@ -201,8 +196,8 @@ function ScopePanel({ search }: { search: SearchState }) {
           exit={{ height: 0, opacity: 0 }}
           transition={reduced ? { duration: 0 } : springs.smooth}
         >
-          <div className="glass mb-3 rounded-[var(--dock-radius)] p-3">
-            <ScopeOptions search={search} />
+          <div className="glass mb-3 max-h-[50dvh] overflow-y-auto overscroll-contain rounded-[var(--dock-radius)] p-3">
+            <FilterOptions search={search} />
           </div>
         </motion.div>
       )}

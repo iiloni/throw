@@ -49,6 +49,11 @@ moving to the ADR 0012 side column when wide) task links under `SegmentedTabs`.
 Touch screens swipe between them with `useTabSwipe`. Refused changes have a quiet task-only
 notice and description recovery links. Desktop columns on both boards fold to a strip, as Catch's deck does
 (`Board/BoardColumn.tsx`, remembered per project by `useCollapsedColumns` in `Board/state.ts`).
+Both boards narrow in place: the board store holds a filter and a temporary sort
+(`Board/filter.ts`, applied by `listTasks` and `countIn`), set from the desktop boards'
+search bar (`components/BoardSearch`, docked as a sidebar on wide boards) or the phone drawer's
+search; Ctrl/⌘K opens the palette only away from boards. A sorted list is `data-drop-send`:
+drops there send. The Updated sort reads each task's activity log (`updatedAtByTask`).
 Cards move on both boards by drag, keyboard,
 phone long press, the move drawer and a rightward swipe to close (ADR 0008).
 Settings (`/settings/*`) and project settings (`/w/:workspaceId/p/:projectId/settings`,
@@ -350,7 +355,8 @@ Throw moves as Catch does (Catch's `docs/decisions/0003-design-system-and-motion
     reflowing.
   - `springs.bouncy` (0.45 s, bounce 0.28): surfaces that should feel thrown or pop open.
   - `springs.pane` (0.45 s, no bounce): edge-docked panes and side columns, where bounce
-    would pull them off the screen edge.
+    would pull them off the screen edge, and clipped surfaces changing height, where a bounce
+    below the new height would cut off their content.
 - `curves` (`EASE_EMPHASIZED = [0.2, 0, 0, 1]`) are for what a spring's overshoot would
   break: full-screen container transforms (`expand`, `collapse`), startup and entry settles
   (`enter`), and surfaces folding to zero (`fold`, where bounce dips below zero).

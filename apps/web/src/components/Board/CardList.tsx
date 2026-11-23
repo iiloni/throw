@@ -7,7 +7,17 @@ import { CARD_SPACING, drag, makingWay } from './drag';
 import { hasPriorityIcon, PriorityIcon } from './glyphs';
 import { groupByPriority, type Priority, priorityName, taskColor } from './model';
 import { SwipeReveal } from './SwipeReveal';
-import { board, createTask, current, type ListId, listTasks, useBoardSettings } from './state';
+import {
+  board,
+  createTask,
+  current,
+  type ListId,
+  listStatusId,
+  listTasks,
+  sortedByField,
+  useBoardSettings,
+  visibleIds,
+} from './state';
 import { TaskCard } from './TaskCard';
 import { useTaskCardHidden } from './taskTransition';
 
@@ -57,7 +67,14 @@ export function CardList({
   const dragging = held?.phase === 'dragging';
   const moving = makingWay(held);
   const target = dragging ? held.target : null;
-  const over = moving && target?.kind !== 'status' && target?.listId === listId;
+  // Sorted by a field, a column keeps no manual order: a card is sent to it, not placed in it,
+  // and nothing in it moves while one is held (ADR 0008).
+  const resorted = sortedByField(state);
+  const over =
+    moving &&
+    (target?.kind === 'status'
+      ? resorted && target.statusId === listStatusId(listId)
+      : target?.listId === listId);
   const place = target?.kind === 'place' && target.listId === listId ? target : null;
   const stretch = moving && place !== null && settings.heldColumn === 'compact';
   const inPlace = moving && place !== null && settings.heldColumn === 'full';
@@ -66,7 +83,9 @@ export function CardList({
   // it began on, and stops if that element is removed.
   const lifted = (taskId: string) => dragging && held.ids.includes(taskId);
   const tasks = listTasks(state, listId);
-  const groups = groupByPriority(tasks);
+  const groups: { priority: Priority | null; tasks: typeof tasks }[] = resorted
+    ? [{ priority: null, tasks }]
+    : groupByPriority(tasks);
   const open = held?.priority;
   const gapHeight = held ? held.height + CARD_SPACING : 0;
   // Cards arrive in a diagonal wave: across the columns, then down each one.
@@ -90,6 +109,7 @@ export function CardList({
           : project.statuses.find((status) => status.id === listId.slice(7))?.name
       }
       data-drop-list={listId}
+      data-drop-send={resorted ? '' : undefined}
       data-over={over ? '' : undefined}
       data-surface={surface && settings.surfaces ? '' : undefined}
       className={cn('board-column relative flex min-h-0 min-w-0 flex-col rounded-3xl', className)}
@@ -109,6 +129,30 @@ export function CardList({
             style={endSpace ? { paddingBottom: endSpace } : undefined}
           >
             {groups.map(({ priority, tasks: zone }) => {
+              if (priority === null)
+                return (
+                  <Fragment key="size">
+                    {zone.map((task) => (
+                      <div
+                        key={task.id}
+                        data-slot={task.id}
+                        data-zone={task.priority}
+                        className="board-slot"
+                      >
+                        <div>
+                          <EnteringCard
+                            taskId={task.id}
+                            delay={entryDelay(column + (rows.get(task.id) ?? 0))}
+                            skip={!!held || revealed}
+                          >
+                            <SwipeReveal taskId={task.id} />
+                            <TaskCard task={task} showStatus={showStatus} />
+                          </EnteringCard>
+                        </div>
+                      </div>
+                    ))}
+                  </Fragment>
+                );
               const headerMode = mode(priority, zone.length);
               const folded = stretch && priority !== open;
               const accepts = stretch ? priority === open : inPlace || place?.priority === priority;
@@ -224,7 +268,11 @@ export function CardList({
             )}
             {tasks.length === 0 && !moving && (
               <p className="px-1 py-10 text-center text-muted-foreground text-sm">
-                {state.awaitingTasks ? 'Loading tasks…' : 'Nothing here.'}
+                {state.awaitingTasks
+                  ? 'Loading tasks…'
+                  : visibleIds(state)
+                    ? 'Nothing matches here.'
+                    : 'Nothing here.'}
               </p>
             )}
           </div>
