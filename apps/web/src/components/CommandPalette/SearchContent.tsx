@@ -23,7 +23,7 @@ import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { Hint } from '@/components/Hint/Hint';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { useAllTags, useAllTaskTags, useTasks } from '@/lib/collections';
-import { springs } from '@/lib/motion';
+import { curves, springs } from '@/lib/motion';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import {
   descriptionSnippet,
@@ -600,14 +600,15 @@ export function PhoneSearchContent({
             {search.filtersOpen && (
               <motion.div
                 key="filters"
-                className="pointer-events-auto shrink-0 overflow-hidden rounded-[var(--dock-radius)] shadow-[0_10px_30px_-10px_var(--glass-shadow)]"
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
+                // Opens from its foot, the tabs first, as Catch's card does.
+                className="pointer-events-auto flex shrink-0 flex-col justify-end overflow-hidden rounded-[var(--dock-radius)] shadow-[0_10px_30px_-10px_var(--glass-shadow)] [&>*]:shrink-0"
+                initial={{ height: 0 }}
+                animate={{ height: 'auto' }}
+                exit={{ height: 0, transition: reduced ? { duration: 0 } : curves.fold }}
                 transition={reduced ? { duration: 0 } : springs.smooth}
               >
                 {/* The board's filter sections fit what is left above their tabs. */}
-                <div className="glass max-h-[calc(100cqh-1.5rem)] overflow-y-auto overscroll-contain rounded-[var(--dock-radius)] p-3 [--board-filter-view-max:min(24rem,calc(100cqh-6.75rem))]">
+                <div className="glass-thick max-h-[calc(100cqh-1.5rem)] overflow-y-auto overscroll-contain rounded-[var(--dock-radius)] p-3 [--board-filter-view-max:min(24rem,calc(100cqh-6.75rem))]">
                   <FilterOptions search={search} />
                 </div>
               </motion.div>

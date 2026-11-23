@@ -26,7 +26,7 @@ import {
 } from '@/components/Board/state';
 import { Hint } from '@/components/Hint/Hint';
 import { haptics } from '@/lib/haptics';
-import { springs } from '@/lib/motion';
+import { curves, springs } from '@/lib/motion';
 import { createTask } from '@/lib/tasks';
 import { cn } from '@/lib/utils';
 import { ActiveFilters, BoardFilters, hasChips, QuickFilters } from './BoardFilters';
@@ -246,10 +246,11 @@ function FilterPanel({ open }: { open: boolean }) {
       {open && (
         <motion.div
           key="filters"
-          className="pointer-events-auto shrink-0 overflow-hidden"
-          initial={{ height: 0, opacity: 0 }}
-          animate={{ height: 'auto', opacity: 1 }}
-          exit={{ height: 0, opacity: 0 }}
+          // Opens from its foot, the tabs first, as Catch's card does.
+          className="pointer-events-auto flex shrink-0 flex-col justify-end overflow-hidden [&>*]:shrink-0"
+          initial={{ height: 0 }}
+          animate={{ height: 'auto' }}
+          exit={{ height: 0, transition: reduced ? { duration: 0 } : curves.fold }}
           transition={reduced ? { duration: 0 } : springs.smooth}
         >
           <section
