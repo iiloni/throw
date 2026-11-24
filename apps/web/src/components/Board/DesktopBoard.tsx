@@ -37,7 +37,7 @@ import { BoardColumn, ColumnHeader } from './BoardColumn';
 import { BoardSettingsPanel } from './BoardSettingsPanel';
 import { CardList } from './CardList';
 import { drag, makingWay } from './drag';
-import type { Status } from './model';
+import type { Status, Task } from './model';
 import {
   SelectionControls,
   type SelectionTab,
@@ -440,6 +440,7 @@ export const OpenTaskPane = memo(function OpenTaskPane({ frameWidth }: { frameWi
   const state = board.use();
   const paneWidth = useEffectivePaneWidth(frameWidth);
   const [resizing, setResizing] = useState(false);
+  const reduced = useReducedMotion();
   const openTask = openTaskOf(state);
 
   useEffect(() => {
@@ -474,30 +475,70 @@ export const OpenTaskPane = memo(function OpenTaskPane({ frameWidth }: { frameWi
   return (
     <AnimatePresence initial={false}>
       {openTask && (
-        <motion.div
+        <OpenTaskPaneFrame
           key="pane"
-          className="flex shrink-0 overflow-hidden pt-[calc(var(--safe-top)+1.25rem)] pr-6 pb-[max(1.5rem,calc(var(--safe-bottom)+0.75rem))]"
-          initial={{ width: 0, opacity: 0 }}
-          animate={{ width: paneWidth + HANDLE_WIDTH + PANE_MARGIN, opacity: 1 }}
-          exit={{ width: 0, opacity: 0 }}
-          transition={resizing ? { duration: 0 } : springs.pane}
-        >
-          <SplitHandle
-            width={paneWidth}
-            max={Math.max(PANE_MIN, frameWidth * 0.62)}
-            onResize={resize}
-            onActive={hold}
-          />
-          <div className="min-w-0 flex-1" style={{ width: paneWidth }}>
-            <TaskPaneWidthContext value={paneWidth}>
-              <TaskPane task={openTask} />
-            </TaskPaneWidthContext>
-          </div>
-        </motion.div>
+          task={openTask}
+          paneWidth={paneWidth}
+          maxWidth={Math.max(PANE_MIN, frameWidth * 0.62)}
+          resizing={resizing}
+          reduced={!!reduced}
+          onResize={resize}
+          onActive={hold}
+        />
       )}
     </AnimatePresence>
   );
 });
+
+/**
+ * The clipping frame around the open task: outer padding would hold the frame open at its
+ * margin width until unmount, and flex-shrinking the task would crush its card and side column
+ * on every frame of the slide. Keeping padding and a minimum target width on the inner frame
+ * slides the whole pane rigidly in and out without reflow or an end-of-close shift.
+ */
+function OpenTaskPaneFrame({
+  task,
+  paneWidth,
+  maxWidth,
+  resizing,
+  reduced,
+  onResize,
+  onActive,
+}: {
+  task: Task;
+  paneWidth: number;
+  maxWidth: number;
+  resizing: boolean;
+  reduced: boolean;
+  onResize: (width: number, keyboard: boolean) => void;
+  onActive: (active: boolean) => void;
+}) {
+  const present = useIsPresent();
+  const totalWidth = paneWidth + HANDLE_WIDTH + PANE_MARGIN;
+  return (
+    <motion.div
+      inert={!present}
+      data-task-pane-frame=""
+      className="h-full shrink-0 overflow-hidden"
+      initial={{ width: 0, opacity: 0 }}
+      animate={{ width: totalWidth, opacity: 1 }}
+      exit={{ width: 0, opacity: 0 }}
+      transition={resizing || reduced ? { duration: 0 } : springs.pane}
+    >
+      <div
+        className="flex h-full w-full pt-[calc(var(--safe-top)+1.25rem)] pr-6 pb-[max(1.5rem,calc(var(--safe-bottom)+0.75rem))]"
+        style={{ minWidth: totalWidth }}
+      >
+        <SplitHandle width={paneWidth} max={maxWidth} onResize={onResize} onActive={onActive} />
+        <div className="h-full min-w-0 flex-1">
+          <TaskPaneWidthContext value={paneWidth}>
+            <TaskPane task={task} />
+          </TaskPaneWidthContext>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
 
 /**
  * What can be done with the cards selected on desktop, floating at the foot of the board over
