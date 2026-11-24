@@ -19,6 +19,7 @@ const access = vi.hoisted(() => ({
 
 vi.mock('@tanstack/react-router', () => ({
   linkOptions: <T,>(options: T) => options,
+  useNavigate: () => vi.fn(),
   useRouterState: ({ select }: { select: (state: { matches: unknown[] }) => unknown }) =>
     select({ matches: [routerState.match] }),
   Link: ({

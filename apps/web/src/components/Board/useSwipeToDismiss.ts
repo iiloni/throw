@@ -14,17 +14,22 @@ export function useSwipeToDismiss({
   onDismiss,
   enabled,
   scrollElement,
+  canStart,
 }: {
   dragY: MotionValue<number>;
   onDismiss: () => void;
   enabled: boolean;
   /** When touches are on page content but the document owns its scroll. */
   scrollElement?: Element;
+  /** Guards touch starts when an overlay or inert layer owns the interaction. */
+  canStart?: (event: TouchEvent) => boolean;
 }) {
   // Radix mounts the dialog portal after this hook's first effect has run.
   const [element, setElement] = useState<HTMLDivElement | null>(null);
   const onDismissRef = useRef(onDismiss);
   onDismissRef.current = onDismiss;
+  const canStartRef = useRef(canStart);
+  canStartRef.current = canStart;
 
   useEffect(() => {
     if (!element || !enabled) return;
@@ -37,7 +42,7 @@ export function useSwipeToDismiss({
     let direction = 0;
 
     function onStart(event: TouchEvent) {
-      if (!element || event.touches.length !== 1) {
+      if (!element || event.touches.length !== 1 || canStartRef.current?.(event) === false) {
         startY = null;
         return;
       }
@@ -80,8 +85,7 @@ export function useSwipeToDismiss({
       const past = distance > DISMISS_DISTANCE;
       if (past !== armed) {
         armed = past;
-        // Crossing the line either way: letting go now dismisses, or no longer does.
-        haptics.threshold();
+        if (past) haptics.threshold();
       }
     }
 
@@ -93,6 +97,7 @@ export function useSwipeToDismiss({
         event.touches.length === 0 &&
         (armed || flung)
       ) {
+        if (!armed) haptics.threshold();
         onDismissRef.current();
       } else if (dragging) {
         animate(dragY, 0, springs.snappy);
