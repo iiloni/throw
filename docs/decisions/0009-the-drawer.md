@@ -1,7 +1,7 @@
 # 0009: The drawer
 
 Status: accepted (2026-10-15), amended 2026-10-17 for quick capture's card, 2026-10-19
-for the move drawer and 2026-11-23 for the project switcher
+for the move drawer and 2026-11-23 for the project switcher and half-height pages
 
 ## Context
 
@@ -36,9 +36,14 @@ in it, and it goes away again when that closes.
 
 **The drawer has three heights: collapsed, half and full.** It is pulled between them by
 its header, and tapping the dock's handle opens or closes it. Content chooses the heights
-it uses. The backlog uses all three. Board settings, the closed tasks, search and forms open
-at full height with a fixed header and their own scrolling. A short picker may rise only as
-far as its content needs. An open task's drawer stays collapsed and does not move until one
+it uses. The backlog uses all three. Board settings, search and forms open at full height
+with a fixed header and their own scrolling. The closed tasks open at half height, as the
+backlog does: a glance at what was just finished, with the dimmed board still in view
+above (2026-11-23). Pulled up by their header they rise to full, and they come back to
+half the same way; pulled down past half, or flung toward the dock, they close. A page that
+asks for this (`half` on `DrawerPage`) keeps the end of its list clear of the part left
+off screen, as the backlog does, and reopens at half each time. A short picker may rise
+only as far as its content needs. An open task's drawer stays collapsed and does not move until one
 of its panels is open.
 
 **Opening something replaces what the drawer shows; it does not stack.** Closing it with
@@ -104,6 +109,11 @@ and the tag manager are centred dialogs.
   on phones, not into their own sheets or full-screen overlays. Capture is the drawer's card
   and dock.
 - The prototype shares the Board components, so it gets the drawer too.
+- **Half-height pages (2026-11-23).** A page may open at half height and be pulled between
+  half and full; it stays modal at both, with the scrim, focus, Escape and Back as any page
+  has. Back and Escape close it from either height rather than lowering it first, since
+  closing returns the drawer to what it showed before. Pages that fit their content and full
+  pages are unchanged.
 - **The project switcher is drawer content (2026-11-23).** On a phone the page title opens
   the shell's `ProjectSwitcher` as a page that fits its content, in the board's drawer or the
   shell's own: the workspace's projects as tinted tiles, a workspace row that opens a
