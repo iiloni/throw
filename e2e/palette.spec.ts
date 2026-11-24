@@ -251,15 +251,19 @@ test('quick capture lands in the board it was opened from', async ({ page, isMob
     await expect(title).toBeFocused();
     await expect(title).toHaveValue('A newly captured task');
     await title.press('Enter');
+    // Mobile quick capture closes and stays on the board without opening the task view.
+    await expect(capture(page)).toHaveCount(0);
+    await expect(taskPane(page, true)).toHaveCount(0);
+    await expect(create).toBeFocused();
   } else {
     // The search bar captures into its board's backlog.
     await open(page);
     await input(page).fill('A newly captured task');
     await input(page).press('ControlOrMeta+Enter');
+    await expect(taskPane(page, false).getByRole('textbox', { name: 'Task title' })).toHaveValue(
+      'A newly captured task',
+    );
   }
-  await expect(taskPane(page, isMobile).getByRole('textbox', { name: 'Task title' })).toHaveValue(
-    'A newly captured task',
-  );
   await expect(page).toHaveURL(new RegExp(`/p/${account.catchProject.id}`));
   await expect
     .poll(async () => {
@@ -271,6 +275,104 @@ test('quick capture lands in the board it was opened from', async ({ page, isMob
     .toEqual([ideas?.id, isMobile ? '2' : '3']);
   const rows = await shapeRows(page.request, 'tasks', account.headers);
   expect(rows.some((row) => row.title === 'Not this one')).toBe(false);
+});
+
+test('mobile quick capture submits in place, expands via button or swipe up, and dismisses via swipe down', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'The floating capture card belongs to the phone drawer');
+  const account = await fixture(page);
+  const home = await newTag(page.request, account, account.catchProject.id, {
+    name: 'Home',
+    color: 'teal',
+  });
+  const create = page.getByRole('button', { name: 'New task', exact: true });
+  const title = page
+    .locator('[data-drawer-card]')
+    .getByRole('textbox', { name: 'Task title', exact: true });
+  const swipeCard = async (dy: number) => {
+    const box = (await page.locator('[data-drawer-card]').boundingBox())!;
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    const session = await page.context().newCDPSession(page);
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x, y }],
+    });
+    for (let step = 1; step <= 10; step++) {
+      await session.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x, y: y + (dy * step) / 10 }],
+      });
+    }
+    await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await session.detach();
+  };
+
+  // Swipe down dismisses capture without creating a task.
+  await create.click();
+  await expect(title).toBeFocused();
+  await title.fill('Dismissed by swipe');
+  await swipeCard(160);
+  await expect(capture(page)).toHaveCount(0);
+  await expect(taskPane(page, true)).toHaveCount(0);
+
+  // Tapping the ArrowUp button creates the task and stays right on the board.
+  await create.click();
+  await title.fill('Submitted in place');
+  await capture(page).getByRole('button', { name: 'Create task', exact: true }).click();
+  await expect(capture(page)).toHaveCount(0);
+  await expect(taskPane(page, true)).toHaveCount(0);
+  await expect(page.getByRole('article', { name: /Submitted in place$/ })).toBeVisible();
+
+  // Clicking Expand creates the task with its fields and opens the full task view.
+  await create.click();
+  await title.fill('Expanded from button');
+  await captureControls(page)
+    .getByRole('button', { name: /^Priority:/ })
+    .click();
+  await page.getByRole('radio', { name: 'High', exact: true }).click();
+  await captureControls(page)
+    .getByRole('button', { name: /^Tags:/ })
+    .click();
+  await page.getByRole('button', { name: 'Teal: Home', exact: true }).click();
+  await page.getByRole('button', { name: 'Expand', exact: true }).click();
+  await expect(capture(page)).toHaveCount(0);
+  await expect(taskPane(page, true).getByRole('textbox', { name: 'Task title' })).toHaveValue(
+    'Expanded from button',
+  );
+  await expect
+    .poll(async () => {
+      const row = (await shapeRows(page.request, 'tasks', account.headers)).find(
+        (row) => row.title === 'Expanded from button',
+      );
+      return row && [String(row.priority), row.primary_tag_id];
+    })
+    .toEqual(['2', home.id]);
+  await closeTask(page);
+  await expect(taskPane(page, true)).toHaveCount(0);
+
+  // Expanding an empty draft opens an untitled task in the full task view.
+  await create.click();
+  await capture(page).getByRole('button', { name: 'Expand', exact: true }).click();
+  await expect(taskPane(page, true).getByRole('textbox', { name: 'Task title' })).toHaveValue('');
+  await closeTask(page);
+  await expect(taskPane(page, true)).toHaveCount(0);
+
+  // Swiping up on the capture card expands into the full task view.
+  await create.click();
+  await title.fill('Expanded by swipe');
+  await swipeCard(-160);
+  await expect(capture(page)).toHaveCount(0);
+  await expect(taskPane(page, true).getByRole('textbox', { name: 'Task title' })).toHaveValue(
+    'Expanded by swipe',
+  );
+  await closeTask(page);
+  await expect(taskPane(page, true)).toHaveCount(0);
+
+  const rows = await shapeRows(page.request, 'tasks', account.headers);
+  expect(rows.some((row) => row.title === 'Dismissed by swipe')).toBe(false);
 });
 
 test('offline capture is immediate, searchable, persists and receives a number on reconnect', async ({

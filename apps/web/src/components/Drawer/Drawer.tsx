@@ -3,6 +3,7 @@ import {
   AnimatePresence,
   animate,
   type MotionStyle,
+  type MotionValue,
   motion,
   useIsPresent,
   useMotionValue,
@@ -65,6 +66,12 @@ export type DrawerCard = {
   content: ReactNode;
   /** The field the card opens on; closing a page over the card returns here. */
   focus?: RefObject<HTMLElement | null>;
+  /** The floating card element, for gestures that track the whole card. */
+  surfaceRef?: RefObject<HTMLDivElement | null>;
+  /** Vertical drag offset while a swipe gesture moves the card. */
+  y?: MotionValue<number>;
+  /** Exit immediately without shrinking into the dock button (e.g. expanding into a full view). */
+  instantExit?: RefObject<boolean>;
   onClose: () => void;
 };
 
@@ -141,6 +148,10 @@ export function Drawer({
   // Read by effects that run once per opening, after the props that opened them.
   const latest = useRef({ page, card });
   latest.current = { page, card };
+  // Retained past the render where `card` clears so an expand can exit without shrinking back.
+  const cardExit = useRef<RefObject<boolean> | undefined>(undefined);
+  if (card) cardExit.current = card.instantExit;
+  const instantCardExit = Boolean(cardExit.current?.current);
   // How far an open page lifts the dock. Over a card, the keyboard and a page share that
   // room, unless the page has a field of its own being typed in, which needs both.
   const closedAt = useRef(0);
@@ -453,9 +464,10 @@ export function Drawer({
               : '-bottom-px',
           )}
         />
-        <AnimatePresence>
+        <AnimatePresence custom={instantCardExit}>
           {card && (
             <motion.div
+              ref={card.surfaceRef}
               key={card.key}
               data-drawer-card=""
               // Writing in the card again puts away a page opened over it.
@@ -465,14 +477,19 @@ export function Drawer({
               // Sits behind the drawer's -z-10 glass so the card's shadow never paints over the dock.
               className="absolute inset-x-3 bottom-full -z-20 mb-3 flex max-h-[calc(100dvh-var(--keyboard)-var(--safe-top)-var(--dock-height)-3rem)] flex-col overflow-hidden rounded-[28px] bg-card text-card-foreground shadow-[0_24px_60px_-12px_oklch(0_0_0/0.45)]"
               // Grows out of the dock's create button, below the card's bottom-right corner.
-              style={{ transformOrigin: 'calc(100% - 2rem) calc(100% + 3rem)' }}
+              style={{
+                transformOrigin: 'calc(100% - 2rem) calc(100% + 3rem)',
+                ...(card.y ? { y: card.y } : {}),
+              }}
               initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.3 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={
-                reduced
-                  ? { opacity: 0, transition: { duration: 0 } }
-                  : { opacity: 0, scale: 0.3, transition: springs.smooth }
-              }
+              exit="leave"
+              variants={{
+                leave: (instant: boolean) =>
+                  reduced || instant
+                    ? { opacity: 0, transition: { duration: 0 } }
+                    : { opacity: 0, scale: 0.3, y: 0, transition: springs.smooth },
+              }}
               transition={reduced ? { duration: 0 } : springs.bouncy}
             >
               {card.content}
