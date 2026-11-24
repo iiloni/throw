@@ -95,8 +95,9 @@ export function railGeometry({
 }: {
   rowWidth: number;
   /**
-   * The row's width once the task pane has finished sliding: the rails' cards are laid out
-   * for it at once, while the rails themselves follow the row as it goes.
+   * The row's width once the docked search sidebar and task pane have finished sliding: the
+   * rails' cards are laid out for it at once, while the rails themselves follow the row as
+   * it goes.
    */
   restWidth?: number;
   views: Record<Zone, ZoneState>;
@@ -161,9 +162,9 @@ export function settleRail(width: number, max: number): { view: ZoneState; width
 
 /**
  * A rail's width: a spring when the rail changes state (a strip opening, a gallery closing, a
- * card picked up), and otherwise its target exactly, as the row narrows while the task pane
- * slides open or a window or the rail's own edge is dragged. Re-firing a spring at a target
- * that moves every frame made those changes lag and bounce.
+ * card picked up), and otherwise its target exactly, as the row narrows while the docked search
+ * sidebar or task pane slides open or a window or the rail's own edge is dragged. Re-firing a
+ * spring at a target that moves every frame made those changes lag and bounce.
  *
  * `width` is what to draw: the motion value while it springs, and the plain number otherwise,
  * so React writes it in the same commit as the row's new width rather than a frame later.
@@ -318,10 +319,9 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
             <motion.div
               key="open"
               className="absolute inset-y-0 flex min-h-0 flex-col pt-[calc(var(--safe-top)+1.25rem)]"
-              // Laid out at its resting width from the start, so opening the rail reveals the
-              // cards, and widening it fans them out into columns, rather than re-wrapping them
-              // at every width on the way.
-              style={{ width: geometry.content, [start ? 'left' : 'right']: 0 }}
+              // The header follows the rail's live width down to a single column, so its
+              // actions stay at the rail's edge while the search sidebar or task pane slides.
+              style={{ width: `max(100%, ${PANEL_WIDTH}px)`, [start ? 'left' : 'right']: 0 }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -346,11 +346,25 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
                 </IconButton>
               </div>
               <StatusFilter zone={zone} />
-              <ZoneGallery
-                zone={zone}
-                width={geometry.content - GALLERY_INSET * 2}
-                anchor={start ? 'start' : 'end'}
-              />
+              <div className="relative flex min-h-0 flex-1">
+                <div
+                  className="absolute inset-y-0 flex min-h-0 flex-col"
+                  // Laid out at its resting width from the start, so opening the rail reveals the
+                  // cards and widening it fans them out into columns rather than re-wrapping them
+                  // on every frame; keeping at least 100% avoids clipping cards while the rail
+                  // narrows ahead of them.
+                  style={{
+                    width: `max(100%, ${geometry.content}px)`,
+                    [start ? 'left' : 'right']: 0,
+                  }}
+                >
+                  <ZoneGallery
+                    zone={zone}
+                    width={geometry.content - GALLERY_INSET * 2}
+                    anchor={start ? 'start' : 'end'}
+                  />
+                </div>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
