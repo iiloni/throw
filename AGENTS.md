@@ -18,6 +18,11 @@ the top of a board, opens the shell's project switcher as a drawer page
 (`AppShell/ProjectSwitcher.tsx`, `AppShell/SwitcherPull.tsx`). Page changes animate through the router's
 view transitions (`lib/pageTransition.ts`, ADR 0013): boards cross-fade, ordered pages
 slide, and content enters once per document with `useEntryMotion` (`lib/entryMotion.ts`).
+A fling into the top or bottom of the page or any vertical scroller bounces off it, as in
+Catch (`lib/scrollBounce.ts`, watched from `routes/_app.tsx`): the page column moves by `top`
+(`pageBounceY`), never a transform, so fixed docks and glass stay put, and a scroller's
+children move by composited WAAPI. It waits for the finger to lift and for a held, dragged or
+carried card, and stays still with reduced motion.
 Its project board uses the shared Board
 components on synced tasks and statuses, and the cross-project board
 (`Board/WorkspaceBoard.tsx`) adapts every project of the workspace into one virtual project
