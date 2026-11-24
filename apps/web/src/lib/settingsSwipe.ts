@@ -1,6 +1,6 @@
 import { motionValue, useReducedMotion, useTransform } from 'motion/react';
 
-/** Shared by the settings content so a pull moves it together while respecting reduced motion. */
+/** Shared by the settings content and its chrome (title, dock) so a pull moves the whole page. */
 export const settingsDragY = motionValue(0);
 
 export function useSettingsSwipeY() {

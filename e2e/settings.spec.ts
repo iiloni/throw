@@ -301,20 +301,24 @@ test('mobile settings pull-down dismisses app settings, project settings, and tr
     await (await switcherItem(page, item)).click();
   };
 
-  // App settings: content follows the pull while the fixed dock stays put, and release returns to the board.
+  // App settings: the whole page follows the pull, its title and dock too, so the content never
+  // slides over them; release returns to the board.
   await openFromSwitcher('Settings');
   await expect(page).toHaveURL(/\/settings\/general$/);
   await expect(page.getByRole('heading', { name: 'General', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Settings page: General' })).toBeVisible();
   await waitForSwipeReady(page);
-  const restContentTop = await layerTop(page, '[data-settings-content]');
-  const restDockTop = await layerTop(page, '[data-drawer]');
+  const layers = ['[data-page-header]', '[data-settings-content]', '[data-drawer]'];
+  const restTops = await Promise.all(layers.map((layer) => layerTop(page, layer)));
   await pullSettings(touch, 150, {
     whileHeld: async () => {
       await expect
         .poll(() => layerTop(page, '[data-settings-content]'))
-        .toBeGreaterThan(restContentTop + 40);
-      expect(Math.abs((await layerTop(page, '[data-drawer]')) - restDockTop)).toBeLessThan(2);
+        .toBeGreaterThan((restTops[1] ?? 0) + 40);
+      const offsets = await Promise.all(
+        layers.map(async (layer, index) => (await layerTop(page, layer)) - (restTops[index] ?? 0)),
+      );
+      for (const offset of offsets) expect(Math.abs(offset - (offsets[1] ?? 0))).toBeLessThan(2);
     },
   });
   await expect(page).toHaveURL(boardUrl);
