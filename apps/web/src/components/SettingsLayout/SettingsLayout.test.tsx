@@ -164,6 +164,20 @@ describe('SettingsLayout', () => {
     expect(haptics.threshold).toHaveBeenCalledTimes(dismissed ? 1 : 0);
   });
 
+  it('leaves a drag on a control that takes its own touches, such as a reorder handle', () => {
+    render(
+      <SettingsLayout title="Settings" groups={groups} current={pages[1]!} wide={false} back={back}>
+        <button type="button" style={{ touchAction: 'none' }}>
+          <span>Reorder</span>
+        </button>
+      </SettingsLayout>,
+    );
+    pull(screen.getByText('Reorder'), -150);
+    pull(screen.getByText('Reorder'), 150);
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(settingsDragY.get()).toBe(0);
+  });
+
   it('keeps settings open when a pull is canceled', () => {
     render(
       <SettingsLayout title="Settings" groups={groups} current={pages[1]!} wide={false} back={back}>

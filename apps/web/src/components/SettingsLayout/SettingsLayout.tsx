@@ -76,8 +76,9 @@ export function SettingsLayout({
       )
         return false;
       const target = event.target;
-      if (target instanceof Element && target.closest('[inert], [data-no-pull]')) return false;
-      return true;
+      if (!(target instanceof Element)) return true;
+      if (target.closest('[inert], [data-no-pull]')) return false;
+      return !ownsTouch(target, event.currentTarget);
     },
   });
 
@@ -160,6 +161,17 @@ export function SettingsLayout({
       </div>
     </div>
   );
+}
+
+/**
+ * Whether a control under the touch takes its own touches, as a status's reorder handle does
+ * (`touch-action: none`): its drag must not pull settings away.
+ */
+function ownsTouch(target: Element, boundary: EventTarget | null) {
+  for (let node: Element | null = target; node && node !== boundary; node = node.parentElement) {
+    if (getComputedStyle(node).touchAction === 'none') return true;
+  }
+  return false;
 }
 
 /** A link that moves within settings without adding to history, so Back leaves in one step. */
