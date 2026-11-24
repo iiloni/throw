@@ -124,6 +124,40 @@ describe('the board’s search bar', () => {
     expect(board.get().searching).toBe(false);
   });
 
+  it('collapses the floating bar without clearing query, filters or sort, while Close clears them', () => {
+    render(<BoardSearch />);
+    fireEvent.change(field(), { target: { value: 'weed' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Filter and sort' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Size' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Size S,/ }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Sort' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Size' }));
+
+    act(() => collapseSearch());
+    expect(board.get()).toMatchObject({
+      searching: false,
+      sort: 'size-asc',
+      filter: { query: 'weed', sizes: [2] },
+    });
+
+    act(() => update({ searching: true }));
+    expect(field()).toHaveValue('weed');
+    expect(screen.getByRole('button', { name: 'Filter and sort' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    expect(screen.getByRole('group', { name: 'Active filters' })).toHaveTextContent(
+      /Smallest first/,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close search' }));
+    expect(board.get()).toMatchObject({
+      searching: false,
+      sort: 'priority',
+      filter: { query: '', sizes: [] },
+    });
+  });
+
   it('feathers the top and bottom edges of the docked sidebar scroller when overflowing', () => {
     const { container } = render(<BoardSearchSidebar />);
     const area = container.querySelector<HTMLElement>('[data-slot="scroll-area"][data-edges]');

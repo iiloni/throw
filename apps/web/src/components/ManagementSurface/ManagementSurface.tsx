@@ -7,11 +7,13 @@ import {
   useEffect,
   useId,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { BottomSheet } from '@/components/BottomSheet/BottomSheet';
 import { Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
 import { useDesktop } from '@/lib/media';
+import { useSettingsSwipeY } from '@/lib/settingsSwipe';
 import { createStore } from '@/lib/store';
 
 /**
@@ -28,6 +30,8 @@ const SurfaceContext = createContext<{
   hide: (id: string) => void;
   setDock: (dock: ReactNode) => void;
 } | null>(null);
+
+const SurfaceOpenContext = createContext(false);
 
 export function ManagementSurfaceProvider({
   children,
@@ -71,6 +75,23 @@ export function ManagementSurfaceProvider({
   }, []);
   const docked = dock !== null;
   const modal = surface !== null;
+  // A pull on phone settings moves the whole page, so its dock rides the pull as Catch's does.
+  // `translate` composes with the drawer's own transform, which springs its detents.
+  const pull = useSettingsSwipeY();
+  const drawerHost = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!phone || !active) return;
+    const follow = (y: number) => {
+      const drawer = drawerHost.current?.querySelector<HTMLElement>('[data-drawer]');
+      if (drawer) drawer.style.translate = y ? `0 ${y}px` : '';
+    };
+    follow(pull.get());
+    const stop = pull.on('change', follow);
+    return () => {
+      stop();
+      follow(0);
+    };
+  }, [phone, active, pull]);
   useEffect(() => {
     if (!modal) return;
     const previous = document.body.style.overflow;
@@ -81,28 +102,35 @@ export function ManagementSurfaceProvider({
   }, [modal]);
   return (
     <SurfaceContext.Provider value={active ? host : phone ? lent : null}>
-      <div className="contents" inert={surface !== null}>
-        {children}
-      </div>
-      {phone && active && (
-        // biome-ignore lint/a11y/noStaticElementInteractions: contains keyboard focus for the dialog descendant
-        <div className="contents" inert={!surface && !docked} onKeyDown={containFocus}>
-          <Drawer
-            label={surface?.page.title ?? 'Management'}
-            dock={dock}
-            detent="closed"
-            detents={['closed']}
-            onDetent={() => {}}
-            page={surface?.page ?? null}
-            sunk={!surface && !docked}
-            // A bare dock has nothing above it to pull up.
-            gesturesDisabled={!surface}
-            onClosePage={() => surface?.close()}
-          >
-            {null}
-          </Drawer>
+      <SurfaceOpenContext.Provider value={modal}>
+        <div className="contents" inert={surface !== null}>
+          {children}
         </div>
-      )}
+        {phone && active && (
+          // biome-ignore lint/a11y/noStaticElementInteractions: contains keyboard focus for the dialog descendant
+          <div
+            ref={drawerHost}
+            className="contents"
+            inert={!surface && !docked}
+            onKeyDown={containFocus}
+          >
+            <Drawer
+              label={surface?.page.title ?? 'Management'}
+              dock={dock}
+              detent="closed"
+              detents={['closed']}
+              onDetent={() => {}}
+              page={surface?.page ?? null}
+              sunk={!surface && !docked}
+              // A bare dock has nothing above it to pull up.
+              gesturesDisabled={!surface}
+              onClosePage={() => surface?.close()}
+            >
+              {null}
+            </Drawer>
+          </div>
+        )}
+      </SurfaceOpenContext.Provider>
     </SurfaceContext.Provider>
   );
 }
@@ -179,6 +207,14 @@ export function useManagementDock(dock: ReactNode) {
     if (!host) return;
     return () => host.setDock(null);
   }, [host]);
+}
+
+/**
+ * Whether a phone management drawer page is currently open above the screen, so page-level
+ * gestures behind it can stand down cleanly.
+ */
+export function useManagementSurfaceOpen() {
+  return useContext(SurfaceOpenContext);
 }
 
 /** The management background is inert; keep Tab's endpoints inside its phone drawer too. */

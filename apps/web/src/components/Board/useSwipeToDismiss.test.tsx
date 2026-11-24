@@ -1,7 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { motionValue } from 'motion/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { haptics } from '@/lib/haptics';
 import { MAX_DRAG, useSwipeToDismiss } from './useSwipeToDismiss';
+
+vi.mock('@/lib/haptics', () => ({ haptics: { threshold: vi.fn() } }));
 
 afterEach(() => vi.clearAllMocks());
 
@@ -98,6 +101,43 @@ describe('task editor swipe to dismiss', () => {
     start(area);
     move(area, 150);
     fireEvent.touchCancel(area, { touches: [] });
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it('triggers threshold haptic once on crossing and on fling dismissal', () => {
+    const { area, onDismiss } = setup(0);
+    start(area);
+    move(area, 150);
+    expect(haptics.threshold).toHaveBeenCalledTimes(1);
+    // Retreating back below the threshold does not fire a second haptic.
+    move(area, 40);
+    expect(haptics.threshold).toHaveBeenCalledTimes(1);
+    move(area, 40);
+    end(area);
+    expect(onDismiss).not.toHaveBeenCalled();
+
+    // A quick fling below the distance threshold still fires threshold haptic on dismiss.
+    vi.clearAllMocks();
+    fireEvent.touchStart(area, { touches: [{ clientY: 200 }] });
+    fireEvent.touchMove(area, { touches: [{ clientY: 260 }] });
+    fireEvent.touchEnd(area, { touches: [] });
+    expect(onDismiss).toHaveBeenCalledOnce();
+    expect(haptics.threshold).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores touches rejected by canStart', () => {
+    const dragY = motionValue(0);
+    const onDismiss = vi.fn();
+    function Guarded() {
+      const ref = useSwipeToDismiss({ dragY, onDismiss, enabled: true, canStart: () => false });
+      return <div ref={ref} data-testid="scroll-area" />;
+    }
+    render(<Guarded />);
+    const area = screen.getByTestId('scroll-area');
+    start(area);
+    move(area, 150);
+    end(area);
+    expect(dragY.get()).toBe(0);
     expect(onDismiss).not.toHaveBeenCalled();
   });
 });

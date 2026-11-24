@@ -1582,3 +1582,203 @@ test('desktop task split-pane width persists across projects, workspace board, a
   await expect(handle).toHaveAttribute('aria-valuenow', '600');
   await expect.poll(async () => Math.round((await pane.boundingBox())!.width)).toBe(600);
 });
+
+test('wide desktop task pane slides open and closed rigidly without squishing the card or shifting at close end', async ({
+  page,
+  isMobile,
+  browser,
+}, testInfo) => {
+  test.skip(isMobile, 'The split pane is the desktop board’s');
+  testInfo.annotations.push({ type: 'browser version', description: browser.version() });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const account = await fixture(page);
+  const { pane } = account;
+
+  // Give the task a tag, a description, and a subtask so the ADR 0012 side column opens at >= 620px.
+  const tagId = randomUUID();
+  expect(
+    (
+      await page.request.post('/api/tags', {
+        headers: account.headers,
+        data: {
+          id: tagId,
+          projectId: account.projectId,
+          name: 'Launch',
+          parentId: null,
+          icon: null,
+          color: 'amber',
+        },
+      })
+    ).status(),
+  ).toBe(201);
+  expect(
+    (
+      await page.request.patch(`/api/tasks/${account.taskId}`, {
+        headers: account.headers,
+        data: { changeId: randomUUID(), changes: { primaryTagId: { before: null, after: tagId } } },
+      })
+    ).ok(),
+  ).toBe(true);
+  expect(
+    (
+      await page.request.post('/api/tasks', {
+        headers: account.headers,
+        data: {
+          id: randomUUID(),
+          projectId: account.projectId,
+          title: 'Verify rigid split-pane motion',
+          statusId: account.status('active'),
+          priority: 3,
+          position: 'a0',
+          parentId: account.taskId,
+          description: null,
+          descriptionVersion: null,
+        },
+      })
+    ).status(),
+  ).toBe(201);
+
+  await editDescription(
+    pane,
+    'The task card and side column must keep their full width throughout the open and close slide.',
+  );
+
+  // Widen past the 620px side-column threshold so both the card and TaskColumn are visible.
+  const handle = page.getByRole('separator', { name: 'Resize task' });
+  const grip = (await handle.boundingBox())!;
+  const gx = grip.x + grip.width / 2;
+  const gy = grip.y + grip.height / 2;
+  await page.mouse.move(gx, gy);
+  await page.mouse.down();
+  await page.mouse.move(gx - 260, gy, { steps: 6 });
+  await page.mouse.up();
+  await expect(handle).toHaveAttribute('aria-valuenow', '700');
+
+  const card = pane.locator('[data-task-card]');
+  const column = pane.getByRole('complementary', { name: 'Task sidebar' });
+  await expect(column).toBeVisible();
+  await expect.poll(async () => Math.round((await pane.boundingBox())!.width)).toBe(700);
+  // Wait for the ADR 0012 side column (256px + 12px gap) to finish springing open.
+  await expect.poll(async () => Math.round((await card.boundingBox())!.width)).toBe(700 - 268);
+  const restingPaneWidth = (await pane.boundingBox())!.width;
+  const restingCardWidth = (await card.boundingBox())!.width;
+  const restingFrameWidth = await page
+    .locator('[data-task-pane-frame]')
+    .evaluate((el) => el.getBoundingClientRect().width);
+  expect(restingCardWidth).toBeGreaterThan(350);
+
+  type Sample = {
+    frameWidth: number | null;
+    paneWidth: number | null;
+    cardWidth: number | null;
+    closedRight: number;
+  };
+
+  function sampleTransition(direction: 'closing' | 'opening', expectedFrameWidth: number) {
+    return page.evaluate(
+      ({ direction, expectedFrameWidth }) =>
+        new Promise<Sample[]>((resolve) => {
+          const samples: Sample[] = [];
+          const started = performance.now();
+          let afterGone = 0;
+          let settledOpen = 0;
+          const step = () => {
+            const frame = document.querySelector<HTMLElement>('[data-task-pane-frame]');
+            const paneEl = document.querySelector<HTMLElement>('[aria-label="Task"]');
+            const cardEl = document.querySelector<HTMLElement>('[data-task-card]');
+            const closedRail = document.querySelector<HTMLElement>('aside[data-origin="closed"]');
+            const frameWidth = frame ? frame.getBoundingClientRect().width : null;
+            samples.push({
+              frameWidth,
+              paneWidth: paneEl ? paneEl.getBoundingClientRect().width : null,
+              cardWidth: cardEl ? cardEl.getBoundingClientRect().width : null,
+              closedRight: closedRail ? closedRail.getBoundingClientRect().right : 0,
+            });
+            if (direction === 'closing' && frameWidth === null) {
+              afterGone += 1;
+              if (afterGone >= 3) return resolve(samples);
+            }
+            if (
+              direction === 'opening' &&
+              frameWidth !== null &&
+              Math.abs(frameWidth - expectedFrameWidth) < 1
+            ) {
+              settledOpen += 1;
+              if (settledOpen >= 3) return resolve(samples);
+            }
+            if (performance.now() - started > 4000) return resolve(samples);
+            requestAnimationFrame(step);
+          };
+          requestAnimationFrame(step);
+        }),
+      { direction, expectedFrameWidth },
+    );
+  }
+
+  // Close the wide task pane and inspect every animation frame.
+  const closeSamplesPromise = sampleTransition('closing', restingFrameWidth);
+  await pane.getByRole('button', { name: 'Back to the board', exact: true }).click();
+  const closeSamples = await closeSamplesPromise;
+  await expect(pane).toHaveCount(0);
+
+  const presentClose = closeSamples.filter((s) => s.frameWidth !== null);
+  expect(presentClose.length).toBeGreaterThanOrEqual(4);
+  // Outer frame slides all the way down past the old 24px pr-6 floor before unmounting.
+  const lastFrameBeforeUnmount = presentClose.at(-1)!;
+  expect(lastFrameBeforeUnmount.frameWidth!).toBeLessThan(12);
+  // Every intermediate frame keeps the pane and its colored card at their full resting width.
+  for (const sample of presentClose) {
+    expect(Math.abs(sample.paneWidth! - restingPaneWidth)).toBeLessThan(1.5);
+    expect(Math.abs(sample.cardWidth! - restingCardWidth)).toBeLessThan(1.5);
+  }
+  // Closed rail moves monotonically right with no abrupt end-of-close shift on unmount.
+  const firstGoneIndex = closeSamples.findIndex((s) => s.frameWidth === null);
+  expect(firstGoneIndex).toBeGreaterThan(0);
+  const unmountShift = Math.abs(
+    closeSamples[firstGoneIndex]!.closedRight - closeSamples[firstGoneIndex - 1]!.closedRight,
+  );
+  expect(unmountShift).toBeLessThan(12);
+
+  // Reopen the same wide task and verify zero squishing on the opening slide too.
+  const openSamplesPromise = sampleTransition('opening', restingFrameWidth);
+  await page.getByRole('article', { name: 'TASK-1 Write the launch plan', exact: true }).click();
+  const openSamples = await openSamplesPromise;
+  await expect(pane).toBeVisible();
+
+  const presentOpen = openSamples.filter((s) => s.frameWidth !== null);
+  expect(presentOpen.length).toBeGreaterThanOrEqual(4);
+  expect(
+    presentOpen.some((s) => s.frameWidth! > 10 && s.frameWidth! < restingFrameWidth - 20),
+  ).toBe(true);
+  for (const sample of presentOpen) {
+    expect(Math.abs(sample.paneWidth! - restingPaneWidth)).toBeLessThan(1.5);
+    expect(Math.abs(sample.cardWidth! - restingCardWidth)).toBeLessThan(1.5);
+  }
+
+  // Also verify the cross-project workspace board (WorkspaceDesktopBoard mounts OpenTaskPane).
+  await page.goto(`/w/${account.workspaceId}/board`);
+  const workspaceCard = page.getByRole('article', {
+    name: 'TASK-1 Write the launch plan',
+    exact: true,
+  });
+  await expect(workspaceCard).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
+  await workspaceCard.click();
+  await expect(pane).toBeVisible();
+  await expect(column).toBeVisible();
+  await expect.poll(async () => Math.round((await pane.boundingBox())!.width)).toBe(700);
+  await expect.poll(async () => Math.round((await card.boundingBox())!.width)).toBe(700 - 268);
+
+  const wsCloseSamplesPromise = sampleTransition('closing', restingFrameWidth);
+  await pane.getByRole('button', { name: 'Back to the board', exact: true }).click();
+  const wsCloseSamples = await wsCloseSamplesPromise;
+  await expect(pane).toHaveCount(0);
+
+  const wsPresentClose = wsCloseSamples.filter((s) => s.frameWidth !== null);
+  expect(wsPresentClose.length).toBeGreaterThanOrEqual(4);
+  expect(wsPresentClose.at(-1)!.frameWidth!).toBeLessThan(12);
+  for (const sample of wsPresentClose) {
+    expect(Math.abs(sample.paneWidth! - restingPaneWidth)).toBeLessThan(1.5);
+    expect(Math.abs(sample.cardWidth! - restingCardWidth)).toBeLessThan(1.5);
+  }
+});

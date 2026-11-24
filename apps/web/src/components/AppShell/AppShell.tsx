@@ -24,8 +24,8 @@ import {
   viewSchema,
 } from '@/components/AppShell/shell';
 import { AppUpdatePrompt } from '@/components/AppUpdatePrompt/AppUpdatePrompt';
-import { chosenFilters } from '@/components/Board/filter';
 import {
+  activeFilterCount,
   board,
   closeSearch,
   collapseSearch,
@@ -140,23 +140,22 @@ export function AppShell() {
     if (boardSearch) openSearch();
     else setPalette({ mode: 'search', seed: '' });
   }, [boardSearch]);
-  // Clicking Search in the rail again collapses the docked search sidebar without clearing active filters;
-  // on narrower boards with the floating bar, it opens or focuses the bar as before.
+  // Clicking Search in the rail toggles desktop board search (docked sidebar or floating bar)
+  // without clearing active query, filters, or sort.
   const toggleRailSearch = useCallback(() => {
     if (!boardSearch) return setPalette({ mode: 'search', seed: '' });
-    if (board.get().searching && searchSidebarOpen.get()) collapseSearch();
+    if (board.get().searching) collapseSearch();
     else openSearch();
   }, [boardSearch]);
   const boardState = board.use();
   const dockedSearch = searchSidebarOpen.use();
   const sidebarConnected = boardSearch && boardState.searching && dockedSearch;
   const searchActive = boardSearch && boardState.searching;
-  const searchFiltered = boardSearch && narrowed(boardState);
-  const activeFilterCount = searchFiltered
-    ? chosenFilters(boardState.filter) +
-      Number(boardState.sort !== 'priority') +
-      Number(boardState.filter.query.trim() !== '')
-    : 0;
+  const searchFilterCount = boardSearch ? activeFilterCount(boardState) : 0;
+  const searchFiltered = searchFilterCount > 0;
+  const searchHint = searchFiltered
+    ? `Search (${searchFilterCount} ${searchFilterCount === 1 ? 'active filter' : 'active filters'})`
+    : undefined;
   const isAppSettings = routeId?.startsWith('/_app/settings') ?? false;
   const isProjectSettings =
     routeId === '/_app/w/$workspaceId/p/$projectId_/settings' ||
@@ -230,18 +229,24 @@ export function AppShell() {
       if (palette) return setPalette(null);
       if (document.querySelector('[role="dialog"]')) return;
       if (!boardSearch) return setPalette({ mode: 'search', seed: '' });
-      // The bar: open it, or take the caret back to it; from inside it, close an empty one.
+      // Search on a board: open it, or take the caret back to it; from inside its field,
+      // collapse it without clearing active filters.
       const state = board.get();
       const input = document.querySelector('[data-board-search-input]');
       if (!state.searching) openSearch();
-      else if (document.activeElement === input && !narrowed(state)) {
-        closeSearch();
+      else if (document.activeElement === input) {
+        collapseSearch();
         document.querySelector<HTMLElement>('#main-content')?.focus({ preventScroll: true });
       } else focusSearch();
     }
     window.addEventListener('keydown', shortcut);
     return () => window.removeEventListener('keydown', shortcut);
   }, [workspace, form, palette, boardSearch]);
+  // Search, filters and sort belong to the board on screen and clear when navigating away.
+  useEffect(() => {
+    if (!fullBoard && !navigating && (board.get().searching || narrowed(board.get())))
+      closeSearch();
+  }, [fullBoard, navigating]);
   useEffect(() => {
     const here = crossBoard ? `workspace:${workspace?.id}` : pendingTask?.projectId;
     if (!pendingTask || boardState.projectId !== here || !boardState.actions) return;
@@ -360,6 +365,7 @@ export function AppShell() {
                 <div className={cn('mt-3 pl-3', sidebarConnected ? 'relative z-20 pr-0' : 'pr-3')}>
                   <RailButton
                     label="Search"
+                    hintLabel={searchHint}
                     expanded={expanded}
                     expandedControl={boardSearch ? searchActive : undefined}
                     connected={sidebarConnected}
@@ -373,9 +379,10 @@ export function AppShell() {
                       searchFiltered ? (
                         <span
                           aria-hidden
+                          data-search-filter-badge=""
                           className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-brand px-1.5 font-semibold text-[0.6875rem] text-brand-foreground tabular-nums"
                         >
-                          {activeFilterCount}
+                          {searchFilterCount}
                         </span>
                       ) : undefined
                     }
@@ -386,6 +393,7 @@ export function AppShell() {
                       {searchFiltered && !expanded && (
                         <span
                           aria-hidden
+                          data-search-filter-dot=""
                           className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-brand"
                         />
                       )}
@@ -541,6 +549,7 @@ export function AppShell() {
 
 function RailButton({
   label,
+  hintLabel,
   expanded,
   active,
   expandedControl,
@@ -553,6 +562,8 @@ function RailButton({
   className,
 }: {
   label: string;
+  /** Extra tooltip and accessible description when status adds beyond `label` (e.g. active filters). */
+  hintLabel?: string;
   expanded: boolean;
   active?: boolean;
   /** Panel toggle state (e.g. Search): sets `aria-expanded` instead of `aria-current="page"`. */
@@ -601,9 +612,15 @@ function RailButton({
       {expanded && badge}
     </span>
   );
-  // A collapsed rail shows only icons, so each names itself beside the rail.
+  // A collapsed rail shows only icons, so each names itself beside the rail; extra status hints
+  // (such as active search filters) also describe the control in both rail states.
   const hint = (control: ReactElement) => (
-    <Hint label={label} side="right" disabled={expanded}>
+    <Hint
+      label={hintLabel ?? label}
+      side="right"
+      disabled={expanded && !hintLabel}
+      describe={Boolean(hintLabel)}
+    >
       {control}
     </Hint>
   );

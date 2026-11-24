@@ -364,15 +364,36 @@ test.describe('desktop', () => {
     await expect(bar(page)).toHaveCount(0);
     await expect(railSearch).toHaveAttribute('aria-expanded', 'false');
     await expect(railSearch).not.toHaveAttribute('data-connected');
-    // Filters stay active while collapsed and return when reopened from the rail.
+    await expect(railSearch).toHaveAccessibleDescription('Search (3 active filters)');
+    await expect(railSearch.locator('[data-search-filter-badge]')).toHaveText('3');
+    // Filters stay active while collapsed, and the collapsed nav rail shows a quiet dot + tooltip.
     await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Later position']]);
+    await page.getByRole('button', { name: 'Collapse navigation', exact: true }).click();
+    await expect(railSearch.locator('[data-search-filter-dot]')).toBeVisible();
+    await expect(railSearch).toHaveAccessibleDescription('Search (3 active filters)');
+    await railSearch.hover();
+    await expect(page.getByRole('tooltip')).toHaveText('Search (3 active filters)');
+    await page.getByRole('button', { name: 'Expand navigation', exact: true }).click();
+    await expect(railSearch.locator('[data-search-filter-badge]')).toHaveText('3');
+    // Reopening from the rail restores the sidebar with active filters and focuses the input.
     await railSearch.click();
     await expect(docked).toBeVisible();
+    await expect(field(page)).toBeFocused();
     await expect(chips(page)).toContainText('Largest first');
     await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Later position']]);
-    // Closing via the search field's close button clears filters and sort.
+    // Ctrl/⌘K from inside the focused search input also collapses without clearing filters.
+    await page.keyboard.press('ControlOrMeta+k');
+    await expect(bar(page)).toHaveCount(0);
+    await expect(railSearch).toHaveAccessibleDescription('Search (3 active filters)');
+    await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Later position']]);
+    await page.keyboard.press('ControlOrMeta+k');
+    await expect(docked).toBeVisible();
+    await expect(field(page)).toBeFocused();
+    // Closing via the search field's close button clears filters and sort and drops the rail badge.
     await docked.getByRole('button', { name: 'Close search', exact: true }).click();
     await expect(bar(page)).toHaveCount(0);
+    await expect(railSearch.locator('[data-search-filter-badge]')).toHaveCount(0);
+    await expect(railSearch).not.toHaveAttribute('aria-describedby');
     await expect(
       page.getByRole('region', { name: 'Build', exact: true }).getByRole('article'),
     ).toHaveCount(4);
@@ -507,6 +528,52 @@ test.describe('desktop', () => {
     });
     await expect(area).toHaveAttribute('data-more-top');
     await expect(area).not.toHaveAttribute('data-more-bottom');
+  });
+
+  test('the rail toggles the floating search bar without losing filters and resets them on leaving the board', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1100, height: 800 });
+    const board = await sizedBoard(page);
+    const railSearch = page.getByRole('button', { name: 'Search', exact: true });
+    await railSearch.click();
+    await expect(field(page)).toBeFocused();
+    await expect(bar(page)).not.toHaveAttribute('data-docked');
+    await expect(railSearch).toHaveAttribute('aria-expanded', 'true');
+
+    await field(page).fill('position');
+    await openFilters(page);
+    await section(page, 'Size');
+    await filters(page)
+      .getByRole('button', { name: /^Size L,/ })
+      .click();
+    await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Later position']]);
+
+    // Clicking Search in the collapsed nav rail collapses the floating bar while keeping filters.
+    await railSearch.click();
+    await expect(bar(page)).toHaveCount(0);
+    await expect(railSearch).toHaveAttribute('aria-expanded', 'false');
+    await expect(railSearch.locator('[data-search-filter-dot]')).toBeVisible();
+    await expect(railSearch).toHaveAccessibleDescription('Search (2 active filters)');
+    await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Later position']]);
+
+    // Expanding the rail shows the active count badge, and clicking Search reopens with filters intact.
+    await page.getByRole('button', { name: 'Expand navigation', exact: true }).click();
+    await expect(railSearch.locator('[data-search-filter-badge]')).toHaveText('2');
+    await railSearch.click();
+    await expect(field(page)).toBeFocused();
+    await expect(field(page)).toHaveValue('position');
+    await expect(chips(page)).toContainText('L');
+
+    // Navigating away from the board and returning clears the board's search and filter state.
+    await page.getByRole('link', { name: 'Settings', exact: true }).click();
+    await expect(page).toHaveURL(/\/settings/);
+    await page.getByRole('link', { name: 'Real board', exact: true }).click();
+    await expect(
+      page.getByRole('region', { name: 'Build', exact: true }).getByRole('article'),
+    ).toHaveCount(4);
+    await expect(bar(page)).toHaveCount(0);
+    await expect(railSearch.locator('[data-search-filter-badge]')).toHaveCount(0);
   });
 });
 

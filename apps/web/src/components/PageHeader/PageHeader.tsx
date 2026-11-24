@@ -1,7 +1,9 @@
+import { motion } from 'motion/react';
 import { ShellMenu } from '@/components/AppShell/ShellMenu';
 import { useShell } from '@/components/AppShell/shell';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
+import { useSettingsSwipeY } from '@/lib/settingsSwipe';
 
 /** Catch's centred display title and quiet corner controls, without note selection or scroll collapse. */
 export function PageHeader({ desktop }: { desktop: boolean }) {
@@ -11,8 +13,14 @@ export function PageHeader({ desktop }: { desktop: boolean }) {
     : shell.crossBoard
       ? 'All projects'
       : (shell.project?.name ?? shell.workspace?.name ?? 'Throw');
+  const swipeY = useSettingsSwipeY();
   return (
-    <header className="relative px-5 pt-[calc(var(--safe-top)+1rem)] pb-4 md:px-8 md:pt-[calc(var(--safe-top)+2rem)] md:pb-6">
+    <motion.header
+      data-page-header=""
+      // A pull on phone settings moves the whole page, its title too, as Catch's header rides it.
+      style={shell.settings && !desktop ? { y: swipeY } : undefined}
+      className="relative px-5 pt-[calc(var(--safe-top)+1rem)] pb-4 md:px-8 md:pt-[calc(var(--safe-top)+2rem)] md:pb-6"
+    >
       <div className="flex h-8 items-center justify-between gap-3 text-xs text-muted-foreground">
         {/* The rail carries the brand on wide screens. */}
         <span className="truncate">{desktop ? null : shell.workspace?.name}</span>
@@ -40,6 +48,6 @@ export function PageHeader({ desktop }: { desktop: boolean }) {
           )}
         </h1>
       </div>
-    </header>
+    </motion.header>
   );
 }
