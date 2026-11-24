@@ -81,6 +81,7 @@ const boardProject: BoardProject = {
 const mocks = vi.hoisted(() => ({
   createTask: vi.fn(),
   openTask: vi.fn(),
+  presetTaskOrigin: vi.fn(),
   haptics: {
     success: vi.fn(),
     toggle: vi.fn(),
@@ -110,6 +111,11 @@ vi.mock('@/lib/collections', () => ({
 
 vi.mock('@/lib/tasks', () => ({
   createTask: (...args: unknown[]) => mocks.createTask(...args),
+}));
+
+vi.mock('@/components/Board/taskTransition', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/Board/taskTransition')>()),
+  presetTaskOrigin: (...args: unknown[]) => mocks.presetTaskOrigin(...args),
 }));
 
 vi.mock('@/lib/haptics', () => ({
@@ -220,6 +226,11 @@ describe('mobile quick capture', () => {
       secondaryTagIds: ['tag-2'],
     });
     expect(mocks.haptics.toggle).toHaveBeenCalledOnce();
+    // The task's screen grows out of the card, as Catch's editor does from the quick note.
+    expect(mocks.presetTaskOrigin).toHaveBeenCalledWith('created-task', expect.any(HTMLDivElement));
+    expect(mocks.presetTaskOrigin.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.openTask.mock.invocationCallOrder[0] ?? 0,
+    );
     expect(mocks.openTask).toHaveBeenCalledWith('project-1', 'created-task', true);
     expect(screen.queryByTestId('capture-card')).toBeNull();
   });

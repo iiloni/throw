@@ -1,6 +1,7 @@
 import type { Project, Status } from '@throw/shared';
 import { type RefObject, useRef } from 'react';
 import { useShell } from '@/components/AppShell/shell';
+import { presetTaskOrigin } from '@/components/Board/taskTransition';
 import { useStatuses } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
 import { useAwaitingSync } from '@/lib/syncStatus';
@@ -21,6 +22,8 @@ export type CreateOptions = {
   allowEmptyTitle?: boolean;
   /** Haptic feedback on creation; defaults to `success`. */
   haptic?: 'success' | 'toggle';
+  /** What the opened task's screen grows out of, such as quick capture's card. */
+  origin?: HTMLElement | null;
 };
 
 export type PaletteActions = {
@@ -88,7 +91,7 @@ export function usePaletteActions({
     },
     create(projectId, title, fields = {}, options = {}) {
       if (taken.current) return null;
-      const { open = true, allowEmptyTitle = false, haptic = 'success' } = options;
+      const { open = true, allowEmptyTitle = false, haptic = 'success', origin } = options;
       const trimmed = title.trim();
       if (!trimmed && !allowEmptyTitle) return null;
       if (trimmed.length > MAX_TITLE) return 'Use 500 characters or fewer.';
@@ -103,6 +106,7 @@ export function usePaletteActions({
         if (haptic === 'toggle') haptics.toggle();
         else haptics.success();
         if (open) {
+          if (origin) presetTaskOrigin(taskId, origin);
           onAction('task');
           onClose();
           onOpenTask(projectId, taskId, true);

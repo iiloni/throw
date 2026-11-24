@@ -3,6 +3,7 @@ import { trackDrawerTravel } from '@/components/Drawer/travel';
 import {
   findTaskCard,
   measureTaskCard,
+  presetTaskOrigin,
   rememberTaskOrigin,
   takeTaskOrigin,
 } from './taskTransition';
@@ -34,6 +35,18 @@ it('starts from the subtask card in the pane rather than its copy on the board',
   expect(takeTaskOrigin('task')).toMatchObject({ x: 100, y: 200, width: 280, radius: 16 });
   expect(takeTaskOrigin('task')).toBeNull();
   expect(measureTaskCard('task')).toMatchObject({ x: 20, y: 80 });
+});
+it('grows a task out of a preset surface, such as quick capture, over its new card', () => {
+  card(20, 80);
+  const capture = card(12, 400, 360);
+  capture.removeAttribute('data-card-id');
+  presetTaskOrigin('task', capture);
+  capture.remove();
+  rememberTaskOrigin('task');
+  expect(takeTaskOrigin('task')).toMatchObject({ x: 12, y: 400, width: 360 });
+  // Used once: the next opening finds the task's card again.
+  rememberTaskOrigin('task');
+  expect(takeTaskOrigin('task')).toMatchObject({ x: 20, y: 80 });
 });
 it('falls back to a fade when a card was removed or is outside either viewport edge', () => {
   card(innerWidth + 20, 20);

@@ -70,7 +70,7 @@ export type DrawerCard = {
   surfaceRef?: RefObject<HTMLDivElement | null>;
   /** Vertical drag offset while a swipe gesture moves the card. */
   y?: MotionValue<number>;
-  /** Exit immediately without shrinking into the dock button (e.g. expanding into a full view). */
+  /** Leave without shrinking into the dock button, once the card lets go (expanding into a task). */
   instantExit?: RefObject<boolean>;
   onClose: () => void;
 };
@@ -485,10 +485,14 @@ export function Drawer({
               animate={{ opacity: 1, scale: 1 }}
               exit="leave"
               variants={{
+                // Expanding, the card holds still until what it opened has painted beneath
+                // it, then goes at once (the card's content decides when).
                 leave: (instant: boolean) =>
-                  reduced || instant
-                    ? { opacity: 0, transition: { duration: 0 } }
-                    : { opacity: 0, scale: 0.3, y: 0, transition: springs.smooth },
+                  instant && !reduced
+                    ? { opacity: 1, transition: { duration: 0 } }
+                    : reduced
+                      ? { opacity: 0, transition: { duration: 0 } }
+                      : { opacity: 0, scale: 0.3, y: 0, transition: springs.smooth },
               }}
               transition={reduced ? { duration: 0 } : springs.bouncy}
             >

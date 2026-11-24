@@ -20,6 +20,8 @@ export type TaskRect = {
   element: HTMLElement;
 };
 const origins = new Map<string, TaskRect>();
+// Origins recorded for a task before the board opens it, such as quick capture's card.
+const presets = new Map<string, TaskRect>();
 const hidden = createStore<ReadonlySet<string>>(new Set());
 // Hidden cards whose task is about to land back in them.
 const landing = createStore<ReadonlySet<string>>(new Set());
@@ -87,7 +89,22 @@ export function measureTaskCard(taskId: string): TaskRect | null {
   return card && taskCardRect(card);
 }
 
+/**
+ * Grows the task's screen out of `element` when the board next opens it, as Catch's editor
+ * grows out of the quick-note window: the surface is not the task's card, and the card it
+ * would otherwise find has only just been made.
+ */
+export function presetTaskOrigin(taskId: string, element: HTMLElement) {
+  presets.set(taskId, { ...taskCardRect(element), showStatus: false, statusControl: false });
+}
+
 export function rememberTaskOrigin(taskId: string, element?: HTMLElement | null) {
+  const preset = presets.get(taskId);
+  presets.delete(taskId);
+  if (preset && !element) {
+    origins.set(taskId, preset);
+    return;
+  }
   const target = element && isVisibleOrigin(element) ? element : findTaskCard(taskId);
   const rect = target && taskCardRect(target);
   if (rect) origins.set(taskId, rect);

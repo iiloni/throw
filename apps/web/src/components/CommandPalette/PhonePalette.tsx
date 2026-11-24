@@ -1,7 +1,7 @@
 import { DEFAULT_PRIORITY, type Priority, taskTagColor } from '@throw/shared';
 import { ArrowUp, Maximize2 } from 'lucide-react';
-import { type MotionValue, motion, useIsPresent, useMotionValue } from 'motion/react';
-import { type ReactNode, type RefObject, useRef, useState } from 'react';
+import { type MotionValue, motion, useMotionValue, usePresence } from 'motion/react';
+import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react';
 import { useShell } from '@/components/AppShell/shell';
 import type { Project } from '@/components/Board/model';
 import { update } from '@/components/Board/state';
@@ -211,6 +211,24 @@ function useCaptureOptions(draft: Draft) {
   return { projectId, statuses, status, tags };
 }
 
+/** Frames to wait for the task screen before letting the card go regardless. */
+const SCREEN_WAIT_FRAMES = 30;
+
+/** Calls `done` once a task screen has mounted and painted twice, or after a short wait. */
+function afterTaskScreen(done: () => void) {
+  let frames = 0;
+  let id = 0;
+  const check = () => {
+    if (document.querySelector('[data-task-screen]') || ++frames > SCREEN_WAIT_FRAMES) {
+      id = requestAnimationFrame(() => {
+        id = requestAnimationFrame(done);
+      });
+    } else id = requestAnimationFrame(check);
+  };
+  id = requestAnimationFrame(check);
+  return () => cancelAnimationFrame(id);
+}
+
 /** Catch's quick-note card for a task: drag handle, title, where it lands, expand and create. */
 function CaptureCard({
   draft,
@@ -230,7 +248,7 @@ function CaptureCard({
   onClose: () => void;
 }) {
   const shell = useShell();
-  const isPresent = useIsPresent();
+  const [isPresent, safeToRemove] = usePresence();
   const handleRef = useRef<HTMLDivElement>(null);
   const actions = usePaletteActions({ onClose, onOpenTask: shell.openTask, onAction: () => {} });
   const { projectId, status } = useCaptureOptions(draft);
@@ -271,6 +289,7 @@ function CaptureCard({
       open: true,
       allowEmptyTitle: true,
       haptic: 'toggle',
+      origin: surfaceRef.current,
     });
     if (failure) {
       instantExit.current = false;
@@ -280,6 +299,16 @@ function CaptureCard({
     setError('');
     return true;
   }
+
+  // Expanding, the task's screen grows out of this card from beneath the dock's glass, so the
+  // card stays until that screen has painted under it (as Catch's quick note waits for its
+  // editor). Any other close leaves with the card's own exit.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs once, when removed
+  useEffect(() => {
+    if (isPresent) return;
+    if (!instantExit.current) return safeToRemove?.();
+    return afterTaskScreen(() => safeToRemove?.());
+  }, [isPresent]);
 
   useCaptureSwipe({
     surface: surfaceRef,
