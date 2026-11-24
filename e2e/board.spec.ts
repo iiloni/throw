@@ -89,6 +89,20 @@ async function scrollListTo(scroller: Locator, position: { top: number } | { fro
   );
 }
 
+/** The Closed page opens at the drawer's half height (ADR 0009). */
+async function atHalfPage(drawer: Locator) {
+  await expect(drawer).toHaveAttribute('data-page-height', 'half');
+  await expect
+    .poll(() =>
+      drawer.evaluate((element) => {
+        const half =
+          parseFloat(getComputedStyle(element).top) + Math.round(element.offsetHeight * 0.42);
+        return Math.abs(element.getBoundingClientRect().top - half);
+      }),
+    )
+    .toBeLessThan(3);
+}
+
 async function atDetent(drawer: Locator, detent: 'full' | 'half' | 'closed') {
   await expect(drawer).toHaveAttribute('data-detent', detent);
   await expect
@@ -642,13 +656,13 @@ test('drawer pulls start on filter pills and short lists without activating a fi
   await atDetent(backlog, 'half');
   await openClosed(page, true);
   const closed = page.getByRole('dialog', { name: 'Closed', exact: true });
-  await expect.poll(async () => (await closed.boundingBox())!.y).toBeLessThan(10);
+  await atHalfPage(closed);
   const done = closed.getByRole('button', { name: 'Done', exact: true });
   await pullFrom(page, isMobile, done, 220);
   await expect(closed).toHaveCount(0);
   await atDetent(backlog, 'half');
   await openClosed(page, true);
-  await expect.poll(async () => (await closed.boundingBox())!.y).toBeLessThan(10);
+  await atHalfPage(closed);
   await expect(done).toHaveAttribute('aria-pressed', 'false');
   await done.click();
   await expect(done).toHaveAttribute('aria-pressed', 'true');
@@ -735,6 +749,16 @@ test('drawer pulls require the scroll boundary at gesture start, including after
   await expect(backlog).not.toHaveAttribute('data-detent', 'full');
   await openClosed(page, true);
   const closed = page.getByRole('dialog', { name: 'Closed', exact: true });
+  await atHalfPage(closed);
+  // Opened at half height, its header pulls it up to the full history.
+  await pullFrom(
+    page,
+    isMobile,
+    closed.getByRole('heading', { name: 'Closed', exact: true }),
+    // Ends inside the window, where a mouse still reports it.
+    -250,
+  );
+  await expect(closed).toHaveAttribute('data-page-height', 'full');
   await expect.poll(async () => (await closed.boundingBox())!.y).toBeLessThan(10);
   await expect(closed.getByRole('article')).toHaveCount(14);
   // The list scrolls in its scroll area's viewport, as the backlog does.
@@ -763,8 +787,23 @@ test('drawer pulls require the scroll boundary at gesture start, including after
   await expect(closed).toBeVisible();
   await expect.poll(async () => (await closed.boundingBox())!.y).toBeLessThan(10);
   await expect.poll(() => history.evaluate((element) => element.scrollTop)).toBeLessThan(2);
+  // At the boundary the pull takes: back to half height, or closed if flung far enough.
   await pullFrom(page, isMobile, history, 220);
-  await expect(closed).toHaveCount(0);
+  await expect
+    .poll(
+      async () =>
+        (await closed.count()) === 0 || (await closed.getAttribute('data-page-height')) === 'half',
+    )
+    .toBe(true);
+  if (await closed.count()) {
+    await pullFrom(
+      page,
+      isMobile,
+      closed.getByRole('heading', { name: 'Closed', exact: true }),
+      220,
+    );
+    await expect(closed).toHaveCount(0);
+  }
 });
 
 test('synced primary tags show their quiet name and root color on cards', async ({ page }) => {

@@ -41,6 +41,11 @@ export type DrawerPage = {
   origin?: string;
   /** A short page rises only as far as its content needs, and no higher than full. */
   fit?: boolean;
+  /**
+   * The page opens at half height, as the backlog does, and is pulled up to full and back.
+   * Pulled down past half, it closes. Not for a page that fits its content.
+   */
+  half?: boolean;
   /** The dock stays as the page's header, its buttons acting as tabs over the content. */
   dock?: boolean;
   /**
@@ -78,13 +83,14 @@ export type DrawerCard = {
 /**
  * The phone's one drawer (ADR 0009): a glass surface along the bottom edge whose collapsed
  * header is the dock. It rests at three heights, pulled between them by its header. A page
- * replaces what it shows at full height, or at its own height when it fits its content, and
- * closing the page returns it to the height it was at. A docked page keeps the dock above it. A held card sinks it out of the way,
- * unless it is full and its own list is being reordered. Raised, it sits above a full-screen
- * view such as an open task, and its dock rides above the keyboard as a note's dock does in
- * Catch, as does a short page; a full page ends above the keyboard instead, so its input stays
- * in view. Otherwise an open page ends above the keyboard too. A card
- * floats above the dock, which rides above the keyboard with it. A page opened over the card
+ * replaces what it shows at full height, at its own height when it fits its content, or at
+ * half height when it asks to, from where it is pulled up to full, and closing the page
+ * returns it to the height it was at. A docked page keeps the dock above it. A held card
+ * sinks it out of the way, unless it is full and its own list is being reordered. Raised, it
+ * sits above a full-screen view such as an open task, and its dock rides above the keyboard as
+ * a note's dock does in Catch, as does a short page; a full page ends above the keyboard
+ * instead, so its input stays in view. Otherwise an open page ends above the keyboard too. A
+ * card floats above the dock, which rides above the keyboard with it. A page opened over the card
  * takes the keyboard's place rather than stacking on it, so the card glides between the two
  * instead of bouncing as one leaves and the other arrives.
  */
@@ -138,6 +144,11 @@ export function Drawer({
   // What the drawer leaves off screen at half height, kept clear at the end of its list.
   const [hidden, setHidden] = useState(0);
   const paged = page !== null;
+  // The half page pulled up to full, by key; another page, or this one reopened, starts at half.
+  const [expanded, setExpanded] = useState<string | null>(null);
+  if (expanded !== null && expanded !== page?.key) setExpanded(null);
+  const halfPage = !!page?.half && !page.fit;
+  const pageHalf = halfPage && expanded !== page?.key;
   const docked = paged && !!page.dock;
   const moving = move !== null;
   const grooming = moving && detent === 'full' && !paged;
@@ -171,6 +182,7 @@ export function Drawer({
       safe.current,
       page?.fit ? body.current : null,
     );
+    if (pageHalf) at.page = at.half;
     closedAt.current = at.closed;
     return at;
   };
@@ -202,10 +214,29 @@ export function Drawer({
     onMove: (dy) => {
       y.stop();
       const at = offsets();
-      y.set(Math.min(at.closed, Math.max(paged ? at.page : 0, y.get() + dy)));
+      // A half page rises to full; any other page no higher than where it rests.
+      const top = paged && !halfPage ? at.page : 0;
+      y.set(Math.min(at.closed, Math.max(top, y.get() + dy)));
     },
     onEnd: (offset, velocity) => {
       const at = offsets();
+      if (page && halfPage) {
+        // Settles at the nearer of its two heights, as the backlog does, and closes when let go
+        // past half on its way down or flung toward the dock.
+        const aim = y.get() + velocity * 0.15;
+        const heights = { full: 0, half: at.half, closed: at.closed };
+        const nearest = (['full', 'half', 'closed'] as const).reduce((best, next) =>
+          Math.abs(heights[next] - aim) < Math.abs(heights[best] - aim) ? next : best,
+        );
+        if (nearest === 'closed' || (y.get() > at.half && (offset > 100 || velocity > 500))) {
+          haptics.selection();
+          onClosePage();
+        } else if ((nearest === 'full') === pageHalf) {
+          haptics.selection();
+          setExpanded(nearest === 'full' ? page.key : null);
+        } else slide(at.page);
+        return;
+      }
       if (paged) {
         if (offset > 100 || velocity > 500) {
           haptics.selection();
@@ -240,7 +271,7 @@ export function Drawer({
   // biome-ignore lint/correctness/useExhaustiveDependencies: placement follows these inputs
   useLayoutEffect(() => {
     const at = offsets();
-    setHidden(detent === 'half' && !paged ? at.half : 0);
+    setHidden((detent === 'half' && !paged) || pageHalf ? at.half : 0);
     const closing = !page && last.current?.dock ? last.current : null;
     const opening = paged && !last.current;
     last.current = page;
@@ -266,7 +297,7 @@ export function Drawer({
       });
     } else y.jump(restingAt(at));
     placed.current = true;
-  }, [sunk, detent, paged, page?.key, y, reduced, moveInHead]);
+  }, [sunk, detent, paged, page?.key, pageHalf, y, reduced, moveInHead]);
 
   // The move target floating over a groomed backlog covers its foot, so the list keeps that
   // much room clear at its end too.
@@ -335,7 +366,7 @@ export function Drawer({
     const onResize = () => {
       const at = offsets();
       y.jump(restingAt(at));
-      setHidden(detent === 'half' && !paged ? at.half : 0);
+      setHidden((detent === 'half' && !paged) || pageHalf ? at.half : 0);
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
@@ -434,6 +465,7 @@ export function Drawer({
         data-detent={detent}
         data-sunk={sunk && !moveInHead && !paged ? '' : undefined}
         data-page={page?.key}
+        data-page-height={halfPage ? (pageHalf ? 'half' : 'full') : undefined}
         data-drop-block=""
         // The whole visible drawer, safe area too, opens the move target under a held card.
         data-drop-expand={moveInHead ? '' : undefined}

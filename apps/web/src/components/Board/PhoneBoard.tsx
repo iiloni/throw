@@ -570,7 +570,14 @@ function BoardDrawer({
 
   const pages: Record<BoardPage, DrawerPage> = {
     search: searchPage,
-    closed: { key: 'closed', title: 'Closed', origin: 'closed', content: <ClosedTasks /> },
+    // Opens at half height as the backlog does, a glance at what was finished; pulled up, the history.
+    closed: {
+      key: 'closed',
+      title: 'Closed',
+      origin: 'closed',
+      half: true,
+      content: <ClosedTasks />,
+    },
     settings: {
       key: 'settings',
       title: 'Board settings',
@@ -790,7 +797,8 @@ function ClosedTasks() {
         <ScrollAreaViewport data-autoscroll="">
           <section
             aria-label="Closed tasks"
-            className="px-3.5 pb-[calc(var(--safe-bottom)+1.5rem)]"
+            // At half height the drawer's lower part is off screen; the list's end stays reachable.
+            className="px-3.5 pb-[calc(var(--drawer-hidden)+var(--safe-bottom)+1.5rem)]"
           >
             {groups.map((group) => (
               <section key={group.label}>
