@@ -6,6 +6,7 @@ import { createStore } from '@/lib/store';
 import {
   type BoardFilter,
   type BoardSort,
+  chosenFilters,
   compareByField,
   EMPTY_FILTER,
   isFiltering,
@@ -640,6 +641,15 @@ export function clearFilters() {
 /** Search or a filter narrows the board, or a sort reorders it. */
 export function narrowed(state: BoardState) {
   return isFiltering(state.filter) || state.sort !== 'priority';
+}
+
+/** How many active search criteria currently narrow or reorder the board. */
+export function activeFilterCount(state: BoardState) {
+  return (
+    chosenFilters(state.filter) +
+    Number(state.sort !== 'priority') +
+    Number(state.filter.query.trim() !== '')
+  );
 }
 
 /** Opens the desktop search bar over the board and puts the caret in it. */
