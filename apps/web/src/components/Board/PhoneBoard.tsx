@@ -465,9 +465,19 @@ function BoardDrawer({
   // A closing task shrinks beneath the drawer, as an opening one grows beneath it.
   const raised = useTaskSurfaceShown();
 
+  // The URL remembers whether the backlog is open. Writing it renders the whole route again,
+  // which on a phone took the frames the drawer needed to start sliding, so it waits until the
+  // drawer is at rest, and while a task is open, whose own address it would replace.
+  const unsaved = useRef<boolean | null>(null);
   function goTo(next: Detent) {
     setDetent(next);
-    onChange?.(next !== 'closed');
+    if (onChange) unsaved.current = next !== 'closed';
+  }
+  function saveDetent() {
+    const open = unsaved.current;
+    if (open === null || task) return;
+    unsaved.current = null;
+    onChange?.(open);
   }
 
   const capturing = capture.card !== null;
@@ -614,6 +624,7 @@ function BoardDrawer({
       }
       card={task ? null : capture.card}
       raised={!!task || raised}
+      onSettle={saveDetent}
     >
       <div
         className="flex min-h-0 flex-1 flex-col"
