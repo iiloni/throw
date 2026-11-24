@@ -249,4 +249,130 @@ test.describe('desktop rails', () => {
     );
     expect(Math.round(one!.y)).toBe(Math.round(two!.y));
   });
+
+  test('toggling the docked search sidebar over a gallery reflows the masonry once instead of on every frame', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    const board = await fixture(page, true);
+    for (const [title, position] of [
+      ['Sidebar one', 'a1'],
+      ['Sidebar two', 'a2'],
+      ['Sidebar three', 'a3'],
+      ['Sidebar four', 'a4'],
+      ['Sidebar five', 'a5'],
+      ['Sidebar six', 'a6'],
+    ] as const)
+      await board.add(title, 'Ideas', 3, position);
+    await openBacklog(page);
+    const backlog = rail(page, 'Backlog');
+    await backlog.getByRole('button', { name: 'Open as a gallery' }).click();
+    await settled(card(page, 'Sidebar five'));
+    const wide = await widthOf(backlog);
+    const [firstBefore, fifthBefore] = await Promise.all(
+      ['Sidebar one', 'Sidebar five'].map(
+        async (title) => (await card(page, title).boundingBox())!,
+      ),
+    );
+    expect(Math.round(firstBefore!.y)).toBe(Math.round(fifthBefore!.y));
+
+    const sampleMotion = () =>
+      page.evaluate(
+        () =>
+          new Promise<
+            { width: number; room: number; masonry: string; cardX: number; headerRight: number }[]
+          >((resolve) => {
+            const aside = document.querySelector<HTMLElement>('aside[data-origin="backlog"]')!;
+            const row = aside.parentElement!;
+            const grid = aside.querySelector<HTMLElement>('[data-masonry]')!;
+            // Fifth card moves between row 1 (5 columns) and row 2 (4 columns) on sidebar toggle.
+            const fifth = aside.querySelectorAll<HTMLElement>('[data-slot]')[4]!;
+            const closeBtn = aside.querySelector<HTMLElement>(
+              'button[aria-label="Close backlog"]',
+            )!;
+            const seen: {
+              width: number;
+              room: number;
+              masonry: string;
+              cardX: number;
+              headerRight: number;
+            }[] = [];
+            const started = performance.now();
+            const sample = (now: number) =>
+              setTimeout(() => {
+                seen.push({
+                  width: aside.getBoundingClientRect().width,
+                  room: row.getBoundingClientRect().width - 64 - 40,
+                  masonry: grid.getAttribute('data-masonry') ?? '',
+                  cardX: fifth.getBoundingClientRect().left - grid.getBoundingClientRect().left,
+                  headerRight: closeBtn.getBoundingClientRect().right,
+                });
+                if (now - started < 1100) requestAnimationFrame(sample);
+                else resolve(seen);
+              });
+            requestAnimationFrame(sample);
+          }),
+      );
+
+    // Open the docked search sidebar while the backlog gallery is expanded.
+    const expandFrames = sampleMotion();
+    await page.keyboard.press('ControlOrMeta+k');
+    const expanded = await expandFrames;
+    await expect(
+      page.getByRole('search', { name: 'Search the board', exact: true }),
+    ).toHaveAttribute('data-docked', '');
+
+    const narrow = expanded.at(-1)!.width;
+    expect(narrow).toBeLessThan(wide - 300);
+    // The rail follows the row frame-by-frame while the sidebar slides in.
+    for (const frame of expanded) expect(Math.abs(frame.width - frame.room)).toBeLessThan(1);
+    // Masonry computes once for the resting width instead of recomputing on every animation frame.
+    const expandLayouts = new Set(expanded.map((frame) => frame.masonry));
+    expect(expandLayouts.size).toBeLessThanOrEqual(2);
+    // The backlog header actions stay anchored at the rail's stationary right edge.
+    const expandHeaderRights = expanded.map((frame) => frame.headerRight);
+    expect(Math.max(...expandHeaderRights) - Math.min(...expandHeaderRights)).toBeLessThan(4);
+    // The reflowing card springs cleanly to its new slot without oscillating across intermediate layouts.
+    const expandMoves = expanded.map((frame) => frame.cardX);
+    const expandDir = Math.sign(expandMoves.at(-1)! - expandMoves[0]!);
+    let expandBack = 0;
+    for (let i = 1; i < expandMoves.length; i++)
+      expandBack += Math.max(0, (expandMoves[i - 1]! - expandMoves[i]!) * expandDir);
+    expect(expandBack).toBeLessThan(16);
+    const [firstNarrow, fifthNarrow] = await Promise.all(
+      ['Sidebar one', 'Sidebar five'].map(
+        async (title) => (await (await settled(card(page, title))).boundingBox())!,
+      ),
+    );
+    expect(fifthNarrow!.y).toBeGreaterThan(firstNarrow!.y + 40);
+
+    // Collapse the docked search sidebar and verify the reverse transition.
+    const collapseFrames = sampleMotion();
+    await page.keyboard.press('Escape');
+    const collapsed = await collapseFrames;
+    await expect(page.getByRole('search', { name: 'Search the board', exact: true })).toHaveCount(
+      0,
+    );
+
+    expect(collapsed.at(-1)!.width).toBeCloseTo(wide, 0);
+    for (const frame of collapsed) expect(Math.abs(frame.width - frame.room)).toBeLessThan(1);
+    const collapseLayouts = new Set(collapsed.map((frame) => frame.masonry));
+    expect(collapseLayouts.size).toBeLessThanOrEqual(2);
+    const collapseHeaderRights = collapsed.map((frame) => frame.headerRight);
+    expect(Math.max(...collapseHeaderRights) - Math.min(...collapseHeaderRights)).toBeLessThan(4);
+    const collapseMoves = collapsed.map((frame) => frame.cardX);
+    const collapseDir = Math.sign(collapseMoves.at(-1)! - collapseMoves[0]!);
+    let collapseBack = 0;
+    for (let i = 1; i < collapseMoves.length; i++)
+      collapseBack += Math.max(0, (collapseMoves[i - 1]! - collapseMoves[i]!) * collapseDir);
+    expect(collapseBack).toBeLessThan(16);
+
+    // The fifth card returns to the top row once the sidebar finishes closing.
+    const settledBoxes = await Promise.all(
+      ['Sidebar one', 'Sidebar five'].map(
+        async (title) => (await (await settled(card(page, title))).boundingBox())!,
+      ),
+    );
+    expect(Math.round(settledBoxes[0]!.y)).toBe(Math.round(settledBoxes[1]!.y));
+  });
 });

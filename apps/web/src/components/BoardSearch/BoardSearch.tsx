@@ -2,6 +2,7 @@ import { Search, SlidersHorizontal, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
   type KeyboardEvent,
+  memo,
   type RefObject,
   useContext,
   useEffect,
@@ -43,7 +44,7 @@ export const SEARCH_SPACE = 'var(--board-search-space, 0.25rem)';
  * and a few columns.
  */
 export const SEARCH_SIDEBAR_MIN = 1320;
-const SIDEBAR_WIDTH = 376;
+export const SIDEBAR_WIDTH = 376;
 
 /** Whether the docked desktop search sidebar is open beside the navigation rail. */
 export const searchSidebarOpen = createStore(false);
@@ -182,7 +183,7 @@ export function BoardSearch() {
  * narrows the board in place as the floating bar does, and Escape clears active filters and
  * search before closing.
  */
-export function BoardSearchSidebar() {
+export const BoardSearchSidebar = memo(function BoardSearchSidebar() {
   const state = board.use();
   const reduced = useReducedMotion();
   const root = useRef<HTMLElement>(null);
@@ -255,7 +256,7 @@ export function BoardSearchSidebar() {
       )}
     </AnimatePresence>
   );
-}
+});
 
 /** Catch's filter panel: glass rising above the field. */
 function FilterPanel({ open }: { open: boolean }) {

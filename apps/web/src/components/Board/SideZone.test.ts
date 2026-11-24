@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { SEARCH_SIDEBAR_MIN, SIDEBAR_WIDTH } from '@/components/BoardSearch/BoardSearch';
+import { boardRestWidth } from './DesktopBoard';
 import {
   PANEL_WIDTH,
   RAIL_SNAP,
@@ -79,6 +81,64 @@ describe('railGeometry', () => {
     const strip = railGeometry({ ...base, holding: true, origin: 'active' }).closed;
     expect(strip.zone).toBe(STRIP_WIDTH);
     expect(strip.drawn).toBeGreaterThan(STRIP_WIDTH);
+  });
+
+  it('holds gallery content steady at its resting width while the docked search sidebar slides', () => {
+    const frameWidth = 1600;
+    const expectedRest = frameWidth - SIDEBAR_WIDTH;
+    const expectedContent = expectedRest - STRIP_WIDTH - 2 * ZONE_GAP;
+    // Simulate intermediate row widths as BoardSearchSidebar expands from 0 to SIDEBAR_WIDTH.
+    const frames = [1600, 1520, 1410, 1300, expectedRest].map((liveRow) =>
+      railGeometry({
+        ...base,
+        views: { backlog: 'full', closed: 'strip' },
+        rowWidth: liveRow,
+        restWidth: boardRestWidth({
+          frameWidth,
+          rowWidth: liveRow,
+          searching: true,
+          paneSpace: 0,
+        }),
+      }),
+    );
+    // Outer rail width tracks rowWidth frame-by-frame, while content stays pinned to the resting width.
+    expect(frames.map((frame) => frame.backlog.zone)).toEqual(
+      [1600, 1520, 1410, 1300, expectedRest].map((liveRow) => liveRow - STRIP_WIDTH - 2 * ZONE_GAP),
+    );
+    expect(new Set(frames.map((frame) => frame.backlog.content))).toEqual(
+      new Set([expectedContent]),
+    );
+  });
+});
+
+describe('boardRestWidth', () => {
+  it('subtracts docked search sidebar and task pane space from frameWidth', () => {
+    expect(
+      boardRestWidth({ frameWidth: 1600, rowWidth: 1500, searching: true, paneSpace: 0 }),
+    ).toBe(1600 - SIDEBAR_WIDTH);
+    expect(
+      boardRestWidth({ frameWidth: 1600, rowWidth: 1100, searching: true, paneSpace: 488 }),
+    ).toBe(1600 - SIDEBAR_WIDTH - 488);
+    expect(
+      boardRestWidth({ frameWidth: 1600, rowWidth: 1300, searching: false, paneSpace: 488 }),
+    ).toBe(1600 - 488);
+  });
+
+  it('ignores search sidebar space below SEARCH_SIDEBAR_MIN, falls back before measurement, and never goes negative', () => {
+    expect(
+      boardRestWidth({
+        frameWidth: SEARCH_SIDEBAR_MIN - 1,
+        rowWidth: SEARCH_SIDEBAR_MIN - 1,
+        searching: true,
+        paneSpace: 0,
+      }),
+    ).toBe(SEARCH_SIDEBAR_MIN - 1);
+    expect(boardRestWidth({ frameWidth: 0, rowWidth: 900, searching: true, paneSpace: 488 })).toBe(
+      900,
+    );
+    expect(
+      boardRestWidth({ frameWidth: 1320, rowWidth: 100, searching: true, paneSpace: 1200 }),
+    ).toBe(0);
   });
 });
 

@@ -4,6 +4,7 @@ import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scrol
 import { entryDelayForTop, useEntryMotion } from '@/lib/entryMotion';
 import { bandMasonry, GAP, gridFor, type Point } from '@/lib/masonry';
 import { afterPaint, springs } from '@/lib/motion';
+import { cn } from '@/lib/utils';
 import { drag, makingWay } from './drag';
 import { PriorityIcon } from './glyphs';
 import { groupByPriority, type Priority, priorityName, type Task } from './model';
@@ -380,7 +381,7 @@ export const ZoneGallery = memo(function ZoneGallery({
             <div
               ref={container}
               data-masonry={masonryData ? JSON.stringify(masonryData) : undefined}
-              className="relative"
+              className={cn('relative', anchor === 'end' && 'ml-auto')}
               style={{ width: Math.max(0, width), height: layout?.height ?? 0 }}
             >
               {layout &&
