@@ -195,6 +195,17 @@ describe('filter matching', () => {
     expect(bestMatch(board, filter({ sizes: [2] }), open)).toBeUndefined();
   });
 
+  it('opens open work before a closed task that answers better, unless named by identifier', () => {
+    const board = data();
+    const closed = (task: { id: string }) => task.id === 'plan garden office';
+    // Its title holds the word, Weed beds only its tag; still Weed beds comes first.
+    expect(bestMatch(board, filter({ query: 'garden' }), closed)?.id).toBe('weed beds');
+    // Its identifier names it, closed or not.
+    expect(bestMatch(board, filter({ query: 'BRD-5' }), closed)?.id).toBe('plan garden office');
+    // With nothing open matching, the closed task is still the answer.
+    expect(bestMatch(board, filter({ query: 'office' }), closed)?.id).toBe('plan garden office');
+  });
+
   it('counts what each tag or size would leave, given the rest', () => {
     const counts = facetCounts(data(), filter({ sizes: [2], tagIds: ['work'] }), false);
     // Tags count cards of the chosen size; sizes count cards with the chosen tag.

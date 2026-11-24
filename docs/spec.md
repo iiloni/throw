@@ -735,6 +735,16 @@ shown as a removable chip while it applies. Open and closed tasks and subtasks a
 trash (including children of trashed parents and projects) is excluded. There is no
 cross-workspace search.
 
+Closed (done and cancelled) tasks stay out of the palette's results until asked for
+(2026-11-24), so finished work does not crowd out what is still to do. When any match, a quiet
+“Show closed tasks” row with their count sits at the foot of the open results; it is an option
+like the others, reached with the arrows and turned with Enter or a tap, and the closed results
+appear beneath it. Showing them lasts for that search, through new words, and is forgotten
+when search closes. A closed task named by its exact identifier (THR-27, or its number on a
+project board) is listed with the open results all the same, so looking one up never needs
+the toggle. On the boards' own search, where closed cards stay in the closed zone, Enter
+likewise opens the best open match before any closed one, unless the identifier names it.
+
 Search runs on synced device data, offline too. Every literal query word must appear across
 the title, current identifier, description text or tag names, ignoring case and accents. A
 task's tags are its primary and secondary tags with their ancestors' names, so a task tagged

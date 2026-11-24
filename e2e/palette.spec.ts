@@ -137,11 +137,27 @@ test('a project board searches titles, identifiers, descriptions, closed tasks a
     await expect(taskPane(page, isMobile)).toContainText('CAT-1');
     await closeTask(page);
   }
+  // A closed task waits behind a toggle, unless its identifier names it.
   await open(page);
+  await input(page).fill('CAT-2');
+  await expect(palette(page).getByRole('option', { name: /Closed palette task/ })).toBeVisible();
+  await expect(palette(page).getByRole('option', { name: /closed tasks/ })).toHaveCount(0);
   await input(page).fill('needle');
   await expect(palette(page).getByRole('option', { name: /Fix keyboard capture/ })).toBeVisible();
-  await expect(palette(page).getByRole('option', { name: /Closed palette task/ })).toBeVisible();
   await expect(palette(page).getByRole('option', { name: /Small nested job/ })).toBeVisible();
+  const closed = palette(page).getByRole('option', { name: /Closed palette task/ });
+  await expect(closed).toHaveCount(0);
+  const toggle = palette(page).getByRole('option', { name: /^Show closed tasks/ });
+  await expect(toggle).toContainText('1');
+  // The arrows reach it after the open results, and Enter shows them.
+  await input(page).press('ArrowDown');
+  await input(page).press('ArrowDown');
+  await expect(toggle).toHaveAttribute('aria-selected', 'true');
+  await input(page).press('Enter');
+  await expect(closed).toBeVisible();
+  await expect(palette(page).getByRole('option', { name: /^Hide closed tasks/ })).toBeVisible();
+  await input(page).press('ArrowDown');
+  await expect(closed).toHaveAttribute('aria-selected', 'true');
   // Another project's tasks and the jump to it belong to the workspace board.
   await input(page).fill('Throw');
   await expect(palette(page).getByRole('option', { name: /^Create “Throw”/ })).toBeVisible();

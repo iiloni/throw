@@ -1,5 +1,13 @@
 import { sizeLabel, type Tag, taskTagColor } from '@throw/shared';
-import { Plus, Search, SearchX, SlidersHorizontal, Tag as TagGlyph, X } from 'lucide-react';
+import {
+  ChevronRight,
+  Plus,
+  Search,
+  SearchX,
+  SlidersHorizontal,
+  Tag as TagGlyph,
+  X,
+} from 'lucide-react';
 import { AnimatePresence, animate, motion, useReducedMotion } from 'motion/react';
 import {
   type KeyboardEvent,
@@ -43,7 +51,8 @@ import {
   SEARCH_LIMIT,
   type Segment,
   searchProjects,
-  searchTasks,
+  searchTasksSplit,
+  splitClosed,
   taskTagNames,
 } from '@/lib/taskSearch';
 import { cn } from '@/lib/utils';
@@ -123,14 +132,20 @@ export function useSearch({
   // so choosing a tag shows its cards here rather than only behind the page.
   const browsing =
     !!onBoard && !query.trim() && !!boardFilter && isFiltering({ ...boardFilter, query: '' });
-  const results = useMemo(() => {
+  // Done and Cancelled tasks wait behind a toggle, so finished work does not crowd out what is
+  // still to do. Showing them lasts as long as this search does.
+  const [showClosed, setShowClosed] = useState(false);
+  const found = useMemo(() => {
     if (browsing && onBoard) {
       const byId = new Map(indexed.map((row) => [row.task.id, row]));
-      return shownTasks(onBoard)
-        .flatMap((task) => byId.get(task.id) ?? [])
-        .slice(0, SEARCH_LIMIT);
+      return splitClosed(
+        shownTasks(onBoard).flatMap((task) => {
+          const row = byId.get(task.id);
+          return row ? [{ row, rank: null }] : [];
+        }),
+      );
     }
-    return searchTasks(
+    return searchTasksSplit(
       allowed ? indexed.filter((row) => allowed.has(row.task.id)) : indexed,
       query,
       {
@@ -139,6 +154,9 @@ export function useSearch({
       },
     );
   }, [browsing, onBoard, indexed, allowed, query, projectFilter, shell.project?.id]);
+  const results = found.open;
+  const closedResults = showClosed ? found.closed : [];
+  const toggleClosed = () => setShowClosed((shown) => !shown);
   const projects = useMemo(
     () => (board ? [] : searchProjects(shell.projects, query)),
     [board, shell.projects, query],
@@ -178,6 +196,11 @@ export function useSearch({
           key: row.task.id,
           choose: () => actions.openTask(row.project.id, row.task.id),
         })),
+        ...(found.closedCount > 0 ? [{ key: CLOSED_TOGGLE, choose: toggleClosed }] : []),
+        ...closedResults.map((row) => ({
+          key: row.task.id,
+          choose: () => actions.openTask(row.project.id, row.task.id),
+        })),
         ...projects.map((project) => ({ key: project.id, choose: () => actions.jump(project) })),
       ];
   if (title && !awaiting) options.push({ key: 'create', choose: create });
@@ -207,7 +230,14 @@ export function useSearch({
     title,
     /** Listing the narrowed board, with filters chosen and no words typed. */
     browsing,
+    /** Open tasks found, and closed ones named by their exact identifier. */
     results,
+    /** The other closed tasks found, while they are shown. */
+    closedResults,
+    /** How many closed tasks match, shown or not. */
+    closedCount: found.closedCount,
+    showClosed,
+    toggleClosed,
     tagsByProject,
     secondaryTags,
     projects,
@@ -272,6 +302,9 @@ export function useSearch({
     },
   };
 }
+
+/** The option that shows or hides closed tasks. */
+const CLOSED_TOGGLE = 'closed';
 
 /** Search matches marked in text, as search results show them. */
 export function Highlighted({ segments }: { segments: Segment[] }) {
@@ -526,9 +559,8 @@ const MOVING_RESULTS = 10;
  * Only the cards in view move, and they are measured only when the order changes: a layout
  * animation measures every card on each render, and the active card follows the pointer.
  */
-function ResultList({ search }: { search: SearchState }) {
+function ResultList({ search, results }: { search: SearchState; results: SearchState['results'] }) {
   const reduced = useReducedMotion();
-  const { results } = search;
   const order = results.map((row) => row.task.id).join(' ');
   return (
     <ul className="flex flex-col gap-2">
@@ -548,6 +580,38 @@ function ResultList({ search }: { search: SearchState }) {
         );
       })}
     </ul>
+  );
+}
+
+/**
+ * Shows or hides the closed tasks that match, at the foot of the open ones: an option like the
+ * others, so the arrows reach it and Enter turns it.
+ */
+function ClosedToggle({ search }: { search: SearchState }) {
+  const reduced = useReducedMotion();
+  return (
+    <button
+      type="button"
+      {...search.optionProps(CLOSED_TOGGLE)}
+      onClick={search.toggleClosed}
+      className="mt-2 flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left text-muted-foreground text-sm outline-none transition-colors duration-150 data-active:bg-foreground/[0.07] data-active:text-foreground"
+    >
+      <motion.span
+        aria-hidden
+        className="flex size-5 shrink-0 items-center justify-center"
+        initial={false}
+        animate={{ rotate: search.showClosed ? 90 : 0 }}
+        transition={reduced ? { duration: 0 } : springs.snappy}
+      >
+        <ChevronRight className="size-4" />
+      </motion.span>
+      <span className="min-w-0 flex-1 truncate">
+        {search.showClosed ? 'Hide' : 'Show'} closed tasks
+      </span>
+      <span className="shrink-0 rounded-md bg-foreground/[0.06] px-1.5 font-medium text-xs tabular-nums">
+        {search.closedCount}
+      </span>
+    </button>
   );
 }
 
@@ -632,15 +696,23 @@ export function SearchResults({ search }: { search: SearchState }) {
           <p role="status" className="px-1 pb-5 text-muted-foreground text-sm">
             Loading tasks…
           </p>
-        ) : results.length > 0 ? (
+        ) : results.length > 0 || search.closedCount > 0 ? (
           <section aria-label="Tasks" className="pb-5">
             <p role="status" className="px-1 pb-2 text-muted-foreground text-xs">
-              {results.length === SEARCH_LIMIT
-                ? `First ${SEARCH_LIMIT} tasks`
-                : `${results.length} ${results.length === 1 ? 'task' : 'tasks'}`}
+              {results.length === 0
+                ? 'No open tasks'
+                : results.length === SEARCH_LIMIT
+                  ? `First ${SEARCH_LIMIT} tasks`
+                  : `${results.length}${search.closedCount > 0 ? ' open' : ''} ${results.length === 1 ? 'task' : 'tasks'}`}
               {search.browsing && ' on the board'}
             </p>
-            <ResultList search={search} />
+            {results.length > 0 && <ResultList search={search} results={results} />}
+            {search.closedCount > 0 && <ClosedToggle search={search} />}
+            {search.closedResults.length > 0 && (
+              <section aria-label="Closed tasks" className="pt-2">
+                <ResultList search={search} results={search.closedResults} />
+              </section>
+            )}
           </section>
         ) : (
           projects.length === 0 && (
