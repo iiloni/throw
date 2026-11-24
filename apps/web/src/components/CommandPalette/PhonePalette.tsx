@@ -1,13 +1,6 @@
 import { DEFAULT_PRIORITY, type Priority, taskTagColor } from '@throw/shared';
 import { ArrowUp, Maximize2 } from 'lucide-react';
-import {
-  animate,
-  type MotionValue,
-  motion,
-  useMotionValue,
-  usePresence,
-  useReducedMotion,
-} from 'motion/react';
+import { type MotionValue, motion, useMotionValue, usePresence } from 'motion/react';
 import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react';
 import { useShell } from '@/components/AppShell/shell';
 import type { Project } from '@/components/Board/model';
@@ -18,12 +11,11 @@ import { ControlButtons, panelTitle } from '@/components/TaskDetails/TaskControl
 import { PriorityOptions, StatusOptions, TagOptions } from '@/components/TaskDetails/TaskPickers';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useStatuses, useTags } from '@/lib/collections';
-import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { backlogOf, type Dismiss, MAX_TITLE, usePaletteActions } from './actions';
 import { PhoneSearchContent, useSearch } from './SearchContent';
-import { MAX_LIFT, RELEASE_LIFT, useCaptureSwipe } from './useCaptureSwipe';
+import { useCaptureSwipe } from './useCaptureSwipe';
 
 /** What quick capture has been told so far. Without a status, it lands in the backlog. */
 type Draft = {
@@ -257,7 +249,6 @@ function CaptureCard({
 }) {
   const shell = useShell();
   const [isPresent, safeToRemove] = usePresence();
-  const reduced = useReducedMotion();
   const handleRef = useRef<HTMLDivElement>(null);
   const actions = usePaletteActions({ onClose, onOpenTask: shell.openTask, onAction: () => {} });
   const { projectId, status } = useCaptureOptions(draft);
@@ -291,13 +282,13 @@ function CaptureCard({
     setError('');
   }
 
-  function expand(haptic: 'toggle' | null = 'toggle') {
+  function expand() {
     if (!canExpand) return false;
     instantExit.current = true;
     const failure = actions.create(projectId, draft.title, fields, {
       open: true,
       allowEmptyTitle: true,
-      haptic,
+      haptic: 'toggle',
       origin: surfaceRef.current,
     });
     if (failure) {
@@ -307,31 +298,6 @@ function CaptureCard({
     }
     setError('');
     return true;
-  }
-
-  // Opening the task's screen takes the main thread for a moment. A swipe has the card already
-  // rising when it does; a tap on Expand lifts the card as a released pull would and opens once
-  // it has risen that far, so the pause reads as a pull rather than a frozen card.
-  const lift = useRef<(() => void) | null>(null);
-  useEffect(() => () => lift.current?.(), []);
-  function expandFromButton() {
-    if (!canExpand || lift.current) return;
-    haptics.toggle();
-    if (reduced) return void expand(null);
-    const rising = animate(cardY, MAX_LIFT, springs.snappy);
-    const unsubscribe = cardY.on('change', (value) => {
-      if (value > RELEASE_LIFT) return;
-      // Held where the task's screen measures it, so it grows from exactly there.
-      rising.stop();
-      unsubscribe();
-      if (expand(null)) return;
-      lift.current = null;
-      animate(cardY, 0, springs.snappy);
-    });
-    lift.current = () => {
-      rising.stop();
-      unsubscribe();
-    };
   }
 
   // Expanding, the task's screen grows out of this card from beneath the dock's glass, so the
@@ -351,7 +317,7 @@ function CaptureCard({
     enabled: isPresent,
     canExpand,
     onDismiss: onClose,
-    onExpand: () => expand(),
+    onExpand: expand,
   });
 
   return (
@@ -407,9 +373,9 @@ function CaptureCard({
           tooltip={false}
           disabled={!canExpand}
           // The keyboard stays until the task's screen takes focus, as with a swipe: closing
-          // now would carry the card down away from where the screen grows.
+          // first would carry the card down away from where the screen grows from it.
           onPointerDown={(event) => event.preventDefault()}
-          onClick={expandFromButton}
+          onClick={expand}
           className="size-9 shrink-0 rounded-xl"
         >
           <Maximize2 />

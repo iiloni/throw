@@ -7,11 +7,6 @@ const RELEASE_DISTANCE = 90;
 const MOVE_TOLERANCE = 12;
 const TOUCH_MOVE_TOLERANCE = 4;
 const HOLD_DELAY = 300;
-/** How much of an upward pull the card follows, and the furthest it rises. */
-const PULL_UP = 0.3;
-export const MAX_LIFT = -56;
-/** Where the card has risen to when a pull up is far enough to expand on release. */
-export const RELEASE_LIFT = -RELEASE_DISTANCE * PULL_UP;
 
 /**
  * Catch's quick-note swipe gesture adapted for Throw's mobile capture card: touch can start
@@ -181,7 +176,7 @@ export function useCaptureSwipe({
       state.velocity = (clientY - state.lastY) / Math.max(1, event.timeStamp - state.lastTime);
       state.lastY = clientY;
       state.lastTime = event.timeStamp;
-      y.set(delta < 0 ? Math.max(delta * PULL_UP, MAX_LIFT) : Math.min(delta * 0.5, 100));
+      y.set(delta < 0 ? Math.max(delta * 0.3, -56) : Math.min(delta * 0.5, 100));
       const armed =
         delta > RELEASE_DISTANCE
           ? 1
