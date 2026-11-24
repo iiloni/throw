@@ -259,6 +259,7 @@ describe('Drawer motion', () => {
     onSettle.mockClear();
     rerender(view(null));
     expect(screen.getByText('Options')).toBeInTheDocument();
+    expect(screen.getByText('Options').closest('[aria-hidden]')).not.toBeNull();
     expect(screen.queryByText('Backlog list')).toBeNull();
     expect(mounts).toBe(0);
     await settled();

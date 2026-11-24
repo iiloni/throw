@@ -691,7 +691,9 @@ function PageBody({
         if (typeof ref === 'function') ref(element);
         else if (ref) ref.current = element;
       }}
+      // A leaving page stays drawn while the drawer settles, but is gone to everything else.
       inert={!live || !isPresent}
+      aria-hidden={!live || !isPresent || undefined}
       onFocus={onFocus}
       className={className}
       initial={{ opacity: 0 }}
