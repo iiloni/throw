@@ -292,7 +292,12 @@ test('offline capture is immediate, searchable, persists and receives a number o
   await input(page).press('ControlOrMeta+Enter');
   await expect(taskPane(page, isMobile)).toContainText('Pending');
   await closeTask(page);
-  await open(page);
+  if (isMobile) await open(page);
+  else {
+    // On desktop the board search bar stays open beside the task pane; Ctrl/⌘K returns focus to it.
+    await page.keyboard.press('ControlOrMeta+k');
+    await expect(input(page)).toBeFocused();
+  }
   await input(page).fill('Captured with no connection');
   await expect(found(page, isMobile, 'Captured with no connection')).toContainText('Pending');
   await closeSearch(page, isMobile);
