@@ -250,21 +250,20 @@ test('a task created offline appears immediately, survives reload and gains its 
     .getByRole('button', { name: isMobile ? 'New task' : 'Add task to Build', exact: true })
     .click();
   if (isMobile) {
-    // The card opens on its title, so the keyboard rises with it.
+    // The card opens on its title, so the keyboard rises with it, and submitting stays on the board.
     const capture = captureTitle(page);
     await expect(capture).toBeFocused();
     await capture.fill('Written without a connection');
     await capture.press('Enter');
-  }
-  const pane = page.getByRole(isMobile ? 'dialog' : 'region', { name: 'Task', exact: true });
-  const title = pane.getByRole('textbox', { name: 'Task title' });
-  if (!isMobile) {
+  } else {
+    const pane = page.getByRole('region', { name: 'Task', exact: true });
+    const title = pane.getByRole('textbox', { name: 'Task title' });
     await expect(title).toBeFocused();
     await title.fill('Written without a connection');
     await title.press('Enter');
+    await expect(pane).toContainText('Pending');
+    await page.getByRole('button', { name: 'Back to the board', exact: true }).click();
   }
-  await expect(pane).toContainText('Pending');
-  await page.getByRole('button', { name: 'Back to the board', exact: true }).click();
   const card = page.getByRole('article', {
     name: 'Pending Written without a connection',
     exact: true,
@@ -406,10 +405,8 @@ test('rails, galleries, board settings and the phone tray keep their distinct la
     await page.getByRole('button', { name: 'New task in the backlog', exact: true }).click();
     await captureTitle(page).fill('New tray task');
     await captureTitle(page).press('Enter');
-    await expect(
-      page.getByRole(isMobile ? 'dialog' : 'region', { name: 'Task', exact: true }),
-    ).toBeVisible();
-    await page.getByRole('button', { name: 'Back to the board' }).click();
+    await expect(tray.getByRole('article', { name: /New tray task$/ })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Task', exact: true })).toHaveCount(0);
     await handle.focus();
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('ArrowDown');
@@ -591,16 +588,16 @@ test('creating from a filtered backlog uses its default status and reveals the n
     : page.getByRole('complementary', { name: 'Backlog', exact: true });
   await backlog.getByRole('button', { name: 'Planned', exact: true }).click();
   await page.getByRole('button', { name: 'New task in the backlog', exact: true }).click();
-  const pane = page.getByRole(isMobile ? 'dialog' : 'region', { name: 'Task', exact: true });
   if (isMobile) {
     await captureTitle(page).fill('New backlog task');
     await captureTitle(page).press('Enter');
   } else {
+    const pane = page.getByRole('region', { name: 'Task', exact: true });
     const title = pane.getByRole('textbox', { name: 'Task title' });
     await title.fill('New backlog task');
     await title.press('Enter');
+    await page.getByRole('button', { name: 'Back to the board', exact: true }).click();
   }
-  await page.getByRole('button', { name: 'Back to the board', exact: true }).click();
   await expect(backlog.getByRole('button', { name: 'All', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',

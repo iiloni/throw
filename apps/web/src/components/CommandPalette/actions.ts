@@ -1,6 +1,7 @@
 import type { Project, Status } from '@throw/shared';
 import { type RefObject, useRef } from 'react';
 import { useShell } from '@/components/AppShell/shell';
+import { presetTaskOrigin } from '@/components/Board/taskTransition';
 import { useStatuses } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
 import { useAwaitingSync } from '@/lib/syncStatus';
@@ -14,17 +15,29 @@ export const MAX_TITLE = 500;
  */
 export type Dismiss = RefObject<(() => boolean) | null>;
 
+export type CreateOptions = {
+  /** Open the created task right away; false closes capture and stays on the board. */
+  open?: boolean;
+  /** Allow creating a task with an empty title, such as expanding an empty draft. */
+  allowEmptyTitle?: boolean;
+  /** Haptic feedback on creation; defaults to `success`. */
+  haptic?: 'success' | 'toggle';
+  /** What the opened task's screen grows out of, such as quick capture's card. */
+  origin?: HTMLElement | null;
+};
+
 export type PaletteActions = {
   openTask: (projectId: string, taskId: string, created?: boolean) => void;
   jump: (project: Project) => void;
   /**
-   * Creates the task and opens it, or returns why it could not. Without a status it lands in
-   * the backlog's default.
+   * Creates the task (opening it by default, or staying on the board when `open: false`), or
+   * returns why it could not. Without a status it lands in the backlog's default.
    */
   create: (
     projectId: string | undefined,
     title: string,
     fields?: Pick<NewTask, 'statusId' | 'priority' | 'primaryTagId' | 'secondaryTagIds'>,
+    options?: CreateOptions,
   ) => string | null;
   statuses: Status[];
   awaitingStatuses: boolean;
@@ -76,10 +89,11 @@ export function usePaletteActions({
       shell.selectProject(project.workspaceId, project.id);
       document.querySelector<HTMLElement>('#main-content')?.focus({ preventScroll: true });
     },
-    create(projectId, title, fields = {}) {
+    create(projectId, title, fields = {}, options = {}) {
       if (taken.current) return null;
+      const { open = true, allowEmptyTitle = false, haptic = 'success', origin } = options;
       const trimmed = title.trim();
-      if (!trimmed) return null;
+      if (!trimmed && !allowEmptyTitle) return null;
       if (trimmed.length > MAX_TITLE) return 'Use 500 characters or fewer.';
       if (!projectId) return 'Choose a project.';
       if (!fields.statusId && !backlogOf(statuses, projectId))
@@ -88,8 +102,17 @@ export function usePaletteActions({
           : 'Connect to load this project’s backlog before capturing.';
       try {
         const taskId = createTask(projectId, { ...fields, title: trimmed });
-        haptics.success();
-        openTask(projectId, taskId, true);
+        taken.current = true;
+        if (haptic === 'toggle') haptics.toggle();
+        else haptics.success();
+        if (open) {
+          if (origin) presetTaskOrigin(taskId, origin);
+          onAction('task');
+          onClose();
+          onOpenTask(projectId, taskId, true);
+        } else {
+          onClose();
+        }
         return null;
       } catch (error) {
         return error instanceof Error ? error.message : 'Could not create the task. Try again.';

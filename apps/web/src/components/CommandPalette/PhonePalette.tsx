@@ -1,10 +1,12 @@
 import { DEFAULT_PRIORITY, type Priority, taskTagColor } from '@throw/shared';
-import { ArrowUp } from 'lucide-react';
-import { motion } from 'motion/react';
-import { type ReactNode, type RefObject, useRef, useState } from 'react';
+import { ArrowUp, Maximize2 } from 'lucide-react';
+import { type MotionValue, motion, useMotionValue, usePresence } from 'motion/react';
+import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react';
 import { useShell } from '@/components/AppShell/shell';
 import type { Project } from '@/components/Board/model';
+import { update } from '@/components/Board/state';
 import type { DrawerCard, DrawerPage } from '@/components/Drawer/Drawer';
+import { IconButton } from '@/components/IconButton/IconButton';
 import { ControlButtons, panelTitle } from '@/components/TaskDetails/TaskControls';
 import { PriorityOptions, StatusOptions, TagOptions } from '@/components/TaskDetails/TaskPickers';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
@@ -13,9 +15,12 @@ import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { backlogOf, type Dismiss, MAX_TITLE, usePaletteActions } from './actions';
 import { PhoneSearchContent, useSearch } from './SearchContent';
+import { useCaptureSwipe } from './useCaptureSwipe';
 
 /** What quick capture has been told so far. Without a status, it lands in the backlog. */
 type Draft = {
+  /** Distinguishes each capture opening so reopening mid-exit mounts a fresh card. */
+  id: number;
   title: string;
   statusId: string | undefined;
   priority: Priority;
@@ -55,6 +60,10 @@ export function usePhonePalette({
   const dismiss: Dismiss = useRef(null);
   const searchInput = useRef<HTMLInputElement>(null);
   const title = useRef<HTMLTextAreaElement>(null);
+  const cardSurface = useRef<HTMLDivElement>(null);
+  const cardY = useMotionValue(0);
+  const instantExit = useRef(false);
+  const nextDraftId = useRef(0);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [panel, setPanel] = useState<CapturePanel | null>(null);
   const change = (next: Partial<Draft>) => setDraft((before) => before && { ...before, ...next });
@@ -63,8 +72,11 @@ export function usePhonePalette({
     setDraft(null);
   };
   const open = (statusId?: string, seed = '') => {
+    instantExit.current = false;
+    cardY.jump(0);
     setPanel(null);
     setDraft({
+      id: ++nextDraftId.current,
       title: seed,
       statusId,
       priority: DEFAULT_PRIORITY,
@@ -97,8 +109,22 @@ export function usePhonePalette({
         key: 'capture',
         title: 'New task',
         focus: title,
+        surfaceRef: cardSurface,
+        y: cardY,
+        instantExit,
         onClose: close,
-        content: <CaptureCard draft={draft} titleRef={title} onChange={change} onClose={close} />,
+        content: (
+          <CaptureCard
+            key={draft.id}
+            draft={draft}
+            titleRef={title}
+            surfaceRef={cardSurface}
+            cardY={cardY}
+            instantExit={instantExit}
+            onChange={change}
+            onClose={close}
+          />
+        ),
       },
       controls: draft && (
         <CaptureControls
@@ -185,25 +211,52 @@ function useCaptureOptions(draft: Draft) {
   return { projectId, statuses, status, tags };
 }
 
-/** Catch's quick-note card for a task: its title, where it lands, and create. */
+/** Frames to wait for the task screen before letting the card go regardless. */
+const SCREEN_WAIT_FRAMES = 30;
+
+/** Calls `done` once a task screen has mounted and painted twice, or after a short wait. */
+function afterTaskScreen(done: () => void) {
+  let frames = 0;
+  let id = 0;
+  const check = () => {
+    if (document.querySelector('[data-task-screen]') || ++frames > SCREEN_WAIT_FRAMES) {
+      id = requestAnimationFrame(() => {
+        id = requestAnimationFrame(done);
+      });
+    } else id = requestAnimationFrame(check);
+  };
+  id = requestAnimationFrame(check);
+  return () => cancelAnimationFrame(id);
+}
+
+/** Catch's quick-note card for a task: drag handle, title, where it lands, expand and create. */
 function CaptureCard({
   draft,
   titleRef,
+  surfaceRef,
+  cardY,
+  instantExit,
   onChange,
   onClose,
 }: {
   draft: Draft;
   titleRef: RefObject<HTMLTextAreaElement | null>;
+  surfaceRef: RefObject<HTMLDivElement | null>;
+  cardY: MotionValue<number>;
+  instantExit: RefObject<boolean>;
   onChange: (next: Partial<Draft>) => void;
   onClose: () => void;
 }) {
   const shell = useShell();
+  const [isPresent, safeToRemove] = usePresence();
+  const handleRef = useRef<HTMLDivElement>(null);
   const actions = usePaletteActions({ onClose, onOpenTask: shell.openTask, onAction: () => {} });
   const { projectId, status } = useCaptureOptions(draft);
   const [error, setError] = useState('');
   const trimmed = draft.title.trim();
   const tooLong = trimmed.length > MAX_TITLE;
-  const canCreate = trimmed.length > 0 && !tooLong && !!status;
+  const canExpand = !tooLong && !!status;
+  const canCreate = trimmed.length > 0 && canExpand;
   const notice = tooLong
     ? 'Use 500 characters or fewer.'
     : !status
@@ -211,21 +264,72 @@ function CaptureCard({
         ? 'Loading statuses…'
         : 'Connect to load this project’s backlog before capturing.'
       : '';
+  const fields = {
+    statusId: status?.id,
+    priority: draft.priority,
+    primaryTagId: draft.primaryTagId,
+    secondaryTagIds: draft.secondaryTagIds,
+  };
 
   function create() {
     if (!canCreate) return;
-    setError(
-      actions.create(projectId, draft.title, {
-        statusId: status?.id,
-        priority: draft.priority,
-        primaryTagId: draft.primaryTagId,
-        secondaryTagIds: draft.secondaryTagIds,
-      }) ?? '',
-    );
+    const failure = actions.create(projectId, draft.title, fields, { open: false });
+    if (failure) {
+      setError(failure);
+      return;
+    }
+    if (status?.category === 'backlog') update({ backlogFilter: null });
+    setError('');
   }
+
+  function expand() {
+    if (!canExpand) return false;
+    instantExit.current = true;
+    const failure = actions.create(projectId, draft.title, fields, {
+      open: true,
+      allowEmptyTitle: true,
+      haptic: 'toggle',
+      origin: surfaceRef.current,
+    });
+    if (failure) {
+      instantExit.current = false;
+      setError(failure);
+      return false;
+    }
+    setError('');
+    return true;
+  }
+
+  // Expanding, the task's screen grows out of this card from beneath the dock's glass, so the
+  // card stays until that screen has painted under it (as Catch's quick note waits for its
+  // editor). Any other close leaves with the card's own exit.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs once, when removed
+  useEffect(() => {
+    if (isPresent) return;
+    if (!instantExit.current) return safeToRemove?.();
+    return afterTaskScreen(() => safeToRemove?.());
+  }, [isPresent]);
+
+  useCaptureSwipe({
+    surface: surfaceRef,
+    handle: handleRef,
+    y: cardY,
+    enabled: isPresent,
+    canExpand,
+    onDismiss: onClose,
+    onExpand: expand,
+  });
 
   return (
     <>
+      <div
+        ref={handleRef}
+        aria-hidden
+        data-testid="capture-handle"
+        className="flex shrink-0 cursor-grab touch-none justify-center pt-2.5 pb-1"
+      >
+        <span className="h-1 w-9 rounded-full bg-foreground/20" />
+      </div>
       <div className="min-h-0 shrink overflow-y-auto overscroll-contain">
         <textarea
           ref={titleRef}
@@ -246,7 +350,7 @@ function CaptureCard({
             event.preventDefault();
             create();
           }}
-          className="field-sizing-content block max-h-48 min-h-14 w-full resize-none bg-transparent px-5 pt-4 pb-2 font-display font-semibold text-lg leading-snug tracking-[-0.01em] outline-none placeholder:text-muted-foreground"
+          className="field-sizing-content block max-h-48 min-h-14 w-full resize-none bg-transparent px-5 pt-2 pb-2 font-display font-semibold text-lg leading-snug tracking-[-0.01em] outline-none placeholder:text-muted-foreground"
         />
       </div>
       {(notice || error) && (
@@ -264,6 +368,18 @@ function CaptureCard({
         <span className="min-w-0 flex-1 truncate text-muted-foreground text-xs">
           {status?.name}
         </span>
+        <IconButton
+          label="Expand"
+          tooltip={false}
+          disabled={!canExpand}
+          // The keyboard stays until the task's screen takes focus, as with a swipe: closing
+          // first would carry the card down away from where the screen grows from it.
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={expand}
+          className="size-9 shrink-0 rounded-xl"
+        >
+          <Maximize2 />
+        </IconButton>
         <motion.button
           type="button"
           aria-label="Create task"
