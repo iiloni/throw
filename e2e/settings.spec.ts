@@ -1,5 +1,64 @@
-import { expect, test } from '@playwright/test';
+import { type CDPSession, expect, type Page, test } from '@playwright/test';
+import { fixture } from './board-helpers';
 import { APP_LOAD_TIMEOUT, signUp, switcherItem } from './helpers';
+
+async function pullSettings(
+  touch: CDPSession,
+  delta: number,
+  options: { y?: number; whileHeld?: () => Promise<void> } = {},
+) {
+  const startY = options.y ?? 240;
+  let timestamp = Date.now() / 1000;
+  await touch.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x: 24, y: startY }],
+    timestamp,
+  });
+  const distances = [4, 10, 20, 40, 60, 90, 120, 150].filter(
+    (distance) => distance <= Math.abs(delta),
+  );
+  for (const distance of distances) {
+    // A short pull must be slow: a quick flick also dismisses the surface.
+    timestamp += Math.abs(delta) < 110 ? 0.08 : 0.016;
+    await touch.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: 24, y: startY + Math.sign(delta) * distance }],
+      timestamp,
+    });
+  }
+  // Rest before release so short pulls are not mistaken for a fling.
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  timestamp += 0.2;
+  await touch.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ x: 24, y: startY + delta }],
+    timestamp,
+  });
+  await options.whileHeld?.();
+  await touch.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: [],
+    timestamp: timestamp + 0.016,
+  });
+}
+
+async function layerTop(page: Page, selector: string) {
+  return page.locator(selector).evaluate((element) => element.getBoundingClientRect().top);
+}
+
+/** Wait for any page view transition and drawer scrim fade to clear before starting a touch gesture. */
+async function waitForSwipeReady(page: Page, y = 240) {
+  await expect
+    .poll(() =>
+      page.evaluate((pointY) => {
+        if (document.documentElement.matches(':active-view-transition')) return false;
+        const swipe = document.querySelector('[data-settings-swipe]');
+        const hit = document.elementFromPoint(24, pointY);
+        return Boolean(swipe && hit && swipe.contains(hit));
+      }, y),
+    )
+    .toBe(true);
+}
 
 test('settings pages switch from the side list or the phone dock, and the account renames', async ({
   page,
@@ -226,4 +285,130 @@ test('unified settings hub lists the active project alongside User settings and 
       'page',
     );
   }
+});
+
+test('mobile settings pull-down dismisses app settings, project settings, and trash back to the board', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'Settings pull-down dismiss is for the narrow mobile layout.');
+  const { workspaceId, projectId } = await fixture(page, true);
+  const boardUrl = new RegExp(`/w/${workspaceId}/p/${projectId}`);
+  const touch = await page.context().newCDPSession(page);
+
+  const openFromSwitcher = async (item: string) => {
+    await page.getByRole('button', { name: 'Switch project or workspace', exact: true }).click();
+    await (await switcherItem(page, item)).click();
+  };
+
+  // App settings: content follows the pull while the fixed dock stays put, and release returns to the board.
+  await openFromSwitcher('Settings');
+  await expect(page).toHaveURL(/\/settings\/general$/);
+  await expect(page.getByRole('heading', { name: 'General', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Settings page: General' })).toBeVisible();
+  await waitForSwipeReady(page);
+  const restContentTop = await layerTop(page, '[data-settings-content]');
+  const restDockTop = await layerTop(page, '[data-drawer]');
+  await pullSettings(touch, 150, {
+    whileHeld: async () => {
+      await expect
+        .poll(() => layerTop(page, '[data-settings-content]'))
+        .toBeGreaterThan(restContentTop + 40);
+      expect(Math.abs((await layerTop(page, '[data-drawer]')) - restDockTop)).toBeLessThan(2);
+    },
+  });
+  await expect(page).toHaveURL(boardUrl);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Real board');
+
+  // Project settings: pulling down returns to the board.
+  await openFromSwitcher('Project settings');
+  await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/p/${projectId}/settings`));
+  await expect(page.getByRole('heading', { name: 'General', exact: true })).toBeVisible();
+  await waitForSwipeReady(page);
+  await pullSettings(touch, 150);
+  await expect(page).toHaveURL(boardUrl);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Real board');
+
+  // Project trash: open via settings picker, then pulling down returns to the board.
+  await openFromSwitcher('Project settings');
+  await page.getByRole('button', { name: 'Settings page: General' }).click();
+  await page
+    .getByRole('dialog', { name: 'Settings', exact: true })
+    .getByRole('link', { name: 'Trash', exact: true })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/p/${projectId}/trash$`));
+  await expect(page.getByRole('heading', { name: 'Trash', exact: true })).toBeVisible();
+  await waitForSwipeReady(page);
+  await pullSettings(touch, 150);
+  await expect(page).toHaveURL(boardUrl);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Real board');
+
+  // Pulling up from the bottom of a settings page also dismisses back to the board.
+  await openFromSwitcher('Settings');
+  await page.getByRole('button', { name: 'Settings page: General' }).click();
+  await page
+    .getByRole('dialog', { name: 'Settings', exact: true })
+    .getByRole('link', { name: 'Account', exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/settings\/account$/);
+  await expect(page.getByRole('heading', { name: 'Account', exact: true })).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await waitForSwipeReady(page, 400);
+  await pullSettings(touch, -150, { y: 400 });
+  await expect(page).toHaveURL(boardUrl);
+});
+
+test('mobile settings scroll normally, keep short pulls open, and ignore pulls under a drawer dialog', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'Settings pull-down dismiss is for the narrow mobile layout.');
+  await page.setViewportSize({ width: 393, height: 500 });
+  const { workspaceId, projectId } = await fixture(page, true);
+  await page.getByRole('button', { name: 'Switch project or workspace', exact: true }).click();
+  await (await switcherItem(page, 'Settings')).click();
+  await expect(page).toHaveURL(/\/settings\/general$/);
+  await expect(page.getByRole('heading', { name: 'General', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Appearance' })).toBeVisible();
+  await waitForSwipeReady(page);
+  const settingsUrl = page.url();
+  const touch = await page.context().newCDPSession(page);
+
+  // Short slow pull springs back cleanly and stays on settings.
+  await pullSettings(touch, 40);
+  await expect(page).toHaveURL(settingsUrl);
+  await expect(page.locator('[data-settings-content]')).toHaveCSS('transform', 'none');
+
+  // Upward drag at the top scrolls into the page instead of leaving it.
+  await pullSettings(touch, -150, { y: 340 });
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(50);
+  await expect(page).toHaveURL(settingsUrl);
+
+  // Downward drag while scrolled down scrolls back up instead of dismissing.
+  const middle = await page.evaluate(() => {
+    const scroll = document.documentElement;
+    const top = Math.max(120, (scroll.scrollHeight - scroll.clientHeight) / 2);
+    window.scrollTo(0, top);
+    return window.scrollY;
+  });
+  expect(middle).toBeGreaterThan(50);
+  await pullSettings(touch, 150);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(middle - 40);
+  await expect(page).toHaveURL(settingsUrl);
+
+  // When a ManagementSurface dialog is open on top, pulling down does not dismiss settings.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.getByRole('button', { name: 'Settings page: General' }).click();
+  const picker = page.getByRole('dialog', { name: 'Settings', exact: true });
+  await expect(picker).toBeVisible();
+  await pullSettings(touch, 150, { y: 180 });
+  await expect(page).toHaveURL(settingsUrl);
+  await expect(picker).toBeVisible();
+
+  // Closing the dialog restores pull-down dismiss back to the board.
+  await page.keyboard.press('Escape');
+  await expect(picker).toHaveCount(0);
+  await waitForSwipeReady(page);
+  await pullSettings(touch, 150);
+  await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/p/${projectId}`));
 });

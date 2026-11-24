@@ -29,6 +29,8 @@ const SurfaceContext = createContext<{
   setDock: (dock: ReactNode) => void;
 } | null>(null);
 
+const SurfaceOpenContext = createContext(false);
+
 export function ManagementSurfaceProvider({
   children,
   active,
@@ -81,28 +83,30 @@ export function ManagementSurfaceProvider({
   }, [modal]);
   return (
     <SurfaceContext.Provider value={active ? host : phone ? lent : null}>
-      <div className="contents" inert={surface !== null}>
-        {children}
-      </div>
-      {phone && active && (
-        // biome-ignore lint/a11y/noStaticElementInteractions: contains keyboard focus for the dialog descendant
-        <div className="contents" inert={!surface && !docked} onKeyDown={containFocus}>
-          <Drawer
-            label={surface?.page.title ?? 'Management'}
-            dock={dock}
-            detent="closed"
-            detents={['closed']}
-            onDetent={() => {}}
-            page={surface?.page ?? null}
-            sunk={!surface && !docked}
-            // A bare dock has nothing above it to pull up.
-            gesturesDisabled={!surface}
-            onClosePage={() => surface?.close()}
-          >
-            {null}
-          </Drawer>
+      <SurfaceOpenContext.Provider value={modal}>
+        <div className="contents" inert={surface !== null}>
+          {children}
         </div>
-      )}
+        {phone && active && (
+          // biome-ignore lint/a11y/noStaticElementInteractions: contains keyboard focus for the dialog descendant
+          <div className="contents" inert={!surface && !docked} onKeyDown={containFocus}>
+            <Drawer
+              label={surface?.page.title ?? 'Management'}
+              dock={dock}
+              detent="closed"
+              detents={['closed']}
+              onDetent={() => {}}
+              page={surface?.page ?? null}
+              sunk={!surface && !docked}
+              // A bare dock has nothing above it to pull up.
+              gesturesDisabled={!surface}
+              onClosePage={() => surface?.close()}
+            >
+              {null}
+            </Drawer>
+          </div>
+        )}
+      </SurfaceOpenContext.Provider>
     </SurfaceContext.Provider>
   );
 }
@@ -179,6 +183,14 @@ export function useManagementDock(dock: ReactNode) {
     if (!host) return;
     return () => host.setDock(null);
   }, [host]);
+}
+
+/**
+ * Whether a phone management drawer page is currently open above the screen, so page-level
+ * gestures behind it can stand down cleanly.
+ */
+export function useManagementSurfaceOpen() {
+  return useContext(SurfaceOpenContext);
 }
 
 /** The management background is inert; keep Tab's endpoints inside its phone drawer too. */

@@ -1,13 +1,16 @@
-import { Link, type LinkOptions } from '@tanstack/react-router';
+import { Link, type LinkOptions, useNavigate } from '@tanstack/react-router';
 import { ChevronLeft, ChevronUp, type LucideIcon, Settings } from 'lucide-react';
 import { motion } from 'motion/react';
-import { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { useSwipeToDismiss } from '@/components/Board/useSwipeToDismiss';
 import {
   ManagementSurface,
   useManagementDock,
+  useManagementSurfaceOpen,
 } from '@/components/ManagementSurface/ManagementSurface';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
+import { settingsDragY, useSettingsSwipeY } from '@/lib/settingsSwipe';
 import { cn } from '@/lib/utils';
 
 /** A page and where it is: route options, so a renamed route fails the typecheck. */
@@ -50,6 +53,48 @@ export function SettingsLayout({
   roomy = false,
   children,
 }: Props) {
+  const navigate = useNavigate();
+  const [picking, setPicking] = useState(false);
+  const surfaceOpen = useManagementSurfaceOpen();
+  const swipeEnabled = !wide && Boolean(back) && !surfaceOpen && !picking;
+  const swipeY = useSettingsSwipeY();
+  const swipeRef = useSwipeToDismiss({
+    dragY: settingsDragY,
+    onDismiss: () => {
+      if (back) void navigate(back.link);
+    },
+    enabled: swipeEnabled,
+    scrollElement:
+      typeof document !== 'undefined'
+        ? (document.scrollingElement ?? document.documentElement)
+        : undefined,
+    canStart: (event) => {
+      if (
+        document.querySelector(
+          '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]',
+        )
+      )
+        return false;
+      const target = event.target;
+      if (target instanceof Element && target.closest('[inert], [data-no-pull]')) return false;
+      return true;
+    },
+  });
+
+  useEffect(() => {
+    if (wide) setPicking(false);
+  }, [wide]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Switching pages, layout, or overlay state cancels the shared pull as well as unmounting.
+  useLayoutEffect(() => {
+    const reset = () => {
+      settingsDragY.stop();
+      settingsDragY.set(0);
+    };
+    reset();
+    return reset;
+  }, [swipeEnabled, wide, current?.key]);
+
   const currentGroup = current
     ? groups.find((group) => group.pages.some((page) => page.key === current.key))
     : undefined;
@@ -67,11 +112,31 @@ export function SettingsLayout({
   );
   if (!wide) {
     return (
-      <div className="mx-auto flex max-w-2xl flex-col gap-4 px-3 sm:px-6">
-        {heading}
-        {children}
-        <SettingsDock title={title} groups={groups} current={current} back={back} />
-      </div>
+      <>
+        <div
+          ref={swipeRef}
+          data-settings-swipe=""
+          className="min-h-[calc(100dvh-var(--safe-top)-var(--dock-space)-7.5rem)]"
+        >
+          {/* Move the page content rather than its ancestor so fixed dock/chrome stay un-transformed. */}
+          <motion.div
+            data-settings-content=""
+            className="mx-auto flex max-w-2xl flex-col gap-4 px-3 sm:px-6"
+            style={{ y: swipeY }}
+          >
+            {heading}
+            {children}
+          </motion.div>
+        </div>
+        <SettingsDock
+          title={title}
+          groups={groups}
+          current={current}
+          back={back}
+          picking={picking}
+          onPickingChange={setPicking}
+        />
+      </>
     );
   }
   return (
@@ -223,13 +288,16 @@ function SettingsDock({
   groups,
   current,
   back,
+  picking,
+  onPickingChange,
 }: {
   title: string;
   groups: readonly SettingsPageGroup[];
   current: SettingsPage | null;
   back?: { label: string; link: LinkOptions };
+  picking: boolean;
+  onPickingChange: (picking: boolean) => void;
 }) {
-  const [picking, setPicking] = useState(false);
   const Icon = current?.icon ?? Settings;
   const label = current?.label ?? title;
   const dock = useMemo(
@@ -238,7 +306,7 @@ function SettingsDock({
         type="button"
         aria-haspopup="dialog"
         aria-label={`${title} page: ${label}`}
-        onClick={() => setPicking(true)}
+        onClick={() => onPickingChange(true)}
         whileTap={{ scale: 0.97 }}
         transition={springs.snappy}
         className="flex h-[var(--dock-height)] w-full min-w-0 items-center gap-3 rounded-[var(--dock-radius)] bg-foreground/[0.06] px-4 text-left font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
@@ -248,18 +316,18 @@ function SettingsDock({
         <ChevronUp aria-hidden className="size-5 shrink-0 text-muted-foreground" />
       </motion.button>
     ),
-    [Icon, label, title],
+    [Icon, label, onPickingChange, title],
   );
   useManagementDock(dock);
   return (
-    <ManagementSurface open={picking} title={title} fit onClose={() => setPicking(false)}>
+    <ManagementSurface open={picking} title={title} fit onClose={() => onPickingChange(false)}>
       <nav aria-label={`${title} pages`} className="flex flex-col gap-4 pb-1">
-        {back && <BackLink {...back} onNavigate={() => setPicking(false)} />}
+        {back && <BackLink {...back} onNavigate={() => onPickingChange(false)} />}
         <PageList
           groups={groups}
           current={current}
           indicator="settings-dock-nav"
-          onNavigate={() => setPicking(false)}
+          onNavigate={() => onPickingChange(false)}
         />
       </nav>
     </ManagementSurface>
