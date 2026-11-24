@@ -17,7 +17,8 @@ navigation; each phone board brings its own dock. On a phone the title, or a pul
 the top of a board, opens the shell's project switcher as a drawer page
 (`AppShell/ProjectSwitcher.tsx`, `AppShell/SwitcherPull.tsx`). Page changes animate through the router's
 view transitions (`lib/pageTransition.ts`, ADR 0013): boards cross-fade, ordered pages
-slide, and content enters once per document with `useEntryMotion` (`lib/entryMotion.ts`).
+slide, and content enters once per document with `useEntryMotion` (`lib/entryMotion.ts`),
+except that a board switched to settles its content in on every visit.
 Its project board uses the shared Board
 components on synced tasks and statuses, and the cross-project board
 (`Board/WorkspaceBoard.tsx`) adapts every project of the workspace into one virtual project

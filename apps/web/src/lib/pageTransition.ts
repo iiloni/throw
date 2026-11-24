@@ -87,20 +87,30 @@ export function pageTransition(
   return [after.order > before.order ? 'forward' : 'back'];
 }
 
+function transitionIs(types: string) {
+  try {
+    return document.documentElement.matches(`:active-view-transition-type(${types})`);
+  } catch {
+    // An engine without transition types runs no page transitions (main.tsx).
+    return false;
+  }
+}
+
 /**
  * Whether a page transition is moving the page as a whole, so content arriving with it
  * should not make its own entry on top. A cross-fade leaves the page still, and its content
  * enters as it would on a cold start.
  */
 export function pageMoving() {
-  try {
-    return document.documentElement.matches(
-      ':active-view-transition-type(forward, back, enter, inner)',
-    );
-  } catch {
-    // An engine without transition types runs no page transitions (main.tsx).
-    return false;
-  }
+  return transitionIs('forward, back, enter, inner');
+}
+
+/**
+ * Whether a board is arriving through a cross-fade. Its content settles in every time, not
+ * only on its first visit, so every switch between boards reads alike.
+ */
+export function boardArriving() {
+  return transitionIs('fade');
 }
 
 /**

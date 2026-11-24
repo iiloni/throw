@@ -185,6 +185,78 @@ test('boards cross-fade, ordered pages slide, and the rail and dock stay put', a
   await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/trash$`));
 });
 
+test('a board switch dissolves the page and settles the board in on every visit', async ({
+  page,
+  isMobile,
+  browserName,
+}) => {
+  test.skip(
+    browserName === 'firefox' &&
+      !(await page.evaluate(() => CSS.supports('selector(:active-view-transition-type(a))'))),
+    'This Firefox has no view transition types, so it runs no page transitions',
+  );
+  // As each switch's new board is in place: how its first card shows, and how the two page
+  // images combine.
+  await page.addInitScript(() => {
+    const log: { blend: string; card: number }[] = [];
+    Object.assign(window, { boardSwitches: log });
+    const start = document.startViewTransition?.bind(document);
+    if (!start) return;
+    document.startViewTransition = ((
+      update?: ViewTransitionUpdateCallback | StartViewTransitionOptions,
+    ) => {
+      const transition = start(update);
+      transition.ready.then(
+        () => {
+          let card = 1;
+          const first = document.querySelector('[data-card-id]');
+          for (let element = first; element; element = element.parentElement)
+            card *= Number(getComputedStyle(element).opacity);
+          const blend = getComputedStyle(
+            document.documentElement,
+            '::view-transition-new(root)',
+          ).mixBlendMode;
+          log.push({ blend, card: first ? card : -1 });
+        },
+        () => {},
+      );
+      return transition;
+    }) as typeof document.startViewTransition;
+  });
+  await workspaceFixture(page);
+  await expect(card(page, 'Water tomatoes')).toBeVisible();
+  const switches = () =>
+    page.evaluate(
+      () =>
+        (window as unknown as { boardSwitches: { blend: string; card: number }[] }).boardSwitches,
+    );
+  async function open(name: string) {
+    const count = (await switches()).length;
+    if (isMobile) {
+      await openMenu(page, true);
+      await (await switcherItem(page, name)).click();
+    } else
+      await page
+        .getByRole('navigation', { name: 'Projects', exact: true })
+        .getByRole('link', { name, exact: true })
+        .click();
+    await expect.poll(async () => (await switches()).length).toBeGreaterThan(count);
+    return (await switches())[count]!;
+  }
+
+  const first = await open('Kitchen');
+  // The two boards add up, so what they share holds steady through the dissolve.
+  expect(first.blend).toBe('plus-lighter');
+  expect(first.card).toBeLessThan(0.5);
+  await expect(card(page, 'Bake bread')).toBeVisible();
+  await open('Garden');
+  await expect(card(page, 'Prune roses')).toBeVisible();
+  // Kitchen has been seen, and its cards still settle in rather than snapping into place.
+  const again = await open('Kitchen');
+  expect(again.card).toBeLessThan(0.5);
+  await expect(card(page, 'Bake bread')).toHaveCSS('opacity', '1');
+});
+
 test('reduced motion turns page transitions into a short cross-fade', async ({
   page,
   isMobile,
