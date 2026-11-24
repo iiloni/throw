@@ -14,10 +14,12 @@ import {
 } from './filter';
 import { projectBoardData, secondaryTagsByTask, updatedAtByTask } from './selection';
 import {
+  activeFilterCount,
   type BoardActions,
   board,
   clearFilters,
   closeSearch,
+  collapseSearch,
   countIn,
   current,
   initialBoard,
@@ -356,6 +358,41 @@ describe('a narrowed board', () => {
     setSort('size-asc');
     closeSearch();
     expect(board.get()).toMatchObject({ searching: false, filter: EMPTY_FILTER, sort: 'priority' });
+  });
+
+  it('collapsing the search hides it while keeping the query, filters and sort', () => {
+    update({ searching: true });
+    setFilter({ query: 'garden', tagIds: ['home'], sizes: [1] });
+    setSort('size-asc');
+    expect(activeFilterCount(board.get())).toBe(4);
+
+    collapseSearch();
+    expect(board.get()).toMatchObject({
+      searching: false,
+      filter: { query: 'garden', tagIds: ['home'], sizes: [1] },
+      sort: 'size-asc',
+    });
+    expect(narrowed(board.get())).toBe(true);
+    expect(activeFilterCount(board.get())).toBe(4);
+  });
+
+  it('counts active search criteria consistently with narrowed()', () => {
+    expect(activeFilterCount(board.get())).toBe(0);
+    expect(narrowed(board.get())).toBe(false);
+
+    setFilter({ query: '   ' });
+    expect(activeFilterCount(board.get())).toBe(0);
+    expect(narrowed(board.get())).toBe(false);
+
+    setFilter({ query: 'weed', tagIds: ['home', 'work'], sizes: [2], unsized: true });
+    setSort('updated-desc');
+    expect(activeFilterCount(board.get())).toBe(6);
+    expect(narrowed(board.get())).toBe(true);
+
+    setFilter({ query: '', tagIds: [], untagged: true, sizes: [], unsized: false, projectId: 'p' });
+    setSort('priority');
+    expect(activeFilterCount(board.get())).toBe(2);
+    expect(narrowed(board.get())).toBe(true);
   });
 
   it('starts every board unfiltered in its own order', () => {

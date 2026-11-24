@@ -700,8 +700,11 @@ and has no results list: the board itself narrows as words are typed or
 [filters](#search-filters-and-sorting) chosen, and stays usable while the bar is open. The
 bar centres on the board beside an open task pane, and the columns leave room for it at their
 ends. A filter button opens the filters and sort in a panel above the field; the chips of what
-applies sit between them. Enter opens the best match, ranked as below, and Ctrl/⌘K on an
-empty, focused bar closes it. Escape first closes the panel, then clears the words, filters
+applies sit between them. Enter opens the best match, ranked as below. Clicking Search in the
+navigation rail again, or pressing Ctrl/⌘K while the search field has focus, collapses the bar
+without clearing active query, filters or sort (the rail button shows a quiet active indicator
+and tooltip in both expanded and collapsed rail states); the field's close button clears them as
+it closes. Escape first closes the panel, then clears the words, filters
 and sort, then closes the bar and returns focus. Project jumps are not offered there; the rail
 lists the projects.
 
@@ -711,8 +714,9 @@ sidebar between the rail and the backlog instead of floating, so nothing sits ov
 controls directly — Sort, Size, and Tags (including nested tags, Any/All matching and Untagged,
 or Projects on the cross-project board) — without a popup filter card, sharing an elevated
 full-height surface that connects directly to the active Search button in the navigation rail
-(2026-11-23). Clicking Search in the navigation rail again collapses the sidebar without
-clearing active filters or sort (the rail button indicates when filters remain active); the
+(2026-11-23). Clicking Search in the navigation rail again, or pressing Ctrl/⌘K while the search
+field has focus, collapses the sidebar without clearing active query, filters or sort (the rail
+button marks that filters remain active in both expanded and collapsed rail states); the
 search field's close button clears them as it closes. The active chips and Clear all sit above
 the field at its foot, and Escape clears active filters and search before closing and returning
 focus.
