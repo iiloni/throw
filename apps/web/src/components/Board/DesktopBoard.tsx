@@ -262,7 +262,6 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
               <TooltipContent
                 side="right"
                 sideOffset={10}
-                variant="glass"
                 className="rounded-xl px-3.5 py-2 font-display font-semibold text-base tracking-[-0.01em]"
               >
                 {item.name}

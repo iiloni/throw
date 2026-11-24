@@ -17,6 +17,20 @@ it('shows on keyboard focus and leaves the name to the element', async () => {
   expect(screen.queryByRole('tooltip')).toBeNull();
 });
 
+it('draws on frosted glass, leaving room beside the label for a shortcut', async () => {
+  render(
+    <Hint label="Collapse Building column">
+      <button type="button" aria-label="Collapse Building column" />
+    </Hint>,
+  );
+  act(() => screen.getByRole('button').focus());
+  await screen.findByRole('tooltip');
+  const content = document.querySelector('[data-slot="tooltip-content"]');
+  expect(content).toHaveClass('glass-thick', 'text-foreground', 'flex', 'items-center');
+  expect(content).not.toHaveClass('bg-primary');
+  expect(content?.firstElementChild).toHaveTextContent('Collapse Building column');
+});
+
 it('stays closed while disabled, keeping the element mounted', () => {
   const { rerender } = render(
     <Hint label="Projects" disabled>
