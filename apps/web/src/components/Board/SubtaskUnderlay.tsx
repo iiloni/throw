@@ -1,6 +1,7 @@
 import { ChevronDown } from 'lucide-react';
 import { Hint } from '@/components/Hint/Hint';
 import { cn } from '@/lib/utils';
+import { useIsBlockerSpotlightTarget } from './blockers';
 import { StatusGlyph } from './glyphs';
 import { isClosed, type Project, projectOf, statusById, type Task } from './model';
 import { StatusMenu } from './StatusMenu';
@@ -82,11 +83,18 @@ export function SubtaskUnderlay({ parent, subtasks, inert = false }: Props) {
 /** A subtask on its parent's card: its status changes here, and a tap opens it. */
 function SubtaskRow({ project, task }: { project: Project; task: Task }) {
   const status = statusById(project, task.statusId);
+  const spotlightBlocker = useIsBlockerSpotlightTarget(task.id);
   if (!status) return null;
   const closed = isClosed(status.category);
   return (
     // One inset row with one hover fill; the glyph lines up under the progress pips above.
-    <li className="mx-1.5 flex min-h-9 items-center rounded-xl transition-colors hover:bg-foreground/[0.05]">
+    <li
+      data-spotlight={spotlightBlocker ? 'blocker' : undefined}
+      className={cn(
+        'mx-1.5 flex min-h-9 items-center rounded-xl transition-colors hover:bg-foreground/[0.05]',
+        spotlightBlocker && 'bg-destructive/12 ring-1 ring-destructive/75 ring-inset',
+      )}
+    >
       <StatusMenu
         project={project}
         value={status.id}
