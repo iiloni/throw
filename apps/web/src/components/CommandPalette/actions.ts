@@ -20,8 +20,8 @@ export type CreateOptions = {
   open?: boolean;
   /** Allow creating a task with an empty title, such as expanding an empty draft. */
   allowEmptyTitle?: boolean;
-  /** Haptic feedback on creation; defaults to `success`. */
-  haptic?: 'success' | 'toggle';
+  /** Haptic feedback on creation; defaults to `success`. Null when the caller gave it already. */
+  haptic?: 'success' | 'toggle' | null;
   /** What the opened task's screen grows out of, such as quick capture's card. */
   origin?: HTMLElement | null;
 };
@@ -104,7 +104,7 @@ export function usePaletteActions({
         const taskId = createTask(projectId, { ...fields, title: trimmed });
         taken.current = true;
         if (haptic === 'toggle') haptics.toggle();
-        else haptics.success();
+        else if (haptic === 'success') haptics.success();
         if (open) {
           if (origin) presetTaskOrigin(taskId, origin);
           onAction('task');
