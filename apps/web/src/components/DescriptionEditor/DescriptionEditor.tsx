@@ -1,6 +1,6 @@
 import '@blocknote/shadcn/style.css';
 import { type BlockNoteEditor, BlockNoteSchema, defaultBlockSpecs } from '@blocknote/core';
-import { SuggestionMenu } from '@blocknote/core/extensions';
+import { HistoryExtension, SuggestionMenu } from '@blocknote/core/extensions';
 import { en } from '@blocknote/core/locales';
 import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/shadcn';
@@ -51,6 +51,7 @@ export function DescriptionEditor({
   placeholder = 'Describe the work…',
   autoFocus = false,
   scrollClearance = 0,
+  onControls,
 }: {
   initialContent: Description;
   editable?: boolean;
@@ -59,6 +60,8 @@ export function DescriptionEditor({
   /** Keep actions beneath an editor clear of the dock while typing. */
   scrollClearance?: number;
   onChange?: (document: Description) => void;
+  /** Hands the owner this editor's controls while it is mounted, for its undo and redo. */
+  onControls?: (controls: EditorControls | null) => void;
 }) {
   const theme = useResolvedTheme();
   const editor = useCreateBlockNote({
@@ -88,6 +91,11 @@ export function DescriptionEditor({
     }
   }
   const controls = useMemo(() => createControls(editor), [editor]);
+  useEffect(() => {
+    if (!editable || !onControls) return;
+    onControls(controls);
+    return () => onControls(null);
+  }, [editable, onControls, controls]);
   // While it has focus on a touch screen, this editor is the one the dock formats.
   useEffect(() => {
     if (!editable || !coarsePointer) return;
@@ -230,11 +238,25 @@ function createControls(editor: Editor): EditorControls {
       if (editor.canUnnestBlock()) editor.unnestBlock();
       refresh();
     },
+    undo() {
+      // Only hold on to focus: taking it would raise a keyboard the user had put away.
+      const focused = editor.isFocused();
+      editor.undo();
+      if (focused) editor.focus();
+      refresh();
+    },
+    redo() {
+      const focused = editor.isFocused();
+      editor.redo();
+      if (focused) editor.focus();
+      refresh();
+    },
   };
 }
 
 function readState(editor: Editor): FormattingState {
   const active: Partial<Record<TextStyle, unknown>> = editor.getActiveStyles();
+  const history = editor.getExtension(HistoryExtension);
   return {
     styles: {
       bold: Boolean(active.bold),
@@ -245,5 +267,7 @@ function readState(editor: Editor): FormattingState {
     block: editor.getTextCursorPosition().block.type,
     canIndent: editor.canNestBlock(),
     canOutdent: editor.canUnnestBlock(),
+    canUndo: history ? editor.canExec(history.undoCommand) : false,
+    canRedo: history ? editor.canExec(history.redoCommand) : false,
   };
 }

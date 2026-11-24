@@ -21,8 +21,19 @@ import {
  * the Escape, Back and outside-tap dismissal around the same controls and panels a phone
  * shows in the board's drawer.
  */
-export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] }) {
+export function TaskDrawer({
+  task,
+  statuses,
+  onPanelChange,
+}: {
+  task: Task;
+  statuses: Status[];
+  /** Told whether a panel has grown over the card's foot, for what floats there. */
+  onPanelChange?: (open: boolean) => void;
+}) {
   const [panel, setPanel] = useState<TaskPanel | null>(null);
+  const panelOpen = panel !== null;
+  useEffect(() => onPanelChange?.(panelOpen), [panelOpen, onPanelChange]);
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLElement | null>(null);
   const id = useId();

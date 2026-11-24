@@ -566,6 +566,107 @@ test('a finger formats the description from the dock while typing, as in Catch',
   await expect(formatting).toHaveCount(0);
 });
 
+test('undo and redo float beside Back or above the dock, and a long task offers a jump to its end', async ({
+  page,
+  isMobile,
+}, testInfo) => {
+  const { pane } = await fixture(page);
+  const press = (target: Locator) => (isMobile ? target.tap() : target.click());
+  const editor = pane.locator('.bn-editor[contenteditable="true"]');
+  const history = page.getByRole('toolbar', { name: 'Undo and redo', exact: true });
+  const jump = page.getByRole('button', { name: 'Scroll to bottom', exact: true });
+  const viewport = pane.locator('[data-task-card] [data-slot="scroll-area-viewport"]');
+  const box = async (target: Locator) => (await target.boundingBox())!;
+  // Nothing to undo and the whole task in view: neither shows.
+  await expect(history).toHaveCount(0);
+  await expect(jump).toHaveCount(0);
+
+  await press(editor);
+  await page.keyboard.type('First line');
+  await expect(history).toBeVisible();
+  const undo = history.getByRole('button', { name: 'Undo', exact: true });
+  const redo = history.getByRole('button', { name: 'Redo', exact: true });
+  await expect(undo).toBeEnabled();
+  await expect(redo).toBeDisabled();
+  // History never takes focus, so the caret and the keyboard stay where they were.
+  await press(undo);
+  await expect(editor).toBeFocused();
+  await expect(editor).not.toContainText('First line');
+  await expect(redo).toBeEnabled();
+  await press(redo);
+  await expect(editor).toBeFocused();
+  await expect(editor).toContainText('First line');
+
+  if (isMobile) {
+    // Above the dock (the drawer's top edge, with the formatting bar inside it), at its end.
+    const drawer = page.locator('[data-drawer]');
+    await expect(page.getByRole('toolbar', { name: 'Formatting', exact: true })).toBeVisible();
+    await expect
+      .poll(async () => {
+        const toolbar = await box(history);
+        return toolbar.y + toolbar.height <= (await box(drawer)).y;
+      })
+      .toBe(true);
+    expect((await box(history)).x).toBeLessThan(page.viewportSize()!.width / 2);
+  } else {
+    // In the header, between the navigation and the trash, clear of the card below.
+    const header = await box(page.getByRole('toolbar', { name: 'Task navigation', exact: true }));
+    const trash = await box(page.getByRole('toolbar', { name: 'Task trash', exact: true }));
+    await expect.poll(async () => (await box(history)).y).toBeLessThanOrEqual(header.y + 1);
+    const toolbar = await box(history);
+    expect(toolbar.x).toBeGreaterThanOrEqual(header.x + header.width);
+    expect(toolbar.x + toolbar.width).toBeLessThanOrEqual(trash.x);
+    expect(toolbar.y + toolbar.height).toBeLessThanOrEqual(
+      (await box(page.locator('[data-task-card]'))).y,
+    );
+  }
+
+  // A long description: the jump shows once its end is well out of view.
+  for (let line = 0; line < 40; line++) {
+    await page.keyboard.press('Enter');
+    await page.keyboard.type(`Step ${line + 1}`);
+  }
+  await viewport.evaluate((element) => element.scrollTo({ top: 0, behavior: 'instant' }));
+  await expect(jump).toBeVisible();
+  const pill = await box(jump);
+  if (isMobile) {
+    const drawer = await box(page.locator('[data-drawer]'));
+    expect(pill.y + pill.height).toBeLessThanOrEqual(drawer.y);
+    expect(pill.x).toBeGreaterThan(page.viewportSize()!.width / 2);
+    const toolbar = await box(history);
+    expect(pill.x).toBeGreaterThanOrEqual(toolbar.x + toolbar.width);
+  } else {
+    const card = await box(page.locator('[data-task-card]'));
+    expect(pill.x + pill.width).toBeLessThanOrEqual(card.x + card.width);
+    expect(pill.y + pill.height).toBeLessThanOrEqual(card.y + card.height);
+  }
+  const path = testInfo.outputPath('floating-toolbars.png');
+  await page.screenshot({ path });
+  await testInfo.attach('floating toolbars', { path, contentType: 'image/png' });
+  await press(jump);
+  await expect(editor).toBeFocused();
+  await expect
+    .poll(() =>
+      viewport.evaluate(
+        (element) => element.scrollHeight - element.scrollTop - element.clientHeight,
+      ),
+    )
+    .toBeLessThanOrEqual(1);
+  await expect(jump).toHaveCount(0);
+
+  // A dock panel or drawer page takes the foot of the card: what floats there steps aside.
+  await viewport.evaluate((element) => element.scrollTo({ top: 0, behavior: 'instant' }));
+  await expect(jump).toBeVisible();
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await press(controls(page).getByRole('button', { name: /^Status: Working/ }));
+  await expect(jump).toHaveCount(0);
+  if (isMobile) await expect(history).toHaveCount(0);
+  else await expect(history).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(jump).toBeVisible();
+  await expect(history).toBeVisible();
+});
+
 test('the desktop dock sits below the card, its panels open above it and follow it for Tab', async ({
   page,
   isMobile,
