@@ -3,16 +3,39 @@ import { APP_LOAD_TIMEOUT, createAccount, shapeRows, signUp } from './helpers';
 
 type Account = Awaited<ReturnType<typeof createAccount>>;
 
-/** Gives the page's account a workspace name of its own, to tell whose data is showing. */
+/**
+ * Gives the page's account a workspace name of its own, to tell whose data is showing, and
+ * waits for the server to have it, so another tab loading the account sees it too.
+ */
 async function nameWorkspace(page: Page, name: string) {
-  await page.evaluate(async (name) => {
-    const { workspacesCollection } = await import(/* @vite-ignore */ '/src/lib/collections.ts');
-    const { renameWorkspace } = await import(/* @vite-ignore */ '/src/lib/workspaces.ts');
-    const [workspace] = [...workspacesCollection.values()] as { id: string }[];
-    if (!workspace) throw new Error('No workspace to name');
-    renameWorkspace(workspace.id, name);
-  }, name);
+  // A reload's snapshot can briefly empty the collection behind what the page shows.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async (name) => {
+          const { workspacesCollection } = await import(
+            /* @vite-ignore */ '/src/lib/collections.ts'
+          );
+          const { renameWorkspace } = await import(/* @vite-ignore */ '/src/lib/workspaces.ts');
+          const [workspace] = [...workspacesCollection.values()] as { id: string }[];
+          if (!workspace) return false;
+          renameWorkspace(workspace.id, name);
+          return true;
+        }, name),
+      { timeout: APP_LOAD_TIMEOUT },
+    )
+    .toBe(true);
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          async () =>
+            (await import(/* @vite-ignore */ '/src/lib/syncStatus.ts')).getSyncStatus().pending,
+        ),
+      { timeout: APP_LOAD_TIMEOUT },
+    )
+    .toBe(0);
 }
 
 /** Signs another account in from the sign-in page, beside the one in use (ADR 0016). */
@@ -83,7 +106,9 @@ test('accounts signed in together keep their own data, at their own addresses', 
     timeout: APP_LOAD_TIMEOUT,
   });
   await expect(page).toHaveURL(/\/u\/1\/w\//);
-  await expect(page.getByRole('heading', { name: 'First space' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'First space' })).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
   await expect(page.getByRole('heading', { name: 'Second space' })).toBeHidden();
 
   // The browser's cookie is the second account's; the bearer token says whose write it is.
@@ -110,7 +135,9 @@ test('tabs show different accounts side by side, and signing one out leaves the 
   const tab = await page.context().newPage();
   await tab.goto('/');
   await expect(tab).toHaveURL(/\/u\/2\/w\//, { timeout: APP_LOAD_TIMEOUT });
-  await expect(tab.getByRole('heading', { name: 'Second space' })).toBeVisible();
+  await expect(tab.getByRole('heading', { name: 'Second space' })).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
 
   await switchAccount(page, first);
   await expect(page.getByRole('heading', { name: 'First space' })).toBeVisible({
