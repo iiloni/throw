@@ -383,6 +383,9 @@ Throw moves as Catch does (Catch's `docs/decisions/0003-design-system-and-motion
   it settles (Catch's `RESIZE_SETTLE_MS = 150` in `NoteGrid`).
 - Keep elements mounted and animate their geometry (or FLIP them) rather than swapping
   components between layout states.
+- A fade that is the whole transition (nothing moving under it, such as the board
+  cross-fade) takes `curves.enter`'s 420 ms and gentle curve. The short, front-loaded fades
+  under a page slide are timed to ride under its movement; on their own they read as a blink.
 - Respect `useReducedMotion()`: switch in place, or fade with `curves.fade`.
 - Page changes use view transitions and entry motion (ADR 0013); the task side column is
   ADR 0012.

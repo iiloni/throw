@@ -21,15 +21,19 @@ default cross-fade of every navigation, opening tasks too. The types:
 
 - **`fade`: one board to another** (a project or workspace switch from the rail, the phone
   menu or search). The owner chose a cross-fade here: boards are siblings, not an order. It
-  is a true dissolve: both page images run the same 260 ms ease-out and add up
+  is a true dissolve: both page images run the same curve and add up
   (`mix-blend-mode: plus-lighter` in an isolated image pair, as the browser's own cross-fade
   does), so what the boards share (the header, column frames, the page colour) holds steady
-  and only what differs changes. The first version faded the old board out over 180 ms and
-  the new one in over 260 ms from 60 ms, Catch's slide timings; with plain alpha the two
-  half-faded images let the background through, so every switch blinked the whole page
-  toward the background colour, and on a phone the scrim of the closing switcher dimmed and
-  washed out with it. The arriving board's content then settles in (below), so the switch
-  reads as a deliberate arrival rather than a swap. Switching workspace goes straight to the
+  and only what differs changes. Nothing moves, so the fade is the whole transition: it runs
+  the content entry's 420 ms and gentle curve (`curves.enter`), alongside the arriving cards'
+  own entry (below), so the board and its cards land together. The first version used the
+  quick fades of Catch's slide (out over 180 ms, in over 260 ms from 60 ms), which are timed to
+  ride under 500 ms of movement; alone, and with plain alpha letting the background through
+  the two half-faded images, they read as a blink.
+  On a phone the switcher stays open until the next board commits (it closes on the router's
+  resolved location, inside the transition), so the outgoing image is what was on screen and
+  the live drawer closes over the dissolve while its scrim lifts. Closing it first put a
+  half-closed drawer in the snapshot, held while the next board rendered and then dropped. Switching workspace goes straight to the
   board it would open, so it is one cross-fade rather than a fade to the workspace's loading
   page and another to its board.
 - **`forward` / `back`: pages with an order** slide 20% in the direction of travel while

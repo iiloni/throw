@@ -1,3 +1,4 @@
+import { useRouterState } from '@tanstack/react-router';
 import type { Project } from '@throw/shared';
 import {
   Check,
@@ -13,7 +14,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AnimatedHeight } from '@/components/AnimatedHeight/AnimatedHeight';
 import { useShell } from '@/components/AppShell/shell';
 import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
@@ -50,6 +51,26 @@ export function ProjectSwitcher({ open, onClose }: { open: boolean; onClose: () 
   /** Closes the switcher, then acts: a form opening takes the drawer's page in its place. */
   const then = (action: () => void) => () => {
     onClose();
+    action();
+  };
+  /*
+   * A board switch leaves the switcher open until the next board commits, inside the page's
+   * cross-fade. Closing first put the half-closed drawer and its scrim in the outgoing snapshot,
+   * held while the board rendered and then dropped in a frame; this way the page dissolves from
+   * what was on screen while the live drawer closes over it. The router sets the resolved
+   * location inside the transition; `location` changes as navigation starts, before the
+   * outgoing snapshot is taken. `leaving` is the page a switch waits to leave.
+   */
+  const pathname = useRouterState({ select: (state) => state.resolvedLocation?.pathname });
+  const leaving = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    if (leaving.current === null || leaving.current === (pathname ?? '')) return;
+    leaving.current = null;
+    onClose();
+  }, [pathname, onClose]);
+  const switchTo = (action: (() => void) | false) => () => {
+    if (!action) return onClose();
+    leaving.current = pathname ?? '';
     action();
   };
   const { workspace, project } = shell;
@@ -112,9 +133,7 @@ export function ProjectSwitcher({ open, onClose }: { open: boolean; onClose: () 
                     >
                       <AllProjectsTile
                         active={shell.crossBoard}
-                        onSelect={then(() => {
-                          if (!shell.crossBoard) shell.goBoard();
-                        })}
+                        onSelect={switchTo(!shell.crossBoard && shell.goBoard)}
                       />
                       {shell.projects.map((item, index) => (
                         <ProjectTile
@@ -123,10 +142,10 @@ export function ProjectSwitcher({ open, onClose }: { open: boolean; onClose: () 
                           index={index}
                           reduced={reduced}
                           active={!shell.crossBoard && !shell.settings && project?.id === item.id}
-                          onSelect={then(() => {
-                            if (shell.crossBoard || shell.settings || project?.id !== item.id)
-                              shell.selectProject(item.workspaceId, item.id);
-                          })}
+                          onSelect={switchTo(
+                            (shell.crossBoard || shell.settings || project?.id !== item.id) &&
+                              (() => shell.selectProject(item.workspaceId, item.id)),
+                          )}
                         />
                       ))}
                       <Tile
@@ -180,9 +199,7 @@ export function ProjectSwitcher({ open, onClose }: { open: boolean; onClose: () 
                           <Row
                             icon={Layers}
                             active={active}
-                            onSelect={then(() => {
-                              if (!active) shell.selectWorkspace(item.id);
-                            })}
+                            onSelect={switchTo(!active && (() => shell.selectWorkspace(item.id)))}
                           >
                             {item.name}
                           </Row>

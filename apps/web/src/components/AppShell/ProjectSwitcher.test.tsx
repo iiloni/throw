@@ -38,6 +38,12 @@ const shell = vi.hoisted(() => ({
   value: {} as Record<string, unknown>,
 }));
 vi.mock('@/components/AppShell/shell', () => ({ useShell: () => shell.value }));
+// The pathname the router has resolved, which it sets as the next page commits.
+const router = vi.hoisted(() => ({ pathname: '/w/w1/p/p1' }));
+vi.mock('@tanstack/react-router', () => ({
+  useRouterState: ({ select }: { select: (state: unknown) => unknown }) =>
+    select({ resolvedLocation: { pathname: router.pathname } }),
+}));
 
 import { ProjectSwitcher } from './ProjectSwitcher';
 
@@ -62,14 +68,20 @@ function setup(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
   const onClose = vi.fn();
-  render(<ProjectSwitcher open onClose={onClose} />);
-  return { ...actions, onClose };
+  const view = render(<ProjectSwitcher open onClose={onClose} />);
+  /** The router resolving the next page, inside its view transition. */
+  const arrive = (pathname: string) => {
+    router.pathname = pathname;
+    view.rerender(<ProjectSwitcher open onClose={onClose} />);
+  };
+  return { ...actions, onClose, arrive };
 }
 
 const button = (name: string) => screen.getByRole('button', { name });
 
 beforeEach(() => {
   surface.dismiss = undefined;
+  router.pathname = '/w/w1/p/p1';
 });
 
 describe('project switcher', () => {
@@ -82,20 +94,27 @@ describe('project switcher', () => {
     expect(button('All projects')).not.toHaveAttribute('aria-current');
   });
 
-  it('switches project, or just closes on the open one', () => {
-    const { selectProject, onClose } = setup();
+  it('switches project, closing as the board arrives, or just closes on the open one', () => {
+    const { selectProject, onClose, arrive } = setup();
     fireEvent.click(button('Garden'));
-    expect(onClose).toHaveBeenCalledOnce();
     expect(selectProject).toHaveBeenCalledWith('w1', 'p2');
+    // Still open in the outgoing snapshot; the drawer closes over the cross-fade.
+    expect(onClose).not.toHaveBeenCalled();
+    arrive('/w/w1/p/p2');
+    expect(onClose).toHaveBeenCalledOnce();
+    // Only the switch that was asked for closes it.
+    arrive('/w/w1/p/p1');
+    expect(onClose).toHaveBeenCalledOnce();
     fireEvent.click(button('Kitchen'));
     expect(onClose).toHaveBeenCalledTimes(2);
     expect(selectProject).toHaveBeenCalledOnce();
   });
 
   it('opens the cross-project board, a new project and the footer’s pages', () => {
-    const { goBoard, openForm, goProjectSettings, goTrash, goSettings, onClose } = setup();
+    const { goBoard, openForm, goProjectSettings, goTrash, goSettings, onClose, arrive } = setup();
     fireEvent.click(button('All projects'));
     expect(goBoard).toHaveBeenCalled();
+    arrive('/w/w1/board');
     fireEvent.click(button('New project'));
     expect(openForm).toHaveBeenCalledWith({ kind: 'new-project', workspace: workspaces[0] });
     fireEvent.click(button('Project settings'));
@@ -116,12 +135,15 @@ describe('project switcher', () => {
   });
 
   it('switches, makes and renames workspaces from their own view, which Back leaves', () => {
-    const { selectWorkspace, openForm } = setup();
+    const { selectWorkspace, openForm, onClose, arrive } = setup();
     fireEvent.click(button('Workspace: Personal'));
     expect(screen.getByRole('dialog', { name: 'Workspaces' })).toBeInTheDocument();
     expect(button('Personal')).toHaveAttribute('aria-current', 'true');
     fireEvent.click(button('Studio'));
     expect(selectWorkspace).toHaveBeenCalledWith('w2');
+    expect(onClose).not.toHaveBeenCalled();
+    arrive('/w/w2/p/p9');
+    expect(onClose).toHaveBeenCalledOnce();
     fireEvent.click(button('New workspace'));
     expect(openForm).toHaveBeenCalledWith({ kind: 'new-workspace' });
     fireEvent.click(button('Rename workspace'));
