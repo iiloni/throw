@@ -105,8 +105,8 @@ export function Hint({
       >
         {children}
       </TooltipTrigger>
-      <TooltipContent side={side} className="max-w-[min(24rem,calc(100vw-2rem))] break-words">
-        {label}
+      <TooltipContent side={side}>
+        <span className="min-w-0">{label}</span>
       </TooltipContent>
       {hidden}
     </Tooltip>

@@ -181,13 +181,9 @@ export function TagBadge({
         trigger
       )}
       <TooltipContent
-        variant="glass"
         data-color={root.color ?? undefined}
         sideOffset={8}
-        className={cn(
-          'max-w-[min(24rem,calc(100vw-2rem))] break-words',
-          root.color ? 'border-tint-accent!' : 'border-foreground/20!',
-        )}
+        className={root.color ? 'border-tint-accent!' : 'border-foreground/20!'}
         onEscapeKeyDown={(event) => event.stopPropagation()}
         onPointerDownOutside={(event) => {
           // A second tap must reach the toggle without Radix first dismissing it.

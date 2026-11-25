@@ -21,18 +21,21 @@ export type WebhookFold = {
 };
 
 /**
- * `wait` sends after the quiet window, `now` at once. `hold` keeps the delivery unsent but
- * open to later changes: an undone edit, or a created task that is blank or in the trash.
- * `drop` removes it: a task created and purged within the window was never announced.
+ * `wait` sends once the webhook has been quiet for its window. `hold` keeps the delivery
+ * unsent but open to later changes: an undone edit, or a created task that is blank or in the
+ * trash. `drop` removes it: a task created and purged within the window was never announced.
  */
-export type FoldOutcome = 'wait' | 'now' | 'hold' | 'drop';
+export type FoldOutcome = 'wait' | 'hold' | 'drop';
 
 export type Folded = { payload: WebhookPayload; fold: WebhookFold | null; outcome: FoldOutcome };
 
 /** The title a board's `+` gives a task before anyone names it. */
 export const BLANK_TASK_TITLE = 'New task';
 
-/** What a quiet window folds a change into. Comments are never folded: they are sent at once. */
+/**
+ * What a quiet window folds a change into. Comments are never folded: each is its own
+ * delivery, which still waits for the webhook to go quiet.
+ */
 export function coalesceKeyOf(change: {
   event: WebhookEvent;
   workspaceId: string;
@@ -152,9 +155,11 @@ export function netFields(fold: WebhookFold) {
 
 /**
  * Folds a task change into the webhook's waiting delivery for that task, if it has one, and
- * decides what the delivery now says and when. Changes count by their net effect: marking a
- * task done and back, or removing a tag and adding it again, leaves nothing to send, and only
- * the fields that still differ are listed. A purge is sent at once.
+ * decides what the delivery now says and whether it waits. Changes count by their net effect:
+ * marking a task done and back, or removing a tag and adding it again, leaves nothing to send,
+ * and only the fields that still differ are listed. A purge replaces what was waiting and
+ * waits like any other change, unless the task was created in the window: then nothing is
+ * left to say.
  */
 export function foldTask(
   waiting: { payload: WebhookPayload; fold: WebhookFold | null } | undefined,
@@ -164,7 +169,7 @@ export function foldTask(
   const base = waiting ? mergePayload(waiting.payload, next) : next;
   const fold = foldValues(waiting?.fold ?? null, next, values);
   if (base.event === 'task.deleted')
-    return { payload: base, fold, outcome: fold.created ? 'drop' : 'now' };
+    return { payload: base, fold, outcome: fold.created ? 'drop' : 'wait' };
 
   const changed = netFields(fold);
   // A device's reorders are not announced on their own, so neither is a position left over

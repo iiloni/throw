@@ -1,6 +1,6 @@
 import '@blocknote/shadcn/style.css';
 import { type BlockNoteEditor, BlockNoteSchema, defaultBlockSpecs } from '@blocknote/core';
-import { SuggestionMenu } from '@blocknote/core/extensions';
+import { HistoryExtension, SuggestionMenu } from '@blocknote/core/extensions';
 import { en } from '@blocknote/core/locales';
 import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/shadcn';
@@ -51,6 +51,7 @@ export function DescriptionEditor({
   placeholder = 'Describe the work…',
   autoFocus = false,
   scrollClearance = 0,
+  onControls,
 }: {
   initialContent: Description;
   editable?: boolean;
@@ -59,6 +60,8 @@ export function DescriptionEditor({
   /** Keep actions beneath an editor clear of the dock while typing. */
   scrollClearance?: number;
   onChange?: (document: Description) => void;
+  /** Hands the owner this editor's controls while it is mounted, for its undo and redo. */
+  onControls?: (controls: EditorControls | null) => void;
 }) {
   const theme = useResolvedTheme();
   const editor = useCreateBlockNote({
@@ -88,6 +91,11 @@ export function DescriptionEditor({
     }
   }
   const controls = useMemo(() => createControls(editor), [editor]);
+  useEffect(() => {
+    if (!editable || !onControls) return;
+    onControls(controls);
+    return () => onControls(null);
+  }, [editable, onControls, controls]);
   // While it has focus on a touch screen, this editor is the one the dock formats.
   useEffect(() => {
     if (!editable || !coarsePointer) return;
@@ -108,7 +116,8 @@ export function DescriptionEditor({
   }, [editor, editable, controls]);
   // Catch keeps the caret above its native keyboard and dock. Throw owns the same inset
   // as a CSS token, so observe it rather than installing a second keyboard tracker. A dock
-  // resting over the scroll area declares itself as the area's bottom scroll padding.
+  // resting over the scroll area declares itself as the area's bottom scroll padding, and
+  // toolbars floating over its top as its top scroll padding.
   useEffect(() => {
     if (!editable) return;
     let frame = 0;
@@ -123,11 +132,17 @@ export function DescriptionEditor({
         const view = editor.prosemirrorView;
         const area = view.dom.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
         if (!area) return;
-        const covered = Number.parseFloat(getComputedStyle(area).scrollPaddingBottom) || 0;
-        if (keyboard <= 0 && covered <= 0) return;
+        const style = getComputedStyle(area);
+        const covered = Number.parseFloat(style.scrollPaddingBottom) || 0;
+        const coveredTop = Number.parseFloat(style.scrollPaddingTop) || 0;
+        if (keyboard <= 0 && covered <= 0 && coveredTop <= 0) return;
         const caret = view.coordsAtPos(view.state.selection.head);
-        const bottom = area.getBoundingClientRect().bottom - covered - 16 - scrollClearance;
-        if (caret.bottom > bottom) area.scrollTop += caret.bottom - bottom + 12;
+        const rect = area.getBoundingClientRect();
+        const top = rect.top + coveredTop;
+        const bottom = rect.bottom - covered - 16 - scrollClearance;
+        // Only a caret hidden under the toolbars: one scrolled further up was scrolled away.
+        if (caret.top < top && caret.bottom > rect.top) area.scrollTop -= top - caret.top + 12;
+        else if (caret.bottom > bottom) area.scrollTop += caret.bottom - bottom + 12;
       });
     }
     const observer = new MutationObserver(schedule);
@@ -230,11 +245,25 @@ function createControls(editor: Editor): EditorControls {
       if (editor.canUnnestBlock()) editor.unnestBlock();
       refresh();
     },
+    undo() {
+      // Only hold on to focus: taking it would raise a keyboard the user had put away.
+      const focused = editor.isFocused();
+      editor.undo();
+      if (focused) editor.focus();
+      refresh();
+    },
+    redo() {
+      const focused = editor.isFocused();
+      editor.redo();
+      if (focused) editor.focus();
+      refresh();
+    },
   };
 }
 
 function readState(editor: Editor): FormattingState {
   const active: Partial<Record<TextStyle, unknown>> = editor.getActiveStyles();
+  const history = editor.getExtension(HistoryExtension);
   return {
     styles: {
       bold: Boolean(active.bold),
@@ -245,5 +274,7 @@ function readState(editor: Editor): FormattingState {
     block: editor.getTextCursorPosition().block.type,
     canIndent: editor.canNestBlock(),
     canOutdent: editor.canUnnestBlock(),
+    canUndo: history ? editor.canExec(history.undoCommand) : false,
+    canRedo: history ? editor.canExec(history.redoCommand) : false,
   };
 }

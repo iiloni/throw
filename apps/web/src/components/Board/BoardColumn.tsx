@@ -5,10 +5,11 @@ import { type ReactNode, useLayoutEffect, useRef, useState } from 'react';
 import { Hint } from '@/components/Hint/Hint';
 import { entryDelay, useEntryMotion } from '@/lib/entryMotion';
 import { cn } from '@/lib/utils';
+import { useColumnSpotlightBlocker } from './blockers';
 import { drag, makingWay } from './drag';
 import { StatusGlyph } from './glyphs';
 import type { Category } from './model';
-import { useBoardSettings } from './state';
+import { board, current, useBoardSettings, visibleIds } from './state';
 
 /** Catch's deck: the content swapped in by folding fades in once the column has mostly resized. */
 const CONTENT_FADE = { duration: 0.25, delay: 0.15, ease: 'easeOut' } as const;
@@ -147,9 +148,19 @@ function ColumnStrip({
   revealed: boolean;
   onExpand: () => void;
 }) {
+  const state = board.use();
   const held = drag.use();
+  const reduced = useReducedMotion();
+  const activeBoard = state.boards.length > 0 ? current(state) : null;
   const over =
     makingWay(held) && held.target?.kind === 'status' && held.target.statusId === columnId;
+  const hasBlocker = useColumnSpotlightBlocker(
+    columnId,
+    activeBoard?.project ?? null,
+    state.subtasksAsCards,
+    activeBoard ? visibleIds(state) : null,
+    !makingWay(held),
+  );
   const entry = useEntryMotion(`column:${columnId}`, true, entryDelay(index), revealed);
   return (
     <motion.div className="flex min-h-0 flex-1 flex-col" style={entry}>
@@ -162,9 +173,11 @@ function ColumnStrip({
           data-drop-status={columnId}
           data-status-home={columnId}
           data-over={over ? '' : undefined}
+          data-spotlight={hasBlocker ? 'blocker' : undefined}
+          data-spotlight-instant={reduced ? '' : undefined}
           onClick={onExpand}
           className={cn(
-            'board-column column-strip flex min-h-0 flex-1 flex-col items-center gap-3 rounded-3xl pt-[1.1875rem] pb-4 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60',
+            'board-column column-strip spotlight-strip flex min-h-0 flex-1 flex-col items-center gap-3 rounded-3xl pt-[1.1875rem] pb-4 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60',
             over && 'text-foreground',
           )}
         >

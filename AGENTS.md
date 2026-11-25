@@ -19,6 +19,11 @@ the top of a board, opens the shell's project switcher as a drawer page
 view transitions (`lib/pageTransition.ts`, ADR 0013): boards cross-fade, ordered pages
 slide, and content enters once per document with `useEntryMotion` (`lib/entryMotion.ts`),
 except that a board switched to settles its content in on every visit.
+A fling into the top or bottom of the page or any vertical scroller bounces off it, as in
+Catch (`lib/scrollBounce.ts`, watched from `routes/_app.tsx`): the page column moves by `top`
+(`pageBounceY`), never a transform, so fixed docks and glass stay put, and a scroller's
+children move by composited WAAPI. It waits for the finger to lift and for a held, dragged or
+carried card, and stays still with reduced motion.
 Its project board uses the shared Board
 components on synced tasks and statuses, and the cross-project board
 (`Board/WorkspaceBoard.tsx`) adapts every project of the workspace into one virtual project
@@ -28,7 +33,13 @@ Task actions live in `apps/web/src/lib/tasks.ts` and `statuses.ts`. The task pan
 fields and text-only BlockNote descriptions (a touch screen formats from Catch's
 `FormattingBar` in the dock, through `DescriptionEditor/editorControls.ts`), keeps
 recoverable description drafts, and
-opens subtasks through the board's existing `openTaskId`. Its real content is supplied by
+opens subtasks through the board's existing `openTaskId`. Catch's floating undo/redo
+(`components/HistoryToolbar`, from the description's `editorControls`) sits beside Back in the
+desktop header and above the dock on a phone; on a phone only, `components/ScrollToBottom`
+offers a jump to a long task's end above the dock. On a phone both step aside while a drawer
+page covers the screen's foot. A phone task scrolls the full screen height under its floating Back and
+trash toolbars, and Catch's `page-top-blur` / `page-bottom-blur` scrims blur its edges while
+there is more that way (`useScrollEdges`). Its real content is supplied by
 `TaskContentContext` at the project-board boundary; the prototype keeps its mock content.
 On a phone the same boundary hands the board's drawer the open task's dock and pickers
 (`TaskDetails/TaskControls.tsx`); the desktop pane docks them below the task's card, as
@@ -37,9 +48,10 @@ tags and subtasks to a side column beside the card while it has any (ADR 0012,
 `TaskDetails/TaskColumn.tsx`); later extras such as link previews join it there.
 Outbound webhooks (ADR 0015) are server-only: `apps/server/src/webhooks` queues deliveries
 in the write's transaction, checks receivers against its SSRF policy and sends them from a
-worker; Settings manages them at `/settings/webhooks`. A webhook's quiet window folds a
-task's or project's changes into one waiting delivery and sends only their net effect
-(`webhooks/fold.ts`).
+worker; Settings manages them at `/settings/webhooks`. A webhook's quiet window is a
+debounce over the whole webhook: any change it follows, comments included, pushes back all
+its waiting deliveries. Within it, a task's or project's changes fold into one delivery that
+sends only their net effect (`webhooks/fold.ts`).
 The activity log syncs to devices and comments are built (`lib/comments.ts`), with a
 timeline query in `collections.ts` and a task history view in `TaskDetails/TaskTimeline.tsx`.
 Tags have their data layer and reusable controls in `components/Tag*`, with a real-data `/prototype/tags` workshop in
@@ -61,6 +73,8 @@ the board. `railGeometry` and `useRailSpring` in `Board/SideZone.tsx` spring a r
 its state changes and track its width exactly as the row or its edge is resized.
 Desktop columns on both boards fold to a strip, as Catch's deck does
 (`Board/BoardColumn.tsx`, remembered per project by `useCollapsedColumns` in `Board/state.ts`).
+A phone's project board reads the same folds: its pager skips folded columns, which stay as
+short handles on `FlowTrack` that open them again (`phoneColumns` in `Board/PhoneBoard.tsx`).
 Both boards narrow in place: the board store holds a filter and a temporary sort
 (`Board/filter.ts`, applied by `listTasks` and `countIn`), set from the desktop boards'
 search bar (`components/BoardSearch`, docked as a sidebar on wide boards) or the phone drawer's

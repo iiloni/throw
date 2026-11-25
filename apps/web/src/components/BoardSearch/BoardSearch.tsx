@@ -33,7 +33,7 @@ import { createStore } from '@/lib/store';
 import { createTask } from '@/lib/tasks';
 import { cn } from '@/lib/utils';
 import { ActiveFilters, BoardFilters, hasChips, SidebarFilters } from './BoardFilters';
-import { FilterCard } from './FilterCard';
+import { FilterCard, keepFocus } from './FilterCard';
 
 /** Room the open bar takes at the foot of the board, so a column's last card can scroll clear. */
 export const SEARCH_SPACE = 'var(--board-search-space, 0.25rem)';
@@ -135,9 +135,17 @@ export function BoardSearch() {
   return (
     <AnimatePresence>
       {searching && (
+        // A soft keyboard that overlays the page (Android, VirtualKeyboard) reports its height
+        // as `--keyboard`; the bar rides it to sit snugly above, as the drawer's dock does. It
+        // moves by `translate` so the keyboard's frames cost no layout, and the measured bar,
+        // and with it the columns' end room, keeps its size.
         <motion.div
           key="search"
-          className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex justify-center px-6 pb-[max(1.25rem,calc(var(--safe-bottom)+0.75rem))]"
+          data-board-search-float=""
+          className={cn(
+            'pointer-events-none absolute inset-x-0 bottom-0 z-30 flex justify-center px-6 pb-[max(1.25rem,calc(var(--safe-bottom)+0.75rem))]',
+            KEYBOARD_LIFT,
+          )}
           initial={{ opacity: 0, y: reduced ? 0 : 16 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: reduced ? 0 : 16 }}
@@ -229,11 +237,15 @@ export const BoardSearchSidebar = memo(function BoardSearchSidebar() {
             data-docked=""
             onKeyDown={onKeyDown}
             style={{ width: SIDEBAR_WIDTH }}
-            className="flex min-h-0 flex-1 flex-col bg-[var(--search-surface)] px-4 pt-[calc(var(--safe-top)+1.25rem)] pb-[max(1.5rem,calc(var(--safe-bottom)+0.75rem))]"
+            // The field ends above an overlaying soft keyboard, and the filters above it give
+            // up the room; with no keyboard (`--keyboard: 0px`) the foot is as it was.
+            className="flex min-h-0 flex-1 flex-col bg-[var(--search-surface)] px-4 pt-[calc(var(--safe-top)+1.25rem)] pb-[max(1.5rem,calc(var(--safe-bottom)+0.75rem),calc(var(--keyboard)+0.75rem))]"
           >
             <ScrollArea edges className="-mx-1 flex-1 [--scrollbar-inset:0.5rem]">
               <ScrollAreaViewport>
-                <div className="px-1 pt-0.5 pb-4">
+                {/* Choosing a filter keeps the field's keyboard up, as the filter card does, so
+                    the column does not grow under the finger as the keyboard falls. */}
+                <div {...keepFocus} className="px-1 pt-0.5 pb-4">
                   <SidebarFilters />
                 </div>
               </ScrollAreaViewport>
@@ -258,7 +270,17 @@ export const BoardSearchSidebar = memo(function BoardSearchSidebar() {
   );
 });
 
-/** Catch's filter panel: glass rising above the field. */
+/**
+ * Lifts the floating bar above an overlaying soft keyboard to 0.75rem over it. Its resting
+ * padding already covers part of that, so it moves only by the rest; with no keyboard it stays.
+ */
+const KEYBOARD_LIFT =
+  '[translate:0_min(0px,calc(max(1.25rem,var(--safe-bottom)+0.75rem)-0.75rem-var(--keyboard)))]';
+
+/**
+ * Catch's filter panel: glass rising above the field. Its views fit between the top of the
+ * screen and the bar, which an open keyboard lifts, and keep a floor so they stay usable.
+ */
 function FilterPanel({ open }: { open: boolean }) {
   return (
     <AnimatePresence initial={false}>
@@ -270,7 +292,7 @@ function FilterPanel({ open }: { open: boolean }) {
           <section
             id="board-filter-panel"
             aria-label="Filters and sort"
-            className="p-3 [--board-filter-view-max:min(26rem,calc(100dvh-var(--dock-height)-15rem))]"
+            className="p-3 [--board-filter-view-max:max(8rem,min(26rem,calc(100dvh-var(--keyboard)-var(--safe-top)-var(--dock-height)-15rem)))]"
           >
             <BoardFilters />
           </section>
@@ -296,7 +318,8 @@ function Chips({ onClear }: { onClear?: () => void }) {
           exit={{ height: 0, opacity: 0 }}
           transition={reduced ? { duration: 0 } : springs.smooth}
         >
-          <div className="glass mb-3 rounded-[1.25rem] px-2.5 py-2">
+          {/* Removing a chip leaves focus, and the keyboard, in the field. */}
+          <div {...keepFocus} className="glass mb-3 rounded-[1.25rem] px-2.5 py-2">
             <ActiveFilters state={state} onClear={onClear} />
           </div>
         </motion.div>

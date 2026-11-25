@@ -2,6 +2,7 @@ import { type ActivityEntry, descriptionSchema, type Task } from '@throw/shared'
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { uuidv7 } from 'uuidv7';
+import type { EditorControls } from '@/components/DescriptionEditor/editorControls';
 import { LazyDescriptionEditor } from '@/components/DescriptionEditor/LazyDescriptionEditor';
 import { Button } from '@/components/ui/button';
 import {
@@ -17,9 +18,12 @@ import { getTask } from '@/lib/tasks';
 export function TaskDescription({
   task,
   recovery,
+  onControls,
 }: {
   task: Task;
   recovery?: ActivityEntry | null;
+  /** Receives the editable description's controls, for the pane's undo and redo. */
+  onControls?: (controls: EditorControls | null) => void;
 }) {
   const draft = useDescriptionDraft(task.id);
   const editing = draft && draft.status !== 'pending';
@@ -190,6 +194,7 @@ export function TaskDescription({
         key={session.key}
         initialContent={session.document}
         editable
+        onControls={onControls}
         onChange={(document) => {
           const existing = readDescriptionDraft(task.id);
           const next: DescriptionDraft = {

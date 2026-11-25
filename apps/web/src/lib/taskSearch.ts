@@ -1,4 +1,5 @@
 import {
+  isClosedCategory,
   isTaskTrashed,
   type Project,
   type Status,
@@ -159,12 +160,12 @@ export function rankMatch(
         : 4;
 }
 
-/** Exact identifiers, exact titles, title prefixes, all-title words, then body/tag matches. */
-export function searchTasks(
+/** Matches ranked best first, unlimited: see `searchTasks`. */
+function rankTasks(
   indexed: readonly IndexedTask[],
   query: string,
-  { projectId = '', currentProjectId = '', limit = SEARCH_LIMIT } = {},
-): IndexedTask[] {
+  { projectId = '', currentProjectId = '' } = {},
+): { row: IndexedTask; rank: number }[] {
   const prepared = prepareQuery(query);
   if (!prepared) return [];
   const results: { row: IndexedTask; rank: number }[] = [];
@@ -187,7 +188,59 @@ export function searchTasks(
       a.row.title.localeCompare(b.row.title) ||
       a.row.task.id.localeCompare(b.row.task.id),
   );
-  return results.slice(0, limit).map(({ row }) => row);
+  return results;
+}
+
+/** Exact identifiers, exact titles, title prefixes, all-title words, then body/tag matches. */
+export function searchTasks(
+  indexed: readonly IndexedTask[],
+  query: string,
+  { projectId = '', currentProjectId = '', limit = SEARCH_LIMIT } = {},
+): IndexedTask[] {
+  return rankTasks(indexed, query, { projectId, currentProjectId })
+    .slice(0, limit)
+    .map(({ row }) => row);
+}
+
+/** Done or Cancelled; a task whose status has not synced goes by its close time. */
+export function isClosedTask({ task, status }: Pick<IndexedTask, 'task' | 'status'>) {
+  return status ? isClosedCategory(status.category) : task.closedAt !== null;
+}
+
+export type SplitResults = {
+  /** Open tasks, and closed ones asked for by their exact identifier. */
+  open: IndexedTask[];
+  /** The other closed tasks, which search keeps behind a toggle. */
+  closed: IndexedTask[];
+  /** Every closed match, before the limit. */
+  closedCount: number;
+};
+
+/**
+ * Splits rows already in order into open work and closed. Closed work is set apart, so finished
+ * tasks do not crowd out what is still to do, except one named by its exact identifier
+ * (`rank` 0): looking up THR-27 finds it, done or not.
+ */
+export function splitClosed(
+  rows: readonly { row: IndexedTask; rank: number | null }[],
+  limit = SEARCH_LIMIT,
+): SplitResults {
+  const open: IndexedTask[] = [];
+  const closed: IndexedTask[] = [];
+  for (const { row, rank } of rows) {
+    if (rank !== 0 && isClosedTask(row)) closed.push(row);
+    else open.push(row);
+  }
+  return { open: open.slice(0, limit), closed: closed.slice(0, limit), closedCount: closed.length };
+}
+
+/** `searchTasks`, with closed work set apart (`splitClosed`). */
+export function searchTasksSplit(
+  indexed: readonly IndexedTask[],
+  query: string,
+  { projectId = '', currentProjectId = '', limit = SEARCH_LIMIT } = {},
+): SplitResults {
+  return splitClosed(rankTasks(indexed, query, { projectId, currentProjectId }), limit);
 }
 
 export function searchProjects(projects: readonly Project[], query: string): Project[] {

@@ -339,8 +339,13 @@ motion.
   the two, and the column's content fades in once it has mostly resized. Folded columns are
   remembered per project on the device. A card dropped on a strip is sent to its status
   without the column opening ([ADR 0008](decisions/0008-board-drag-model.md)); carrying a card
-  into one from the keyboard, or opening one of its tasks, opens it. A phone shows one column
-  at a time, so it does not fold them, and a column folded on a desktop shows in full there.
+  into one from the keyboard, or opening one of its tasks, opens it.
+- A phone shows one column at a time and shares the project's folded columns: the pager skips
+  them, so a column rarely visited costs no swipe. The current column folds from a control
+  beside its name, and the next column takes its place. Each folded column stays on the flow
+  track as a short handle in its place; tapping it opens the column and turns to it. The last open
+  column does not fold, and a board whose every column was folded on a desktop shows its first.
+  Cards still reach a folded column through the move drawer.
 - The board has no title row. The project's name is in the expanded navigation rail, and in
   a tooltip on the project's icon when the rail is collapsed.
 - A list of cards fades out over its last few pixels at the top or bottom while
@@ -734,6 +739,16 @@ to projects, and has a filter button beside the field that opens the project sco
 shown as a removable chip while it applies. Open and closed tasks and subtasks are included;
 trash (including children of trashed parents and projects) is excluded. There is no
 cross-workspace search.
+
+Closed (done and cancelled) tasks stay out of the palette's results until asked for
+(2026-11-24), so finished work does not crowd out what is still to do. When any match, a quiet
+“Show closed tasks” row with their count sits at the foot of the open results; it is an option
+like the others, reached with the arrows and turned with Enter or a tap, and the closed results
+appear beneath it. Showing them lasts for that search, through new words, and is forgotten
+when search closes. A closed task named by its exact identifier (THR-27, or its number on a
+project board) is listed with the open results all the same, so looking one up never needs
+the toggle. On the boards' own search, where closed cards stay in the closed zone, Enter
+likewise opens the best open match before any closed one, unless the identifier names it.
 
 Search runs on synced device data, offline too. Every literal query word must appear across
 the title, current identifier, description text or tag names, ignoring case and accents. A

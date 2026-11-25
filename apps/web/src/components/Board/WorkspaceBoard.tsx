@@ -144,6 +144,7 @@ export function WorkspaceBoard({
             statuses={statuses.filter((row) => row.projectId === project.id)}
             tasks={tasks.filter((row) => row.projectId === project.id)}
             phone={phone}
+            drawerPage={taskPage?.taskId === id}
           />
         )
       );

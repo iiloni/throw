@@ -134,6 +134,28 @@ test.describe('desktop', () => {
     await expect(bar(page)).toHaveCount(0);
   });
 
+  test('Enter opens open work before a closed task that answers better, unless its identifier names it', async ({
+    page,
+  }) => {
+    const board = await fixture(page);
+    // Numbered after the fixture's eleven: BRD-12 and BRD-13.
+    await board.add('Wrap up', 'Done');
+    await board.add('Wrap up notes', 'Build');
+    await expect(page.getByRole('article', { name: /Wrap up notes$/ })).toBeVisible();
+    const title = page
+      .getByRole('region', { name: 'Task', exact: true })
+      .getByRole('textbox', { name: 'Task title' });
+    await openBar(page);
+    // The closed task's exact title outranks the open one's prefix, yet the open one opens.
+    await field(page).fill('wrap up');
+    await field(page).press('Enter');
+    await expect(title).toHaveValue('Wrap up notes');
+    await page.getByRole('button', { name: 'Back to the board', exact: true }).click();
+    await field(page).fill('BRD-12');
+    await field(page).press('Enter');
+    await expect(title).toHaveValue('Wrap up');
+  });
+
   test('tags match all or any, with the tags beneath them, alongside sizes; chips remove them', async ({
     page,
   }) => {

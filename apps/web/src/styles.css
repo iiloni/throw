@@ -543,6 +543,29 @@
 }
 
 /*
+ * Catch's edge blurs: scrolling content blurs away beneath a full-screen page's floating
+ * controls without a visible bar edge.
+ */
+.page-top-blur,
+.page-bottom-blur {
+  background-color: var(--glass);
+  backdrop-filter: blur(24px) saturate(150%);
+
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--background);
+    backdrop-filter: none;
+  }
+}
+
+.page-top-blur {
+  mask-image: linear-gradient(to bottom, black 0%, black 35%, transparent 100%);
+}
+
+.page-bottom-blur {
+  mask-image: linear-gradient(to top, black 0%, black 35%, transparent 100%);
+}
+
+/*
  * Sonner gives every toast its column's full width (the whole screen on phones). Size each
  * to its text and center it; the extra attribute outranks Sonner's own injected rules.
  */
@@ -678,6 +701,74 @@ body:has(section.board-column[data-column-color]) .column-strip {
 }
 .board-slot[data-dim] {
   opacity: 0.36;
+}
+
+/*
+ * Blocker spotlight (THR-93): lingering on a card's blocked badge softly dims unrelated
+ * cards while elevating the hovered card and its open blockers, plus any collapsed column
+ * or backlog strip hiding one.
+ */
+.board-card {
+  transition:
+    box-shadow 220ms var(--ease-emphasized),
+    opacity 220ms var(--ease-emphasized);
+}
+.board-card-group {
+  transition: opacity 220ms var(--ease-emphasized);
+}
+.board-card[data-spotlight="dimmed"] {
+  opacity: 0.36;
+}
+.board-card-group[data-spotlight-group="dimmed"] {
+  opacity: 0.36;
+}
+.board-card-group[data-spotlight-group="dimmed"] > .board-card[data-spotlight="dimmed"] {
+  opacity: 1;
+}
+.board-card-group[data-spotlight-group="active"] {
+  z-index: 1;
+}
+.board-card[data-spotlight="blocked"] {
+  z-index: 1;
+  box-shadow:
+    0 0 0 2px color-mix(in oklab, var(--destructive) 60%, var(--border)),
+    0 8px 22px -8px color-mix(in oklab, var(--destructive) 22%, oklch(0 0 0 / 0.18));
+}
+.board-card[data-spotlight="blocker"] {
+  z-index: 1;
+  box-shadow:
+    0 0 0 2px var(--destructive),
+    0 0 0 5px color-mix(in oklab, var(--destructive) 16%, transparent),
+    0 10px 26px -8px color-mix(in oklab, var(--destructive) 30%, oklch(0 0 0 / 0.22));
+}
+.spotlight-strip {
+  transition:
+    background-color 220ms var(--ease-emphasized),
+    box-shadow 220ms var(--ease-emphasized),
+    color 220ms var(--ease-emphasized);
+}
+.spotlight-strip[data-spotlight="blocker"] {
+  background-color: color-mix(in oklab, var(--destructive) 11%, var(--column, transparent));
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--destructive) 78%, transparent);
+  color: var(--foreground);
+}
+.spotlight-underlay {
+  transition:
+    background-color 220ms var(--ease-emphasized),
+    box-shadow 220ms var(--ease-emphasized);
+}
+.spotlight-underlay[data-spotlight="blocker"] {
+  background-color: color-mix(in oklab, var(--destructive) 14%, var(--tint, var(--card)));
+  box-shadow:
+    0 0 0 2px var(--destructive),
+    0 0 0 5px color-mix(in oklab, var(--destructive) 16%, transparent),
+    0 8px 20px -6px color-mix(in oklab, var(--destructive) 28%, oklch(0 0 0 / 0.2));
+}
+.board-card[data-spotlight-instant],
+.board-card-group[data-spotlight-instant],
+.spotlight-strip[data-spotlight-instant],
+.spotlight-underlay[data-spotlight-instant] {
+  transition-duration: 0ms;
 }
 
 /* Where a held card would land: a soft well the other cards part around. */

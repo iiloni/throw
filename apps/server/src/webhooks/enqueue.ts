@@ -81,13 +81,14 @@ export function followsChange(
   return webhook.projectId === change.projectId && (!webhook.projectTrashed || trashingProject);
 }
 
-type Target = { id: string; quietWindowSeconds: number };
+export type Target = { id: string; quietWindowSeconds: number };
 type Fold = (
   waiting: { payload: WebhookPayload; fold: WebhookFold | null } | undefined,
   deliveryId: string,
 ) => Folded;
 
 const now = sql`clock_timestamp()`;
+const afterWindow = (seconds: number) => sql`${now} + make_interval(secs => ${seconds})`;
 const waitingRows = (webhookIds: string[], key: string) =>
   and(
     inArray(webhookDeliveries.webhookId, webhookIds),
@@ -96,19 +97,92 @@ const waitingRows = (webhookIds: string[], key: string) =>
     eq(webhookDeliveries.attempts, 0),
   );
 
-/** Where a folded delivery goes: sent after the window from now, sent at once, or held. */
+/** Where a folded delivery goes: sent after the window from now, or held. */
 function scheduled(target: Target, outcome: Exclude<FoldOutcome, 'drop'>) {
   if (outcome === 'hold') return { status: 'held' as const };
-  return {
-    status: 'pending' as const,
-    nextAttemptAt:
-      outcome === 'now' ? now : sql`${now} + make_interval(secs => ${target.quietWindowSeconds})`,
-  };
+  return { status: 'pending' as const, nextAttemptAt: afterWindow(target.quietWindowSeconds) };
 }
 
 /**
- * Queues a change for webhooks with a quiet window. It folds into the webhook's waiting
- * delivery for the same task or project, whose window starts again, or starts one. The partial
+ * How a change is queued for the webhooks that follow it. Webhooks with a quiet window are
+ * `quiet`: the change restarts the window for everything they have waiting. Of those, task
+ * and structure changes fold into a waiting delivery (`folding`); a comment is queued on its
+ * own after the window. Webhooks without a window are sent the change at once.
+ */
+export function queuePlan(matching: readonly Target[], key: string | null) {
+  const quiet = matching.filter((target) => target.quietWindowSeconds > 0);
+  const folding = key === null ? [] : quiet;
+  const direct = matching
+    .filter((target) => !folding.includes(target))
+    .map((target) => ({
+      target,
+      waitSeconds: target.quietWindowSeconds > 0 ? target.quietWindowSeconds : null,
+    }));
+  return { quiet, folding, direct };
+}
+
+/**
+ * Serializes quiet-window queueing in a workspace. Every write that folds or pushes back
+ * waiting deliveries takes it first, and so does a change to a webhook's window, so they never
+ * wait on each other's delivery rows in opposite orders. The worker does not take it: it
+ * claims with `SKIP LOCKED`, and the rows it has claimed have left the waiting set.
+ */
+export function lockQuietWindows(tx: Transaction, workspaceId: string) {
+  return tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${`webhooks/${workspaceId.toLowerCase()}`}, 0))`,
+  );
+}
+
+/**
+ * The webhooks' windows as they are once the lock is held. A change to a window commits under
+ * the lock, so a window read before it may be stale: pushing deliveries back by a window that
+ * was just shortened would undo `shortenWaiting`.
+ */
+async function currentWindows<T extends Target>(tx: Transaction, targets: T[]): Promise<T[]> {
+  const rows = await tx
+    .select({ id: webhooks.id, quietWindowSeconds: webhooks.quietWindowSeconds })
+    .from(webhooks)
+    .where(
+      inArray(
+        webhooks.id,
+        targets.map((target) => target.id),
+      ),
+    );
+  const windows = new Map(rows.map((row) => [row.id, row.quietWindowSeconds]));
+  return targets.map((target) => ({
+    ...target,
+    quietWindowSeconds: windows.get(target.id) ?? target.quietWindowSeconds,
+  }));
+}
+
+/**
+ * A quiet window is the webhook's, not one task's: any change it follows starts the window
+ * again for every delivery it has waiting, so nothing is sent while someone is still working
+ * on the board. Held deliveries stay held, and retries keep their schedule.
+ */
+export async function pushBackWaiting(tx: Transaction, targets: readonly Target[]) {
+  const byWindow = new Map<number, string[]>();
+  for (const target of targets)
+    byWindow.set(target.quietWindowSeconds, [
+      ...(byWindow.get(target.quietWindowSeconds) ?? []),
+      target.id,
+    ]);
+  for (const [seconds, ids] of byWindow)
+    await tx
+      .update(webhookDeliveries)
+      .set({ nextAttemptAt: afterWindow(seconds) })
+      .where(
+        and(
+          inArray(webhookDeliveries.webhookId, ids),
+          eq(webhookDeliveries.status, 'pending'),
+          eq(webhookDeliveries.attempts, 0),
+        ),
+      );
+}
+
+/**
+ * Folds a change for webhooks with a quiet window into the webhook's waiting delivery for the
+ * same task or project, or starts one, due after the window. The partial
  * unique index keeps one waiting delivery per key, so when a concurrent write inserts first
  * this one folds into it on the next round. A delivery the worker has claimed has left the
  * index and is not changed, so the change starts a new one.
@@ -188,8 +262,9 @@ const structureDeliveries = new WeakMap<
 /**
  * Queues a delivery for each webhook that follows this change, in the write's transaction:
  * the change and its announcement commit or roll back together. A webhook with a quiet window
- * folds task and structure changes into its waiting delivery for the same task or project
- * (`queueWaiting`, `fold.ts`). The worker is woken when the transaction commits.
+ * pushes back everything it has waiting (`pushBackWaiting`), folds task and structure changes
+ * into its waiting delivery for the same task or project (`queueWaiting`, `fold.ts`) and
+ * queues a comment to wait with them. The worker is woken when the transaction commits.
  */
 export async function enqueueWebhooks(tx: Transaction, actor: WriteActor, change: WebhookChange) {
   const key = coalesceKeyOf(change);
@@ -207,6 +282,7 @@ export async function enqueueWebhooks(tx: Transaction, actor: WriteActor, change
             payload: sql`jsonb_set(${webhookDeliveries.payload}, '{changedFields}', ${JSON.stringify(fields)}::jsonb)`,
           })
           .where(inArray(webhookDeliveries.id, merged.ids));
+      // The transaction's first entry already took the lock and pushed the window back.
       if (merged.waiting.length && key !== null)
         await queueWaiting(tx, merged.waiting, key, (waiting, id) =>
           foldStructure(waiting, buildPayload(id, change, actor, merged.projectKey, occurredAt)),
@@ -234,10 +310,15 @@ export async function enqueueWebhooks(tx: Transaction, actor: WriteActor, change
     )
     .leftJoin(projects, eq(projects.id, webhooks.projectId))
     .where(and(eq(webhooks.workspaceId, change.workspaceId), eq(webhooks.enabled, true)))
+    .orderBy(webhooks.id)
     // A webhook deleted before this write commits would break the deliveries' foreign key.
     // Holding its key makes the delete wait for this transaction instead.
     .for('key share', { of: webhooks });
-  const matching = targets.filter((target) => followsChange(target, change, actor));
+  let matching = targets.filter((target) => followsChange(target, change, actor));
+  if (matching.some((target) => target.quietWindowSeconds > 0)) {
+    await lockQuietWindows(tx, change.workspaceId);
+    matching = await currentWindows(tx, matching);
+  }
 
   let projectKey = change.projectKey ?? null;
   if (matching.length && change.projectKey === undefined && change.projectId !== null) {
@@ -253,13 +334,17 @@ export async function enqueueWebhooks(tx: Transaction, actor: WriteActor, change
     projectKey = project?.key ?? null;
   }
   const payloadFor = (id: string) => buildPayload(id, change, actor, projectKey, occurredAt);
-  const waiting = key === null ? [] : matching.filter((target) => target.quietWindowSeconds > 0);
-  const rows = matching
-    .filter((target) => !waiting.includes(target))
-    .map((target) => {
-      const id = uuidv7();
-      return { id, webhookId: target.id, event: change.event, payload: payloadFor(id) };
-    });
+  const { quiet, folding: waiting, direct } = queuePlan(matching, key);
+  const rows = direct.map(({ target, waitSeconds }) => {
+    const id = uuidv7();
+    return {
+      id,
+      webhookId: target.id,
+      event: change.event,
+      payload: payloadFor(id),
+      ...(waitSeconds === null ? {} : { nextAttemptAt: afterWindow(waitSeconds) }),
+    };
+  });
   if (structureKey !== null) {
     const byProject = structureDeliveries.get(tx) ?? new Map();
     byProject.set(structureKey, {
@@ -271,6 +356,7 @@ export async function enqueueWebhooks(tx: Transaction, actor: WriteActor, change
     structureDeliveries.set(tx, byProject);
   }
   if (!matching.length) return;
+  if (quiet.length) await pushBackWaiting(tx, quiet);
   if (rows.length) await tx.insert(webhookDeliveries).values(rows);
   if (key !== null && waiting.length) {
     const values = change.values && fieldValues(change.values);
@@ -289,14 +375,19 @@ export async function enqueueWebhooks(tx: Transaction, actor: WriteActor, change
  * A shorter quiet window applies to deliveries already waiting: none waits longer than the new
  * window from now, and with no window they are sent at once. A longer one leaves them be.
  */
-export async function shortenWaiting(tx: Transaction, webhookId: string, seconds: number) {
-  const until = sql`clock_timestamp() + make_interval(secs => ${seconds})`;
+export async function shortenWaiting(
+  tx: Transaction,
+  webhook: { id: string; workspaceId: string },
+  seconds: number,
+) {
+  await lockQuietWindows(tx, webhook.workspaceId);
+  const until = afterWindow(seconds);
   const shortened = await tx
     .update(webhookDeliveries)
     .set({ nextAttemptAt: until })
     .where(
       and(
-        eq(webhookDeliveries.webhookId, webhookId),
+        eq(webhookDeliveries.webhookId, webhook.id),
         eq(webhookDeliveries.status, 'pending'),
         eq(webhookDeliveries.attempts, 0),
         sql`${webhookDeliveries.nextAttemptAt} > ${until}`,

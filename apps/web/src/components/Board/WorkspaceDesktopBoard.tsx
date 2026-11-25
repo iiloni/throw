@@ -7,6 +7,7 @@ import {
 } from '@/components/BoardSearch/BoardSearch';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { BoardColumn, ColumnHeader } from './BoardColumn';
+import { useSpotlightCleanup } from './blockers';
 import { OpenTaskPane, SelectionBar, useWidth } from './DesktopBoard';
 import { drag, makingWay } from './drag';
 import { PriorityIcon } from './glyphs';
@@ -42,6 +43,7 @@ export function foldableCategory(category: string): 'done' | 'cancelled' | null 
  * each banded by priority. A wide column lays each band out as a masonry grid.
  */
 export function WorkspaceDesktopBoard() {
+  useSpotlightCleanup();
   const state = board.use();
   const { project } = current(state);
   const [frame, frameWidth] = useWidth();
