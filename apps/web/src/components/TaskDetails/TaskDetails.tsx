@@ -9,7 +9,7 @@ import {
   taskTagColor,
 } from '@throw/shared';
 import { ChevronLeft, ChevronRight, Plus, RotateCcw, Trash2 } from 'lucide-react';
-import { type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ShellContext } from '@/components/AppShell/shell';
 import { StatusGlyph } from '@/components/Board/glyphs';
@@ -27,7 +27,10 @@ import {
 import { CARD_STATUS_CONTROL, TaskCard } from '@/components/Board/TaskCard';
 import { cardSurface, TaskTitle } from '@/components/Board/TaskView';
 import { TaskPaneWidthContext, TaskScrollContext } from '@/components/Board/taskMotionContext';
+import type { EditorControls } from '@/components/DescriptionEditor/editorControls';
+import { HistoryToolbar, useHasHistory } from '@/components/HistoryToolbar/HistoryToolbar';
 import { IconButton } from '@/components/IconButton/IconButton';
+import { ScrollToBottom, useScrollToBottom } from '@/components/ScrollToBottom/ScrollToBottom';
 import { TaskRelations, useRelationGroups } from '@/components/TaskRelations/TaskRelations';
 import { TaskTags } from '@/components/TaskTags/TaskTags';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
@@ -58,6 +61,7 @@ export function TaskDetails({
   statuses,
   tasks,
   phone = false,
+  drawerPage = false,
 }: {
   task: Task;
   project: Project;
@@ -65,8 +69,24 @@ export function TaskDetails({
   tasks: Task[];
   /** On a phone the task's controls are the board drawer's dock (ADR 0009), resting over it. */
   phone?: boolean;
+  /** On a phone, whether the board's drawer shows a page of the task's over its foot. */
+  drawerPage?: boolean;
 }) {
-  const attachScroll = useContext(TaskScrollContext);
+  const shareScroll = useContext(TaskScrollContext);
+  const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
+  const attachScroll = useCallback(
+    (element: HTMLDivElement | null) => {
+      shareScroll?.(element);
+      setScrollElement(element);
+    },
+    [shareScroll],
+  );
+  // Only a phone jumps to the end: a desktop pane has a scrollbar and room to see where it is.
+  const scrollToBottom = useScrollToBottom(phone ? scrollElement : null);
+  const [descriptionControls, setDescriptionControls] = useState<EditorControls | null>(null);
+  const hasHistory = useHasHistory(descriptionControls);
+  // On a phone both float just above the dock, over the content's end.
+  const floating = phone && !drawerPage && (hasHistory || scrollToBottom !== null);
   const paneWidth = useContext(TaskPaneWidthContext);
   const { tags, isLoading: tagsLoading } = useTags(project.id);
   const { taskTags, isLoading: taskTagsLoading } = useTaskTags(task.id);
@@ -236,14 +256,24 @@ export function TaskDetails({
       className={cn('min-h-0 min-w-0 flex-1 [--scrollbar-inset:1rem]', !phone && cardSurface)}
     >
       <ScrollAreaViewport
-        ref={attachScroll ?? undefined}
-        // The dock rests over the content's end; focus and the caret stay clear of it.
-        className={cn(phone && 'scroll-pb-[calc(var(--dock-height)+var(--safe-bottom)+2.5rem)]')}
+        ref={attachScroll}
+        // The dock rests over the content's end, with undo and the jump to the end floating
+        // above it; focus and the caret stay clear of them.
+        className={cn(
+          phone &&
+            (floating
+              ? 'scroll-pb-[calc(var(--dock-height)+var(--safe-bottom)+6.25rem)]'
+              : 'scroll-pb-[calc(var(--dock-height)+var(--safe-bottom)+2.5rem)]'),
+        )}
       >
         <div
           className={cn(
             'px-6 sm:px-8',
-            phone ? 'pt-5 pb-[calc(var(--dock-height)+var(--safe-bottom)+3rem)]' : 'pt-7 pb-10',
+            phone
+              ? hasHistory
+                ? 'pt-5 pb-[calc(var(--dock-height)+var(--safe-bottom)+6.75rem)]'
+                : 'pt-5 pb-[calc(var(--dock-height)+var(--safe-bottom)+3rem)]'
+              : 'pt-7 pb-10',
           )}
         >
           <TaskTitle task={boardTask(task, tags)} />
@@ -263,7 +293,7 @@ export function TaskDetails({
             </div>
           </Fold>
           <TaskRefusalNotice key={`notice:${task.id}`} taskId={task.id} />
-          <TaskDescription task={task} recovery={recovery} />
+          <TaskDescription task={task} recovery={recovery} onControls={setDescriptionControls} />
           {task.parentId === null && (
             <Fold data-fold="subtasks" amount={column.closed} hidden={column.open}>
               {/* Flush with the task, as Catch lists a note's links below it. */}
@@ -303,7 +333,7 @@ export function TaskDetails({
   return (
     <div
       className={cn(
-        'flex min-h-0 flex-1 flex-col pb-[var(--keyboard)]',
+        'relative flex min-h-0 flex-1 flex-col pb-[var(--keyboard)]',
         phone && 'pt-[var(--safe-top)]',
       )}
     >
@@ -315,45 +345,50 @@ export function TaskDetails({
           phone ? 'px-3 py-3' : 'pb-3',
         )}
       >
-        <div
-          role="toolbar"
-          aria-label="Task navigation"
-          className="glass flex min-w-0 items-center rounded-full p-1"
-        >
-          <IconButton
-            label={
-              below
-                ? `Back to ${taskIdentifier(project, below) ?? 'the parent task'}`
-                : 'Back to the board'
-            }
-            onClick={leaveTask}
-            className="size-10 shrink-0 [&_svg]:size-5"
+        <div className="flex min-w-0 items-start gap-1">
+          <div
+            role="toolbar"
+            aria-label="Task navigation"
+            className="glass flex min-w-0 items-center rounded-full p-1"
           >
-            <ChevronLeft />
-          </IconButton>
-          <nav
-            aria-label="Task breadcrumb"
-            className="flex min-w-0 items-center gap-1 pr-4 text-muted-foreground text-sm tabular-nums"
-          >
-            {parent && (
-              <>
-                <button
-                  type="button"
-                  aria-label={`Open parent ${taskIdentifier(project, parent) ?? 'Pending'}`}
-                  onClick={() =>
-                    below?.id === parent.id ? leaveTask() : update({ openTaskId: parent.id })
-                  }
-                  className="min-h-10 truncate rounded-full px-1 outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60"
-                >
-                  {taskIdentifier(project, parent) ?? 'Pending'}
-                </button>
-                <ChevronRight aria-hidden className="size-3 shrink-0" />
-              </>
-            )}
-            <span className="truncate" aria-current="page">
-              {taskIdentifier(project, task) ?? 'Pending'}
-            </span>
-          </nav>
+            <IconButton
+              label={
+                below
+                  ? `Back to ${taskIdentifier(project, below) ?? 'the parent task'}`
+                  : 'Back to the board'
+              }
+              onClick={leaveTask}
+              className="size-10 shrink-0 [&_svg]:size-5"
+            >
+              <ChevronLeft />
+            </IconButton>
+            <nav
+              aria-label="Task breadcrumb"
+              className="flex min-w-0 items-center gap-1 pr-4 text-muted-foreground text-sm tabular-nums"
+            >
+              {parent && (
+                <>
+                  <button
+                    type="button"
+                    aria-label={`Open parent ${taskIdentifier(project, parent) ?? 'Pending'}`}
+                    onClick={() =>
+                      below?.id === parent.id ? leaveTask() : update({ openTaskId: parent.id })
+                    }
+                    className="min-h-10 truncate rounded-full px-1 outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60"
+                  >
+                    {taskIdentifier(project, parent) ?? 'Pending'}
+                  </button>
+                  <ChevronRight aria-hidden className="size-3 shrink-0" />
+                </>
+              )}
+              <span className="truncate" aria-current="page">
+                {taskIdentifier(project, task) ?? 'Pending'}
+              </span>
+            </nav>
+          </div>
+          {/* Beside Back, as Catch's split view holds a note's history. A phone has no width to
+            spare here; there it floats above the dock. */}
+          {!phone && <HistoryToolbar controls={descriptionControls} />}
         </div>
         <div
           role="toolbar"
@@ -411,6 +446,23 @@ export function TaskDetails({
         </TaskColumnFrame>
       )}
       {!phone && <TaskDrawer task={task} statuses={statuses} />}
+      {phone && (
+        // The dock's width and place: its glass tops out 1.75rem above the safe area (or the
+        // keyboard it rides), and these float 0.75rem above that, at its ends.
+        <div className="pointer-events-none absolute inset-x-0 bottom-[calc(var(--keyboard)+var(--safe-bottom)+var(--dock-height)+2.5rem)] mx-auto max-w-md">
+          <HistoryToolbar
+            controls={descriptionControls}
+            floating
+            hidden={drawerPage}
+            className="pointer-events-auto absolute bottom-0 left-3"
+          />
+          <ScrollToBottom
+            onJump={scrollToBottom}
+            hidden={drawerPage}
+            className="pointer-events-auto absolute right-3 bottom-0"
+          />
+        </div>
+      )}
     </div>
   );
 }
