@@ -715,7 +715,10 @@ test.describe('desktop', () => {
     // Another device closes the blocked task: its blocker no longer blocks anything.
     const closed = await page.request.patch(`/api/tasks/${board.ids['Earlier position']}`, {
       headers: board.headers,
-      data: { changeId: randomUUID(), changes: { statusId: board.status('Done') } },
+      data: {
+        changeId: randomUUID(),
+        changes: { statusId: { before: board.status('Build'), after: board.status('Done') } },
+      },
     });
     expect(closed.ok()).toBe(true);
     await expect.poll(() => cardIds(page, 'Build')).toEqual([]);
