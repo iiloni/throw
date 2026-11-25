@@ -3,6 +3,7 @@ import {
   CheckCheck,
   ChevronDown,
   ChevronRight,
+  ChevronsRightLeft,
   Plus,
   Search,
   SlidersHorizontal,
@@ -10,7 +11,15 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
-import { type ReactNode, useCallback, useContext, useRef, useState } from 'react';
+import {
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { NarrowedBar } from '@/components/BoardSearch/BoardFilters';
 import { type PhoneCapture, usePhonePalette } from '@/components/CommandPalette/PhonePalette';
 import { type Detent, Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
@@ -20,7 +29,7 @@ import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
 import { haptics } from '@/lib/haptics';
-import { springs } from '@/lib/motion';
+import { afterPaint, curves, springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { BoardSettingsContent } from './BoardSettingsPanel';
 import { CardList } from './CardList';
@@ -48,6 +57,7 @@ import {
   narrowed,
   selectProject,
   update,
+  useCollapsedColumns,
 } from './state';
 import { TaskCard } from './TaskCard';
 import { SelectionContentContext, TaskContentContext } from './taskContent';
@@ -57,6 +67,8 @@ import { usePagerPage } from './usePagerPage';
 /** Clear space at the end of a column, for the collapsed drawer resting over it. */
 export const DOCK_SPACE = 'calc(var(--dock-height) + var(--safe-bottom) + 3rem)';
 const DAY = 86_400_000;
+/** How long a turn the board makes itself keeps trying while a fling's snap settles. */
+const SETTLE_MS = 1500;
 
 /**
  * The board on a phone. The columns are the board, one page at a time; the backlog lives in
@@ -91,7 +103,10 @@ export function PhoneBoard({
     project.statuses.find((status) => status.category === 'done');
   const reduced = useReducedMotion();
   const pagerRef = useRef<HTMLDivElement>(null);
-  const [page, pager, quietPager] = usePagerPage();
+  const [scrolled, pager, quietPager, placePager] = usePagerPage();
+  const { isCollapsed, setCollapsed } = useCollapsedColumns(project);
+  const pages = phoneColumns(active, isCollapsed);
+  const page = Math.min(scrolled, Math.max(0, pages.length - 1));
   const [drawerPage, setDrawerPage] = useState<BoardPage | null>(null);
   const closePage = useCallback(() => setDrawerPage(null), []);
   const phonePalette = usePhonePalette({
@@ -113,6 +128,71 @@ export function PhoneBoard({
       behavior: reduced ? 'instant' : behavior,
     });
   }
+
+  // The column on screen, and the one a tap on a folded column asked to turn to.
+  const shown = useRef<string | undefined>(undefined);
+  const turning = useRef<string | null>(null);
+  const pageKey = pages.map(({ id }) => id).join(' ');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the pages themselves change
+  useLayoutEffect(() => {
+    const element = pagerRef.current;
+    const anchor = pages.findIndex(({ id }) => id === shown.current);
+    const target = pages.findIndex(({ id }) => id === turning.current);
+    turning.current = null;
+    // A column folded or opened beside this one leaves the board on the column it was on; a
+    // folded current column gives its place to the next.
+    const anchored = element !== null && anchor !== -1 && anchor !== page;
+    if (anchored) {
+      element.scrollTo({ left: anchor * pageStride(element), behavior: 'instant' });
+      placePager(anchor);
+    }
+    shown.current = pages[target !== -1 ? target : anchor !== -1 ? anchor : page]?.id;
+    if (target === -1) return;
+    if (!anchored || !element) return turnTo(target);
+    return turnSettled(element, target);
+  }, [pageKey]);
+
+  /**
+   * Turns to a page once the pager has taken a new page before the current one. Chrome snaps
+   * back to the column it was on after the layout, and a fling's snap still settling does the
+   * same, either of which stops a turn begun meanwhile: the turn is made again when the pager
+   * comes to rest elsewhere, unless a finger takes it first.
+   */
+  function turnSettled(element: HTMLElement, target: number) {
+    const until = performance.now() + SETTLE_MS;
+    const ended = () => {
+      const off = Math.abs(element.scrollLeft - target * pageStride(element)) > 1;
+      if (off && performance.now() < until) turnTo(target);
+      else stop();
+    };
+    const cancel = afterPaint(() => turnTo(target));
+    function stop() {
+      cancel();
+      element.removeEventListener('scrollend', ended);
+      element.removeEventListener('touchstart', stop);
+    }
+    element.addEventListener('scrollend', ended);
+    element.addEventListener('touchstart', stop, { passive: true });
+    return stop;
+  }
+  // biome-ignore lint/correctness/useExhaustiveDependencies: follows the turns; the effect above follows the pages
+  useLayoutEffect(() => {
+    shown.current = pages[page]?.id;
+  }, [page]);
+
+  const folding: Folding = {
+    statuses: active,
+    onCollapse: (id) => {
+      // The last column on screen stays: the pager is never empty.
+      if (pages.length > 1) setCollapsed(id, true);
+    },
+    onExpand: (id) => {
+      // Every column folded on a desktop shows only the first here; it stays as another opens.
+      for (const status of pages) setCollapsed(status.id, false);
+      setCollapsed(id, false);
+      turning.current = id;
+    },
+  };
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -170,7 +250,7 @@ export function PhoneBoard({
         {syncIndicator && (
           <div className="px-5 text-muted-foreground empty:hidden">{syncIndicator}</div>
         )}
-        <FlowTrack statuses={active} page={page} onTurn={turnTo} />
+        <FlowTrack statuses={pages} page={page} onTurn={turnTo} folding={folding} />
         <NarrowedBar />
       </header>
 
@@ -181,7 +261,7 @@ export function PhoneBoard({
           {...pager}
           className="phone-pager flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
         >
-          {active.map((status) => (
+          {pages.map((status) => (
             <div key={status.id} data-page="" data-origin="active" className={pageClass}>
               <CardList
                 listId={`status:${status.id}`}
@@ -193,8 +273,8 @@ export function PhoneBoard({
           ))}
         </div>
         <PeekEdge side={-1} shown={page > 0} />
-        <PeekEdge side={1} shown={page < active.length - 1} />
-        {done && <DonePocket status={done} shown={page === active.length - 1} />}
+        <PeekEdge side={1} shown={page < pages.length - 1} />
+        {done && <DonePocket status={done} shown={page === pages.length - 1} />}
       </div>
 
       <BoardDrawer
@@ -208,9 +288,9 @@ export function PhoneBoard({
         onChange={onBacklogChange}
         onCreate={(inBacklog) => {
           // Capture lands where a new card would: the backlog while it is open, else this column.
-          if (palette) return capture.open(inBacklog ? undefined : active[page]?.id);
+          if (palette) return capture.open(inBacklog ? undefined : pages[page]?.id);
           onReturnBoard?.();
-          createTask(inBacklog ? undefined : active[page]?.id);
+          createTask(inBacklog ? undefined : pages[page]?.id);
         }}
       />
     </div>
@@ -220,22 +300,48 @@ export function PhoneBoard({
 export const pageClass = 'flex w-full shrink-0 snap-center flex-col px-[var(--page-inset)]';
 
 /**
+ * The columns a phone pages through: the active statuses not folded. One always stays, so
+ * a board whose every column was folded on a desktop shows its first here.
+ */
+export function phoneColumns(statuses: Status[], isCollapsed: (id: string) => boolean) {
+  const open = statuses.filter((status) => !isCollapsed(status.id));
+  return open.length > 0 || statuses.length === 0 ? open : statuses.slice(0, 1);
+}
+
+/** A board whose columns fold: all of them, in order, and how one folds or opens. */
+export type Folding = {
+  statuses: Status[];
+  onCollapse: (statusId: string) => void;
+  onExpand: (statusId: string) => void;
+};
+
+/**
  * The current column by name, and the active columns as one track in the order work moves
  * through them: the ones behind are filled in, so the header says how far along the board
- * the page is. The next column is named at the end, a step further along.
+ * the page is. The next column is named at the end, a step further along. On a board whose
+ * columns fold, the current one folds from beside its name, and a folded one is a dot on the
+ * track that the pager skips; tapping the dot opens the column and turns to it.
  */
 export function FlowTrack({
   statuses,
   page,
   onTurn,
+  folding,
 }: {
+  /** The pages, in order. */
   statuses: Status[];
   page: number;
   onTurn: (index: number) => void;
+  folding?: Folding;
 }) {
   const state = board.use();
+  const holding = makingWay(drag.use());
+  const reduced = useReducedMotion();
+  const navRef = useRef<HTMLElement>(null);
   const status = statuses[page];
   const next = statuses[page + 1];
+  const track = folding?.statuses ?? statuses;
+  const at = track.findIndex(({ id }) => id === status?.id);
   // Which way the name slides: the way the board turned.
   const [last, setLast] = useState(page);
   const [direction, setDirection] = useState(1);
@@ -243,15 +349,22 @@ export function FlowTrack({
     setDirection(Math.sign(page - last));
     setLast(page);
   }
+  // Folding the current column from its name takes focus to the dot it became.
+  const [focusing, setFocusing] = useState<string | null>(null);
+  useEffect(() => {
+    if (!focusing) return;
+    navRef.current?.querySelector<HTMLElement>(`[data-column-id="${focusing}"]`)?.focus();
+    setFocusing(null);
+  }, [focusing]);
   if (!status) return null;
   return (
     <div className="px-5 pb-2">
       <div className="flex h-9 items-center gap-2 overflow-hidden">
         <AnimatePresence mode="popLayout" initial={false} custom={direction}>
-          <motion.h2
+          <motion.div
             key={status.id}
             data-column-color={status.color ?? undefined}
-            className="flex min-w-0 items-baseline gap-2"
+            className="flex min-w-0 items-center gap-1"
             custom={direction}
             variants={{
               enter: (side: number) => ({ opacity: 0, x: side * 28 }),
@@ -262,19 +375,35 @@ export function FlowTrack({
             exit="exit"
             transition={springs.snappy}
           >
-            {status.color && (
-              <StatusGlyph
-                category={status.category}
-                className="size-4 self-center text-[color:var(--column-accent)]"
-              />
+            <h2 className="flex min-w-0 items-baseline gap-2">
+              {status.color && (
+                <StatusGlyph
+                  category={status.category}
+                  className="size-4 self-center text-[color:var(--column-accent)]"
+                />
+              )}
+              <span className="truncate font-bold font-display text-xl text-[color:var(--column-label,currentColor)] tracking-[-0.01em]">
+                {status.name}
+              </span>
+              <span className="text-muted-foreground text-sm tabular-nums">
+                {countIn(state, status.id)}
+              </span>
+            </h2>
+            {folding && statuses.length > 1 && !holding && (
+              <IconButton
+                label={`Collapse ${status.name} column`}
+                aria-expanded
+                tooltip={false}
+                className="size-9 shrink-0 text-muted-foreground"
+                onClick={() => {
+                  setFocusing(status.id);
+                  folding.onCollapse(status.id);
+                }}
+              >
+                <ChevronsRightLeft />
+              </IconButton>
             )}
-            <span className="truncate font-bold font-display text-xl text-[color:var(--column-label,currentColor)] tracking-[-0.01em]">
-              {status.name}
-            </span>
-            <span className="text-muted-foreground text-sm tabular-nums">
-              {countIn(state, status.id)}
-            </span>
-          </motion.h2>
+          </motion.div>
         </AnimatePresence>
         <span className="flex-1" />
         {next && (
@@ -288,35 +417,59 @@ export function FlowTrack({
           </button>
         )}
       </div>
-      <nav aria-label="Columns" className="flex gap-1">
-        {statuses.map((item, index) => (
-          <button
-            key={item.id}
-            type="button"
-            aria-label={item.name}
-            data-column-color={item.color ?? undefined}
-            aria-current={index === page ? 'page' : undefined}
-            onClick={() => onTurn(index)}
-            className="flex h-6 min-w-0 flex-1 items-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
-          >
-            <span className="relative h-1.5 w-full overflow-hidden rounded-full bg-foreground/10">
+      <nav ref={navRef} aria-label="Columns" className="flex gap-1">
+        {track.map((item, order) => {
+          const index = statuses.findIndex(({ id }) => id === item.id);
+          const folded = index === -1;
+          return (
+            <motion.button
+              key={item.id}
+              type="button"
+              aria-label={folded ? `Expand ${item.name} column` : item.name}
+              aria-expanded={folding ? !folded : undefined}
+              data-column-id={item.id}
+              data-folded={folded ? '' : undefined}
+              data-column-color={item.color ?? undefined}
+              aria-current={index === page ? 'page' : undefined}
+              onClick={() => (folded ? folding?.onExpand(item.id) : onTurn(index))}
+              // A folded column is a dot, kept mounted so it grows back into its segment.
+              initial={false}
+              animate={{
+                flexGrow: folded ? 0 : 1,
+                marginLeft: folded ? 4 : 0,
+                marginRight: folded ? 4 : 0,
+              }}
+              transition={reduced ? { duration: 0 } : folded ? curves.fold : springs.smooth}
+              className={cn(
+                'relative flex h-6 min-w-1.5 basis-1.5 items-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60',
+                // The dot takes a finger's width around it.
+                folded && 'z-10 before:absolute before:-inset-x-2.5 before:inset-y-0',
+              )}
+            >
               <span
                 className={cn(
-                  'absolute inset-0 rounded-full bg-[color:var(--column-accent,color-mix(in_oklab,var(--foreground)_25%,transparent))] transition-opacity duration-300',
-                  index < page ? 'opacity-100' : 'opacity-0',
+                  'relative h-1.5 w-full overflow-hidden rounded-full transition-colors duration-300',
+                  folded ? 'bg-foreground/25' : 'bg-foreground/10',
                 )}
-              />
-              {index === page && (
-                <motion.span
-                  layoutId="phone-flow"
-                  data-column-stripe={item.color ? '' : undefined}
-                  className="absolute inset-0 rounded-full bg-[color:var(--column-accent,var(--foreground))]"
-                  transition={springs.snappy}
+              >
+                <span
+                  className={cn(
+                    'absolute inset-0 rounded-full bg-[color:var(--column-accent,color-mix(in_oklab,var(--foreground)_25%,transparent))] transition-opacity duration-300',
+                    order < at ? 'opacity-100' : 'opacity-0',
+                  )}
                 />
-              )}
-            </span>
-          </button>
-        ))}
+                {index === page && (
+                  <motion.span
+                    layoutId="phone-flow"
+                    data-column-stripe={item.color ? '' : undefined}
+                    className="absolute inset-0 rounded-full bg-[color:var(--column-accent,var(--foreground))]"
+                    transition={springs.snappy}
+                  />
+                )}
+              </span>
+            </motion.button>
+          );
+        })}
       </nav>
     </div>
   );

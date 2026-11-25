@@ -339,8 +339,13 @@ motion.
   the two, and the column's content fades in once it has mostly resized. Folded columns are
   remembered per project on the device. A card dropped on a strip is sent to its status
   without the column opening ([ADR 0008](decisions/0008-board-drag-model.md)); carrying a card
-  into one from the keyboard, or opening one of its tasks, opens it. A phone shows one column
-  at a time, so it does not fold them, and a column folded on a desktop shows in full there.
+  into one from the keyboard, or opening one of its tasks, opens it.
+- A phone shows one column at a time and shares the project's folded columns: the pager skips
+  them, so a column rarely visited costs no swipe. The current column folds from a control
+  beside its name, and the next column takes its place. Each folded column stays on the flow
+  track as a dot in its place; tapping it opens the column and turns to it. The last open
+  column does not fold, and a board whose every column was folded on a desktop shows its first.
+  Cards still reach a folded column through the move drawer.
 - The board has no title row. The project's name is in the expanded navigation rail, and in
   a tooltip on the project's icon when the rail is collapsed.
 - A list of cards fades out over its last few pixels at the top or bottom while

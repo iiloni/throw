@@ -13,12 +13,15 @@ beforeEach(() => {
 });
 
 function Pager() {
-  const [page, pager, quiet] = usePagerPage();
+  const [page, pager, quiet, place] = usePagerPage();
   return (
     <>
       <div data-testid="pager" {...pager} />
       <button type="button" onClick={quiet}>
         Turn from code
+      </button>
+      <button type="button" onClick={() => place(3)}>
+        Place from code
       </button>
       <output>{page}</output>
     </>
@@ -54,6 +57,15 @@ it('stays quiet for turns made from code, and while a held card turns the pages'
   // Momentum ends what the finger started; a later turn from code is quiet again.
   held.current = null;
   fireEvent(screen.getByTestId('pager'), new Event('scrollend'));
+  scrollTo(300);
+  expect(tick).not.toHaveBeenCalled();
+});
+
+it('shows a page placed from code at once, and does not tick when the scroll catches up', () => {
+  render(<Pager />);
+  fireEvent.touchStart(screen.getByTestId('pager'));
+  fireEvent.click(screen.getByRole('button', { name: 'Place from code' }));
+  expect(screen.getByRole('status')).toHaveTextContent('3');
   scrollTo(300);
   expect(tick).not.toHaveBeenCalled();
 });
