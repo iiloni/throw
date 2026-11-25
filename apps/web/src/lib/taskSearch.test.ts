@@ -1,4 +1,4 @@
-import type { Project, Tag, Task } from '@throw/shared';
+import type { Project, Status, Tag, Task } from '@throw/shared';
 import { describe, expect, it } from 'vitest';
 import {
   descriptionSnippet,
@@ -9,6 +9,7 @@ import {
   parseTaskIdentifier,
   searchProjects,
   searchTasks,
+  searchTasksSplit,
   taskTagNames,
 } from './taskSearch';
 
@@ -165,6 +166,68 @@ it('caps results and breaks ties deterministically regardless of input order', (
   expect(searchTasks(rows, '')).toEqual([]);
   expect(searchTasks(rows, 'same')).toHaveLength(30);
   expect(ids(searchTasks(rows, 'same'))).toEqual(ids(searchTasks([...rows].reverse(), 'same')));
+});
+describe('closed tasks', () => {
+  const status = (id: string, category: Status['category']): Status => ({
+    id,
+    category,
+    name: id,
+    projectId: project.id,
+    workspaceId: 'workspace',
+    position: 'a0',
+    isDefault: true,
+  });
+  const statuses = [
+    status('backlog', 'backlog'),
+    status('done', 'done'),
+    status('cut', 'cancelled'),
+  ];
+  const rows = indexTasks(
+    [
+      task('open', { number: 1, title: 'Water plants' }),
+      task('done', { number: 2, title: 'Water lawn', statusId: 'done' }),
+      task('cut', { number: 3, title: 'Water roses', statusId: 'cut' }),
+      // Its status has not synced: its close time says it is closed.
+      task('unsynced', { number: 4, title: 'Water ferns', statusId: 'gone', closedAt: 'x' }),
+    ],
+    [project],
+    statuses,
+    'workspace',
+  );
+
+  it('sets Done and Cancelled matches apart from open ones, counting them all', () => {
+    const found = searchTasksSplit(rows, 'water');
+    expect(ids(found.open)).toEqual(['open']);
+    expect(ids(found.closed)).toEqual(['unsynced', 'done', 'cut']);
+    expect(found.closedCount).toBe(3);
+    // Other searches, such as the relation picker's, still see everything.
+    expect(ids(searchTasks(rows, 'water'))).toHaveLength(4);
+  });
+
+  it('keeps a closed task named by its exact identifier among the open results', () => {
+    for (const query of ['CAT-2', 'cat-2', '2']) {
+      const found = searchTasksSplit(rows, query);
+      expect(ids(found.open)).toEqual(['done']);
+      expect(found.closedCount).toBe(0);
+    }
+    // Words that merely mention it do not.
+    expect(ids(searchTasksSplit(rows, 'lawn').closed)).toEqual(['done']);
+  });
+
+  it('limits each list but counts every closed match', () => {
+    const many = indexTasks(
+      Array.from({ length: 40 }, (_, i) =>
+        task(`t${String(i).padStart(2, '0')}`, { title: 'Same', statusId: 'done' }),
+      ),
+      [project],
+      statuses,
+      'workspace',
+    );
+    const found = searchTasksSplit(many, 'same');
+    expect(found.open).toEqual([]);
+    expect(found.closed).toHaveLength(30);
+    expect(found.closedCount).toBe(40);
+  });
 });
 it('finds projects by name and key with exact name first', () => {
   expect(
