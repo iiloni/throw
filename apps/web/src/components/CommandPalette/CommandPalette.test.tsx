@@ -24,6 +24,7 @@ const status: Status = {
   isDefault: true,
   position: 'a0',
 };
+const doneStatus: Status = { ...status, id: 'done', name: 'Shipped', category: 'done' };
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   shell: vi.fn(),
@@ -34,7 +35,7 @@ vi.mock('@/lib/collections', () => ({
   useTasks: () => mocks.tasks,
   useAllTags: () => ({ tags: [], isLoading: false }),
   useAllTaskTags: () => ({ taskTags: [], isLoading: false }),
-  useStatuses: () => ({ statuses: [status], isLoading: false }),
+  useStatuses: () => ({ statuses: [status, doneStatus], isLoading: false }),
 }));
 vi.mock('@/lib/tasks', () => ({ createTask: (...args: unknown[]) => mocks.create(...args) }));
 vi.mock('motion/react', async (importOriginal) => ({
@@ -187,4 +188,63 @@ it('holds an Enter pressed while tasks load, then opens the task it finds', () =
   rerender(palette());
   expect(onOpenTask).toHaveBeenCalledWith('project', 'water', false);
   expect(onModeChange).not.toHaveBeenCalled();
+});
+it('keeps closed tasks behind a toggle the arrows reach, unless named by identifier', () => {
+  const task = (id: string, number: number, title: string, statusId: string) => ({
+    id,
+    workspaceId: 'workspace',
+    projectId: 'project',
+    number,
+    title,
+    description: null,
+    descriptionVersion: null,
+    parentId: null,
+    deletedAt: null,
+    closedAt: statusId === 'done' ? '2026-10-16T00:00:00Z' : null,
+    createdAt: '2026-10-15T00:00:00Z',
+    statusId,
+    priority: 3,
+    size: null,
+    position: 'a0',
+    primaryTagId: null,
+  });
+  mocks.tasks = {
+    isLoading: false,
+    tasks: [task('tomatoes', 4, 'Water tomatoes', 'status'), task('lawn', 5, 'Water lawn', 'done')],
+  };
+  const onOpenTask = vi.fn();
+  render(
+    <TooltipProvider>
+      <CommandPalette mode="search" onClose={() => {}} onOpenTask={onOpenTask} />
+    </TooltipProvider>,
+  );
+  const input = screen.getByRole('combobox', { name: 'Search tasks' });
+  const option = (name: RegExp) => screen.queryByRole('option', { name });
+
+  // Its identifier finds a closed task straight away.
+  fireEvent.change(input, { target: { value: 'cat-5' } });
+  expect(option(/^Water\s*lawn/)).toBeInTheDocument();
+  expect(option(/closed tasks/)).not.toBeInTheDocument();
+
+  fireEvent.change(input, { target: { value: 'water' } });
+  expect(option(/^Water\s*tomatoes/)).toBeInTheDocument();
+  expect(option(/^Water\s*lawn/)).not.toBeInTheDocument();
+  expect(screen.getByRole('status')).toHaveTextContent('1 open task');
+  const toggle = screen.getByRole('option', { name: /^Show closed tasks/ });
+  expect(toggle).toHaveTextContent('1');
+
+  fireEvent.keyDown(input, { key: 'ArrowDown' });
+  expect(toggle).toHaveAttribute('aria-selected', 'true');
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(onOpenTask).not.toHaveBeenCalled();
+  expect(screen.getByRole('option', { name: /^Hide closed tasks/ })).toBeInTheDocument();
+  expect(option(/^Water\s*lawn/)).toBeInTheDocument();
+
+  // Showing them lasts through new words.
+  fireEvent.change(input, { target: { value: 'lawn' } });
+  expect(screen.getByRole('status')).toHaveTextContent('No open tasks');
+  expect(option(/^Water\s*lawn/)).toBeInTheDocument();
+  fireEvent.keyDown(input, { key: 'ArrowDown' });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(onOpenTask).toHaveBeenCalledWith('project', 'lawn', false);
 });

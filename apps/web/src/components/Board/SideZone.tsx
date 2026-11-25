@@ -13,10 +13,11 @@ import { IconButton } from '@/components/IconButton/IconButton';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
+import { useBacklogSpotlightBlocker, useStatusSpotlightBlocker } from './blockers';
 import { drag, makingWay } from './drag';
 import { GALLERY_INSET, ZoneGallery } from './Gallery';
 import { StatusGlyph } from './glyphs';
-import type { Category, Status } from './model';
+import type { Category, Project, Status } from './model';
 import { StatusTile } from './StatusTile';
 import {
   board,
@@ -27,6 +28,7 @@ import {
   railResize,
   setRailWidth,
   update,
+  visibleIds,
   type ZoneState,
 } from './state';
 import { SplitHandle } from './TaskView';
@@ -207,6 +209,7 @@ export function zoneStatuses(zone: Zone, statuses: Status[]) {
 export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometry }) {
   const state = board.use();
   const held = drag.use();
+  const reduced = useReducedMotion();
   const { project } = current(state);
   const { title, icon: Icon } = ZONES[zone];
   const statuses = zoneStatuses(zone, project.statuses);
@@ -214,6 +217,12 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
   const count = statuses.reduce((sum, status) => sum + countIn(state, status.id), 0);
   // A card held from this zone keeps the zone as it is, so it can still be placed here.
   const tiles = makingWay(held) && held.origin !== zone;
+  const hasBlocker = useBacklogSpotlightBlocker(
+    project,
+    state.subtasksAsCards,
+    visibleIds(state),
+    zone === 'backlog' && view === 'strip' && !geometry.tracking && !tiles,
+  );
   const { width } = useRailSpring(geometry.drawn, geometry.mode, geometry.tracking);
   const other = zone === 'backlog' ? 'closed' : 'backlog';
   const start = zone === 'backlog';
@@ -302,8 +311,10 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
               key="strip"
               type="button"
               aria-label={`Open ${title.toLowerCase()}, ${count} tasks`}
+              data-spotlight={hasBlocker ? 'blocker' : undefined}
+              data-spotlight-instant={reduced ? '' : undefined}
               onClick={() => setView('panel')}
-              className="group absolute inset-0 flex flex-col items-center gap-4 pt-[calc(var(--safe-top)+2.375rem)] text-muted-foreground outline-none transition-colors hover:bg-foreground/[0.04] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60 focus-visible:ring-inset"
+              className="spotlight-strip group absolute inset-0 flex flex-col items-center gap-4 pt-[calc(var(--safe-top)+2.375rem)] text-muted-foreground outline-none hover:bg-foreground/[0.04] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60 focus-visible:ring-inset"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -433,37 +444,81 @@ export function StatusFilter({
           All
         </button>
       )}
-      {statuses.map((status) => {
-        const over = held?.target?.kind === 'status' && held.target.statusId === status.id;
-        return (
-          <button
-            key={status.id}
-            type="button"
-            data-drop-status={targets ? status.id : undefined}
-            aria-pressed={filter === status.id}
-            onClick={() => setFilter(filter === status.id ? null : status.id)}
-            className={cn(
-              chip,
-              'border',
-              targets ? 'h-11 flex-1 justify-center' : 'h-8',
-              over
-                ? 'border-brand bg-accent text-foreground shadow-md'
-                : filter === status.id && !targets
-                  ? 'border-transparent bg-foreground text-background'
-                  : 'border-transparent bg-foreground/[0.06] text-foreground/75 hover:bg-foreground/[0.1]',
-            )}
-          >
-            {status.color && (
-              <StatusGlyph
-                category={status.category}
-                color={status.color}
-                className="-ml-0.5 mr-1.5"
-              />
-            )}
-            {status.name}
-          </button>
-        );
-      })}
+      {statuses.map((status) => (
+        <StatusFilterChip
+          key={status.id}
+          zone={zone}
+          status={status}
+          project={current(state).project}
+          subtasksAsCards={state.subtasksAsCards}
+          visible={visibleIds(state)}
+          filter={filter}
+          targets={targets}
+          over={held?.target?.kind === 'status' && held.target.statusId === status.id}
+          chip={chip}
+          onSelect={() => setFilter(filter === status.id ? null : status.id)}
+        />
+      ))}
     </div>
+  );
+}
+
+function StatusFilterChip({
+  zone,
+  status,
+  project,
+  subtasksAsCards,
+  visible,
+  filter,
+  targets,
+  over,
+  chip,
+  onSelect,
+}: {
+  zone: Zone;
+  status: Status;
+  project: Project;
+  subtasksAsCards: boolean;
+  visible: ReadonlySet<string> | null;
+  filter: string | null;
+  targets: boolean;
+  over: boolean;
+  chip: string;
+  onSelect: () => void;
+}) {
+  const reduced = useReducedMotion();
+  const hasHiddenBlocker = useStatusSpotlightBlocker(
+    status.id,
+    project,
+    subtasksAsCards,
+    visible,
+    zone === 'backlog' && !targets && filter !== null && filter !== status.id,
+  );
+  return (
+    <button
+      type="button"
+      data-drop-status={targets ? status.id : undefined}
+      data-spotlight={hasHiddenBlocker ? 'blocker' : undefined}
+      data-spotlight-instant={reduced ? '' : undefined}
+      aria-pressed={filter === status.id}
+      onClick={onSelect}
+      className={cn(
+        chip,
+        'border',
+        targets ? 'h-11 flex-1 justify-center' : 'h-8',
+        over
+          ? 'border-brand bg-accent text-foreground shadow-md'
+          : filter === status.id && !targets
+            ? 'border-transparent bg-foreground text-background'
+            : hasHiddenBlocker
+              ? 'border-destructive/75 bg-destructive/12 text-foreground'
+              : 'border-transparent bg-foreground/[0.06] text-foreground/75 hover:bg-foreground/[0.1]',
+      )}
+    >
+      {status.color && (
+        <StatusGlyph category={status.category} color={status.color} className="-ml-0.5 mr-1.5" />
+      )}
+      {status.name}
+    </button>
   );
 }

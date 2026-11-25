@@ -2,8 +2,8 @@
 
 Status: accepted (2026-10-13); amended 2026-10-19 when the project board was wired to task
 actions, 2026-11-19 when the board learned to wait for a lifted card to move, 2026-11-22
-when desktop columns learned to fold, and 2026-11-23 when mobile swipe-to-close on board
-cards was removed
+when desktop columns learned to fold, 2026-11-23 when mobile swipe-to-close on board
+cards was removed, and 2026-11-25 when a phone's pager learned to skip folded columns
 
 ## Context
 
@@ -184,6 +184,18 @@ between active columns triggered swipe-to-close accidentally far too easily. Car
 intercept horizontal swipes, so swipes starting anywhere on a card turn the pager cleanly in
 both directions; closing a card uses long-press drag (including to the done pocket), the move
 drawer, or the task dock's Close action.
+
+**A phone's pager skips folded columns (2026-11-25).** A project board's folded active columns
+are the same preference on a phone as on a desktop (`useCollapsedColumns`). The pager pages
+through the columns left open, so a column rarely visited costs no swipe, and the flow track
+keeps each folded one as a short handle in its place that opens the column and turns to it. The
+current column folds from beside its name, and the next column takes its place. The last
+column open does not fold, and a board whose every column was folded on a desktop shows its
+first. A folded column is no page and has no peek, so a held card reaches it through the move
+drawer rather than the pager; a drop target the size of the handle would be too small to aim at.
+Opening a task in a folded column leaves it folded on a phone, where the task covers the board
+and a card's column was never the page on screen in any case. The workspace board's phone
+pages do not fold.
 
 ## Consequences
 

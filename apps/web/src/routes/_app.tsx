@@ -1,7 +1,11 @@
 import { createFileRoute, redirect, useRouterState } from '@tanstack/react-router';
+import { useEffect } from 'react';
 import { AppShell } from '@/components/AppShell/AppShell';
+import { drag, isPrimed } from '@/components/Board/drag';
+import { board } from '@/components/Board/state';
 import { GpuWarmup } from '@/components/GpuWarmup/GpuWarmup';
 import { getAuthToken } from '@/lib/auth';
+import { watchScrollBounce } from '@/lib/scrollBounce';
 import { needsServerUrl } from '@/lib/serverUrl';
 
 export const Route = createFileRoute('/_app')({
@@ -13,7 +17,11 @@ export const Route = createFileRoute('/_app')({
   component: App,
 });
 
+/** A held, dragged or keyboard-carried card moves its column itself; the edge takes no bounce. */
+const cardHeld = () => drag.get() !== null || isPrimed() || board.get().carrying !== null;
+
 function App() {
+  useEffect(() => watchScrollBounce({ held: cardHeld }), []);
   // A task opened from its link has drawn everything the warmup would.
   const taskOpen = useRouterState({
     select: (state) => Boolean((state.location.search as { task?: unknown }).task),

@@ -29,9 +29,10 @@ export const WEBHOOK_SECRET_PREFIX = 'throw_whsec_';
 export const MAX_WEBHOOK_URL_LENGTH = 2048;
 
 /**
- * A webhook may wait until changes pause before it sends (ADR 0015). Each change to a task or
- * a project's structure restarts the wait, status moves included. Comments and purges are
- * sent at once.
+ * A webhook may wait until changes pause before it sends (ADR 0015). The wait is the
+ * webhook's: any change it follows, to any task, comment or project's structure, restarts it
+ * for everything waiting. A window of 0 sends every change at once; `webhook.test` is sent at
+ * once whatever the window.
  */
 export const MAX_WEBHOOK_QUIET_WINDOW_SECONDS = 600;
 export const WEBHOOK_QUIET_WINDOW_PRESETS = [0, 30, 60, 120, 300, 600] as const;

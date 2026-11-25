@@ -377,3 +377,58 @@ describe('the docked search sidebar', () => {
     expect(searchSidebarOpen.get()).toBe(false);
   });
 });
+
+describe('search over a soft keyboard', () => {
+  // jsdom computes no Tailwind, so these pin the rules that keep search above `--keyboard`.
+  it('lifts the floating bar by translate, so its measured height and the columns stay', () => {
+    const { container } = render(<BoardSearch />);
+    const float = container.querySelector<HTMLElement>('[data-board-search-float]');
+    expect(float).toBeInTheDocument();
+    expect(float?.className).toContain(
+      '[translate:0_min(0px,calc(max(1.25rem,var(--safe-bottom)+0.75rem)-0.75rem-var(--keyboard)))]',
+    );
+    // The resting foot is unchanged, and the lift is not padding on the measured bar.
+    expect(float?.className).toContain('pb-[max(1.25rem,calc(var(--safe-bottom)+0.75rem))]');
+    const bar = container.querySelector<HTMLElement>('search[aria-label="Search the board"]');
+    expect(bar?.className).not.toContain('--keyboard');
+  });
+
+  it('ends the docked sidebar above the keyboard, as it was with none', () => {
+    const { container } = render(<BoardSearchSidebar />);
+    const sidebar = container.querySelector<HTMLElement>('search[data-docked]');
+    expect(sidebar?.className).toContain(
+      'pb-[max(1.5rem,calc(var(--safe-bottom)+0.75rem),calc(var(--keyboard)+0.75rem))]',
+    );
+  });
+
+  it('fits the filter panel between the top of the screen and the lifted bar', () => {
+    render(<BoardSearch />);
+    fireEvent.click(screen.getByRole('button', { name: 'Filter and sort' }));
+    const panel = screen.getByRole('region', { name: 'Filters and sort' });
+    expect(panel.className).toContain(
+      '[--board-filter-view-max:max(8rem,min(26rem,calc(100dvh-var(--keyboard)-var(--safe-top)-var(--dock-height)-15rem)))]',
+    );
+  });
+
+  it('keeps focus, and the keyboard, in the field when a chip or filter is pressed', () => {
+    const { unmount } = render(<BoardSearch />);
+    fireEvent.click(screen.getByRole('button', { name: 'Filter and sort' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Sort' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Size' }));
+    const chip = screen.getByRole('button', { name: /^Sorted .*Sort by priority$/ });
+    // A press that is not prevented would move focus to the chip and drop the keyboard.
+    expect(fireEvent.pointerDown(chip)).toBe(false);
+    // The panel stays open while the field is used, and a press inside it keeps focus too.
+    fireEvent.pointerDown(field());
+    expect(screen.getByRole('region', { name: 'Filters and sort' })).toBeInTheDocument();
+    expect(fireEvent.pointerDown(screen.getByRole('tab', { name: 'Size' }))).toBe(false);
+    unmount();
+
+    render(<BoardSearchSidebar />);
+    const sortRegion = screen.getByRole('region', { name: 'Sort' });
+    expect(fireEvent.pointerDown(within(sortRegion).getByRole('button', { name: 'Size' }))).toBe(
+      false,
+    );
+    expect(fireEvent.pointerDown(field())).toBe(true);
+  });
+});

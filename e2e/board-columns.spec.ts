@@ -1,5 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import { expect, type Page, test } from '@playwright/test';
-import { card, carry, fixture, settled, taskRow, workspaceFixture } from './board-helpers';
+import { card, carry, finger, fixture, settled, taskRow, workspaceFixture } from './board-helpers';
 import { APP_LOAD_TIMEOUT } from './helpers';
 
 const region = (page: Page, name: string) => page.getByRole('region', { name, exact: true });
@@ -140,18 +141,109 @@ test.describe('desktop', () => {
   });
 });
 
-test('a column folded on a desktop shows in full on a phone', async ({ page, isMobile }) => {
-  test.skip(!isMobile, 'Phone layout');
-  const board = await fixture(page);
-  await page.evaluate(
-    ([key, id]) => localStorage.setItem(key!, JSON.stringify([id])),
-    [`throw-board-collapsed:${board.projectId}`, board.status('Review')],
-  );
-  await page.reload();
-  await page
-    .getByRole('navigation', { name: 'Columns' })
-    .getByRole('button', { name: 'Review' })
-    .click();
-  await expect(card(page, 'Review this')).toBeInViewport({ timeout: APP_LOAD_TIMEOUT });
-  await expect(expand(page, 'Review')).toHaveCount(0);
+test.describe('phone', () => {
+  test.skip(({ isMobile }) => !isMobile, 'Phone layout');
+
+  /** The fixture's board with a third active column, Testing, between Build and Review. */
+  async function threeColumns(page: Page) {
+    const board = await fixture(page);
+    const testing = randomUUID();
+    const response = await page.request.post('/api/statuses', {
+      headers: board.headers,
+      data: {
+        id: testing,
+        projectId: board.projectId,
+        category: 'active',
+        name: 'Testing',
+        position: 'a0V',
+        isDefault: false,
+      },
+    });
+    expect(response.status()).toBe(201);
+    const columns = page.getByRole('navigation', { name: 'Columns' });
+    await expect(columns.getByRole('button')).toHaveCount(3);
+    return { ...board, testing, columns };
+  }
+
+  const current = (page: Page) =>
+    page.getByRole('navigation', { name: 'Columns' }).locator('[aria-current="page"]');
+
+  test('a folded column is skipped by a swipe, remembered, and opens again from its handle', async ({
+    page,
+    browserName,
+  }) => {
+    const board = await threeColumns(page);
+    await board.columns.getByRole('button', { name: 'Testing', exact: true }).click();
+    await expect(current(page)).toHaveAccessibleName('Testing');
+    await collapse(page, 'Testing').click();
+    // The next column takes its place, and the folded one is a handle that has focus.
+    await expect(current(page)).toHaveAccessibleName('Review');
+    await expect(card(page, 'Review this')).toBeInViewport();
+    await expect(expand(page, 'Testing')).toHaveAttribute('aria-expanded', 'false');
+    await expect(expand(page, 'Testing')).toBeFocused();
+    await expect(page.locator('[data-pager] > [data-page]')).toHaveCount(2);
+    // The last column left open does not fold.
+    await collapse(page, 'Review').click();
+    await expect(collapse(page, 'Build')).toHaveCount(0);
+    await expect(current(page)).toHaveAccessibleName('Build');
+    await expand(page, 'Review').click();
+    await expect(current(page)).toHaveAccessibleName('Review');
+    await expect(card(page, 'Review this')).toBeInViewport();
+
+    await page.reload();
+    await expect(expand(page, 'Testing')).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
+    await expect(current(page)).toHaveAccessibleName('Build');
+    // Build is followed by Review: one swipe turns straight to it.
+    await expect(page.getByRole('button', { name: 'Review', exact: true }).last()).toBeVisible();
+    if (browserName === 'chromium') {
+      const touch = await finger(page);
+      const box = (await (await settled(card(page, 'Low priority'))).boundingBox())!;
+      const from = { x: box.x + box.width - 24, y: box.y + box.height / 2 };
+      await touch.press(from, 30);
+      await touch.move({ x: box.x + 24, y: from.y }, 250);
+      await touch.lift();
+    } else {
+      await board.columns.getByRole('button', { name: 'Review', exact: true }).click();
+    }
+    await expect(current(page)).toHaveAccessibleName('Review');
+    await expect(card(page, 'Review this')).toBeInViewport();
+
+    // The handle opens the column and turns back to it.
+    await expand(page, 'Testing').click();
+    await expect(current(page)).toHaveAccessibleName('Testing');
+    await expect(page.locator('[data-pager] > [data-page]')).toHaveCount(3);
+    await expect(collapse(page, 'Testing')).toBeVisible();
+    await page.reload();
+    await expect(board.columns.getByRole('button', { name: 'Testing', exact: true })).toBeVisible({
+      timeout: APP_LOAD_TIMEOUT,
+    });
+    await expect(expand(page, 'Testing')).toHaveCount(0);
+  });
+
+  test('a column folded on a desktop is a handle on a phone, and the pager always keeps one column', async ({
+    page,
+  }) => {
+    const board = await fixture(page);
+    await page.evaluate(
+      ([key, id]) => localStorage.setItem(key!, JSON.stringify([id])),
+      [`throw-board-collapsed:${board.projectId}`, board.status('Review')],
+    );
+    await page.reload();
+    await expect(expand(page, 'Review')).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
+    await expect(page.locator('[data-pager] > [data-page]')).toHaveCount(1);
+    await expect(card(page, 'Review this')).toHaveCount(0);
+    // The last column on screen keeps its page.
+    await expect(collapse(page, 'Build')).toHaveCount(0);
+
+    // Every column folded still leaves the first on screen.
+    await page.evaluate(
+      ([key, ...ids]) => localStorage.setItem(key!, JSON.stringify(ids)),
+      [`throw-board-collapsed:${board.projectId}`, board.status('Review'), board.status('Build')],
+    );
+    await page.reload();
+    await expect(card(page, 'Low priority')).toBeInViewport({ timeout: APP_LOAD_TIMEOUT });
+    await expand(page, 'Review').click();
+    await expect(card(page, 'Review this')).toBeInViewport();
+    await expect(page.locator('[data-pager] > [data-page]')).toHaveCount(2);
+  });
 });

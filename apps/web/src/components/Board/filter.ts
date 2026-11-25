@@ -176,8 +176,9 @@ export function matchingIds(
 
 /**
  * The task Enter opens from the search: the best answer to the query among those that match
- * the filters, ranked as the palette ranks its results. Open work comes before closed work at
- * the same rank.
+ * the filters, ranked as the palette ranks its results. Open work comes before any closed work,
+ * as the palette lists it, unless the closed task is named by its exact identifier; between
+ * equal answers, open work still comes first.
  */
 export function bestMatch(data: BoardData, filter: BoardFilter, closed: (task: Task) => boolean) {
   const query = prepareQuery(filter.query);
@@ -187,7 +188,9 @@ export function bestMatch(data: BoardData, filter: BoardFilter, closed: (task: T
     if (!matchesFilter(data.project, task, { ...filter, query: '' }, null)) continue;
     const rank = queryRank(data.project, task, query);
     if (rank === null) continue;
-    const score = rank * 2 + Number(closed(task));
+    const shut = closed(task);
+    // Ranks run 0 to 4: a closed task found by anything but its identifier sorts after them all.
+    const score = (shut && rank > 0 ? 5 + rank : rank) * 2 + Number(shut);
     if (
       !best ||
       score < best.rank ||

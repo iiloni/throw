@@ -13,6 +13,8 @@ function fakeControls(state: Partial<FormattingState> = {}): EditorControls {
     block: 'paragraph',
     canIndent: false,
     canOutdent: false,
+    canUndo: false,
+    canRedo: false,
     ...state,
   };
   return {
@@ -23,6 +25,8 @@ function fakeControls(state: Partial<FormattingState> = {}): EditorControls {
     insertSlash: vi.fn(),
     indent: vi.fn(),
     outdent: vi.fn(),
+    undo: vi.fn(),
+    redo: vi.fn(),
   };
 }
 

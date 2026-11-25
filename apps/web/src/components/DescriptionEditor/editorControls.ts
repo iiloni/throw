@@ -17,12 +17,14 @@ export type FormattingState = {
   block: string;
   canIndent: boolean;
   canOutdent: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
 };
 
 /**
  * A small handle on a mounted editor, so controls outside it (the formatting bar) can
  * format text without importing BlockNote, which is lazy-loaded. Catch's, without notes'
- * attachments and history.
+ * attachments.
  */
 export type EditorControls = {
   getState(): FormattingState;
@@ -35,6 +37,8 @@ export type EditorControls = {
   insertSlash(): void;
   indent(): void;
   outdent(): void;
+  undo(): void;
+  redo(): void;
 };
 
 /**

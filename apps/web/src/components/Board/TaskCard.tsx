@@ -1,6 +1,6 @@
 import { sizeLabel } from '@throw/shared';
 import { Ban, Check, CornerDownRight } from 'lucide-react';
-import { animate, motion, useMotionValue } from 'motion/react';
+import { animate, motion, useMotionValue, useReducedMotion } from 'motion/react';
 import {
   type KeyboardEvent,
   type MouseEvent,
@@ -15,7 +15,16 @@ import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { CARD_HELP_ID } from './BoardAnnouncer';
-import { blockedLabel, useTaskBlockers } from './blockers';
+import {
+  armBlockerSpotlight,
+  blockedHint,
+  blockedLabel,
+  cancelBlockerSpotlight,
+  syncBlockerSpotlight,
+  useCardSpotlightRole,
+  useSpotlightActiveFor,
+  useTaskBlockers,
+} from './blockers';
 import { carryAcross, carryVertically, pickUp, putBack, setDown } from './carry';
 import { consumeDragClick, drag, isPrimed, pressCard } from './drag';
 import { PriorityGlyph, StatusGlyph } from './glyphs';
@@ -59,6 +68,7 @@ export function TaskCardFace({
   showStatus,
   statusControl,
   statusAsControl = false,
+  spotlight = false,
 }: {
   project: Project;
   task: Task;
@@ -66,14 +76,36 @@ export function TaskCardFace({
   statusControl?: ReactNode;
   /** Lays the status out as `statusControl` would, for a copy of a card that has one. */
   statusAsControl?: boolean;
+  /** True for interactive board cards that can trigger the blocker spotlight on linger. */
+  spotlight?: boolean;
 }) {
   const [settings] = useBoardSettings();
   const state = board.use();
   const status = statusById(project, task.statusId);
   const blockers = useTaskBlockers(task.id);
+  const blocked = blockers.length > 0 && task.closedAt === null;
+  const spotlightActive = useSpotlightActiveFor(task.id, spotlight);
   const parent = task.parentId
     ? current(state).tasks.find((item) => item.id === task.parentId)
     : undefined;
+
+  // Keep a pending or active spotlight accurate if synced blockers change or the card unmounts.
+  useEffect(() => {
+    if (!spotlight) return;
+    if (!blocked) {
+      cancelBlockerSpotlight(task.id);
+      return;
+    }
+    syncBlockerSpotlight(task.id, blockers);
+  }, [spotlight, blocked, task.id, blockers]);
+
+  useEffect(() => {
+    if (!spotlight) return;
+    return () => cancelBlockerSpotlight(task.id);
+  }, [spotlight, task.id]);
+
+  const hintLabel = blocked ? blockedHint(blockers, project) : '';
+
   return (
     <div className="px-4 pt-3.5 pb-3">
       {parent && !state.actions && (
@@ -101,13 +133,27 @@ export function TaskCardFace({
         <span className="shrink-0 font-medium tabular-nums">
           {identifier(project, task) ?? 'Pending'}
         </span>
-        {blockers.length > 0 && task.closedAt === null && (
-          <Hint label={blockedLabel(blockers)}>
+        {blocked && (
+          <Hint label={hintLabel}>
             <span
               role="img"
               data-blocked=""
+              data-spotlight-trigger={spotlightActive ? 'active' : undefined}
               aria-label={blockedLabel(blockers)}
-              className="flex shrink-0 items-center text-destructive/80"
+              onPointerEnter={
+                spotlight
+                  ? (event) => {
+                      if (event.pointerType === 'touch' || event.buttons !== 0) return;
+                      armBlockerSpotlight(task.id, blockers);
+                    }
+                  : undefined
+              }
+              onPointerLeave={spotlight ? () => cancelBlockerSpotlight(task.id) : undefined}
+              onPointerCancel={spotlight ? () => cancelBlockerSpotlight(task.id) : undefined}
+              className={cn(
+                '-m-1 flex shrink-0 items-center rounded-md p-1 text-destructive/80 transition-colors',
+                spotlightActive && 'bg-destructive/15 text-destructive',
+              )}
             >
               <Ban aria-hidden className="size-3" />
             </span>
@@ -160,12 +206,15 @@ export function TaskCard({
 }: Props) {
   const state = board.use();
   const dragState = drag.use();
+  const reduced = useReducedMotion();
   const { project, tasks } = current(state);
   const color = taskColor(project, task);
   const subtasks = state.subtasksAsCards ? [] : subtasksOf(tasks, task.id);
   const selected = !onOpen && state.selection.includes(task.id);
   const carried = state.carrying?.taskId === task.id;
   const open = state.openTaskId === task.id;
+  const spotlightEnabled = !overlay && !onOpen;
+  const spotlightRole = useCardSpotlightRole(task.id, state.subtasksAsCards, spotlightEnabled);
   const lifted = useTaskCardHidden(task.id);
   // As in Catch, a task shrinking back into its card lands without the underlay, which slides
   // out from behind the card as the task settles, as if the card were setting it down.
@@ -200,6 +249,7 @@ export function TaskCard({
     // Portalled status choices bubble through React, but are not a click on this card.
     if (event.target instanceof Node && !event.currentTarget.contains(event.target)) return;
     if (event.target instanceof Element && event.target.closest('[data-no-drag]')) return;
+    cancelBlockerSpotlight();
     if (onOpen) {
       onOpen(ref.current);
       return;
@@ -273,6 +323,8 @@ export function TaskCard({
       data-status-control={statusControl ? '' : undefined}
       data-overlay={overlay ? '' : undefined}
       data-color={color ?? undefined}
+      data-spotlight={spotlightRole !== 'none' ? spotlightRole : undefined}
+      data-spotlight-instant={reduced ? '' : undefined}
       tabIndex={overlay ? -1 : 0}
       aria-label={`${identifier(project, task) ?? 'Pending'} ${task.title || 'Untitled task'}`}
       aria-roledescription="Task card"
@@ -293,8 +345,8 @@ export function TaskCard({
       animate={{ scale: carried ? 1.03 : 1 }}
       transition={springs.snappy}
       className={cn(
-        'group relative flex cursor-pointer select-none flex-col rounded-2xl border border-transparent text-card-foreground outline-none [-webkit-touch-callout:none]',
-        'shadow-[0_1px_2px_oklch(0_0_0/0.06)] transition-shadow hover:shadow-md focus-visible:ring-[3px] focus-visible:ring-ring/60',
+        'board-card group relative flex cursor-pointer select-none flex-col rounded-2xl border border-transparent text-card-foreground outline-none [-webkit-touch-callout:none]',
+        'shadow-[0_1px_2px_oklch(0_0_0/0.06)] hover:shadow-md focus-visible:ring-[3px] focus-visible:ring-ring/60',
         color ? 'bg-tint' : 'border-border bg-card',
         open && 'ring-2 ring-brand ring-inset',
         (carried || overlay) && 'shadow-xl hover:shadow-xl',
@@ -309,6 +361,7 @@ export function TaskCard({
         task={task}
         showStatus={showStatus}
         statusControl={statusControl}
+        spotlight={spotlightEnabled}
       />
       <motion.span
         aria-hidden
@@ -337,7 +390,11 @@ export function TaskCard({
     <div
       data-card-root=""
       data-color={color ?? undefined}
-      className={cn('isolate flex flex-col', landing && 'invisible')}
+      data-spotlight-group={
+        spotlightRole === 'dimmed' ? 'dimmed' : spotlightRole !== 'none' ? 'active' : undefined
+      }
+      data-spotlight-instant={reduced ? '' : undefined}
+      className={cn('board-card-group isolate flex flex-col', landing && 'invisible')}
     >
       {card}
       <motion.div

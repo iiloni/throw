@@ -91,8 +91,9 @@ export function setSubtasksAsCards(value: boolean) {
 
 /**
  * Desktop columns folded to a strip, kept on the device as Catch keeps its deck's. A project
- * board keeps the ids of its folded active statuses under its own key. The workspace board
- * keeps one flag per category, which its phone pages share for Done and Cancelled only.
+ * board keeps the ids of its folded active statuses under its own key, which a phone's pager
+ * also skips. The workspace board keeps one flag per category, which its phone pages share
+ * for Done and Cancelled only.
  */
 const collapsedSchema = z.array(z.string());
 const foldedSchema = z.object({
@@ -157,7 +158,8 @@ export function foldingColumnOf(project: Project, task: Task) {
 /**
  * Opens the folded column a card is in, so what takes the person to the card (a task opened
  * from search or a link, a card carried from the keyboard) finds it there, as Catch's deck
- * opens a column a keyboard selection lands in. Only a desktop draws the strips.
+ * opens a column a keyboard selection lands in. A phone leaves its folds alone: the task
+ * covers the board there, and a card's column was never the page on screen in any case.
  */
 function expandColumnOf(state: BoardState, taskId: string) {
   if (!isDesktop()) return;

@@ -36,5 +36,11 @@ export function usePagerPage(first = 0) {
   const quiet = useCallback(() => {
     touched.current = false;
   }, []);
-  return [page, pager, quiet] as const;
+  /** Call after moving the pager to a page from code, so what shows it does not wait a frame. */
+  const place = useCallback((index: number) => {
+    touched.current = false;
+    seen.current = index;
+    setPage(index);
+  }, []);
+  return [page, pager, quiet, place] as const;
 }
