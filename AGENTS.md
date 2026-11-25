@@ -38,6 +38,9 @@ On a phone the same boundary hands the board's drawer the open task's dock and p
 Catch's split view does (`TaskDrawer`). A desktop pane at least 620 px wide moves the task's
 tags and subtasks to a side column beside the card while it has any (ADR 0012,
 `TaskDetails/TaskColumn.tsx`); later extras such as link previews join it there.
+Columns that run on under an open desktop pane fade out at the seam (`[data-seam]` in
+`styles.css`, from `ScrollArea`'s `sides` marks and `seamOf`), ending at a sticky closed rail's
+edge where one lies over the scroller.
 Outbound webhooks (ADR 0015) are server-only: `apps/server/src/webhooks` queues deliveries
 in the write's transaction, checks receivers against its SSRF policy and sends them from a
 worker; Settings manages them at `/settings/webhooks`. A webhook's quiet window is a

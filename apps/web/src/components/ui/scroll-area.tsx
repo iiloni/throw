@@ -5,46 +5,72 @@ import { cn } from '@/lib/utils';
 
 /**
  * Marks the root with `data-more-top` and `data-more-bottom` while its viewport has content
- * scrolled out that way. Written to the element, not to state: it changes on every scroll.
+ * scrolled out that way, and with `sides`, `data-more-left` and `data-more-right` too. Written
+ * to the element, not to state: it changes on every scroll.
  */
-function useEdges(enabled: boolean) {
+function useEdges(enabled: boolean, sides: boolean) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const root = ref.current;
     const viewport = root?.querySelector<HTMLElement>(
       ':scope > [data-slot="scroll-area-viewport"]',
     );
-    if (!enabled || !root || !viewport) return;
+    if ((!enabled && !sides) || !root || !viewport) return;
     const measure = () => {
-      const below = viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop;
-      root.toggleAttribute('data-more-top', viewport.scrollTop > 1);
-      root.toggleAttribute('data-more-bottom', below > 1);
+      if (enabled) {
+        const below = viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop;
+        root.toggleAttribute('data-more-top', viewport.scrollTop > 1);
+        root.toggleAttribute('data-more-bottom', below > 1);
+      }
+      if (sides) {
+        const after = viewport.scrollWidth - viewport.clientWidth - viewport.scrollLeft;
+        root.toggleAttribute('data-more-left', viewport.scrollLeft > 1);
+        root.toggleAttribute('data-more-right', after > 1);
+      }
     };
     measure();
     viewport.addEventListener('scroll', measure, { passive: true });
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
-    observer?.observe(viewport);
-    if (viewport.firstElementChild) observer?.observe(viewport.firstElementChild);
+    const content = viewport.firstElementChild;
+    // A row's content box keeps the viewport's width while what it holds runs on past it, so
+    // the scroll width changes with its children (a column folding, a rail springing open)
+    // and with neither a scroll nor a resize of the viewport. They are watched one by one.
+    const watch = () => {
+      if (!observer) return;
+      observer.disconnect();
+      observer.observe(viewport);
+      if (content) observer.observe(content);
+      if (sides && content) for (const child of content.children) observer.observe(child);
+    };
+    watch();
+    const children =
+      sides && content && typeof MutationObserver !== 'undefined'
+        ? new MutationObserver(watch)
+        : null;
+    if (content) children?.observe(content, { childList: true });
     return () => {
       viewport.removeEventListener('scroll', measure);
       observer?.disconnect();
+      children?.disconnect();
     };
-  }, [enabled]);
+  }, [enabled, sides]);
   return ref;
 }
 
 /**
  * Catch's overlay scrollbars: a thin rounded thumb drawn over the content, never beside it.
  * With `edges`, content fades out at the top or bottom while there is more that
- * way, so the area says it scrolls without showing a bar.
+ * way, so the area says it scrolls without showing a bar. With `sides`, the root is marked
+ * while content is scrolled out to the left or right, for a surface to fade that edge itself.
  */
 function ScrollArea({
   className,
   type = 'hover',
   edges = false,
+  sides = false,
   ...props
-}: React.ComponentProps<typeof ScrollAreaPrimitive.Root> & { edges?: boolean }) {
-  const ref = useEdges(edges);
+}: React.ComponentProps<typeof ScrollAreaPrimitive.Root> & { edges?: boolean; sides?: boolean }) {
+  const ref = useEdges(edges, sides);
   return (
     <ScrollAreaPrimitive.Root
       ref={ref}

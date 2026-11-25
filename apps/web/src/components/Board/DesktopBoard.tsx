@@ -144,6 +144,19 @@ function EdgeSpacer({
   }, [trailing]);
   useLayoutEffect(follow);
   useMotionValueEvent(spring, 'change', () => motionFrame.postRender(follow));
+  // A sticky closed rail lies over the scroller's end, so the columns are cut at its edge
+  // rather than at the scroller's: the seam's fade (styles.css) ends there, moving with it.
+  useLayoutEffect(() => {
+    const viewport = element.current?.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
+    if (!trailing || !viewport) return;
+    const inset = (width: number) => viewport.style.setProperty('--seam-inset', `${width}px`);
+    inset(rail.value.get());
+    const stop = rail.value.on('change', inset);
+    return () => {
+      stop();
+      viewport.style.removeProperty('--seam-inset');
+    };
+  }, [trailing, rail.value]);
   const width = typeof rail.width === 'number' ? rail.width + EDGE : spring;
   return <motion.span ref={element} aria-hidden className="shrink-0" style={{ width }} />;
 }
@@ -293,7 +306,7 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
             {!backlogBound && backlogRail}
             <div className="absolute inset-0 flex">
               {/* The columns carry the top and bottom margin, so a rail in here runs full height. */}
-              <ScrollArea className="flex-1">
+              <ScrollArea sides data-seam={seamOf(state)} className="flex-1">
                 <ScrollAreaViewport
                   data-origin="active"
                   data-autoscroll-x=""
@@ -395,6 +408,15 @@ function StatusColumn({ status, index }: { status: Status; index: number }) {
 function openTaskOf(state: BoardState) {
   const data = current(state);
   return [...data.tasks, ...(data.hiddenTasks ?? [])].find((task) => task.id === state.openTaskId);
+}
+
+/**
+ * Whether a board's columns run up to the open task's seam, for `[data-seam]` in styles.css to
+ * fade them out before it. It turns with the pane's own presence, so the fade leaves as the
+ * pane starts to close rather than vanishing once it has gone.
+ */
+export function seamOf(state: BoardState): 'open' | 'shut' {
+  return openTaskOf(state) ? 'open' : 'shut';
 }
 
 /** The effective task pane width: live drag width if held, otherwise stored, clamped to the frame. */
