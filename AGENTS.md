@@ -77,7 +77,10 @@ short handles on `FlowTrack` that open them again (`phoneColumns` in `Board/Phon
 Both boards narrow in place: the board store holds a filter and a temporary sort
 (`Board/filter.ts`, applied by `listTasks` and `countIn`), set from the desktop boards'
 search bar (`components/BoardSearch`, docked as a sidebar on wide boards) or the phone drawer's
-search; Ctrl/⌘K opens the palette only away from boards. A sorted list is `data-drop-send`:
+search; Ctrl/⌘K opens the palette only away from boards. Its Links filters read
+`BoardData.relations`, which the boundaries derive with `boardRelations` (`Board/blockers.ts`)
+from the cards' own blockers, so Blocked matches the blocked mark; the prototype has none and
+hides them. A sorted list is `data-drop-send`:
 drops there send. The Updated sort reads each task's activity log (`updatedAtByTask`).
 Cards move on both boards by drag, keyboard,
 phone long press and the move drawer (ADR 0008). A selection (Ctrl/⌘/Shift click or right

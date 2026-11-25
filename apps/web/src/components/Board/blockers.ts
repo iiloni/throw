@@ -1,8 +1,14 @@
+import {
+  isTaskTrashed,
+  type Project as ProjectRow,
+  type TaskRelation,
+  type Task as TaskRow,
+} from '@throw/shared';
 import { createContext, useContext, useEffect, useSyncExternalStore } from 'react';
 import { isDesktop } from '@/lib/media';
 import { createStore } from '@/lib/store';
 import { drag } from './drag';
-import { type Category, type Project, targetCategory } from './model';
+import { type BoardRelations, type Category, type Project, targetCategory } from './model';
 import { board } from './state';
 
 /** An open, untrashed task blocking another task, as the board needs it. */
@@ -33,6 +39,51 @@ const none: readonly TaskBlocker[] = [];
 
 export function useTaskBlockers(taskId: string) {
   return useContext(TaskBlockersContext)?.get(taskId) ?? none;
+}
+
+/**
+ * The relations a board's filter chooses by, from the same open blockers the cards' badges
+ * read (`blockersByTask`), so Blocked finds exactly the cards that show the badge:
+ *
+ * - blocked: a task with an open blocker (the filter, as the card, leaves out closed tasks);
+ * - blocking: an open blocker of a task that is open and not in the trash itself;
+ * - duplicates: either end of a duplicate link whose other task the device holds and is not
+ *   in the trash. A closed duplicate still counts, since closing one is how a duplicate is
+ *   usually settled; the task view lists it too.
+ *
+ * Tasks of any project count, so a blocker on another project's board still marks this one.
+ */
+export function boardRelations(
+  blockers: ReadonlyMap<string, readonly Pick<TaskBlocker, 'id'>[]>,
+  relations: readonly Pick<TaskRelation, 'sourceTaskId' | 'targetTaskId' | 'kind'>[],
+  tasks: readonly TaskRow[],
+  projects: readonly ProjectRow[],
+): BoardRelations {
+  const taskById = new Map(tasks.map((row) => [row.id, row]));
+  const projectById = new Map(projects.map((row) => [row.id, row]));
+  const live = (id: string) => {
+    const task = taskById.get(id);
+    return task !== undefined &&
+      !isTaskTrashed(task, taskById.get(task.parentId ?? ''), projectById.get(task.projectId))
+      ? task
+      : undefined;
+  };
+  const blocked = new Set<string>();
+  const blocking = new Set<string>();
+  for (const [taskId, open] of blockers) {
+    if (open.length === 0) continue;
+    blocked.add(taskId);
+    const task = live(taskId);
+    if (!task || task.closedAt !== null) continue;
+    for (const blocker of open) blocking.add(blocker.id);
+  }
+  const duplicates = new Set<string>();
+  for (const relation of relations) {
+    if (relation.kind !== 'duplicates') continue;
+    if (live(relation.targetTaskId)) duplicates.add(relation.sourceTaskId);
+    if (live(relation.sourceTaskId)) duplicates.add(relation.targetTaskId);
+  }
+  return { blocked, blocking, duplicates };
 }
 
 const blockerIdentifier = (blocker: string | Pick<TaskBlocker, 'identifier'>) =>

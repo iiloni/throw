@@ -11,9 +11,11 @@ import { useBlockersByTask } from '@/components/TaskRelations/TaskRelations';
 import {
   useActivity,
   useLocalRowsReady,
+  useProjects,
   useProjectTaskTags,
   useStatuses,
   useTags,
+  useTaskRelations,
   useTasks,
 } from '@/lib/collections';
 import { useLaunchScreenReady } from '@/lib/launchScreen';
@@ -21,7 +23,7 @@ import { useDesktop } from '@/lib/media';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { createTask } from '@/lib/tasks';
 import { BoardAnnouncer } from './BoardAnnouncer';
-import { TaskBlockersContext } from './blockers';
+import { boardRelations, TaskBlockersContext } from './blockers';
 import { taskScreens, taskWrites, useBoardBoundary } from './boundary';
 import { DesktopBoard } from './DesktopBoard';
 import { DragOverlay } from './DragOverlay';
@@ -51,11 +53,20 @@ export function ProjectBoard({
   const updates = useMemo(() => updatedAtByTask(activity), [activity]);
   const phone = !useDesktop();
   const blockers = useBlockersByTask();
+  const { relations } = useTaskRelations();
+  const { projects: allProjects } = useProjects();
+  const linked = useMemo(
+    () => boardRelations(blockers, relations, tasks, allProjects),
+    [blockers, relations, tasks, allProjects],
+  );
   const selectionContent = useSelectionContent();
   const state = board.use();
   const data = useMemo(
-    () => projectBoardData(project, statuses, tasks, tags, secondaryTags, updates),
-    [project, statuses, tasks, tags, secondaryTags, updates],
+    () => ({
+      ...projectBoardData(project, statuses, tasks, tags, secondaryTags, updates),
+      relations: linked,
+    }),
+    [project, statuses, tasks, tags, secondaryTags, updates, linked],
   );
   const awaiting = useAwaitingSync(loadingStatuses, data.project.statuses.length);
   const awaitingTasks = useAwaitingSync(loadingTasks, data.tasks.length);

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { expect, type Page, test } from '@playwright/test';
 import {
   card,
@@ -16,7 +17,7 @@ const bar = (page: Page) => page.getByRole('search', { name: 'Search the board',
 const field = (page: Page) => page.getByRole('searchbox', { name: 'Search tasks', exact: true });
 const filters = (page: Page) => page.getByRole('region', { name: 'Filters and sort' });
 /** The filter card shows one section at a time, chosen from the tabs at its foot. */
-const section = (page: Page, name: 'Tags' | 'Projects' | 'Size' | 'Sort') =>
+const section = (page: Page, name: 'Tags' | 'Projects' | 'Size' | 'Links' | 'Sort') =>
   page
     .getByRole('tablist', { name: 'Filter type' })
     .getByRole('tab', { name, exact: true })
@@ -68,6 +69,53 @@ async function sizedBoard(page: Page) {
     page.getByRole('region', { name: 'Build', exact: true }).getByRole('article'),
   ).toHaveCount(4);
   return { ...board, ids };
+}
+
+/** Links two tasks through the API, as another device would; the board learns of it by sync. */
+async function link(
+  page: Page,
+  headers: Record<string, string>,
+  sourceTaskId: string,
+  kind: 'blocks' | 'duplicates' | 'relates_to',
+  targetTaskId: string,
+) {
+  const response = await page.request.post('/api/task-relations', {
+    headers,
+    data: { id: randomUUID(), sourceTaskId, targetTaskId, kind },
+  });
+  expect(response.status()).toBe(201);
+}
+
+/**
+ * `sizedBoard` with relations: Later position blocks Earlier position, Low priority duplicates
+ * Review this, and Board parent only relates to Review this.
+ */
+async function linkedBoard(page: Page) {
+  const board = await sizedBoard(page);
+  await link(
+    page,
+    board.headers,
+    board.ids['Later position']!,
+    'blocks',
+    board.ids['Earlier position']!,
+  );
+  await link(
+    page,
+    board.headers,
+    board.ids['Low priority']!,
+    'duplicates',
+    board.ids['Review this']!,
+  );
+  await link(
+    page,
+    board.headers,
+    board.ids['Board parent']!,
+    'relates_to',
+    board.ids['Review this']!,
+  );
+  // The blocked badge says the relations have synced.
+  await expect(card(page, 'Earlier position').locator('[data-blocked]')).toBeVisible();
+  return board;
 }
 
 async function openBar(page: Page) {
@@ -597,10 +645,162 @@ test.describe('desktop', () => {
     await expect(bar(page)).toHaveCount(0);
     await expect(railSearch.locator('[data-search-filter-badge]')).toHaveCount(0);
   });
+
+  test('relations narrow the board alongside sizes, with chips that remove them', async ({
+    page,
+  }) => {
+    const board = await linkedBoard(page);
+    await openBar(page);
+    await openFilters(page);
+    await section(page, 'Links');
+    const blocked = filters(page).getByRole('button', { name: /^Blocked,/ });
+    const blocking = filters(page).getByRole('button', { name: /^Blocking,/ });
+    const duplicates = filters(page).getByRole('button', { name: /^Duplicates,/ });
+    // Each relation counts the cards it would leave.
+    await expect(blocked).toHaveAccessibleName('Blocked, 1 task');
+    await expect(blocking).toHaveAccessibleName('Blocking, 1 task');
+    await expect(duplicates).toHaveAccessibleName('Duplicates, 2 tasks');
+    await blocked.click();
+    await expect(blocked).toHaveAttribute('aria-pressed', 'true');
+    // Only the card that shows the blocked badge.
+    await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Earlier position']]);
+    await expect(page.getByRole('region', { name: 'Review', exact: true })).toContainText(
+      'Nothing matches here.',
+    );
+    // Any of several relations.
+    await blocking.click();
+    await expect
+      .poll(() => cardIds(page, 'Build'))
+      .toEqual([board.ids['Earlier position'], board.ids['Later position']]);
+    // Alongside sizes: the L card is the blocker.
+    await section(page, 'Size');
+    await filters(page)
+      .getByRole('button', { name: /^Size L,/ })
+      .click();
+    await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Later position']]);
+    await chips(page).getByRole('button', { name: 'Remove Blocking filter', exact: true }).click();
+    await expect.poll(() => cardIds(page, 'Build')).toEqual([]);
+    await chips(page)
+      .getByRole('button', { name: /^Remove size L/ })
+      .click();
+    await chips(page).getByRole('button', { name: 'Remove Blocked filter', exact: true }).click();
+    // Duplicates finds both ends of the link, in each of their columns; relates to is no filter.
+    await section(page, 'Links');
+    await duplicates.click();
+    await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Low priority']]);
+    await expect.poll(() => cardIds(page, 'Review')).toEqual([board.ids['Review this']]);
+    // The search words narrow the chosen relations too.
+    await field(page).fill('review');
+    await expect.poll(() => cardIds(page, 'Build')).toEqual([]);
+    await expect.poll(() => cardIds(page, 'Review')).toEqual([board.ids['Review this']]);
+    await field(page).press('Escape');
+    await field(page).press('Escape');
+    await expect(chips(page)).toHaveCount(0);
+    await expect(
+      page.getByRole('region', { name: 'Build', exact: true }).getByRole('article'),
+    ).toHaveCount(4);
+  });
+
+  test('a blocker of a closed task blocks nothing, and the filter follows synced changes', async ({
+    page,
+  }) => {
+    const board = await linkedBoard(page);
+    await openBar(page);
+    await openFilters(page);
+    await section(page, 'Links');
+    await filters(page)
+      .getByRole('button', { name: /^Blocking,/ })
+      .click();
+    await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Later position']]);
+    // Another device closes the blocked task: its blocker no longer blocks anything.
+    const closed = await page.request.patch(`/api/tasks/${board.ids['Earlier position']}`, {
+      headers: board.headers,
+      data: {
+        changeId: randomUUID(),
+        changes: { statusId: { before: board.status('Build'), after: board.status('Done') } },
+      },
+    });
+    expect(closed.ok()).toBe(true);
+    await expect.poll(() => cardIds(page, 'Build')).toEqual([]);
+    await expect(filters(page).getByRole('button', { name: /^Blocking,/ })).toHaveAccessibleName(
+      'Blocking, 0 tasks',
+    );
+  });
+
+  test('a wide board shows Links inline in the docked sidebar', async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    const board = await linkedBoard(page);
+    await openBar(page);
+    const docked = bar(page);
+    await expect(docked).toHaveAttribute('data-docked', '');
+    const links = docked.getByRole('region', { name: 'Links', exact: true });
+    await expect(links).toBeVisible();
+    await links.getByRole('button', { name: /^Blocking,/ }).click();
+    await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Later position']]);
+    await expect(
+      chips(page).getByRole('button', { name: 'Remove Blocking filter', exact: true }),
+    ).toBeVisible();
+  });
+
+  test('the workspace board finds relations across its projects', async ({ page }) => {
+    const board = await workspaceFixture(page);
+    // Bake bread (Kitchen) blocks Water tomatoes (Garden).
+    await link(
+      page,
+      board.headers,
+      board.ids['Bake bread']!,
+      'blocks',
+      board.ids['Water tomatoes']!,
+    );
+    await expect(card(page, 'Water tomatoes').locator('[data-blocked]')).toBeVisible();
+    await openBar(page);
+    await openFilters(page);
+    await section(page, 'Links');
+    await filters(page)
+      .getByRole('button', { name: /^Blocked,/ })
+      .click();
+    await expect.poll(() => cardIds(page, 'Active')).toEqual([board.ids['Water tomatoes']]);
+    await filters(page)
+      .getByRole('button', { name: /^Blocked,/ })
+      .click();
+    await filters(page)
+      .getByRole('button', { name: /^Blocking,/ })
+      .click();
+    await expect.poll(() => cardIds(page, 'Active')).toEqual([board.ids['Bake bread']]);
+    // Scoped to Garden, the blocker in Kitchen is out of sight.
+    await section(page, 'Projects');
+    await filters(page).getByRole('button', { name: 'Garden', exact: true }).click();
+    await expect.poll(() => cardIds(page, 'Active')).toEqual([]);
+  });
 });
 
 test.describe('phone', () => {
   test.skip(({ isMobile }) => !isMobile, 'The desktop board has its search bar');
+
+  test('the drawer’s search filters by relations, shown under the board as chips', async ({
+    page,
+  }) => {
+    const board = await linkedBoard(page);
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    const field = page.getByRole('combobox', { name: /^Search tasks/ });
+    await expect(field).toBeFocused();
+    await page.getByRole('button', { name: 'Filter and sort', exact: true }).click();
+    await section(page, 'Links');
+    await page.getByRole('button', { name: /^Blocked,/ }).click();
+    await expect(field).toBeFocused();
+    await expect(page.getByText('1 task on the board', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Earlier position']]);
+    const bar = chips(page);
+    await expect(
+      bar.getByRole('button', { name: 'Remove Blocked filter', exact: true }),
+    ).toBeVisible();
+    await bar.getByRole('button', { name: 'Remove Blocked filter', exact: true }).click();
+    await expect(bar).toHaveCount(0);
+    await expect(
+      page.getByRole('region', { name: 'Build', exact: true }).getByRole('article'),
+    ).toHaveCount(4);
+  });
 
   test('the drawer’s search filters and sorts the board, which says so with one-tap clear', async ({
     page,
