@@ -299,12 +299,18 @@ describe('foldTask', () => {
     ).toBe('updated');
   });
 
-  it('sends a purge at once, in place of the changes before it', () => {
+  it('waits to announce a purge, in place of the changes before it', () => {
     const result = fold(updated([item('title', 'A', 'B')]), purged);
-    expect(result.outcome).toBe('now');
+    expect(result.outcome).toBe('wait');
     expect(result.payload).toMatchObject({ deliveryId, event: 'task.deleted', kind: 'deleted' });
     expect(result.payload).not.toHaveProperty('changedFields');
-    expect(fold(purged).outcome).toBe('now');
+    expect(fold(purged).outcome).toBe('wait');
+    // A purge after an undone edit, which was held, is still announced.
+    const undone = fold(updated([item('title', 'A', 'B')]), updated([item('title', 'B', 'A')]));
+    expect(undone.outcome).toBe('hold');
+    expect(
+      fold(updated([item('title', 'A', 'B')]), updated([item('title', 'B', 'A')]), purged),
+    ).toMatchObject({ outcome: 'wait', payload: { event: 'task.deleted' } });
   });
 
   it('counts fields named without values as changed', () => {
