@@ -62,7 +62,7 @@ describe('FlowTrack', () => {
     };
   }
 
-  it('shows a folded column as a dot in its place, which opens it', () => {
+  it('shows a folded column as a short handle in its place, which opens it', () => {
     const { nav, onExpand, onTurn } = track();
     const buttons = within(nav).getAllByRole('button');
     expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual([
@@ -88,7 +88,7 @@ describe('FlowTrack', () => {
     expect(onTurn).toHaveBeenCalledWith(1);
   });
 
-  it('folds the current column from beside its name, and focuses the dot it became', () => {
+  it('folds the current column from beside its name, and focuses the handle it became', () => {
     const { onCollapse } = track({}, all, 1);
     const fold = screen.getByRole('button', { name: 'Collapse Implementation column' });
     expect(fold).toHaveAttribute('aria-expanded', 'true');

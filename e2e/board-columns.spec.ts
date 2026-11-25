@@ -168,7 +168,7 @@ test.describe('phone', () => {
   const current = (page: Page) =>
     page.getByRole('navigation', { name: 'Columns' }).locator('[aria-current="page"]');
 
-  test('a folded column is skipped by a swipe, remembered, and opens again from its dot', async ({
+  test('a folded column is skipped by a swipe, remembered, and opens again from its handle', async ({
     page,
     browserName,
   }) => {
@@ -176,7 +176,7 @@ test.describe('phone', () => {
     await board.columns.getByRole('button', { name: 'Testing', exact: true }).click();
     await expect(current(page)).toHaveAccessibleName('Testing');
     await collapse(page, 'Testing').click();
-    // The next column takes its place, and the folded one is a dot that has focus.
+    // The next column takes its place, and the folded one is a handle that has focus.
     await expect(current(page)).toHaveAccessibleName('Review');
     await expect(card(page, 'Review this')).toBeInViewport();
     await expect(expand(page, 'Testing')).toHaveAttribute('aria-expanded', 'false');
@@ -208,7 +208,7 @@ test.describe('phone', () => {
     await expect(current(page)).toHaveAccessibleName('Review');
     await expect(card(page, 'Review this')).toBeInViewport();
 
-    // The dot opens the column and turns back to it.
+    // The handle opens the column and turns back to it.
     await expand(page, 'Testing').click();
     await expect(current(page)).toHaveAccessibleName('Testing');
     await expect(page.locator('[data-pager] > [data-page]')).toHaveCount(3);
@@ -220,7 +220,7 @@ test.describe('phone', () => {
     await expect(expand(page, 'Testing')).toHaveCount(0);
   });
 
-  test('a column folded on a desktop is a dot on a phone, and the pager always keeps one column', async ({
+  test('a column folded on a desktop is a handle on a phone, and the pager always keeps one column', async ({
     page,
   }) => {
     const board = await fixture(page);

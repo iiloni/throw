@@ -188,11 +188,11 @@ drawer, or the task dock's Close action.
 **A phone's pager skips folded columns (2026-11-25).** A project board's folded active columns
 are the same preference on a phone as on a desktop (`useCollapsedColumns`). The pager pages
 through the columns left open, so a column rarely visited costs no swipe, and the flow track
-keeps each folded one as a dot in its place that opens the column and turns to it. The
+keeps each folded one as a short handle in its place that opens the column and turns to it. The
 current column folds from beside its name, and the next column takes its place. The last
 column open does not fold, and a board whose every column was folded on a desktop shows its
 first. A folded column is no page and has no peek, so a held card reaches it through the move
-drawer rather than the pager; a drop target the size of a dot would be too small to aim at.
+drawer rather than the pager; a drop target the size of the handle would be too small to aim at.
 Opening a task in a folded column leaves it folded on a phone, where the task covers the board
 and a card's column was never the page on screen in any case. The workspace board's phone
 pages do not fold.

@@ -319,8 +319,8 @@ export type Folding = {
  * The current column by name, and the active columns as one track in the order work moves
  * through them: the ones behind are filled in, so the header says how far along the board
  * the page is. The next column is named at the end, a step further along. On a board whose
- * columns fold, the current one folds from beside its name, and a folded one is a dot on the
- * track that the pager skips; tapping the dot opens the column and turns to it.
+ * columns fold, the current one folds from beside its name, and a folded one is a short handle
+ * on the track that the pager skips; tapping the handle opens the column and turns to it.
  */
 export function FlowTrack({
   statuses,
@@ -349,7 +349,7 @@ export function FlowTrack({
     setDirection(Math.sign(page - last));
     setLast(page);
   }
-  // Folding the current column from its name takes focus to the dot it became.
+  // Folding the current column from its name takes focus to the handle it became.
   const [focusing, setFocusing] = useState<string | null>(null);
   useEffect(() => {
     if (!focusing) return;
@@ -432,7 +432,7 @@ export function FlowTrack({
               data-column-color={item.color ?? undefined}
               aria-current={index === page ? 'page' : undefined}
               onClick={() => (folded ? folding?.onExpand(item.id) : onTurn(index))}
-              // A folded column is a dot, kept mounted so it grows back into its segment.
+              // A folded column is a short handle, kept mounted so it grows back into its segment.
               initial={false}
               animate={{
                 flexGrow: folded ? 0 : 1,
@@ -441,9 +441,9 @@ export function FlowTrack({
               }}
               transition={reduced ? { duration: 0 } : folded ? curves.fold : springs.smooth}
               className={cn(
-                'relative flex h-6 min-w-1.5 basis-1.5 items-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60',
-                // The dot takes a finger's width around it.
-                folded && 'z-10 before:absolute before:-inset-x-2.5 before:inset-y-0',
+                'relative flex h-6 min-w-8 basis-8 items-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60',
+                // The handle takes a finger's width around it.
+                folded && 'z-10 before:absolute before:-inset-x-1.5 before:-inset-y-2',
               )}
             >
               <span

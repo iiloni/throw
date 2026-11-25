@@ -61,7 +61,7 @@ its state changes and track its width exactly as the row or its edge is resized.
 Desktop columns on both boards fold to a strip, as Catch's deck does
 (`Board/BoardColumn.tsx`, remembered per project by `useCollapsedColumns` in `Board/state.ts`).
 A phone's project board reads the same folds: its pager skips folded columns, which stay as
-dots on `FlowTrack` that open them again (`phoneColumns` in `Board/PhoneBoard.tsx`).
+short handles on `FlowTrack` that open them again (`phoneColumns` in `Board/PhoneBoard.tsx`).
 Both boards narrow in place: the board store holds a filter and a temporary sort
 (`Board/filter.ts`, applied by `listTasks` and `countIn`), set from the desktop boards'
 search bar (`components/BoardSearch`, docked as a sidebar on wide boards) or the phone drawer's
