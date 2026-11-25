@@ -64,11 +64,18 @@ async function assertSeam(page: Page, opener: Locator, { sticky = false } = {}) 
 
   // A sticky closed rail lies over the scroller's end: the fade ends at its edge instead.
   if (sticky) {
-    const rail = (await page
-      .getByRole('complementary', { name: 'Closed', exact: true })
-      .boundingBox())!;
-    const edge = (await seam.boundingBox())!;
-    await expect.poll(() => inset(seam)).toBeCloseTo(edge.x + edge.width - rail.x, -1);
+    const rail = page.getByRole('complementary', { name: 'Closed', exact: true });
+    // Both read together: the rail springs as the row narrows beside the opening pane.
+    await expect
+      .poll(async () => {
+        const [box, edge, covered] = await Promise.all([
+          rail.boundingBox(),
+          seam.boundingBox(),
+          inset(seam),
+        ]);
+        return Math.abs(edge!.x + edge!.width - box!.x - covered);
+      })
+      .toBeLessThan(2);
   } else expect(await inset(seam)).toBe(0);
 
   // A card in the fade still takes the pointer.
