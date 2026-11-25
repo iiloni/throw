@@ -209,7 +209,10 @@ remove_worktree() {
     fi
     # Also when the worktree was never initialized or its own dev.sh predates this: a
     # process left running there would outlive the checkout.
-    stop_worktree_processes "$target"
+    if ! stop_worktree_processes "$target"; then
+        echo "Refusing to remove a worktree whose processes are still running; stop them, then retry." >&2
+        exit 1
+    fi
     git worktree remove --force "$target"
     echo "Removed worktree: $target"
     if $delete_branch && [[ -n "$branch" ]]; then

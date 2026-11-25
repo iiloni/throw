@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import {
   chmodSync,
   copyFileSync,
@@ -103,8 +103,10 @@ function stopProcesses(target: string): string {
     'bash',
     [
       '-c',
-      'bash -c \'source "$1"; read_proc_stat "$PPID"; echo "$PPID $stat_start" > "$(android_pidfile "$2")"; stop_worktree_processes "$2"\' inner "$@"; echo survived',
-      'cap run android',
+      'bash -c \'source "$1"; read_proc_stat "$PPID"; echo "$PPID $stat_start" > "$(android_pidfile "$2")"; stop_worktree_processes "$2"\' inner "$3" "$4"; echo survived',
+      'cap',
+      'run',
+      'android',
       library,
       target,
     ],
@@ -124,7 +126,7 @@ test('stops the worktree live-reload session and leaves other processes alone', 
   // Ignores SIGINT and SIGTERM, so only the SIGKILL fallback stops it.
   const stubborn = startProcess(
     'bash',
-    ['-c', "trap '' INT TERM; sleep 300 & wait; sleep 300", 'cap run android'],
+    ['-c', "trap '' INT TERM; sleep 300 & wait; sleep 300", 'cap', 'run', 'android'],
     join(worktree, 'apps/web'),
   );
   const otherCheckout = startProcess(
@@ -134,6 +136,8 @@ test('stops the worktree live-reload session and leaves other processes alone', 
   );
   // A shell or editor working in the checkout.
   const bystander = startProcess('sleep', ['300'], worktree);
+  // Mentions the command inside one argument, as a note or a prompt might.
+  const mention = startProcess('bash', ['-c', 'sleep 300; true', 'cap run android'], worktree);
   await waitFor(() => childrenOf(session).length > 0);
   const gradle = childrenOf(session)[0];
 
@@ -141,7 +145,9 @@ test('stops the worktree live-reload session and leaves other processes alone', 
 
   assert.match(output, /survived/);
   for (const pid of [session, gradle, stubborn]) assert.equal(running(pid), false, `${pid}`);
-  for (const pid of [otherCheckout, bystander]) assert.equal(running(pid), true, `${pid}`);
+  for (const pid of [otherCheckout, bystander, mention]) {
+    assert.equal(running(pid), true, `${pid}`);
+  }
   assert.ok(existsSync(join(worktree, 'apps/web/interrupted')), 'interrupted with SIGINT first');
   assert.ok(!existsSync(join(primary, 'apps/web/interrupted')));
 });
@@ -200,6 +206,19 @@ test('removing a worktree that was never initialized still stops its live-reload
   );
   await waitFor(() => childrenOf(session).length > 0);
 
+  // Make signal delivery fail, then retry with normal signal handling.
+  const shellEnv = join(base, 'no-signals.sh');
+  writeFileSync(shellEnv, 'kill() { return 1; }\n');
+  const failed = spawnSync(join(primary, 'scripts/worktree.sh'), ['remove', removable, '-y'], {
+    cwd: primary,
+    encoding: 'utf8',
+    env: { ...process.env, BASH_ENV: shellEnv, THROW_STOP_PROCESS_POLLS: '1' },
+  });
+  assert.equal(failed.status, 1);
+  assert.match(failed.stderr, /Refusing to remove a worktree whose processes are still running/);
+  assert.ok(existsSync(removable));
+  assert.ok(running(session));
+
   execFileSync(join(primary, 'scripts/worktree.sh'), ['remove', removable, '-y'], {
     cwd: primary,
     env: { ...process.env, THROW_STOP_PROCESS_POLLS: '5' },
@@ -208,4 +227,30 @@ test('removing a worktree that was never initialized still stops its live-reload
   assert.equal(running(session), false);
   assert.equal(running(otherCheckout), true);
   assert.equal(existsSync(removable), false);
+});
+
+test('a session in a worktree whose path needs quoting releases its pidfile on exit', {
+  skip: !hasProc && 'needs /proc',
+}, () => {
+  const quoted = join(base, "throw-it's $(touch injected)");
+  mkdirSync(quoted);
+  execFileSync('git', ['init', '-q'], { cwd: quoted });
+  const output = execFileSync(
+    'bash',
+    [
+      '-c',
+      'source "$1"; record_android_session "$2"; cat "$(android_pidfile "$2")"',
+      'test',
+      library,
+      quoted,
+    ],
+    { cwd: base, encoding: 'utf8' },
+  );
+  assert.match(output, /^\d+ \d+\n$/);
+  const gitDir = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-dir'], {
+    cwd: quoted,
+    encoding: 'utf8',
+  }).trim();
+  assert.equal(existsSync(join(gitDir, 'throw-android.pid')), false);
+  assert.equal(existsSync(join(base, 'injected')), false);
 });

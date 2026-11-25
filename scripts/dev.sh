@@ -118,8 +118,11 @@ case "$command" in
         install_dependencies
         ;;
     down)
-        stop_worktree_processes "$repo_root"
+        # A process that will not stop is reported; the stack still goes down.
+        cleanup_status=0
+        stop_worktree_processes "$repo_root" || cleanup_status=$?
         "${compose[@]}" down --remove-orphans "$@"
+        exit "$cleanup_status"
         ;;
     restart)
         "${compose[@]}" restart "$@"
@@ -251,10 +254,12 @@ case "$command" in
             "${compose[@]}" down -v --remove-orphans
             "$0" up
         else
-            stop_worktree_processes "$repo_root"
+            cleanup_status=0
+            stop_worktree_processes "$repo_root" || cleanup_status=$?
             # --rmi local removes only images Compose built (those without an image: tag),
             # so pulled ones such as postgres and electric stay.
             "${compose[@]}" down -v --remove-orphans --rmi local
+            exit "$cleanup_status"
         fi
         ;;
     help|-h|--help)
@@ -262,8 +267,8 @@ case "$command" in
 Usage: ./scripts/dev.sh <command>
 
   up                  Build, install dependencies and start this worktree's stack
-  down                Stop the stack and this worktree's host processes (such as
-                      android's live reload), keeping its database
+  down                Stop the stack, keeping its database. On Linux, also stop this
+                      worktree's Android live reload
   restart [service]   Restart all services or one (app, postgres, electric)
   logs [service]      Follow logs
   logs-once [service] Print current logs without following

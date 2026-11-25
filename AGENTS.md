@@ -133,7 +133,8 @@ checkout's stack. Never hard-code container or project names.
   against this worktree's stack. Select the affected specs or cases; see the E2E policy below.
 - `./scripts/dev.sh android [--static] [--usb] [--target <id>]`: install Throw Dev; use
   `--static` for bundled code and offline testing. Host JDK 21, SDK 36 and adb are required.
-  Live reload runs until Ctrl+C; `down`, `destroy` and worktree removal also stop it.
+  Live reload runs until Ctrl+C. On Linux, `down`, `destroy` and worktree removal also stop
+  it; elsewhere it keeps running until Ctrl+C.
 - `./scripts/dev.sh generate`: create a migration after editing `apps/server/src/db/schema.ts`.
   Commit the generated SQL and journal.
 - `./scripts/dev.sh backup <command>`: server backups for this worktree. See `docs/backups.md`.
