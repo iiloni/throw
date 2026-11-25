@@ -37,7 +37,13 @@ async function flingToTop(page: Page, target: 'page' | 'column') {
       set(y);
       await frame();
     }
-    const dock = document.querySelector('[data-drawer]')?.getBoundingClientRect().top ?? null;
+    // A fixed element whose containing block is the viewport has no offset parent; under a
+    // transformed or filtered ancestor it would have one, and ride along with the bounce. The
+    // drawer's own place moves with the page's scroll (it sinks and rises), so it is not compared.
+    const carried = () => {
+      const drawer = document.querySelector('[data-drawer]') as HTMLElement | null;
+      return drawer !== null && drawer.offsetParent !== null;
+    };
     let furthest = 0;
     let dockMoved = false;
     for (let index = 0; index < 40; index++) {
@@ -51,8 +57,7 @@ async function flingToTop(page: Page, target: 'page' | 'column') {
       } else {
         furthest = Math.max(furthest, Number.parseFloat(column?.style.top || '0'));
       }
-      const now = document.querySelector('[data-drawer]')?.getBoundingClientRect().top ?? null;
-      if (dock !== null && now !== null && Math.abs(now - dock) > 0.5) dockMoved = true;
+      if (carried()) dockMoved = true;
       await frame();
     }
     return { furthest, dockMoved };
