@@ -84,8 +84,15 @@ export function watchScrollBounce({
       const reach = Math.min(MAX_REACH, box.clientHeight * MAX_REACH_OF_HEIGHT);
       const push =
         (atTop ? 1 : -1) * Math.min(Math.abs(velocity) * 1000 * CARRY, reach * Math.E * RATE);
-      if (scroller) bounceContent(scroller, push);
-      else {
+      if (scroller) {
+        // The content reached the edge between the last event and this one; the time since then
+        // is already past the edge. Counted on the frame's own clock (the timeline's time), which
+        // is when this frame's animations are sampled; the event is dispatched later within it.
+        const crossed = last.time + Math.abs(last.y - (atTop ? 0 : y)) / Math.abs(velocity);
+        const past = Math.min(Math.max(time - crossed, 0), time - last.time);
+        const frame = document.timeline?.currentTime;
+        bounceContent(scroller, push, (typeof frame === 'number' ? frame : time) - past);
+      } else {
         animate(pageBounceY, 0, {
           type: 'spring',
           stiffness: RATE ** 2,
@@ -103,7 +110,7 @@ export function watchScrollBounce({
    * A scroller's content has no element of its own to move, so each child in view takes the
    * bounce, added to whatever transform it has.
    */
-  function bounceContent(scroller: Element, push: number) {
+  function bounceContent(scroller: Element, push: number, arrived: number) {
     for (const animation of bounces.get(scroller) ?? []) animation.cancel();
     const view = scroller.getBoundingClientRect();
     const keyframes = Array.from({ length: KEYFRAMES + 1 }, (_, index) => {
@@ -115,7 +122,14 @@ export function watchScrollBounce({
     for (const child of scroller.children) {
       const { top, bottom } = child.getBoundingClientRect();
       if (bottom < view.top - MAX_REACH || top > view.bottom + MAX_REACH) continue;
-      running.push(child.animate(keyframes, { duration: SETTLED_AFTER * 1000, composite: 'add' }));
+      const animation = child.animate(keyframes, {
+        duration: SETTLED_AFTER * 1000,
+        composite: 'add',
+      });
+      // Counted from when the content reached the edge, not from when the animation gets going
+      // a frame later: the content would sit dead at the edge for that frame before it set off.
+      animation.startTime = arrived;
+      running.push(animation);
     }
     bounces.set(scroller, running);
   }

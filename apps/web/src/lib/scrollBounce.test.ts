@@ -121,7 +121,10 @@ describe('watchScrollBounce', () => {
       document.body.append(list);
       vi.spyOn(list, 'scrollHeight', 'get').mockReturnValue(2000);
       vi.spyOn(list, 'clientHeight', 'get').mockReturnValue(height);
-      const animate = vi.fn().mockReturnValue({ cancel: vi.fn() });
+      const animate = vi.fn(
+        (_keyframes: Keyframe[], _options?: KeyframeAnimationOptions) =>
+          ({ cancel: vi.fn(), startTime: null }) as unknown as Animation,
+      );
       row.animate = animate;
       const scrollTo = (...steps: [number, number][]) => {
         for (const [time, y] of steps) {
@@ -134,8 +137,8 @@ describe('watchScrollBounce', () => {
       };
       /** The furthest the latest bounce moves the row. */
       const reach = () => {
-        const frames: { transform: string }[] = animate.mock.lastCall?.[0] ?? [];
-        const offsets = frames.map((frame) => Number.parseFloat(frame.transform.slice(11)));
+        const frames = animate.mock.lastCall?.[0] ?? [];
+        const offsets = frames.map((frame) => Number.parseFloat(String(frame.transform).slice(11)));
         return offsets.reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a), 0);
       };
       return { list, animate, scrollTo, reach };
@@ -151,6 +154,24 @@ describe('watchScrollBounce', () => {
       expect(reach()).toBeGreaterThan(10);
       expect(animate.mock.lastCall?.[0].at(-1)).toEqual({ transform: 'translateY(0.00px)' });
       expect(pageBounceY.isAnimating()).toBe(false);
+    });
+
+    it('counts the bounce from when the content reached the edge', () => {
+      const { animate, scrollTo } = scroller();
+      // At this speed the content met the edge at 64 ms; the event says so at 70.
+      scrollTo([0, 120], [16, 90], [32, 60], [48, 30], [70, 0]);
+      expect(animate.mock.results[0]?.value.startTime).toBe(64);
+    });
+
+    it('counts on the frame clock, which runs ahead of the event', () => {
+      Object.defineProperty(document, 'timeline', {
+        value: { currentTime: 66 },
+        configurable: true,
+      });
+      const { animate, scrollTo } = scroller();
+      scrollTo([0, 120], [16, 90], [32, 60], [48, 30], [70, 0]);
+      expect(animate.mock.results[0]?.value.startTime).toBe(60);
+      Reflect.deleteProperty(document, 'timeline');
     });
 
     it('bounces up off its bottom', () => {
