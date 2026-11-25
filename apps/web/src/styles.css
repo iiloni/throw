@@ -729,9 +729,22 @@ body:has(section.board-column[data-column-color]) .column-strip {
   box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--destructive) 78%, transparent);
   color: var(--foreground);
 }
+.spotlight-underlay {
+  transition:
+    background-color 220ms var(--ease-emphasized),
+    box-shadow 220ms var(--ease-emphasized);
+}
+.spotlight-underlay[data-spotlight="blocker"] {
+  background-color: color-mix(in oklab, var(--destructive) 14%, var(--tint, var(--card)));
+  box-shadow:
+    0 0 0 2px var(--destructive),
+    0 0 0 5px color-mix(in oklab, var(--destructive) 16%, transparent),
+    0 8px 20px -6px color-mix(in oklab, var(--destructive) 28%, oklch(0 0 0 / 0.2));
+}
 .board-card[data-spotlight-instant],
 .board-card-group[data-spotlight-instant],
-.spotlight-strip[data-spotlight-instant] {
+.spotlight-strip[data-spotlight-instant],
+.spotlight-underlay[data-spotlight-instant] {
   transition-duration: 0ms;
 }
 

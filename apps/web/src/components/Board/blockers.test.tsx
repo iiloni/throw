@@ -441,6 +441,87 @@ describe('component spotlight rendering', () => {
     expect(backlogStrip).not.toHaveAttribute('data-spotlight');
   });
 
+  it('highlights the subtask underlay and blocking subtask pip without bordering the parent card when blocked by its own subtask', () => {
+    const app = makeProject('app', 'APP', 'App');
+    const parent = makeTask('parent-task', 1, 'app-working', { title: 'Launch feature' });
+    const blockingSub = makeTask('sub-blocker', 2, 'app-working', {
+      title: 'Verify migration',
+      parentId: 'parent-task',
+    });
+    const otherSub = makeTask('sub-other', 3, 'app-backlog', {
+      title: 'Update readme',
+      parentId: 'parent-task',
+    });
+    const unrelated = makeTask('unrelated-task', 4, 'app-working', { title: 'Clean cache' });
+    board.set(initialBoard([{ project: app, tasks: [parent, blockingSub, otherSub, unrelated] }]));
+    const blockerMap = new Map<string, readonly TaskBlocker[]>([
+      [
+        'parent-task',
+        [
+          makeBlocker('sub-blocker', 'APP-2', {
+            statusId: 'app-working',
+            category: 'active',
+            parentId: 'parent-task',
+            parentStatusId: 'app-working',
+            parentCategory: 'active',
+          }),
+        ],
+      ],
+    ]);
+
+    const { rerender } = render(
+      <TooltipProvider>
+        <TaskBlockersContext.Provider value={blockerMap}>
+          <TaskCard task={parent} />
+          <TaskCard task={unrelated} />
+        </TaskBlockersContext.Provider>
+      </TooltipProvider>,
+    );
+
+    const parentCard = screen.getByRole('article', { name: 'APP-1 Launch feature' });
+    const unrelatedCard = screen.getByRole('article', { name: 'APP-4 Clean cache' });
+    const underlay = document.querySelector<HTMLElement>('[data-subtask-underlay]')!;
+    const blockerPip = document.querySelector<HTMLElement>('[data-subtask-pip="sub-blocker"]')!;
+    const otherPip = document.querySelector<HTMLElement>('[data-subtask-pip="sub-other"]')!;
+    const badge = parentCard.querySelector<HTMLElement>('[data-blocked]')!;
+
+    fireEvent.pointerEnter(badge, { pointerType: 'mouse', buttons: 0 });
+    act(() => vi.advanceTimersByTime(SPOTLIGHT_DWELL_MS));
+
+    // Parent card stays undimmed without a blocked/blocker border; underlay and pip carry the highlight.
+    expect(parentCard).toHaveAttribute('data-spotlight', 'parent');
+    expect(underlay).toHaveAttribute('data-spotlight', 'blocker');
+    expect(blockerPip).toHaveAttribute('data-spotlight', 'blocker');
+    expect(blockerPip.className).toContain('bg-destructive');
+    expect(otherPip).not.toHaveAttribute('data-spotlight');
+    expect(unrelatedCard).toHaveAttribute('data-spotlight', 'dimmed');
+
+    fireEvent.pointerLeave(badge, { pointerType: 'mouse' });
+    expect(parentCard).not.toHaveAttribute('data-spotlight');
+    expect(underlay).not.toHaveAttribute('data-spotlight');
+    expect(blockerPip).not.toHaveAttribute('data-spotlight');
+
+    // When subtasks are shown as top-level cards, there is no underlay and both cards highlight normally.
+    act(() => update({ subtasksAsCards: true }));
+    rerender(
+      <TooltipProvider>
+        <TaskBlockersContext.Provider value={blockerMap}>
+          <TaskCard task={parent} />
+          <TaskCard task={blockingSub} />
+        </TaskBlockersContext.Provider>
+      </TooltipProvider>,
+    );
+    const topParentCard = screen.getByRole('article', { name: 'APP-1 Launch feature' });
+    const topSubtaskCard = screen.getByRole('article', { name: 'APP-2 Verify migration' });
+    fireEvent.pointerEnter(topParentCard.querySelector<HTMLElement>('[data-blocked]')!, {
+      pointerType: 'mouse',
+      buttons: 0,
+    });
+    act(() => vi.advanceTimersByTime(SPOTLIGHT_DWELL_MS));
+    expect(topParentCard).toHaveAttribute('data-spotlight', 'blocked');
+    expect(topSubtaskCard).toHaveAttribute('data-spotlight', 'blocker');
+  });
+
   it('marks cards and strips as instant when reduced motion is enabled', () => {
     stubDesktop(true, true);
     const data = makeBoardData();

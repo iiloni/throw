@@ -43,6 +43,7 @@ async function makeTask(
   title: string,
   statusId: string,
   position: string,
+  parentId: string | null = null,
 ) {
   const id = randomUUID();
   const response = await request.post('/api/tasks', {
@@ -54,7 +55,7 @@ async function makeTask(
       statusId,
       priority: 3,
       position,
-      parentId: null,
+      parentId,
       description: null,
       descriptionVersion: null,
     },
@@ -242,4 +243,76 @@ test('lingering on a blocked card badge spotlights blockers, highlights collapse
   await page.mouse.move(10, 10);
   await expect(wsBlockedCard).not.toHaveAttribute('data-spotlight');
   await expect(wsBacklogStrip).not.toHaveAttribute('data-spotlight');
+});
+
+test('a task blocked by its own subtask highlights the subtask underlay and pip without bordering the parent', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Blocker spotlight is a desktop hover interaction');
+
+  const { headers } = await signUp(page);
+  const [ws] = await shapeRows(page.request, 'workspaces', headers);
+  const workspaceId = String(ws?.id);
+
+  const app = await makeProject(page.request, headers, workspaceId, 'APP', 'App', [
+    { name: 'Backlog', category: 'backlog', isDefault: true },
+    { name: 'Working', category: 'active', isDefault: true },
+    { name: 'Done', category: 'done', isDefault: true },
+    { name: 'Cancelled', category: 'cancelled', isDefault: true },
+  ]);
+
+  const parentId = await makeTask(
+    page.request,
+    headers,
+    app.id,
+    'Launch rollout',
+    app.statusId('Working'),
+    'a0',
+  );
+  const blockerSubtaskId = await makeTask(
+    page.request,
+    headers,
+    app.id,
+    'Verify migration',
+    app.statusId('Working'),
+    'a0',
+    parentId,
+  );
+  const otherSubtaskId = await makeTask(
+    page.request,
+    headers,
+    app.id,
+    'Update changelog',
+    app.statusId('Backlog'),
+    'a1',
+    parentId,
+  );
+  await makeTask(page.request, headers, app.id, 'Unrelated work', app.statusId('Working'), 'a1');
+  await addBlocksRelation(page.request, headers, blockerSubtaskId, parentId);
+
+  await page.goto(`/w/${workspaceId}/p/${app.id}?view=board`);
+  const parentCard = page.getByRole('article', { name: 'APP-1 Launch rollout', exact: true });
+  const unrelatedCard = page.getByRole('article', { name: 'APP-4 Unrelated work', exact: true });
+  await expect(parentCard).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
+  await expect(unrelatedCard).toBeVisible();
+
+  const underlay = page.locator('[data-subtask-underlay]');
+  const blockerPip = page.locator(`[data-subtask-pip="${blockerSubtaskId}"]`);
+  const otherPip = page.locator(`[data-subtask-pip="${otherSubtaskId}"]`);
+  await expect(underlay).toBeVisible();
+
+  await parentCard.locator('[data-blocked]').hover();
+  await expect(parentCard).toHaveAttribute('data-spotlight', 'parent', { timeout: 3000 });
+  await expect(underlay).toHaveAttribute('data-spotlight', 'blocker');
+  await expect(blockerPip).toHaveAttribute('data-spotlight', 'blocker');
+  await expect(otherPip).not.toHaveAttribute('data-spotlight');
+  await expect(unrelatedCard).toHaveAttribute('data-spotlight', 'dimmed');
+
+  // Clear immediately on mouse leave.
+  await page.mouse.move(10, 10);
+  await expect(parentCard).not.toHaveAttribute('data-spotlight');
+  await expect(underlay).not.toHaveAttribute('data-spotlight');
+  await expect(blockerPip).not.toHaveAttribute('data-spotlight');
+  await expect(unrelatedCard).not.toHaveAttribute('data-spotlight');
 });

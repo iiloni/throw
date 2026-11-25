@@ -1,9 +1,10 @@
 import { ChevronDown } from 'lucide-react';
+import { useReducedMotion } from 'motion/react';
 import { Hint } from '@/components/Hint/Hint';
 import { cn } from '@/lib/utils';
-import { useIsBlockerSpotlightTarget } from './blockers';
+import { useIsBlockerSpotlightTarget, useParentHasSpotlightBlocker } from './blockers';
 import { StatusGlyph } from './glyphs';
-import { isClosed, type Project, projectOf, statusById, type Task } from './model';
+import { type Category, isClosed, type Project, projectOf, statusById, type Task } from './model';
 import { StatusMenu } from './StatusMenu';
 import { board, current, setSubtaskStatus, toggleExpanded, update } from './state';
 
@@ -20,17 +21,22 @@ type Props = {
  */
 export function SubtaskUnderlay({ parent, subtasks, inert = false }: Props) {
   const state = board.use();
+  const reduced = useReducedMotion();
   // Subtasks share their parent's project, whose statuses they move among.
   const project = projectOf(current(state).project, parent);
   const expanded = state.expanded.includes(parent.id);
   const category = (task: Task) => statusById(project, task.statusId)?.category ?? 'backlog';
   const done = subtasks.filter((task) => category(task) === 'done').length;
   const open = subtasks.filter((task) => !isClosed(category(task))).length;
+  const spotlightBlocker = useParentHasSpotlightBlocker(parent.id, !inert);
 
   return (
     <div
       data-no-drag={inert ? undefined : ''}
-      className="-z-10 -mt-3 relative mx-2.5 rounded-b-2xl bg-[color-mix(in_oklch,var(--tint,var(--card)),var(--foreground)_7%)] pt-3 text-xs"
+      data-subtask-underlay=""
+      data-spotlight={spotlightBlocker ? 'blocker' : undefined}
+      data-spotlight-instant={reduced ? '' : undefined}
+      className="spotlight-underlay -z-10 -mt-3 relative mx-2.5 rounded-b-2xl bg-[color-mix(in_oklch,var(--tint,var(--card)),var(--foreground)_7%)] pt-3 text-xs"
     >
       <button
         type="button"
@@ -43,20 +49,22 @@ export function SubtaskUnderlay({ parent, subtasks, inert = false }: Props) {
         {/* One pip per subtask: the shape of the work, not only a fraction. */}
         <span aria-hidden className="flex min-w-0 flex-1 items-center gap-1">
           {subtasks.map((task) => (
-            <span
-              key={task.id}
-              data-category={category(task)}
-              className="h-1.5 max-w-6 flex-1 rounded-full bg-foreground/15 transition-colors data-[category=active]:bg-foreground/45 data-[category=done]:bg-foreground/80 data-[category=cancelled]:bg-transparent data-[category=cancelled]:outline data-[category=cancelled]:outline-1 data-[category=cancelled]:outline-foreground/20"
-            />
+            <SubtaskPip key={task.id} taskId={task.id} category={category(task)} inert={inert} />
           ))}
         </span>
-        <span className="shrink-0 font-medium text-foreground/60 tabular-nums">
+        <span
+          className={cn(
+            'shrink-0 font-medium tabular-nums',
+            spotlightBlocker ? 'text-foreground/85' : 'text-foreground/60',
+          )}
+        >
           {done}/{subtasks.length}
         </span>
         <ChevronDown
           aria-hidden
           className={cn(
-            'size-3.5 shrink-0 text-foreground/45 transition-transform duration-200',
+            'size-3.5 shrink-0 transition-transform duration-200',
+            spotlightBlocker ? 'text-foreground/70' : 'text-foreground/45',
             expanded && 'rotate-180',
           )}
         />
@@ -77,6 +85,33 @@ export function SubtaskUnderlay({ parent, subtasks, inert = false }: Props) {
         </ul>
       </div>
     </div>
+  );
+}
+
+/** One pip in the subtask underlay bar; turns destructive red while this subtask is spotlighted. */
+function SubtaskPip({
+  taskId,
+  category,
+  inert,
+}: {
+  taskId: string;
+  category: Category;
+  inert: boolean;
+}) {
+  const isBlocker = useIsBlockerSpotlightTarget(taskId);
+  const highlighted = !inert && isBlocker;
+  return (
+    <span
+      data-category={category}
+      data-subtask-pip={taskId}
+      data-spotlight={highlighted ? 'blocker' : undefined}
+      className={cn(
+        'h-1.5 max-w-6 flex-1 rounded-full transition-colors',
+        highlighted
+          ? 'bg-destructive'
+          : 'bg-foreground/15 data-[category=active]:bg-foreground/45 data-[category=done]:bg-foreground/80 data-[category=cancelled]:bg-transparent data-[category=cancelled]:outline data-[category=cancelled]:outline-1 data-[category=cancelled]:outline-foreground/20',
+      )}
+    />
   );
 }
 

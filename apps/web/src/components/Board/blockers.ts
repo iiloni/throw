@@ -91,7 +91,7 @@ export type BlockerSpotlight = {
   blockerParentIds: ReadonlySet<string>;
 };
 
-export type CardSpotlightRole = 'none' | 'blocked' | 'blocker' | 'dimmed';
+export type CardSpotlightRole = 'none' | 'blocked' | 'blocker' | 'parent' | 'dimmed';
 
 export const blockerSpotlight = createStore<BlockerSpotlight | null>(null);
 
@@ -327,15 +327,22 @@ export function useCardSpotlightRole(
     if (!enabled) return 'none';
     const active = blockerSpotlight.get();
     if (!active) return 'none';
+    const tuckedBlockerChild = !subtasksAsCards && active.blockerParentIds.has(taskId);
+    if (active.blockerIds.has(taskId)) return 'blocker';
+    // When a task's tucked subtask is the blocker (including a task blocked by its own subtask),
+    // keep the parent card undimmed without bordering it; the subtask underlay carries the highlight.
+    if (tuckedBlockerChild) return 'parent';
     if (active.blockedTaskId === taskId) return 'blocked';
-    if (
-      active.blockerIds.has(taskId) ||
-      (!subtasksAsCards && active.blockerParentIds.has(taskId))
-    ) {
-      return 'blocker';
-    }
     return 'dimmed';
   });
+}
+
+/** True while any tucked subtask of `parentId` is a blocker in the active spotlight. */
+export function useParentHasSpotlightBlocker(parentId: string, enabled: boolean) {
+  return useSyncExternalStore(
+    blockerSpotlight.subscribe,
+    () => enabled && (blockerSpotlight.get()?.blockerParentIds.has(parentId) ?? false),
+  );
 }
 
 /** True while `taskId` is the hovered blocked card currently driving the spotlight. */
