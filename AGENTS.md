@@ -106,6 +106,11 @@ keyboard carry. The collection hooks hold
 their last rows through a reconnect's full snapshot (`lib/steadyRows.ts`), so the board
 does not unmount while a shape reloads.
 
+Several accounts can be signed in on one device (ADR 0016): `lib/auth.ts` keeps the list,
+the tab's account (`sessionStorage`) and the `/u/<n>` address prefix the router strips and
+adds (`routerRewrite`); `lib/accounts.ts` switches (a full load) and signs one account out.
+The account switcher UI is not built yet.
+
 ## Layout
 
 | Path | What lives there |
@@ -437,6 +442,9 @@ ids. Do not add a dependency on Catch's repository; the two release independentl
   signed token from `set-auth-token` works as a bearer token.
 - Sign-up closes after the first account unless `REGISTRATION=open`, which dev stacks set.
   Catch's invite links have not been ported, so a closed server has one account.
+- With several accounts signed in, browser addresses start with `/u/<n>` (ADR 0016). The
+  router never sees it, but `window.location.pathname` does: compare `currentPath()` and
+  build a raw `<a href>` or a full page load within the account with `pagePath`.
 - The app draws edge to edge. Pad fixed UI with the `--safe-top` / `--safe-bottom` tokens.
   The root sets `--keyboard` through browser viewport/VirtualKeyboard tracking; the shell
   uses `--dock-*` for the phone dock. Catch's native KeyboardInsets plugin owns system

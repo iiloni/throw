@@ -4,8 +4,16 @@ import { createAuthClient } from 'better-auth/react';
 import { z } from 'zod';
 import { getServerUrl } from './serverUrl';
 
+// The session in use, kept under the keys it had before a device could hold several.
 const TOKEN_KEY = 'throw-auth-token';
 const USER_KEY = 'throw-user';
+// Every session on this device, the one in use among them (ADR 0016).
+const ACCOUNTS_KEY = 'throw-accounts';
+// Whose session this build last put in use. A build from before the list changes the session
+// without knowing either, which is how the list learns of it.
+const ACTIVE_KEY = 'throw-active-account';
+/** Set in the tab when the next page load is a change of account, to say so once. */
+export const SWITCHED_KEY = 'throw-account-switched';
 
 function sessionKey(key: string) {
   // Bundled dev apps share https://localhost across worktrees; their servers do not.
@@ -15,10 +23,223 @@ function sessionKey(key: string) {
 }
 
 const signedInUserSchema = z.object({ id: z.string().min(1), name: z.string(), email: z.string() });
+const accountSchema = z.object({ user: signedInUserSchema, token: z.string().min(1) });
+
 export type SignedInUser = z.infer<typeof signedInUserSchema>;
+/** An account signed in on this device, with the bearer token of its session. */
+export type Account = z.infer<typeof accountSchema>;
+
+function read<T extends z.ZodType>(key: string, schema: T): z.infer<T> | null {
+  try {
+    const parsed = schema.safeParse(JSON.parse(localStorage.getItem(sessionKey(key)) ?? ''));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+const activeToken = () => localStorage.getItem(sessionKey(TOKEN_KEY));
+const activeUser = () => read(USER_KEY, signedInUserSchema);
+
+/**
+ * Each tab shows one account and keeps it across reloads, so tabs can show different ones
+ * side by side. The session in use on the device is only where a new tab starts.
+ */
+const TAB_KEY = 'throw-tab-account';
+
+function tabUserId() {
+  const userId = sessionStorage.getItem(sessionKey(TAB_KEY));
+  // Signed out since, in this tab or another.
+  return userId && getAccounts().some(({ user }) => user.id === userId) ? userId : null;
+}
+
+// The number each account has in addresses on this device (`/u/2/w/…`). Kept after a
+// sign-out, so a bookmark still means the same account once it signs in again, and a number
+// is never handed to anyone else.
+const NUMBERS_KEY = 'throw-account-numbers';
+const numbersSchema = z.record(z.string(), z.number().int().positive());
+
+function accountNumbers() {
+  const numbers = read(NUMBERS_KEY, numbersSchema) ?? {};
+  let last = Math.max(0, ...Object.values(numbers));
+  let added = false;
+  for (const { user } of getAccounts()) {
+    if (numbers[user.id]) continue;
+    numbers[user.id] = ++last;
+    added = true;
+  }
+  if (added) localStorage.setItem(sessionKey(NUMBERS_KEY), JSON.stringify(numbers));
+  return numbers;
+}
+
+// The phone's app has no address bar to read one from, and nothing to bookmark.
+const numbersAddresses = () => !Capacitor.isNativePlatform();
+const NUMBERED = /^\/u\/(\d+)(?=[/?#]|$)/;
+const prefixFor = (userId: string) => `/u/${accountNumbers()[userId]}`;
+
+/**
+ * The address of a page as one of the device's accounts, for a full page load: `/u/2/settings`
+ * while several are signed in. With one account there is nobody to tell apart, and addresses
+ * stay as they always were.
+ */
+export function accountPath(userId: string, path = '/') {
+  if (!numbersAddresses()) return path;
+  // A destination kept from another account's address goes to this one's.
+  const plain = path.replace(NUMBERED, '') || '/';
+  const rest = plain.startsWith('/') ? plain : `/${plain}`;
+  return getAccounts().length > 1 ? prefixFor(userId) + rest : rest;
+}
+
+/**
+ * Settles whose page this is before anything reads it, from the address: `/u/<number>/…`
+ * names an account, as a bookmark or another tab's link does. An address that names nobody
+ * belongs to the tab's account, or for a new tab the one last used on the device. Returns the
+ * account and the prefix its addresses carry.
+ */
+function resolvePage(): { userId: string | null; prefix: string } {
+  const url = new URL(window.location.href);
+  const numbered = numbersAddresses() ? NUMBERED.exec(url.pathname) : null;
+  if (numbered) url.pathname = url.pathname.slice(numbered[0].length) || '/';
+  const signedIn = (userId: string | undefined) =>
+    getAccounts().find(({ user }) => user.id === userId)?.user.id;
+  const tab = tabUserId() ?? activeUser()?.id ?? null;
+
+  let userId = tab;
+  let named = false;
+  if (numbered) {
+    const numbers = accountNumbers();
+    const owner = signedIn(Object.keys(numbers).find((id) => numbers[id] === Number(numbered[1])));
+    if (owner) {
+      userId = owner;
+      named = true;
+    } else {
+      // Nobody signed in here has that number. Signing in leads to the page that was asked
+      // for, as whoever signs in.
+      const redirect = url.pathname + url.search;
+      url.pathname = '/login';
+      url.search = redirect === '/' ? '' : `?${new URLSearchParams({ redirect })}`;
+    }
+  }
+  // A new tab on the account last used has nothing to change on the device.
+  if (userId && userId !== tab) activateAccount(userId);
+  if (userId) sessionStorage.setItem(sessionKey(TAB_KEY), userId);
+
+  const prefix =
+    userId && numbersAddresses() && (named || getAccounts().length > 1) ? prefixFor(userId) : '';
+  url.pathname = prefix + url.pathname;
+  if (url.href !== window.location.href) {
+    window.history.replaceState(window.history.state, '', url);
+  }
+  return { userId, prefix };
+}
+
+const page = resolvePage();
+
+/**
+ * What this page's addresses start with: `/u/<number>` or nothing. It changes when the
+ * accounts are reordered (`followAccountNumber`), without the page loading again.
+ */
+let prefix = page.prefix;
+
+/** The address without the account's number, as routes name it. */
+const withoutNumber = (pathname: string) =>
+  (numbersAddresses() ? pathname.replace(NUMBERED, '') : pathname) || '/';
+
+/**
+ * Keeps the account's number out of the router's sight, so routes and links never mention it;
+ * only a full page load has to (`accountPath`). Any number is taken off, not only the page's:
+ * after a reorder, the entries this tab made before it still carry the old one.
+ */
+export const routerRewrite = {
+  input: ({ url }: { url: URL }) => {
+    url.pathname = withoutNumber(url.pathname);
+    return url;
+  },
+  output: ({ url }: { url: URL }) => {
+    if (prefix) url.pathname = prefix + url.pathname;
+    return url;
+  },
+};
+
+/** What this page's addresses start with now: `/u/<number>`, or nothing. */
+export const basePath = () => prefix;
+
+/** The address of a page of this tab's account, for a plain link or a full page load. */
+export const pagePath = (path: string) => prefix + path;
+
+/** The path of the page showing, as routes name it. */
+export const currentPath = () => withoutNumber(window.location.pathname);
+
+/**
+ * The account this page was loaded for. Collections open that user's database when the app
+ * starts (ADR 0002), so the page keeps sending that account's token whatever another tab
+ * switches to, and after this tab has chosen another, until it loads again. Once set it never
+ * changes: a page whose account signed out has no session, not somebody else's.
+ */
+let pageUserId = page.userId;
+
+/** Every account signed in on this device, in the order they were added or put in. */
+export function getAccounts(): Account[] {
+  let accounts = read(ACCOUNTS_KEY, z.array(accountSchema)) ?? [];
+  const user = activeUser();
+  const token = activeToken();
+  // An older build ended or replaced the session this one had in use, and with it the account.
+  const marked = localStorage.getItem(sessionKey(ACTIVE_KEY));
+  if (marked && (!token || user?.id !== marked)) {
+    accounts = accounts.filter((account) => account.user.id !== marked);
+  }
+  if (!user || !token) return accounts;
+  // The session in use is the newer word on its account, and the only record of one from
+  // before the list was kept.
+  const active = { user, token };
+  return accounts.some((account) => account.user.id === user.id)
+    ? accounts.map((account) => (account.user.id === user.id ? active : account))
+    : [...accounts, active];
+}
+
+function writeAccounts(accounts: Account[]) {
+  if (accounts.length > 0) {
+    localStorage.setItem(sessionKey(ACCOUNTS_KEY), JSON.stringify(accounts));
+  } else {
+    localStorage.removeItem(sessionKey(ACCOUNTS_KEY));
+  }
+}
+
+function writeActive(account: Account) {
+  localStorage.setItem(sessionKey(TOKEN_KEY), account.token);
+  localStorage.setItem(sessionKey(USER_KEY), JSON.stringify(account.user));
+  localStorage.setItem(sessionKey(ACTIVE_KEY), account.user.id);
+}
+
+function clearActive() {
+  localStorage.removeItem(sessionKey(TOKEN_KEY));
+  localStorage.removeItem(sessionKey(USER_KEY));
+  localStorage.removeItem(sessionKey(ACTIVE_KEY));
+}
+
+function saveAccount(account: Account, activate: boolean) {
+  const accounts = getAccounts();
+  const known = accounts.some(({ user }) => user.id === account.user.id);
+  if (known) {
+    writeAccounts(accounts.map((other) => (other.user.id === account.user.id ? account : other)));
+  } else {
+    // An account signing in again takes its place in the order its number gives it, so the
+    // list keeps reading as the addresses count.
+    const numbers = accountNumbers();
+    const number = numbers[account.user.id];
+    const after = number ? accounts.findIndex(({ user }) => (numbers[user.id] ?? 0) > number) : -1;
+    if (after < 0) accounts.push(account);
+    else accounts.splice(after, 0, account);
+    writeAccounts(accounts);
+  }
+  if (activate || activeUser()?.id === account.user.id) writeActive(account);
+}
+
+const pageAccount = () =>
+  pageUserId ? (getAccounts().find(({ user }) => user.id === pageUserId) ?? null) : null;
 
 export function getAuthToken(): string | null {
-  return localStorage.getItem(sessionKey(TOKEN_KEY));
+  return pageUserId ? (pageAccount()?.token ?? null) : activeToken();
 }
 
 /**
@@ -26,19 +247,115 @@ export function getAuthToken(): string | null {
  * Offline there is no session to fetch, and the app still needs to know whose data to open.
  */
 export function getSignedInUser(): SignedInUser | null {
-  try {
-    const parsed = signedInUserSchema.safeParse(
-      JSON.parse(localStorage.getItem(sessionKey(USER_KEY)) ?? ''),
-    );
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
+  return pageUserId ? (pageAccount()?.user ?? null) : activeUser();
+}
+
+/**
+ * Makes a signed-in account this tab's, and the one a new tab starts with. The page must
+ * load again afterwards. Other tabs keep the accounts they show.
+ */
+export function activateAccount(userId: string): boolean {
+  const account = getAccounts().find(({ user }) => user.id === userId);
+  if (!account) return false;
+  sessionStorage.setItem(sessionKey(TAB_KEY), userId);
+  // Written to the list first: making it the session in use must not drop the one it replaces.
+  writeAccounts(getAccounts());
+  writeActive(account);
+  return true;
+}
+
+/**
+ * Puts the device's accounts in this order and numbers their addresses after it: the first is
+ * `/u/1`, the next `/u/2`. A signed-out account keeps the number it had unless one signed in
+ * has taken it; then it gets one nobody has. Open tabs move to their account's new address
+ * (`followAccountNumber`); a bookmark names whoever has the number now.
+ */
+export function reorderAccounts(userIds: string[]) {
+  const accounts = getAccounts();
+  const rank = (userId: string) => {
+    const index = userIds.indexOf(userId);
+    return index < 0 ? userIds.length : index;
+  };
+  // Any account the caller did not know of (signed in by another tab meanwhile) goes last.
+  const ordered = [...accounts].sort((a, b) => rank(a.user.id) - rank(b.user.id));
+  const old = accountNumbers();
+  const numbers: Record<string, number> = {};
+  ordered.forEach(({ user }, index) => {
+    numbers[user.id] = index + 1;
+  });
+  let last = ordered.length;
+  const displaced: string[] = [];
+  for (const [userId, number] of Object.entries(old).sort(([, a], [, b]) => a - b)) {
+    if (numbers[userId]) continue;
+    if (number > ordered.length) {
+      numbers[userId] = number;
+      last = Math.max(last, number);
+    } else {
+      displaced.push(userId);
+    }
+  }
+  for (const userId of displaced) numbers[userId] = ++last;
+  writeAccounts(ordered);
+  localStorage.setItem(sessionKey(NUMBERS_KEY), JSON.stringify(numbers));
+  followAccountNumber();
+}
+
+/**
+ * Moves this page's address to its account's number after the accounts were reordered, here
+ * or in another tab. The page stays as it is: only the number in the address bar changes.
+ */
+export function followAccountNumber() {
+  if (!prefix || !pageUserId || pageAccountGone()) return;
+  const next = prefixFor(pageUserId);
+  if (next === prefix) return;
+  prefix = next;
+  showOwnNumber();
+  for (const listener of numberListeners) listener();
+}
+
+const numberListeners = new Set<() => void>();
+
+/** Calls back when this page's account number changes, for links to rebuild their addresses. */
+export function onAccountNumberChange(listener: () => void) {
+  numberListeners.add(listener);
+  return () => numberListeners.delete(listener);
+}
+
+/** Writes the page's number into the address bar, if it shows another. */
+function showOwnNumber() {
+  const url = new URL(window.location.href);
+  url.pathname = prefix + withoutNumber(url.pathname);
+  // The router's own entry, its key and scroll position included, only changes address.
+  if (url.href !== window.location.href) {
+    window.history.replaceState(window.history.state, '', url);
   }
 }
 
+// Going back or forward to an entry this tab made before a reorder shows its old number,
+// which now names someone else to a copy of the address or a reload.
+if (numbersAddresses()) window.addEventListener('popstate', () => prefix && showOwnNumber());
+
+/** Whether the account this page was loaded for has been signed out, here or in another tab. */
+export function pageAccountGone() {
+  return pageUserId !== null && pageAccount() === null;
+}
+
+/** Forgets an account's session on this device. Its data here is the caller's to remove. */
+export function forgetAccount(userId: string) {
+  const wasActive = activeUser()?.id === userId;
+  writeAccounts(getAccounts().filter(({ user }) => user.id !== userId));
+  if (wasActive) clearActive();
+}
+
+/** Forgets the session this page uses, leaving the device's other accounts signed in. */
 export function clearAuthToken() {
-  localStorage.removeItem(sessionKey(TOKEN_KEY));
-  localStorage.removeItem(sessionKey(USER_KEY));
+  const userId = pageUserId ?? activeUser()?.id;
+  if (userId) {
+    forgetAccount(userId);
+  } else {
+    // A token from before the app remembered whose it was.
+    clearActive();
+  }
 }
 
 const EXPIRED_KEY = 'throw-expired-user';
@@ -46,14 +363,14 @@ const EXPIRED_KEY = 'throw-expired-user';
 /**
  * Ends a session the server turned down while keeping the account's copy and outbox on the
  * device, and goes to sign in, so the same account picks them up again (ADR 0002). Signing
- * in returns to the page it was on.
+ * in returns to the page it was on. The device's other accounts stay signed in.
  */
 export function endExpiredSession() {
   const id = getSignedInUser()?.id;
   if (id) localStorage.setItem(sessionKey(EXPIRED_KEY), id);
   clearAuthToken();
-  const { pathname, search, hash } = window.location;
-  const params = new URLSearchParams({ redirect: pathname + search });
+  const { search, hash } = window.location;
+  const params = new URLSearchParams({ redirect: currentPath() + search });
   window.location.assign(`/login?${params}${hash}`);
 }
 
@@ -84,11 +401,42 @@ export const authClient = createAuthClient({
   fetchOptions: {
     auth: { type: 'Bearer', token: () => getAuthToken() ?? '' },
     onSuccess: (context) => {
-      // A sign-in returns a token, and so does a changed password.
       const token = context.response.headers.get('set-auth-token');
-      if (token) localStorage.setItem(sessionKey(TOKEN_KEY), token);
-      const user = userOf(context.data);
-      if (user && getAuthToken()) localStorage.setItem(sessionKey(USER_KEY), JSON.stringify(user));
+      const url = String(context.request.url);
+      if (/\/(sign-in|sign-up)\//.test(url)) {
+        if (!token) return;
+        // A new session joins the device's accounts and becomes the one in use. A page that
+        // already has an account keeps it until the load that follows: its collections and
+        // outbox are still that account's, and must not send with the new one's token.
+        const user = userOf(context.data);
+        if (user) {
+          saveAccount({ user, token }, true);
+          // The load that follows is this tab's, as the account that just signed in.
+          sessionStorage.setItem(sessionKey(TAB_KEY), user.id);
+          pageUserId ??= user.id;
+        } else {
+          // Kept in the list first, since the keys below are about to name someone else.
+          writeAccounts(getAccounts());
+          clearActive();
+          localStorage.setItem(sessionKey(TOKEN_KEY), token);
+        }
+        return;
+      }
+      // Anything else answers for this page's own session: a session response carries its
+      // user, and a changed password a new token.
+      const session = /\/get-session(\?|$)/.test(url);
+      if (!token && !session) return;
+      const current = getAuthToken();
+      // The account was removed in another tab; a late response must not sign it back in.
+      if (!current) return;
+      const user = (session && userOf(context.data)) || getSignedInUser();
+      if (!user) {
+        if (token) localStorage.setItem(sessionKey(TOKEN_KEY), token);
+        return;
+      }
+      if (pageUserId && user.id !== pageUserId) return;
+      saveAccount({ user, token: token ?? current }, pageUserId === null);
+      pageUserId = user.id;
     },
   },
 });
@@ -101,8 +449,9 @@ export async function changeAccountName(name: string) {
   const user = getSignedInUser();
   if (!user) throw new Error('No signed-in account');
   const result = await authClient.updateUser({ name });
-  if (!result.error && getSignedInUser()?.id === user.id) {
-    localStorage.setItem(sessionKey(USER_KEY), JSON.stringify({ ...user, name }));
+  if (!result.error) {
+    const account = getAccounts().find((account) => account.user.id === user.id);
+    if (account) saveAccount({ ...account, user: { ...account.user, name } }, false);
   }
   return result;
 }

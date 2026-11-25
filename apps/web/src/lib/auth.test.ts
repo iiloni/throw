@@ -1,0 +1,479 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+type SuccessContext = { response: Response; request: { url: string }; data: unknown };
+const mocks = vi.hoisted(() => ({
+  native: vi.fn(() => true),
+  server: vi.fn(() => 'http://llm:24085'),
+  updateUser: vi.fn(),
+  success: undefined as ((context: SuccessContext) => void) | undefined,
+}));
+vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: mocks.native } }));
+vi.mock('./serverUrl', () => ({ getServerUrl: mocks.server }));
+vi.mock('better-auth/react', () => ({
+  createAuthClient: (options: {
+    fetchOptions: { onSuccess: (context: SuccessContext) => void };
+  }) => {
+    mocks.success = options.fetchOptions.onSuccess;
+    return { updateUser: mocks.updateUser };
+  },
+}));
+
+let auth: typeof import('./auth');
+/** Loads the page again: a page keeps the account it was loaded for until then. */
+async function load() {
+  vi.resetModules();
+  auth = await import('./auth');
+}
+
+const user = { id: 'first-user', name: 'Test', email: 'test@example.com' };
+const other = { id: 'second-user', name: 'Other', email: 'other@example.com' };
+function respond(path: string, token: string | null, data: unknown) {
+  mocks.success?.({
+    response: new Response(null, { headers: token ? { 'set-auth-token': token } : {} }),
+    request: { url: `${mocks.server()}/api/auth/${path}` },
+    data,
+  });
+}
+const signIn = (token: string, signedInUser = user) =>
+  respond('sign-in/email', token, { user: signedInUser });
+
+/** Another tab: it shares the device's storage and has a session of its own. */
+async function openTab() {
+  sessionStorage.clear();
+  await load();
+}
+
+beforeEach(async () => {
+  mocks.updateUser.mockReset();
+  localStorage.clear();
+  sessionStorage.clear();
+  window.history.replaceState(null, '', '/');
+  mocks.native.mockReturnValue(true);
+  mocks.server.mockReturnValue('http://llm:24085');
+  vi.stubEnv('THROW_DEV_SERVER_URL', 'http://llm:24085');
+  await load();
+});
+afterEach(() => vi.unstubAllEnvs());
+
+describe('bundled development sessions', () => {
+  it('does not reuse an unscoped session from another server or remove its data', async () => {
+    localStorage.setItem('throw-auth-token', 'legacy-token');
+    localStorage.setItem('throw-user', JSON.stringify(user));
+    await load();
+    expect(auth.getAuthToken()).toBeNull();
+    expect(auth.getSignedInUser()).toBeNull();
+    signIn('current-token');
+    auth.clearAuthToken();
+    expect(auth.getAuthToken()).toBeNull();
+    expect(localStorage.getItem('throw-auth-token')).toBe('legacy-token');
+    expect(localStorage.getItem('throw-user')).toBe(JSON.stringify(user));
+  });
+
+  it('keeps sessions separate and restores the right one when switching worktrees', async () => {
+    signIn('first-token');
+    mocks.server.mockReturnValue('http://llm:24086');
+    await load();
+    expect(auth.getAuthToken()).toBeNull();
+    expect(auth.getSignedInUser()).toBeNull();
+    signIn('second-token', other);
+    expect(auth.getSignedInUser()?.id).toBe('second-user');
+    auth.clearAuthToken();
+    mocks.server.mockReturnValue('http://llm:24085');
+    await load();
+    expect(auth.getAuthToken()).toBe('first-token');
+    expect(auth.getSignedInUser()).toEqual(user);
+  });
+
+  it.each(['web', 'native release', 'native live reload'])(
+    'keeps the existing storage keys for %s',
+    (platform) => {
+      if (platform === 'web') mocks.native.mockReturnValue(false);
+      else vi.stubEnv('THROW_DEV_SERVER_URL', '');
+      signIn('ordinary-token');
+      expect(localStorage.getItem('throw-auth-token')).toBe('ordinary-token');
+      expect(auth.getSignedInUser()).toEqual(user);
+      auth.clearAuthToken();
+      expect(localStorage.getItem('throw-user')).toBeNull();
+    },
+  );
+});
+
+describe('several accounts on one device', () => {
+  beforeEach(() => mocks.native.mockReturnValue(false));
+
+  /** Two accounts signed in one after the other, on a page loaded for the second. */
+  async function signInBoth() {
+    signIn('first-token');
+    await load();
+    signIn('second-token', other);
+    await load();
+  }
+
+  it('keeps the earlier account signed in when another signs in', async () => {
+    await signInBoth();
+    expect(auth.getSignedInUser()).toEqual(other);
+    expect(auth.getAuthToken()).toBe('second-token');
+    expect(auth.getAccounts()).toEqual([
+      { user, token: 'first-token' },
+      { user: other, token: 'second-token' },
+    ]);
+  });
+
+  it('keeps sending the first account’s token until the page loads for the one added', async () => {
+    signIn('first-token');
+    await load();
+    signIn('second-token', other);
+    // The first account's collections and outbox are still running on this page.
+    expect(auth.getAuthToken()).toBe('first-token');
+    expect(auth.getSignedInUser()).toEqual(user);
+    expect(localStorage.getItem('throw-auth-token')).toBe('second-token');
+    await load();
+    expect(auth.getAuthToken()).toBe('second-token');
+  });
+
+  it('lists a session saved before accounts were listed', async () => {
+    localStorage.setItem('throw-auth-token', 'legacy-token');
+    localStorage.setItem('throw-user', JSON.stringify(user));
+    await load();
+    expect(auth.getAccounts()).toEqual([{ user, token: 'legacy-token' }]);
+    signIn('second-token', other);
+    expect(auth.getAccounts().map((account) => account.token)).toEqual([
+      'legacy-token',
+      'second-token',
+    ]);
+  });
+
+  it('learns the user of a session saved before users were remembered', async () => {
+    localStorage.setItem('throw-auth-token', 'legacy-token');
+    await load();
+    expect(auth.getAuthToken()).toBe('legacy-token');
+    respond('get-session', null, { user });
+    expect(auth.getSignedInUser()).toEqual(user);
+    expect(auth.getAccounts()).toEqual([{ user, token: 'legacy-token' }]);
+  });
+
+  it('replaces the session of an account that signs in again', async () => {
+    await signInBoth();
+    signIn('newer-token');
+    expect(auth.getAccounts()).toEqual([
+      { user, token: 'newer-token' },
+      { user: other, token: 'second-token' },
+    ]);
+  });
+
+  it('keeps using the account the page loaded for until it loads again', async () => {
+    await signInBoth();
+    expect(auth.activateAccount(user.id)).toBe(true);
+    expect(localStorage.getItem('throw-auth-token')).toBe('first-token');
+    expect(auth.getAuthToken()).toBe('second-token');
+    expect(auth.getSignedInUser()).toEqual(other);
+    // A switch loads the address of the account it chose.
+    window.history.replaceState(null, '', auth.accountPath(user.id));
+    await load();
+    expect(auth.getSignedInUser()).toEqual(user);
+  });
+
+  it('keeps a tab on its account, across reloads, while another tab switches', async () => {
+    await signInBoth();
+    const tab = sessionStorage.getItem('throw-tab-account');
+    // The other tab starts as the account last used, then switches to the first.
+    await openTab();
+    expect(auth.getSignedInUser()).toEqual(other);
+    auth.activateAccount(user.id);
+    window.history.replaceState(null, '', auth.accountPath(user.id));
+    await load();
+    expect(auth.getSignedInUser()).toEqual(user);
+    // Back in the first tab, which reloads.
+    window.history.replaceState(null, '', auth.accountPath(other.id));
+    sessionStorage.clear();
+    sessionStorage.setItem('throw-tab-account', tab ?? '');
+    await load();
+    expect(auth.getSignedInUser()).toEqual(other);
+    expect(auth.getAuthToken()).toBe('second-token');
+    expect(auth.pageAccountGone()).toBe(false);
+  });
+
+  it('knows when its account was signed out in another tab, and starts over after', async () => {
+    await signInBoth();
+    // As the other tab would, with this page still open.
+    const accounts = auth.getAccounts().filter((account) => account.user.id !== other.id);
+    localStorage.setItem('throw-accounts', JSON.stringify(accounts));
+    localStorage.setItem('throw-auth-token', 'first-token');
+    localStorage.setItem('throw-user', JSON.stringify(user));
+    localStorage.setItem('throw-active-account', user.id);
+    expect(auth.pageAccountGone()).toBe(true);
+    expect(auth.getAuthToken()).toBeNull();
+    await load();
+    expect(auth.getSignedInUser()).toEqual(user);
+    expect(auth.pageAccountGone()).toBe(false);
+  });
+
+  it('gives a new token to the account the page uses, not the one the device switched to', async () => {
+    await signInBoth();
+    auth.activateAccount(user.id);
+    respond('change-password', 'changed-token', {});
+    expect(localStorage.getItem('throw-auth-token')).toBe('first-token');
+    expect(auth.getAccounts()).toEqual([
+      { user, token: 'first-token' },
+      { user: other, token: 'changed-token' },
+    ]);
+  });
+
+  it('remembers a changed name after reload and keeps the session', async () => {
+    signIn('first-token');
+    mocks.updateUser.mockResolvedValue({ error: null, data: { status: true } });
+    await auth.changeAccountName('New Name');
+    expect(mocks.updateUser).toHaveBeenCalledWith({ name: 'New Name' });
+    expect(auth.getSignedInUser()).toEqual({ ...user, name: 'New Name' });
+    await load();
+    expect(auth.getSignedInUser()?.name).toBe('New Name');
+    expect(auth.getAuthToken()).toBe('first-token');
+  });
+
+  it('updates the page’s account while the device is using another account', async () => {
+    await signInBoth();
+    auth.activateAccount(user.id);
+    mocks.updateUser.mockResolvedValue({ error: null, data: { status: true } });
+    await auth.changeAccountName('Changed Other');
+    expect(auth.getAccounts()).toEqual([
+      { user, token: 'first-token' },
+      { user: { ...other, name: 'Changed Other' }, token: 'second-token' },
+    ]);
+    expect(JSON.parse(localStorage.getItem('throw-user') ?? '')).toEqual(user);
+    expect(auth.getAuthToken()).toBe('second-token');
+  });
+
+  it('keeps the remembered name when the server refuses the change', async () => {
+    signIn('first-token');
+    mocks.updateUser.mockResolvedValue({ error: { message: 'Session expired' } });
+    await auth.changeAccountName('New Name');
+    expect(auth.getSignedInUser()).toEqual(user);
+  });
+
+  it('does not restore an account signed out while its name was saving', async () => {
+    await signInBoth();
+    mocks.updateUser.mockImplementation(async () => {
+      auth.forgetAccount(other.id);
+      auth.activateAccount(user.id);
+      return { error: null, data: { status: true } };
+    });
+    await auth.changeAccountName('New Name');
+    expect(auth.getAccounts()).toEqual([{ user, token: 'first-token' }]);
+    expect(auth.getSignedInUser()).toBeNull();
+  });
+
+  it('forgets one account and leaves the rest', async () => {
+    await signInBoth();
+    auth.forgetAccount(user.id);
+    expect(auth.getAccounts()).toEqual([{ user: other, token: 'second-token' }]);
+    expect(auth.getAuthToken()).toBe('second-token');
+    auth.clearAuthToken();
+    expect(auth.getAccounts()).toEqual([]);
+    expect(auth.getAuthToken()).toBeNull();
+    expect(localStorage.getItem('throw-user')).toBeNull();
+  });
+
+  it('has no session once its account signs out, though the device moves to another', async () => {
+    await signInBoth();
+    auth.clearAuthToken();
+    auth.activateAccount(user.id);
+    expect(auth.getAuthToken()).toBeNull();
+    expect(auth.getSignedInUser()).toBeNull();
+    // An answer that was already on its way must not sign the account back in.
+    respond('get-session', null, { user: other });
+    expect(auth.getAccounts()).toEqual([{ user, token: 'first-token' }]);
+    expect(localStorage.getItem('throw-auth-token')).toBe('first-token');
+    expect(JSON.parse(localStorage.getItem('throw-user') ?? '')).toEqual(user);
+  });
+
+  it('does not sign a removed account back in when a late response arrives', () => {
+    signIn('first-token');
+    localStorage.clear();
+    respond('get-session', null, { user });
+    expect(auth.getAccounts()).toEqual([]);
+  });
+
+  it('drops an account that an older build signed out', async () => {
+    await signInBoth();
+    // The older build knows only the session in use.
+    localStorage.removeItem('throw-auth-token');
+    localStorage.removeItem('throw-user');
+    await load();
+    expect(auth.getAccounts()).toEqual([{ user, token: 'first-token' }]);
+    expect(auth.getAuthToken()).toBeNull();
+  });
+
+  it('drops an account that an older build replaced with another', async () => {
+    await signInBoth();
+    const third = { id: 'third-user', name: '', email: 'third@example.com' };
+    localStorage.setItem('throw-auth-token', 'third-token');
+    localStorage.setItem('throw-user', JSON.stringify(third));
+    await load();
+    expect(auth.getAccounts()).toEqual([
+      { user, token: 'first-token' },
+      { user: third, token: 'third-token' },
+    ]);
+  });
+
+  describe('addresses', () => {
+    const address = () => window.location.pathname + window.location.search;
+
+    it('leaves addresses alone while one account is signed in', async () => {
+      signIn('first-token');
+      window.history.replaceState(null, '', '/settings');
+      await load();
+      expect(address()).toBe('/settings');
+      expect(auth.basePath()).toBe('');
+      expect(auth.accountPath(user.id, '/settings')).toBe('/settings');
+    });
+
+    it('numbers the page of each account once there are several', async () => {
+      await signInBoth();
+      window.history.replaceState(null, '', '/settings?task=abc');
+      await load();
+      expect(address()).toBe('/u/2/settings?task=abc');
+      expect(auth.basePath()).toBe('/u/2');
+      expect(auth.currentPath()).toBe('/settings');
+      expect(auth.pagePath('/settings/update')).toBe('/u/2/settings/update');
+      expect(auth.accountPath(user.id)).toBe('/u/1/');
+      expect(auth.accountPath(user.id, '/u/2/settings?task=abc')).toBe('/u/1/settings?task=abc');
+      expect(auth.accountPath(user.id, '/u/2')).toBe('/u/1/');
+    });
+
+    it('loads as the account an address names, in a tab showing another', async () => {
+      await signInBoth();
+      window.history.replaceState(null, '', '/u/1/settings');
+      await load();
+      expect(auth.getSignedInUser()).toEqual(user);
+      expect(auth.getAuthToken()).toBe('first-token');
+      expect(address()).toBe('/u/1/settings');
+      // Arriving by an address is not announced the way a switch is.
+      expect(sessionStorage.getItem(auth.SWITCHED_KEY)).toBeNull();
+      // A new tab starts on the account last opened, and its address says which.
+      window.history.replaceState(null, '', '/');
+      await openTab();
+      expect(address()).toBe('/u/1/');
+    });
+
+    it('keeps an address that names the only account', async () => {
+      signIn('first-token');
+      window.history.replaceState(null, '', '/u/1/board');
+      await load();
+      expect(auth.getSignedInUser()).toEqual(user);
+      expect(address()).toBe('/u/1/board');
+      expect(auth.basePath()).toBe('/u/1');
+    });
+
+    it('asks to sign in for an address that names nobody signed in', async () => {
+      await signInBoth();
+      window.history.replaceState(null, '', '/u/7/settings?task=abc');
+      await load();
+      expect(auth.getSignedInUser()).toEqual(other);
+      expect(address()).toBe(
+        `/u/2/login?${new URLSearchParams({ redirect: '/settings?task=abc' })}`,
+      );
+      localStorage.clear();
+      sessionStorage.clear();
+      window.history.replaceState(null, '', '/u/7/');
+      await load();
+      expect(address()).toBe('/login');
+    });
+
+    it('gives an account its number back when it signs in again, and to nobody else', async () => {
+      await signInBoth();
+      auth.forgetAccount(user.id);
+      signIn('third-token', { id: 'third-user', name: '', email: 'third@example.com' });
+      expect(auth.accountPath('third-user')).toBe('/u/3/');
+      signIn('first-again');
+      expect(auth.accountPath(user.id)).toBe('/u/1/');
+    });
+
+    it('numbers the accounts in the order they are put in', async () => {
+      await signInBoth();
+      window.history.replaceState({ key: 'entry' }, '', '/u/2/settings?task=abc#top');
+      await load();
+      auth.reorderAccounts([other.id, user.id]);
+      expect(auth.getAccounts().map(({ user }) => user.id)).toEqual([other.id, user.id]);
+      expect(auth.accountPath(other.id)).toBe('/u/1/');
+      expect(auth.accountPath(user.id)).toBe('/u/2/');
+      // The page stays as it was and its address follows its account's new number.
+      expect(auth.getSignedInUser()).toEqual(other);
+      expect(window.location.href).toBe(`${window.location.origin}/u/1/settings?task=abc#top`);
+      expect(window.history.state).toEqual({ key: 'entry' });
+      expect(auth.basePath()).toBe('/u/1');
+      expect(auth.pagePath('/board')).toBe('/u/1/board');
+      expect(auth.currentPath()).toBe('/settings');
+      // The new numbers hold when the page loads again.
+      await load();
+      expect(auth.getSignedInUser()).toEqual(other);
+      expect(address()).toBe('/u/1/settings?task=abc');
+    });
+
+    it('moves another tab’s address when it hears of a reorder', async () => {
+      await signInBoth();
+      window.history.replaceState(null, '', '/u/2/settings');
+      await load();
+      // Another tab put the second account first.
+      const accounts = auth.getAccounts();
+      localStorage.setItem('throw-accounts', JSON.stringify([...accounts].reverse()));
+      localStorage.setItem(
+        'throw-account-numbers',
+        JSON.stringify({ [other.id]: 1, [user.id]: 2 }),
+      );
+      auth.followAccountNumber();
+      expect(address()).toBe('/u/1/settings');
+      expect(auth.getSignedInUser()).toEqual(other);
+    });
+
+    it('takes any account number off the router’s paths, and adds the page’s', async () => {
+      await signInBoth();
+      window.history.replaceState(null, '', '/u/2/');
+      await load();
+      const url = (path: string) => new URL(path, window.location.origin);
+      // An entry made before a reorder still names the old number.
+      expect(auth.routerRewrite.input({ url: url('/u/1/settings') }).pathname).toBe('/settings');
+      expect(auth.routerRewrite.input({ url: url('/u/2') }).pathname).toBe('/');
+      expect(auth.routerRewrite.output({ url: url('/settings') }).pathname).toBe('/u/2/settings');
+    });
+
+    it('gives a signed-out account a number nobody has once a reorder takes its own', async () => {
+      await signInBoth();
+      signIn('third-token', { id: 'third-user', name: '', email: 'third@example.com' });
+      auth.forgetAccount(other.id);
+      // First 1, third 3: the reorder makes them 1 and 2, and the second, signed out, moves on.
+      auth.reorderAccounts(['third-user', user.id]);
+      expect(auth.accountPath('third-user')).toBe('/u/1/');
+      expect(auth.accountPath(user.id)).toBe('/u/2/');
+      signIn('second-again', other);
+      expect(auth.accountPath(other.id)).toBe('/u/3/');
+    });
+
+    it('puts an account that signs in again back in its numbered place', async () => {
+      await signInBoth();
+      signIn('third-token', { id: 'third-user', name: '', email: 'third@example.com' });
+      auth.forgetAccount(other.id);
+      signIn('second-again', other);
+      expect(auth.getAccounts().map(({ user }) => user.id)).toEqual([
+        user.id,
+        other.id,
+        'third-user',
+      ]);
+    });
+
+    it('has no numbers in the phone’s app', async () => {
+      await signInBoth();
+      mocks.native.mockReturnValue(true);
+      vi.unstubAllEnvs();
+      window.history.replaceState(null, '', '/settings');
+      await load();
+      expect(address()).toBe('/settings');
+      expect(auth.accountPath(user.id)).toBe('/');
+    });
+  });
+
+  it('refuses to switch to an account that is not signed in', () => {
+    signIn('first-token');
+    expect(auth.activateAccount('nobody')).toBe(false);
+    expect(auth.getAuthToken()).toBe('first-token');
+  });
+});
