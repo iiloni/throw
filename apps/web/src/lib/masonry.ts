@@ -43,10 +43,12 @@ class Columns {
     return { x: column * (this.grid.columnWidth + this.grid.gap), y: this.tops[column] ?? 0 };
   }
 
-  place(height: number): Point {
-    const column = this.shortest();
-    const slot = this.next();
-    this.tops[column] = slot.y + height + this.grid.gap;
+  /** Places a card in the shortest column, or in `column` when it is one of the grid's. */
+  place(height: number, column?: number): Point {
+    const at =
+      column !== undefined && column >= 0 && column < this.tops.length ? column : this.shortest();
+    const slot = { x: at * (this.grid.columnWidth + this.grid.gap), y: this.tops[at] ?? 0 };
+    this.tops[at] = slot.y + height + this.grid.gap;
     return slot;
   }
 
@@ -55,11 +57,23 @@ class Columns {
   }
 }
 
-/** Positions for cards of the given heights, in order, and the height of the whole grid. */
-export function masonry(heights: readonly number[], grid: Grid) {
+/**
+ * Positions for cards of the given heights, in order, and the height of the whole grid. A card
+ * with a column in `keep` stays in it rather than going to the shortest one.
+ */
+export function masonry(
+  heights: readonly number[],
+  grid: Grid,
+  keep: readonly (number | undefined)[] = [],
+) {
   const columns = new Columns(grid);
-  const slots = heights.map((height) => columns.place(height));
+  const slots = heights.map((height, index) => columns.place(height, keep[index]));
   return { slots, height: columns.height };
+}
+
+/** The column of a slot in `grid`. */
+export function columnAt(x: number, grid: Grid) {
+  return Math.round(x / (grid.columnWidth + grid.gap));
 }
 
 export type BandInput = {
@@ -69,6 +83,11 @@ export type BandInput = {
   heading: boolean;
   /** Room the band keeps for its cards however few it has, such as a place to drop into. */
   minHeight?: number;
+  /**
+   * The column each card keeps, by index, where it has one: a card that grew or shrank in
+   * place moves the cards below it down or up its column instead of sending them to others.
+   */
+  keep?: readonly (number | undefined)[];
 };
 
 export type BandLayout = {
@@ -93,7 +112,7 @@ export function bandMasonry(bands: readonly BandInput[], grid: Grid) {
   let y = 0;
   let any = false;
   for (const band of bands) {
-    const cards = masonry(band.heights, grid);
+    const cards = masonry(band.heights, grid, band.keep);
     const body = Math.max(cards.height, band.minHeight ?? 0);
     const empty = body === 0 && !band.heading;
     // Bands are a gap apart, as cards are; an empty one takes nothing, not even the gap.
