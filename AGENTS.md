@@ -63,6 +63,9 @@ on `lib/masonry.ts`, Catch's `NoteGrid` springs): a single column, a width their
 was dragged to (`SplitHandle`, kept by `useRailWidths` in `Board/state.ts`) or a gallery across
 the board. `railGeometry` and `useRailSpring` in `Board/SideZone.tsx` spring a rail only when
 its state changes and track its width exactly as the row or its edge is resized.
+A card's subtask list springs its own height (`useUnfold` in `Board/SubtaskUnderlay.tsx`); the
+gallery measures it at its end (`settleSubtaskLists`) and moves the cards below with the same
+spring from the same paint, each keeping its column while only heights change.
 Desktop columns on both boards fold to a strip, as Catch's deck does
 (`Board/BoardColumn.tsx`, remembered per project by `useCollapsedColumns` in `Board/state.ts`).
 A phone's project board reads the same folds: its pager skips folded columns, which stay as
