@@ -17,7 +17,8 @@ navigation; each phone board brings its own dock. On a phone the title, or a pul
 the top of a board, opens the shell's project switcher as a drawer page
 (`AppShell/ProjectSwitcher.tsx`, `AppShell/SwitcherPull.tsx`). Page changes animate through the router's
 view transitions (`lib/pageTransition.ts`, ADR 0013): boards cross-fade, ordered pages
-slide, and content enters once per document with `useEntryMotion` (`lib/entryMotion.ts`).
+slide, and content enters once per document with `useEntryMotion` (`lib/entryMotion.ts`),
+except that a board switched to settles its content in on every visit.
 A fling into the top or bottom of the page or any vertical scroller bounces off it, as in
 Catch (`lib/scrollBounce.ts`, watched from `routes/_app.tsx`): the page column moves by `top`
 (`pageBounceY`), never a transform, so fixed docks and glass stay put, and a scroller's
@@ -399,6 +400,9 @@ Throw moves as Catch does (Catch's `docs/decisions/0003-design-system-and-motion
   it settles (Catch's `RESIZE_SETTLE_MS = 150` in `NoteGrid`).
 - Keep elements mounted and animate their geometry (or FLIP them) rather than swapping
   components between layout states.
+- A fade that is the whole transition (nothing moving under it, such as the board
+  cross-fade) takes `curves.enter`'s 420 ms and gentle curve. The short, front-loaded fades
+  under a page slide are timed to ride under its movement; on their own they read as a blink.
 - Respect `useReducedMotion()`: switch in place, or fade with `curves.fade`.
 - Page changes use view transitions and entry motion (ADR 0013); the task side column is
   ADR 0012.

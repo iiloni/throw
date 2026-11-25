@@ -1082,11 +1082,27 @@ html:active-view-transition-type(back)::view-transition-new(root) {
     500ms var(--ease-emphasized) both page-from-left,
     260ms ease-out 60ms both page-fade-in;
 }
-html:active-view-transition-type(fade, enter)::view-transition-old(root) {
+html:active-view-transition-type(enter)::view-transition-old(root) {
   animation: 180ms ease-out both page-fade-out;
 }
+/*
+ * One board dissolves into the next. Both images share one curve and add up (plus-lighter in
+ * an isolated pair, as the browser's own cross-fade does), so what the boards share (the
+ * header, column frames, the page colour) holds steady instead of dipping toward the
+ * background half way. Nothing moves, so the fade is the whole transition: it takes the
+ * content entry's length and gentle curve (curves.enter), not the quick fades that ride under
+ * a slide, and the arriving board's cards settle in alongside it (useEntryMotion).
+ */
+html:active-view-transition-type(fade)::view-transition-image-pair(root) {
+  isolation: isolate;
+}
+html:active-view-transition-type(fade)::view-transition-old(root) {
+  mix-blend-mode: plus-lighter;
+  animation: 420ms cubic-bezier(0.25, 0.1, 0.25, 1) both page-fade-out;
+}
 html:active-view-transition-type(fade)::view-transition-new(root) {
-  animation: 260ms ease-out 60ms both page-fade-in;
+  mix-blend-mode: plus-lighter;
+  animation: 420ms cubic-bezier(0.25, 0.1, 0.25, 1) both page-fade-in;
 }
 /* The content entry's settle (curves.enter in lib/motion.ts), for the whole page. */
 html:active-view-transition-type(enter)::view-transition-new(root) {
