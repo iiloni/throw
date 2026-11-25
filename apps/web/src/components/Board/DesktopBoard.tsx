@@ -35,6 +35,7 @@ import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { BoardColumn, ColumnHeader } from './BoardColumn';
 import { BoardSettingsPanel } from './BoardSettingsPanel';
+import { useSpotlightCleanup } from './blockers';
 import { CardList } from './CardList';
 import { drag, makingWay } from './drag';
 import type { Status, Task } from './model';
@@ -157,6 +158,7 @@ function RailGap() {
  * open task taking width from all three.
  */
 export function DesktopBoard({ onReset }: { onReset?: () => void }) {
+  useSpotlightCleanup();
   const state = board.use();
   const held = drag.use();
   const { project } = current(state);

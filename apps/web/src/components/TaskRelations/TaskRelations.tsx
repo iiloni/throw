@@ -17,6 +17,7 @@ import {
 import { X } from 'lucide-react';
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import type { TaskBlocker } from '@/components/Board/blockers';
 import { StatusGlyph } from '@/components/Board/glyphs';
 import { Highlighted } from '@/components/CommandPalette/SearchContent';
 import { IconButton } from '@/components/IconButton/IconButton';
@@ -612,37 +613,54 @@ function PickerOption({
 }
 
 /**
- * Each blocked task's open blockers by identifier, for the board's cards: a blocker counts
- * until it is closed or trashed (`openBlockers`).
+ * Each blocked task's open blockers, for the board's cards and blocker spotlight: a blocker
+ * counts until it is closed or trashed (`openBlockers`).
  */
 export function blockersByTask(
   relations: readonly TaskRelation[],
   tasks: readonly Task[],
   projects: readonly Project[],
   statuses: readonly Status[],
-): ReadonlyMap<string, readonly string[]> {
+): ReadonlyMap<string, readonly TaskBlocker[]> {
   const taskById = new Map(tasks.map((row) => [row.id, row]));
   const projectById = new Map(projects.map((row) => [row.id, row]));
   const statusById = new Map(statuses.map((row) => [row.id, row]));
-  const blocked = new Map<string, string[]>();
+  const blocked = new Map<string, TaskBlocker[]>();
   for (const relation of relations) {
     if (relation.kind !== 'blocks') continue;
-    const [label] = openBlockers(relation.targetTaskId, [relation], (id) => {
+    const [entry] = openBlockers(relation.targetTaskId, [relation], (id) => {
       const blocker = taskById.get(id);
       const status = blocker && statusById.get(blocker.statusId);
       if (!blocker || !status) return undefined;
       const project = projectById.get(blocker.projectId);
+      const parent = blocker.parentId ? taskById.get(blocker.parentId) : undefined;
+      const parentStatus = parent ? statusById.get(parent.statusId) : undefined;
       return {
-        task: (project && taskIdentifier(project, blocker)) ?? 'a pending task',
+        task: {
+          id: blocker.id,
+          identifier: (project && taskIdentifier(project, blocker)) ?? 'a pending task',
+          projectId: blocker.projectId,
+          projectName: project?.name ?? null,
+          statusId: blocker.statusId,
+          category: status.category,
+          parentId: blocker.parentId,
+          parentStatusId: parentStatus?.id ?? null,
+          parentCategory: parentStatus?.category ?? null,
+        } satisfies TaskBlocker,
         category: status.category,
-        trashed: isTaskTrashed(blocker, taskById.get(blocker.parentId ?? ''), project),
+        trashed: isTaskTrashed(blocker, parent, project),
       };
     });
-    if (label === undefined) continue;
-    blocked.set(relation.targetTaskId, [...(blocked.get(relation.targetTaskId) ?? []), label]);
+    if (entry === undefined) continue;
+    blocked.set(relation.targetTaskId, [...(blocked.get(relation.targetTaskId) ?? []), entry]);
   }
-  for (const labels of blocked.values())
-    labels.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  for (const entries of blocked.values()) {
+    entries.sort(
+      (a, b) =>
+        a.identifier.localeCompare(b.identifier, undefined, { numeric: true }) ||
+        a.id.localeCompare(b.id),
+    );
+  }
   return blocked;
 }
 

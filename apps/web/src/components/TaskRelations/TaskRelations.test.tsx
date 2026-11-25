@@ -115,10 +115,34 @@ describe('relation groups', () => {
 
   it('counts only open blockers out of the trash for the card', () => {
     const blocked = blockersByTask(fake.relations, fake.tasks, fake.projects, fake.statuses);
-    expect(blocked.get('me')).toEqual(['APP-2', 'OPS-7']);
+    expect(blocked.get('me')).toEqual([
+      {
+        id: 'blocker',
+        identifier: 'APP-2',
+        projectId: 'app',
+        projectName: 'App',
+        statusId: 'open',
+        category: 'active',
+        parentId: null,
+        parentStatusId: null,
+        parentCategory: null,
+      },
+      {
+        id: 'other-project',
+        identifier: 'OPS-7',
+        projectId: 'ops',
+        projectName: 'Operations',
+        statusId: 'open',
+        category: 'active',
+        parentId: null,
+        parentStatusId: null,
+        parentCategory: null,
+      },
+    ]);
     expect(blocked.has('closed')).toBe(false);
     expect(blockedLabel(['APP-2'])).toBe('Blocked by APP-2');
     expect(blockedLabel(['APP-2', 'OPS-7'])).toBe('Blocked by 2 tasks');
+    expect(blockedLabel(blocked.get('me')!)).toBe('Blocked by 2 tasks');
   });
 });
 
