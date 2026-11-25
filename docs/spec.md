@@ -483,7 +483,8 @@ Each card is written on its own, so one deleted elsewhere meanwhile leaves the o
 Both boards can be narrowed down in place (2026-11-22). Search, filters and the sort are view
 state on the device: they apply to the board on screen, are not saved, and are gone when the
 board is left or reloaded. The filter card shows one section at a time, chosen from tabs at
-its foot as in Catch's filter card: Tags (Projects on the cross-project board), Size and Sort.
+its foot as in Catch's filter card: Tags (Projects on the cross-project board), Size, Links and
+Sort.
 A dot marks a tab whose section narrows or orders the board, and the device remembers the last
 section opened.
 
@@ -495,6 +496,16 @@ section opened.
   many cards it would leave, given the rest of the filter. The cross-project board has no tag
   filter, since tags are per project; it scopes to one project instead.
 - **Sizes**, on both boards. Any of the chosen sizes (OR), and Unsized for tasks without one.
+- **Links**, on both boards: any of the chosen [relations](#relations) (OR), read from
+  the synced relations, so they work offline. Related tasks in any project of the workspace
+  count, on a project board too.
+  - **Blocked**: the cards that show the blocked mark, open tasks with a blocker that is
+    neither closed nor in the trash.
+  - **Blocking**: such an open blocker of a task that is itself open and not in the trash.
+  - **Duplicates**: either end of a duplicate link whose other task is not in the trash. A
+    closed duplicate counts, since closing it is how a duplicate is usually settled.
+
+  Relates to is not a filter. Each choice counts the cards it would leave, as tags do.
 - **Sort.** Priority, the board's own order, is the default. The others order each column by
   one field, either way round:
   - **Size**, smallest or largest first.

@@ -1,13 +1,16 @@
-import type { Project, Status, Tag, Task } from '@throw/shared';
+import type { Project, Status, Tag, Task, TaskRelation } from '@throw/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { boardRelations } from './blockers';
 import { carryAcross, carryVertically, pickUp, setDown } from './carry';
 import {
   type BoardFilter,
   bestMatch,
+  chosenFilters,
   compareByField,
   compareBySize,
   EMPTY_FILTER,
   facetCounts,
+  hasRelation,
   matchesSize,
   matchesTags,
   matchingIds,
@@ -215,6 +218,143 @@ describe('filter matching', () => {
     expect(counts.sizes.get(1)).toBe(1);
     expect(counts.sizes.get(2)).toBe(0);
     expect(facetCounts(data(), EMPTY_FILTER, false).untagged).toBe(1);
+  });
+});
+
+describe('relation filters', () => {
+  const closedAt = '2026-10-15T09:00:00Z';
+  const linkedRows = [
+    ...rows,
+    task('ship it', { statusId: 'done', closedAt }),
+    task('binned', { deletedAt: closedAt }),
+  ];
+  const link = (
+    sourceTaskId: string,
+    kind: TaskRelation['kind'],
+    targetTaskId: string,
+  ): Pick<TaskRelation, 'sourceTaskId' | 'targetTaskId' | 'kind'> => ({
+    sourceTaskId,
+    targetTaskId,
+    kind,
+  });
+  // Open blockers as `blockersByTask` gives them: closed and trashed blockers are already out.
+  const blockers = new Map([
+    // Paint fence blocks Weed beds.
+    ['weed beds', [{ id: 'paint fence' }]],
+    // Tidy desk blocks Ship it, which is closed: no badge, and so nothing blocking.
+    ['ship it', [{ id: 'tidy desk' }]],
+    // The subtask Order seeds blocks Write report.
+    ['write report', [{ id: 'order seeds' }]],
+    ['plan garden office', []],
+  ]);
+  const relations = [
+    link('paint fence', 'blocks', 'weed beds'),
+    link('tidy desk', 'blocks', 'ship it'),
+    link('order seeds', 'blocks', 'write report'),
+    link('ship it', 'duplicates', 'plan garden office'),
+    link('binned', 'duplicates', 'paint fence'),
+    link('tidy desk', 'relates_to', 'paint fence'),
+  ];
+  const linked = boardRelations(blockers, relations, linkedRows, [project]);
+  const linkedData = () => ({
+    ...projectBoardData(project, statuses, linkedRows, tags, secondaryTagsByTask(assignments)),
+    relations: linked,
+  });
+  const shownLinked = (edit: Partial<BoardFilter>, subtasksAsCards = true) =>
+    [...(matchingIds(linkedData(), filter(edit), subtasksAsCards) ?? [])].sort();
+
+  it('derives blocked, blocking and duplicate tasks from open blockers and live links', () => {
+    expect([...linked.blocked].sort()).toEqual(['ship it', 'weed beds', 'write report']);
+    // A blocker of a closed task blocks nothing.
+    expect([...linked.blocking].sort()).toEqual(['order seeds', 'paint fence']);
+    // A closed duplicate counts; one in the trash does not mark its other end.
+    expect([...linked.duplicates].sort()).toEqual(['binned', 'plan garden office', 'ship it']);
+  });
+
+  it('treats a blocked task in the trash as blocking nothing', () => {
+    const gone = boardRelations(new Map([['binned', [{ id: 'tidy desk' }]]]), [], linkedRows, [
+      project,
+    ]);
+    expect([...gone.blocking]).toEqual([]);
+  });
+
+  it('finds blocked cards as their badge does, leaving out closed ones', () => {
+    expect(shownLinked({ relations: ['blocked'] })).toEqual(['weed beds', 'write report']);
+    const shipIt = linkedData().tasks.find((item) => item.id === 'ship it')!;
+    expect(hasRelation(shipIt, 'blocked', linked)).toBe(false);
+  });
+
+  it('finds blocking cards and duplicates', () => {
+    expect(shownLinked({ relations: ['blocking'] })).toEqual(['order seeds', 'paint fence']);
+    expect(shownLinked({ relations: ['duplicates'] })).toEqual(['plan garden office', 'ship it']);
+  });
+
+  it('matches any of several relations, together with the other filters', () => {
+    expect(shownLinked({ relations: ['blocked', 'blocking'] })).toEqual([
+      'order seeds',
+      'paint fence',
+      'weed beds',
+      'write report',
+    ]);
+    expect(shownLinked({ relations: ['blocked', 'blocking'], sizes: [4] })).toEqual([
+      'paint fence',
+    ]);
+    expect(shownLinked({ relations: ['duplicates'], query: 'office' })).toEqual([
+      'plan garden office',
+    ]);
+    expect(shownLinked({ relations: ['blocked'], tagIds: ['work'] })).toEqual(['write report']);
+  });
+
+  it('keeps a parent card on the board when only its subtask has the relation', () => {
+    expect(shownLinked({ relations: ['blocking'] }, false)).toEqual([
+      'order seeds',
+      'paint fence',
+      'weed beds',
+    ]);
+  });
+
+  it('finds nothing on a board without relations, as the prototype is', () => {
+    expect(shown({ relations: ['blocked'] }, true)).toEqual([]);
+    expect([...facetCounts(data(), EMPTY_FILTER, true).relations.values()]).toEqual([0, 0, 0]);
+  });
+
+  it('counts what each relation would leave, given the rest', () => {
+    const counts = facetCounts(linkedData(), filter({ relations: ['duplicates'] }), true);
+    expect(Object.fromEntries(counts.relations)).toEqual({
+      blocked: 2,
+      blocking: 2,
+      duplicates: 2,
+    });
+    // Sizes count only the duplicates.
+    expect(counts.sizes.get(1)).toBe(1);
+    expect(counts.sizes.get(null)).toBe(1);
+    expect(counts.sizes.get(4)).toBe(0);
+    const sized = facetCounts(linkedData(), filter({ sizes: [4] }), true);
+    expect(Object.fromEntries(sized.relations)).toEqual({
+      blocked: 0,
+      blocking: 1,
+      duplicates: 0,
+    });
+  });
+
+  it('opens the best match among the chosen relations', () => {
+    const open = () => false;
+    expect(
+      bestMatch(linkedData(), filter({ query: 'garden', relations: ['blocked'] }), open)?.id,
+    ).toBe('weed beds');
+  });
+
+  it('counts each chosen relation as a filter, and clears them all', () => {
+    expect(chosenFilters(filter({ relations: ['blocked', 'duplicates'] }))).toBe(2);
+    board.set(initialBoard());
+    receiveBoard(linkedData(), { rename: () => {}, place: () => true, send: () => true });
+    setFilter({ relations: ['blocking'] });
+    expect(narrowed(board.get())).toBe(true);
+    expect(activeFilterCount(board.get())).toBe(1);
+    // Paint fence, and Weed beds for its blocking subtask tucked under it.
+    expect(countIn(board.get(), 'build')).toBe(2);
+    clearFilters();
+    expect(board.get().filter.relations).toEqual([]);
   });
 });
 

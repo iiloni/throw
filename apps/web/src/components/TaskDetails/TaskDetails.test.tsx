@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { Project, Status, Task } from '@throw/shared';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TaskDetails } from './TaskDetails';
@@ -156,4 +156,48 @@ it('restores an already-trashed task in place without closing', () => {
   expect(fake.hapticsSuccess).toHaveBeenCalledTimes(1);
   expect(fake.leaveTask).not.toHaveBeenCalled();
   expect(fake.toast).not.toHaveBeenCalled();
+});
+
+it('floats a phone task’s toolbars over its full-height scroll and blurs its scrolled edges', () => {
+  const { container } = render(
+    <TaskDetails task={baseTask} project={project} statuses={statuses} tasks={[baseTask]} phone />,
+  );
+  const header = container.querySelector<HTMLElement>('[data-task-header]')!;
+  expect(header).toHaveClass('absolute', 'top-0', 'pointer-events-none');
+  for (const name of ['Task navigation', 'Task trash'])
+    expect(screen.getByRole('toolbar', { name })).toHaveClass('pointer-events-auto');
+  // The scroll starts at the screen's top edge, and the title rests below the toolbars.
+  expect(container.firstElementChild).not.toHaveClass('pt-[var(--safe-top)]');
+  const viewport = container.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')!;
+  expect(viewport).toHaveClass('scroll-pt-[calc(var(--safe-top)+4.5rem)]');
+
+  const top = container.querySelector<HTMLElement>('[data-task-top-blur]')!;
+  const bottom = container.querySelector<HTMLElement>('[data-task-bottom-blur]')!;
+  expect(top).toHaveClass('page-top-blur', 'pointer-events-none');
+  expect(bottom).toHaveClass('page-bottom-blur', 'pointer-events-none');
+  const scrollTo = (scrollTop: number) =>
+    act(() => {
+      Object.defineProperty(viewport, 'scrollHeight', { configurable: true, value: 2000 });
+      Object.defineProperty(viewport, 'clientHeight', { configurable: true, value: 500 });
+      viewport.scrollTop = scrollTop;
+      viewport.dispatchEvent(new Event('scroll'));
+    });
+  scrollTo(0);
+  expect(top.style.opacity).toBe('0');
+  expect(bottom.style.opacity).toBe('1');
+  scrollTo(700);
+  expect(top.style.opacity).toBe('1');
+  expect(bottom.style.opacity).toBe('1');
+  scrollTo(1500);
+  expect(top.style.opacity).toBe('1');
+  expect(bottom.style.opacity).toBe('0');
+});
+
+it('keeps the desktop pane’s toolbars above its card, with no edge blurs', () => {
+  const { container } = render(
+    <TaskDetails task={baseTask} project={project} statuses={statuses} tasks={[baseTask]} />,
+  );
+  expect(container.querySelector('[data-task-header]')).not.toHaveClass('absolute');
+  expect(container.querySelector('[data-task-top-blur]')).toBeNull();
+  expect(container.querySelector('[data-task-bottom-blur]')).toBeNull();
 });

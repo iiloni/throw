@@ -8,20 +8,37 @@ import { haptics } from '@/lib/haptics';
 /** How far the end must be out of view before the jump is offered, as in Catch. */
 export const END_FAR = 160;
 
+/** Whether `element` has content scrolled out at its top or bottom, and its end well away. */
+export interface ScrollEdges {
+  top: boolean;
+  bottom: boolean;
+  far: boolean;
+}
+
+const NO_EDGES: ScrollEdges = { top: false, bottom: false, far: false };
+
 /**
- * A jump to the end of `element`, offered while its end is well out of view, or null. It
- * follows scrolling and the content's size.
+ * Catch's scroll edges for a full-screen page: what its top and bottom blurs and the jump to
+ * the end follow. It follows scrolling and the content's size.
  */
-export function useScrollToBottom(element: HTMLElement | null) {
-  const [far, setFar] = useState(false);
-  const reducedMotion = useReducedMotion();
+export function useScrollEdges(element: HTMLElement | null): ScrollEdges {
+  const [edges, setEdges] = useState(NO_EDGES);
   useEffect(() => {
     if (!element) {
-      setFar(false);
+      setEdges(NO_EDGES);
       return;
     }
-    const update = () =>
-      setFar(element.scrollHeight - element.scrollTop - element.clientHeight > END_FAR);
+    const update = () => {
+      const below = element.scrollHeight - element.scrollTop - element.clientHeight;
+      const top = element.scrollTop > 1;
+      const bottom = below > 1;
+      const far = below > END_FAR;
+      setEdges((edges) =>
+        edges.top === top && edges.bottom === bottom && edges.far === far
+          ? edges
+          : { top, bottom, far },
+      );
+    };
     update();
     element.addEventListener('scroll', update, { passive: true });
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
@@ -32,13 +49,24 @@ export function useScrollToBottom(element: HTMLElement | null) {
       observer?.disconnect();
     };
   }, [element]);
+  return edges;
+}
+
+/**
+ * A jump to the end of `element`, offered while its end is well out of view, or null. Pass
+ * the `edges` already followed for the element to share them.
+ */
+export function useScrollToBottom(element: HTMLElement | null, edges?: ScrollEdges) {
+  const own = useScrollEdges(edges ? null : element);
+  const far = (edges ?? own).far;
+  const reducedMotion = useReducedMotion();
   const jump = useCallback(() => {
     element?.scrollTo({
       top: element.scrollHeight,
       behavior: reducedMotion ? 'instant' : 'smooth',
     });
   }, [element, reducedMotion]);
-  return far ? jump : null;
+  return far && element ? jump : null;
 }
 
 /**

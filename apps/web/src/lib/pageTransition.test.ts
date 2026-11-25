@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { entryDelay, entryDelayForTop } from './entryMotion';
-import { pageAt, pageTransition } from './pageTransition';
+import { boardArriving, pageAt, pageMoving, pageTransition } from './pageTransition';
 
 const at = (pathname: string, search: Record<string, unknown> = {}) => ({ pathname, search });
 const board = at('/w/a/p/one', { view: 'board' });
@@ -82,6 +82,28 @@ describe('pageTransition', () => {
     );
     expect(pageAt(at('/settings'))).toBeNull();
     expect(pageAt(at('/login'))).toBeNull();
+  });
+});
+
+describe('the transition running', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('tells a board arriving apart from a page moving as a whole', () => {
+    const matches = vi.spyOn(document.documentElement, 'matches');
+    matches.mockImplementation((selector) => selector === ':active-view-transition-type(fade)');
+    expect(boardArriving()).toBe(true);
+    expect(pageMoving()).toBe(false);
+    matches.mockImplementation((selector) => selector.includes('forward'));
+    expect(boardArriving()).toBe(false);
+    expect(pageMoving()).toBe(true);
+  });
+
+  it('reads as no transition in an engine without transition types', () => {
+    vi.spyOn(document.documentElement, 'matches').mockImplementation(() => {
+      throw new SyntaxError('unknown pseudo-class');
+    });
+    expect(boardArriving()).toBe(false);
+    expect(pageMoving()).toBe(false);
   });
 });
 

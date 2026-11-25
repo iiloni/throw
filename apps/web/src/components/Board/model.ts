@@ -325,7 +325,25 @@ export function groupByPriority(tasks: Task[]): PriorityGroup[] {
   }));
 }
 
-export type BoardData = { project: Project; tasks: Task[]; hiddenTasks?: Task[] };
+/**
+ * Which of a board's tasks take part in relations its filter can choose, as the real boards
+ * derive them from synced relations (`boardRelations`). The prototype has none.
+ */
+export type BoardRelations = {
+  /** Tasks with an open blocker, as the card's blocked badge counts them. */
+  blocked: ReadonlySet<string>;
+  /** Open tasks blocking another open task that is not in the trash. */
+  blocking: ReadonlySet<string>;
+  /** Tasks that duplicate, or are duplicated by, a task that is not in the trash. */
+  duplicates: ReadonlySet<string>;
+};
+
+export type BoardData = {
+  project: Project;
+  tasks: Task[];
+  hiddenTasks?: Task[];
+  relations?: BoardRelations;
+};
 
 /** Statuses in their board groups, closed ones together, keeping the order they come in. */
 export function byCategory<T extends { category: Category }>(statuses: readonly T[]) {

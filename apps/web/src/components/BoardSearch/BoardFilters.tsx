@@ -2,9 +2,13 @@ import { SIZES, type Size, sizeLabel, type Tag as TagRow } from '@throw/shared';
 import {
   ArrowDownWideNarrow,
   ArrowUpNarrowWide,
+  Ban,
   Check,
   ChevronRight,
+  Construction,
+  Copy,
   Folder,
+  Link2,
   type LucideIcon,
   Ruler,
   Search,
@@ -28,6 +32,9 @@ import {
   type FacetCounts,
   facetCounts,
   isFiltering,
+  RELATION_FILTER_NAMES,
+  RELATION_FILTERS,
+  type RelationFilter,
   type SortDirection,
   type SortField,
   sortOrder,
@@ -117,10 +124,19 @@ function treeTags(project: Project): TagRow[] {
   }));
 }
 
-const filterTabSchema = z.enum(['group', 'size', 'sort']);
-/** The card's sections: `group` is a project board's tags, or the workspace board's projects. */
+const filterTabSchema = z.enum(['group', 'size', 'links', 'sort']);
+/**
+ * The card's sections: `group` is a project board's tags, or the workspace board's projects;
+ * `links` the task relations, on boards that have them.
+ */
 type FilterTab = z.infer<typeof filterTabSchema>;
-const TAB_ORDER: FilterTab[] = ['group', 'size', 'sort'];
+const TAB_ORDER: FilterTab[] = ['group', 'size', 'links', 'sort'];
+
+const RELATION_ICONS: Record<RelationFilter, LucideIcon> = {
+  blocked: Ban,
+  blocking: Construction,
+  duplicates: Copy,
+};
 
 /** A tab's icon, with a dot while what it holds narrows or orders the board. */
 function TabIcon({ icon: Icon, active }: { icon: LucideIcon; active: boolean }) {
@@ -151,6 +167,44 @@ function toggleTagFilter(filter: BoardFilter, id: string) {
       ? filter.tagIds.filter((value) => value !== id)
       : [...filter.tagIds, id],
   });
+}
+
+function toggleRelationFilter(filter: BoardFilter, relation: RelationFilter) {
+  haptics.selection();
+  const chosen = filter.relations.includes(relation)
+    ? filter.relations.filter((value) => value !== relation)
+    : [...filter.relations, relation];
+  // Kept in the filter's own order, so the chips read the same whichever was chosen first.
+  setFilter({ relations: RELATION_FILTERS.filter((value) => chosen.includes(value)) });
+}
+
+const tasksLabel = (count: number) => `${count} ${count === 1 ? 'task' : 'tasks'}`;
+
+/** Blocked, Blocking and Duplicates: a card with any of the chosen relations stays. */
+function RelationControls({ filter, counts }: { filter: BoardFilter; counts: FacetCounts }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {RELATION_FILTERS.map((relation) => {
+        const Icon = RELATION_ICONS[relation];
+        const count = counts.relations.get(relation) ?? 0;
+        const on = filter.relations.includes(relation);
+        return (
+          <button
+            key={relation}
+            type="button"
+            aria-label={`${RELATION_FILTER_NAMES[relation]}, ${tasksLabel(count)}`}
+            aria-pressed={on}
+            onClick={() => toggleRelationFilter(filter, relation)}
+            className={chip(on)}
+          >
+            <Icon className="size-4 shrink-0" aria-hidden />
+            {RELATION_FILTER_NAMES[relation]}
+            <span className="text-xs tabular-nums opacity-60">{count}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 function SortControls({ sort }: { sort: BoardSort }) {
@@ -278,9 +332,10 @@ function ProjectControls({
 
 /**
  * What narrows and orders the board, one section at a time over Catch's tabs at the foot of
- * the card: a project board's tags or the workspace board's projects, sizes, and the sort. Each
- * choice applies to the board at once. Drawn in the desktop search's filter card and in the
- * phone's search page alike; the open section is remembered on the device.
+ * the card: a project board's tags or the workspace board's projects, sizes, task relations
+ * (where the board has them) and the sort. Each choice applies to the board at once. Drawn in
+ * the desktop search's filter card and in the phone's search page alike; the open section is
+ * remembered on the device.
  */
 export function BoardFilters({ className }: { className?: string }) {
   const state = board.use();
@@ -295,7 +350,14 @@ export function BoardFilters({ className }: { className?: string }) {
   const tags = useMemo(() => treeTags(project), [project]);
   const selected = new Set(filter.tagIds);
   const ids = useId();
-  const [tab, setTab] = usePersistentState('throw-board-filter-tab', filterTabSchema, 'group');
+  const [chosenTab, setTab] = usePersistentState(
+    'throw-board-filter-tab',
+    filterTabSchema,
+    'group',
+  );
+  // The prototype has no relations, so a remembered Links tab opens on the first one there.
+  const linked = data.relations !== undefined;
+  const tab = chosenTab === 'links' && !linked ? 'group' : chosenTab;
   const [direction, setDirection] = useState(1);
   function selectTab(next: FilterTab | null) {
     if (!next || next === tab) return;
@@ -318,6 +380,7 @@ export function BoardFilters({ className }: { className?: string }) {
           >
             {tab === 'sort' && <SortControls sort={state.sort} />}
             {tab === 'size' && <SizeControls filter={filter} counts={counts} />}
+            {tab === 'links' && <RelationControls filter={filter} counts={counts} />}
             {tab === 'group' && workspace && (
               <ProjectControls members={project.members ?? []} projectId={filter.projectId} />
             )}
@@ -414,6 +477,14 @@ export function BoardFilters({ className }: { className?: string }) {
             controls: viewId('size'),
             label: 'Size',
             icon: <TabIcon icon={Ruler} active={filter.sizes.length > 0 || filter.unsized} />,
+          },
+          {
+            value: 'links',
+            id: tabId('links'),
+            controls: viewId('links'),
+            label: 'Links',
+            icon: <TabIcon icon={Link2} active={filter.relations.length > 0} />,
+            hidden: !linked,
           },
           {
             value: 'sort',
@@ -795,6 +866,25 @@ export function ActiveFilters({
             </button>
           </FilterChip>
         ))}
+        {filter.relations.map((relation) => {
+          const Icon = RELATION_ICONS[relation];
+          return (
+            <FilterChip key={`relation:${relation}`}>
+              <button
+                type="button"
+                aria-label={`Remove ${RELATION_FILTER_NAMES[relation]} filter`}
+                onClick={() =>
+                  setFilter({ relations: filter.relations.filter((value) => value !== relation) })
+                }
+                className={badge}
+              >
+                <Icon className="size-3.5" aria-hidden />
+                {RELATION_FILTER_NAMES[relation]}
+                <X className="size-3.5" aria-hidden />
+              </button>
+            </FilterChip>
+          );
+        })}
         {filter.unsized && (
           <FilterChip key="unsized">
             <button
@@ -862,10 +952,9 @@ function FilterSection({
 }
 
 /**
- * Full inline sort and filter controls for the docked desktop search sidebar: Sort, Size, and
- * Tags (or Projects on the cross-project board) flow inside the sidebar's single scroller so
- * nothing is hidden behind tabs or a popup card. Structured as independent sections so future
- * filters (such as task relations) slot in cleanly.
+ * Full inline sort and filter controls for the docked desktop search sidebar: Sort, Size, Links
+ * (where the board has relations) and Tags (or Projects on the cross-project board) flow inside
+ * the sidebar's single scroller so nothing is hidden behind tabs or a popup card.
  */
 export function SidebarFilters({ className }: { className?: string }) {
   const state = board.use();
@@ -886,6 +975,11 @@ export function SidebarFilters({ className }: { className?: string }) {
       <FilterSection title="Size">
         <SizeControls filter={filter} counts={counts} />
       </FilterSection>
+      {data.relations && (
+        <FilterSection title="Links">
+          <RelationControls filter={filter} counts={counts} />
+        </FilterSection>
+      )}
       {workspace
         ? (project.members?.length ?? 0) > 0 && (
             <FilterSection title="Projects">

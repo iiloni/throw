@@ -51,6 +51,7 @@ import { useProjects, useWorkspaces } from '@/lib/collections';
 import { useDesktop, useMedia } from '@/lib/media';
 import { springs } from '@/lib/motion';
 import { projectsIn } from '@/lib/projects';
+import { pageBounceY } from '@/lib/scrollBounce';
 import { usePersistentState } from '@/lib/storage';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { watchUpdates } from '@/lib/updates';
@@ -508,7 +509,16 @@ export function AppShell() {
               </div>
             </motion.aside>
           )}
-          <div className="flex min-w-0 flex-1 flex-col pr-[var(--safe-right)]">
+          {/*
+            A scrolled page bounces off its ends by `top`, which leaves its fixed docks and glass
+            on the viewport where a transform would carry them. Boards scroll inside their own
+            columns, which bounce their content (`lib/scrollBounce.ts`), so they stay unpositioned.
+          */}
+          <motion.div
+            data-page-column=""
+            className="flex min-w-0 flex-1 flex-col pr-[var(--safe-right)]"
+            style={fullBoard ? undefined : { position: 'relative', top: pageBounceY }}
+          >
             {!fullBoard && <PageHeader desktop={desktop} />}
             <main
               ref={mainRef}
@@ -527,7 +537,7 @@ export function AppShell() {
                 <Outlet />
               )}
             </main>
-          </div>
+          </motion.div>
         </div>
         <CommandPalette
           key={workspace?.id ?? 'none'}

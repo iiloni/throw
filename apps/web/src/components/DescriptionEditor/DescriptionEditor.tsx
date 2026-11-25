@@ -116,7 +116,8 @@ export function DescriptionEditor({
   }, [editor, editable, controls]);
   // Catch keeps the caret above its native keyboard and dock. Throw owns the same inset
   // as a CSS token, so observe it rather than installing a second keyboard tracker. A dock
-  // resting over the scroll area declares itself as the area's bottom scroll padding.
+  // resting over the scroll area declares itself as the area's bottom scroll padding, and
+  // toolbars floating over its top as its top scroll padding.
   useEffect(() => {
     if (!editable) return;
     let frame = 0;
@@ -131,11 +132,17 @@ export function DescriptionEditor({
         const view = editor.prosemirrorView;
         const area = view.dom.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
         if (!area) return;
-        const covered = Number.parseFloat(getComputedStyle(area).scrollPaddingBottom) || 0;
-        if (keyboard <= 0 && covered <= 0) return;
+        const style = getComputedStyle(area);
+        const covered = Number.parseFloat(style.scrollPaddingBottom) || 0;
+        const coveredTop = Number.parseFloat(style.scrollPaddingTop) || 0;
+        if (keyboard <= 0 && covered <= 0 && coveredTop <= 0) return;
         const caret = view.coordsAtPos(view.state.selection.head);
-        const bottom = area.getBoundingClientRect().bottom - covered - 16 - scrollClearance;
-        if (caret.bottom > bottom) area.scrollTop += caret.bottom - bottom + 12;
+        const rect = area.getBoundingClientRect();
+        const top = rect.top + coveredTop;
+        const bottom = rect.bottom - covered - 16 - scrollClearance;
+        // Only a caret hidden under the toolbars: one scrolled further up was scrolled away.
+        if (caret.top < top && caret.bottom > rect.top) area.scrollTop -= top - caret.top + 12;
+        else if (caret.bottom > bottom) area.scrollTop += caret.bottom - bottom + 12;
       });
     }
     const observer = new MutationObserver(schedule);

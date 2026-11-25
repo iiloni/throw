@@ -12,14 +12,16 @@ import {
   useAllTags,
   useAllTaskTags,
   useLocalRowsReady,
+  useProjects,
   useStatuses,
+  useTaskRelations,
   useTasks,
 } from '@/lib/collections';
 import { useLaunchScreenReady } from '@/lib/launchScreen';
 import { useDesktop } from '@/lib/media';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { BoardAnnouncer } from './BoardAnnouncer';
-import { TaskBlockersContext } from './blockers';
+import { boardRelations, TaskBlockersContext } from './blockers';
 import { taskScreens, taskWrites, useBoardBoundary } from './boundary';
 import { DragOverlay } from './DragOverlay';
 import { secondaryTagsByTask, updatedAtByTask, workspaceBoardData } from './selection';
@@ -70,11 +72,20 @@ export function WorkspaceBoard({
   const updates = useMemo(() => updatedAtByTask(activity), [activity]);
   const phone = !useDesktop();
   const blockers = useBlockersByTask();
+  const { relations } = useTaskRelations();
+  const { projects: allProjects } = useProjects();
+  const linked = useMemo(
+    () => boardRelations(blockers, relations, tasks, allProjects),
+    [blockers, relations, tasks, allProjects],
+  );
   const selectionContent = useSelectionContent();
   const state = board.use();
   const data = useMemo(
-    () => workspaceBoardData(workspaceId, projects, statuses, tasks, tags, secondaryTags, updates),
-    [workspaceId, projects, statuses, tasks, tags, secondaryTags, updates],
+    () => ({
+      ...workspaceBoardData(workspaceId, projects, statuses, tasks, tags, secondaryTags, updates),
+      relations: linked,
+    }),
+    [workspaceId, projects, statuses, tasks, tags, secondaryTags, updates, linked],
   );
   const awaiting = useAwaitingSync(loadingStatuses, data.project.statuses.length);
   const awaitingTasks = useAwaitingSync(loadingTasks, data.tasks.length);

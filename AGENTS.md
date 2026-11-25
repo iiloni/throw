@@ -17,7 +17,13 @@ navigation; each phone board brings its own dock. On a phone the title, or a pul
 the top of a board, opens the shell's project switcher as a drawer page
 (`AppShell/ProjectSwitcher.tsx`, `AppShell/SwitcherPull.tsx`). Page changes animate through the router's
 view transitions (`lib/pageTransition.ts`, ADR 0013): boards cross-fade, ordered pages
-slide, and content enters once per document with `useEntryMotion` (`lib/entryMotion.ts`).
+slide, and content enters once per document with `useEntryMotion` (`lib/entryMotion.ts`),
+except that a board switched to settles its content in on every visit.
+A fling into the top or bottom of the page or any vertical scroller bounces off it, as in
+Catch (`lib/scrollBounce.ts`, watched from `routes/_app.tsx`): the page column moves by `top`
+(`pageBounceY`), never a transform, so fixed docks and glass stay put, and a scroller's
+children move by composited WAAPI. It waits for the finger to lift and for a held, dragged or
+carried card, and stays still with reduced motion.
 Its project board uses the shared Board
 components on synced tasks and statuses, and the cross-project board
 (`Board/WorkspaceBoard.tsx`) adapts every project of the workspace into one virtual project
@@ -31,7 +37,9 @@ opens subtasks through the board's existing `openTaskId`. Catch's floating undo/
 (`components/HistoryToolbar`, from the description's `editorControls`) sits beside Back in the
 desktop header and above the dock on a phone; on a phone only, `components/ScrollToBottom`
 offers a jump to a long task's end above the dock. On a phone both step aside while a drawer
-page covers the screen's foot. Its real content is supplied by
+page covers the screen's foot. A phone task scrolls the full screen height under its floating Back and
+trash toolbars, and Catch's `page-top-blur` / `page-bottom-blur` scrims blur its edges while
+there is more that way (`useScrollEdges`). Its real content is supplied by
 `TaskContentContext` at the project-board boundary; the prototype keeps its mock content.
 On a phone the same boundary hands the board's drawer the open task's dock and pickers
 (`TaskDetails/TaskControls.tsx`); the desktop pane docks them below the task's card, as
@@ -74,7 +82,10 @@ short handles on `FlowTrack` that open them again (`phoneColumns` in `Board/Phon
 Both boards narrow in place: the board store holds a filter and a temporary sort
 (`Board/filter.ts`, applied by `listTasks` and `countIn`), set from the desktop boards'
 search bar (`components/BoardSearch`, docked as a sidebar on wide boards) or the phone drawer's
-search; Ctrl/⌘K opens the palette only away from boards. A sorted list is `data-drop-send`:
+search; Ctrl/⌘K opens the palette only away from boards. Its Links filters read
+`BoardData.relations`, which the boundaries derive with `boardRelations` (`Board/blockers.ts`)
+from the cards' own blockers, so Blocked matches the blocked mark; the prototype has none and
+hides them. A sorted list is `data-drop-send`:
 drops there send. The Updated sort reads each task's activity log (`updatedAtByTask`).
 Cards move on both boards by drag, keyboard,
 phone long press and the move drawer (ADR 0008). A selection (Ctrl/⌘/Shift click or right
@@ -393,6 +404,9 @@ Throw moves as Catch does (Catch's `docs/decisions/0003-design-system-and-motion
   it settles (Catch's `RESIZE_SETTLE_MS = 150` in `NoteGrid`).
 - Keep elements mounted and animate their geometry (or FLIP them) rather than swapping
   components between layout states.
+- A fade that is the whole transition (nothing moving under it, such as the board
+  cross-fade) takes `curves.enter`'s 420 ms and gentle curve. The short, front-loaded fades
+  under a page slide are timed to ride under its movement; on their own they read as a blink.
 - Respect `useReducedMotion()`: switch in place, or fade with `curves.fade`.
 - Page changes use view transitions and entry motion (ADR 0013); the task side column is
   ADR 0012.
