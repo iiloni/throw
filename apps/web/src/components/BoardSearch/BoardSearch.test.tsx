@@ -378,6 +378,72 @@ describe('the docked search sidebar', () => {
   });
 });
 
+describe('relation filters', () => {
+  const linked = () =>
+    receiveBoard(
+      {
+        ...projectBoardData(
+          project,
+          statuses,
+          [task('Weed beds', 2), task('Paint fence', 4), task('Tidy desk', null)],
+          [],
+          secondaryTagsByTask([]),
+        ),
+        relations: {
+          blocked: new Set(['Weed beds']),
+          blocking: new Set(['Paint fence']),
+          duplicates: new Set(['Weed beds', 'Tidy desk']),
+        },
+      },
+      { rename: () => {}, place: () => true, send: () => true },
+    );
+
+  it('leaves Links out where the board has no relations, as the prototype does', () => {
+    const { unmount } = render(<BoardSearch />);
+    fireEvent.click(screen.getByRole('button', { name: 'Filter and sort' }));
+    expect(screen.queryByRole('tab', { name: 'Links' })).not.toBeInTheDocument();
+    unmount();
+    render(<BoardSearchSidebar />);
+    expect(screen.queryByRole('region', { name: 'Links' })).not.toBeInTheDocument();
+  });
+
+  it('chooses relations from the Links tab, each counted, and removes them by their chips', () => {
+    linked();
+    render(<BoardSearch />);
+    fireEvent.click(screen.getByRole('button', { name: 'Filter and sort' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Links' }));
+    const panel = screen.getByRole('region', { name: 'Filters and sort' });
+    expect(within(panel).getByRole('button', { name: 'Blocked, 1 task' })).toBeInTheDocument();
+    expect(within(panel).getByRole('button', { name: 'Blocking, 1 task' })).toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Duplicates, 2 tasks' }));
+    fireEvent.click(within(panel).getByRole('button', { name: /^Blocked,/ }));
+    // Kept in the filter's order, whichever was chosen first.
+    expect(board.get().filter.relations).toEqual(['blocked', 'duplicates']);
+    expect(within(panel).getByRole('button', { name: /^Blocked,/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(field()).toHaveAccessibleDescription('2 matching');
+    const chips = screen.getByRole('group', { name: 'Active filters' });
+    fireEvent.click(within(chips).getByRole('button', { name: 'Remove Blocked filter' }));
+    expect(board.get().filter.relations).toEqual(['duplicates']);
+    // Counts follow the rest of the filter: with Size S, only Weed beds is left to count.
+    fireEvent.click(screen.getByRole('tab', { name: 'Size' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Size S,/ }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Links' }));
+    expect(screen.getByRole('button', { name: 'Blocking, 0 tasks' })).toBeInTheDocument();
+  });
+
+  it('shows a Links section in the docked sidebar', () => {
+    linked();
+    render(<BoardSearchSidebar />);
+    const links = screen.getByRole('region', { name: 'Links' });
+    fireEvent.click(within(links).getByRole('button', { name: /^Blocking,/ }));
+    expect(board.get().filter.relations).toEqual(['blocking']);
+    expect(screen.getByRole('group', { name: 'Active filters' })).toHaveTextContent(/Blocking/);
+  });
+});
+
 describe('search over a soft keyboard', () => {
   // jsdom computes no Tailwind, so these pin the rules that keep search above `--keyboard`.
   it('lifts the floating bar by translate, so its measured height and the columns stay', () => {
