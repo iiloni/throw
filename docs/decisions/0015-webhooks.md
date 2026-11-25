@@ -109,8 +109,9 @@ With a window, every change the webhook follows waits for a pause in all of them
   Held deliveries last a day (below), so a task first named later than that is announced as
   `task.updated`; `list_changes` still has its creation.
 - **Comments** are written on purpose and are never folded: each comment event is its own
-  delivery and leaves the task's waiting delivery as it is. It still waits out the window
-  with everything else, so a comment and the edits around it reach the receiver together.
+  delivery and does not fold into the task's waiting delivery, though like any change it
+  pushes that delivery back. It waits out the window with everything else, so a comment and
+  the edits around it reach the receiver together.
 - **Purges.** A purge (`task.deleted`) of a task announced before folds in, replacing
   whatever was waiting, and waits like any other change: a receiver woken mid-session would
   only find the person still working. A task created and purged within the window is
@@ -131,7 +132,9 @@ are sent one by one.
 Folding is safe under concurrent writes. A write that queues for a quiet window first takes
 a transaction-level advisory lock for the workspace (`webhooks/<workspaceId>`), as does
 changing a webhook's window, so writes that push back the same webhook's deliveries never
-lock its rows in opposite orders. Only writes the workspace's quiet webhooks follow take it.
+lock its rows in opposite orders. Only writes the workspace's quiet webhooks follow take it,
+and they read those webhooks' windows again once they hold it, so a window shortened while
+they waited is not undone by pushing deliveries back by the old one.
 A partial unique index allows one waiting (`pending` or `held`, never attempted) delivery per
 webhook and key. A write pushes back the webhook's pending rows, locks the waiting row for
 its key (`FOR UPDATE`) and folds into it, or inserts with `ON CONFLICT DO NOTHING` and folds

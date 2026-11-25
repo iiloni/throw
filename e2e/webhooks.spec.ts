@@ -622,9 +622,27 @@ test('a quiet window waits until nothing the webhook follows has changed @api', 
   const backlog = project.statuses.find((status) => status.category === 'backlog')!;
   const done = project.statuses.find((status) => status.category === 'done')!;
   const receiver = await startReceiver();
-  const window = 3;
+  const window = 4;
   const { createTask, change, comment } = taskActions(request, account, project.id, backlog.id);
-  const pause = () => new Promise((resolve) => setTimeout(resolve, (window * 1000) / 2));
+  /**
+   * Starts each write a second after the one before it started, so slow answers do not add
+   * up, and checks that each lands while the one before it is still waiting: otherwise the
+   * server was too slow for the test to tell anything. Returns when the last one started.
+   */
+  const paced = async (writes: (() => Promise<unknown>)[]) => {
+    const starts: number[] = [];
+    for (const [index, write] of writes.entries()) {
+      const at = (starts[0] ?? Date.now()) + index * 1000;
+      await new Promise((resolve) => setTimeout(resolve, Math.max(0, at - Date.now())));
+      starts.push(Date.now());
+      await write();
+      if (index)
+        expect(Date.now(), 'a write landed after the window of the one before it').toBeLessThan(
+          starts[index - 1]! + window * 1000,
+        );
+    }
+    return starts.at(-1)!;
+  };
   const about = (taskId: string) =>
     receiver.received.filter((hook) => hook.payload.taskId === taskId);
   try {
@@ -642,14 +660,12 @@ test('a quiet window waits until nothing the webhook follows has changed @api', 
 
     // Each change comes before the last one's window is out, so all of them wait for the last:
     // a change to another task, a blank `+` that sends nothing itself, and a comment.
-    await change(first, { title: { before: 'First', after: 'First, renamed' } });
-    await pause();
-    await change(second, { priority: { before: 3, after: 1 } });
-    await pause();
-    await createTask('New task');
-    await pause();
-    const last = Date.now();
-    await comment(third, 'Looking at this next');
+    const last = await paced([
+      () => change(first, { title: { before: 'First', after: 'First, renamed' } }),
+      () => change(second, { priority: { before: 3, after: 1 } }),
+      () => createTask('New task'),
+      () => comment(third, 'Looking at this next'),
+    ]);
     await receiver.next(() => true);
     expect(Date.now() - last).toBeGreaterThanOrEqual(window * 1000);
     await receiver.next(({ payload }) => payload.event === 'comment.created');
@@ -672,13 +688,14 @@ test('a quiet window waits until nothing the webhook follows has changed @api', 
 
     // A purge waits for the board to go quiet too, and pushes back what is waiting.
     before = receiver.received.length;
-    await change(second, { priority: { before: 1, after: 2 } });
-    await pause();
-    await change(third, { trashed: { before: false, after: true } });
-    const purged = Date.now();
-    expect(
-      (await request.delete(`/api/tasks/${third}`, { headers: account.headers })).status(),
-    ).toBe(200);
+    const purged = await paced([
+      () => change(second, { priority: { before: 1, after: 2 } }),
+      () => change(third, { trashed: { before: false, after: true } }),
+      async () =>
+        expect(
+          (await request.delete(`/api/tasks/${third}`, { headers: account.headers })).status(),
+        ).toBe(200),
+    ]);
     const gone = await receiver.next(({ payload }) => payload.event === 'task.deleted', before);
     expect(Date.now() - purged).toBeGreaterThanOrEqual(window * 1000);
     expect(gone.payload).toMatchObject({ taskId: third, kind: 'deleted' });

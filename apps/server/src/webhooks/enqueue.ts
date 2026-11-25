@@ -134,6 +134,28 @@ export function lockQuietWindows(tx: Transaction, workspaceId: string) {
 }
 
 /**
+ * The webhooks' windows as they are once the lock is held. A change to a window commits under
+ * the lock, so a window read before it may be stale: pushing deliveries back by a window that
+ * was just shortened would undo `shortenWaiting`.
+ */
+async function currentWindows<T extends Target>(tx: Transaction, targets: T[]): Promise<T[]> {
+  const rows = await tx
+    .select({ id: webhooks.id, quietWindowSeconds: webhooks.quietWindowSeconds })
+    .from(webhooks)
+    .where(
+      inArray(
+        webhooks.id,
+        targets.map((target) => target.id),
+      ),
+    );
+  const windows = new Map(rows.map((row) => [row.id, row.quietWindowSeconds]));
+  return targets.map((target) => ({
+    ...target,
+    quietWindowSeconds: windows.get(target.id) ?? target.quietWindowSeconds,
+  }));
+}
+
+/**
  * A quiet window is the webhook's, not one task's: any change it follows starts the window
  * again for every delivery it has waiting, so nothing is sent while someone is still working
  * on the board. Held deliveries stay held, and retries keep their schedule.
@@ -292,7 +314,11 @@ export async function enqueueWebhooks(tx: Transaction, actor: WriteActor, change
     // A webhook deleted before this write commits would break the deliveries' foreign key.
     // Holding its key makes the delete wait for this transaction instead.
     .for('key share', { of: webhooks });
-  const matching = targets.filter((target) => followsChange(target, change, actor));
+  let matching = targets.filter((target) => followsChange(target, change, actor));
+  if (matching.some((target) => target.quietWindowSeconds > 0)) {
+    await lockQuietWindows(tx, change.workspaceId);
+    matching = await currentWindows(tx, matching);
+  }
 
   let projectKey = change.projectKey ?? null;
   if (matching.length && change.projectKey === undefined && change.projectId !== null) {
@@ -330,10 +356,7 @@ export async function enqueueWebhooks(tx: Transaction, actor: WriteActor, change
     structureDeliveries.set(tx, byProject);
   }
   if (!matching.length) return;
-  if (quiet.length) {
-    await lockQuietWindows(tx, change.workspaceId);
-    await pushBackWaiting(tx, quiet);
-  }
+  if (quiet.length) await pushBackWaiting(tx, quiet);
   if (rows.length) await tx.insert(webhookDeliveries).values(rows);
   if (key !== null && waiting.length) {
     const values = change.values && fieldValues(change.values);

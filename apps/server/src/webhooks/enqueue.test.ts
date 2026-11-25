@@ -129,10 +129,12 @@ describe('queuePlan', () => {
   const slower = { id: 'slower', quietWindowSeconds: 600 };
 
   it('folds task and structure changes for quiet webhooks and sends the rest at once', () => {
-    const plan = queuePlan([atOnce, patient, slower], 'task:1');
-    expect(plan.quiet).toEqual([patient, slower]);
-    expect(plan.folding).toEqual([patient, slower]);
-    expect(plan.direct).toEqual([{ target: atOnce, waitSeconds: null }]);
+    for (const key of [`task:${projectId}`, `structure:${projectId}`]) {
+      const plan = queuePlan([atOnce, patient, slower], key);
+      expect(plan.quiet).toEqual([patient, slower]);
+      expect(plan.folding).toEqual([patient, slower]);
+      expect(plan.direct).toEqual([{ target: atOnce, waitSeconds: null }]);
+    }
   });
 
   it('queues a comment on its own to wait out each quiet window, unfolded', () => {
