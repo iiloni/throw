@@ -106,6 +106,13 @@ test('a fling into the top of a board column bounces its cards', async ({ page }
   const { furthest } = await flingToTop(page, 'column');
   expect(furthest).toBe(1);
   await expect.poll(() => settled(page)).toBe(true);
+  // Android's own overscroll stretch would play on top of the bounce.
+  const viewport = page
+    .getByRole('article', { name: /Filler 0$/ })
+    .locator('xpath=ancestor::*[@data-slot="scroll-area-viewport"][1]');
+  expect(await viewport.evaluate((element) => getComputedStyle(element).overscrollBehaviorY)).toBe(
+    'none',
+  );
 });
 
 test('stays still with reduced motion', async ({ page }) => {

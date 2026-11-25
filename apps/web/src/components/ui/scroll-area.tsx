@@ -65,8 +65,11 @@ function ScrollAreaViewport({
     <ScrollAreaPrimitive.Viewport
       data-slot="scroll-area-viewport"
       // Replace Radix's table wrapper so content wraps and a short list can fill the area.
+      // No overscroll of the browser's own: `lib/scrollBounce.ts` bounces the content at its
+      // ends, and Android's stretch would play on top of it. `none` still keeps the scroll from
+      // chaining to the page, as `contain` did.
       className={cn(
-        'size-full rounded-[inherit] overscroll-y-contain outline-none focus-visible:ring-2 focus-visible:ring-ring [&>div]:min-h-full [&>div]:flex-col [&>div]:!flex',
+        'size-full rounded-[inherit] overscroll-y-none outline-none focus-visible:ring-2 focus-visible:ring-ring [&>div]:min-h-full [&>div]:flex-col [&>div]:!flex',
         className,
       )}
       {...props}
