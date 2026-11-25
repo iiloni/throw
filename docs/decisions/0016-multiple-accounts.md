@@ -90,7 +90,8 @@ same account signs in.
 
 **The sign-in page adds an account.** Reached while another is signed in, it shows "Back to
 your tasks", and a sign-in there adds to the list and loads the new account's page. The
-account switcher (the rail's account menu, the phone's) is THR-129, built on these helpers.
+desktop rail, phone project switcher and Account settings share an account list built on
+these helpers. The rail and phone avatars also switch accounts by swipe in list order.
 
 ## Compatibility
 

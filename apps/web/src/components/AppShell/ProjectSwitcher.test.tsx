@@ -41,8 +41,27 @@ vi.mock('@/components/AppShell/shell', () => ({ useShell: () => shell.value }));
 // The pathname the router has resolved, which it sets as the next page commits.
 const router = vi.hoisted(() => ({ pathname: '/w/w1/p/p1' }));
 vi.mock('@tanstack/react-router', () => ({
+  Link: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a>,
   useRouterState: ({ select }: { select: (state: unknown) => unknown }) =>
     select({ resolvedLocation: { pathname: router.pathname } }),
+}));
+
+const device = vi.hoisted(() => ({
+  accounts: [
+    { user: { id: 'ada', name: 'Ada', email: 'ada@example.com' }, token: 'a' },
+    { user: { id: 'bob', name: '', email: 'bob@example.com' }, token: 'b' },
+  ],
+  switchAccount: vi.fn(),
+}));
+vi.mock('@/lib/auth', () => ({
+  getAccounts: () => device.accounts,
+  getSignedInUser: () => device.accounts[0]?.user ?? null,
+  reorderAccounts: vi.fn(),
+}));
+vi.mock('@/lib/accounts', () => ({
+  switchAccount: device.switchAccount,
+  signOutAccount: vi.fn(),
+  unsyncedChanges: vi.fn(async () => 0),
 }));
 
 import { ProjectSwitcher } from './ProjectSwitcher';
@@ -156,5 +175,31 @@ describe('project switcher', () => {
     expect(handled).toBe(true);
     expect(screen.getByRole('dialog', { name: 'Projects' })).toBeInTheDocument();
     expect(surface.dismiss?.()).toBe(false);
+  });
+
+  it('lists the device’s accounts in their own view, switching by a tap or a swipe', () => {
+    const { onClose } = setup();
+    const account = button('Account: Ada');
+    expect(account).toHaveTextContent('2');
+    act(() => {
+      fireEvent.pointerDown(account, { pointerId: 1, button: 0, clientX: 40, clientY: 10 });
+      fireEvent.pointerMove(account, { pointerId: 1, clientX: 0, clientY: 10 });
+      fireEvent.pointerUp(account, { pointerId: 1, clientX: 0, clientY: 10 });
+      fireEvent.click(account);
+    });
+    expect(device.switchAccount).toHaveBeenCalledWith('bob');
+    expect(screen.getByRole('dialog', { name: 'Projects' })).toBeInTheDocument();
+
+    device.switchAccount.mockClear();
+    fireEvent.click(button('Account: Ada'));
+    expect(screen.getByRole('dialog', { name: 'Accounts' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Add account' })).toHaveAttribute('href', '/login');
+    fireEvent.click(button('bob@example.com'));
+    expect(device.switchAccount).toHaveBeenCalledWith('bob');
+    expect(onClose).not.toHaveBeenCalled();
+    act(() => {
+      surface.dismiss?.();
+    });
+    expect(screen.getByRole('dialog', { name: 'Projects' })).toBeInTheDocument();
   });
 });
