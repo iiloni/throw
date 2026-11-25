@@ -144,17 +144,18 @@ function EdgeSpacer({
   }, [trailing]);
   useLayoutEffect(follow);
   useMotionValueEvent(spring, 'change', () => motionFrame.postRender(follow));
-  // A sticky closed rail lies over the scroller's end, so the columns are cut at its edge
-  // rather than at the scroller's: the seam's fade (styles.css) ends there, moving with it.
+  // A sticky rail lies over its end of the scroller, so the columns are cut at its edge rather
+  // than at the scroller's: the board's side fade (styles.css) stands there, moving with it.
   useLayoutEffect(() => {
     const viewport = element.current?.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
-    if (!trailing || !viewport) return;
-    const inset = (width: number) => viewport.style.setProperty('--seam-inset', `${width}px`);
+    if (!viewport) return;
+    const property = trailing ? '--inset-right' : '--inset-left';
+    const inset = (width: number) => viewport.style.setProperty(property, `${width}px`);
     inset(rail.value.get());
     const stop = rail.value.on('change', inset);
     return () => {
       stop();
-      viewport.style.removeProperty('--seam-inset');
+      viewport.style.removeProperty(property);
     };
   }, [trailing, rail.value]);
   const width = typeof rail.width === 'number' ? rail.width + EDGE : spring;
@@ -412,7 +413,7 @@ function openTaskOf(state: BoardState) {
 
 /**
  * Whether a board's columns run up to the open task's seam, for `[data-seam]` in styles.css to
- * fade them out before it. It turns with the pane's own presence, so the fade leaves as the
+ * fade them out before it (their left side fades whether or not a task is open). It turns with the pane's own presence, so the fade leaves as the
  * pane starts to close rather than vanishing once it has gone.
  */
 export function seamOf(state: BoardState): 'open' | 'shut' {

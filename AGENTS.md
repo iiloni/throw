@@ -39,8 +39,9 @@ Catch's split view does (`TaskDrawer`). A desktop pane at least 620 px wide move
 tags and subtasks to a side column beside the card while it has any (ADR 0012,
 `TaskDetails/TaskColumn.tsx`); later extras such as link previews join it there.
 Columns that run on under an open desktop pane fade out at the seam (`[data-seam]` in
-`styles.css`, from `ScrollArea`'s `sides` marks and `seamOf`), ending at a sticky closed rail's
-edge where one lies over the scroller.
+`styles.css`, from `ScrollArea`'s `sides` marks and `seamOf`), and columns scrolled out to the
+left fade at the board's start; each fade stands at a sticky rail's edge where one lies over
+that end of the scroller.
 Outbound webhooks (ADR 0015) are server-only: `apps/server/src/webhooks` queues deliveries
 in the write's transaction, checks receivers against its SSRF policy and sends them from a
 worker; Settings manages them at `/settings/webhooks`. A webhook's quiet window is a
