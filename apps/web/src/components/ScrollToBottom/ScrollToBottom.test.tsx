@@ -1,7 +1,7 @@
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { END_FAR, ScrollToBottom, useScrollToBottom } from './ScrollToBottom';
+import { END_FAR, ScrollToBottom, useScrollEdges, useScrollToBottom } from './ScrollToBottom';
 
 vi.stubGlobal(
   'ResizeObserver',
@@ -94,5 +94,38 @@ describe('useScrollToBottom', () => {
   it('offers nothing without a scroller', () => {
     const { result } = renderHook(() => useScrollToBottom(null));
     expect(result.current).toBeNull();
+  });
+});
+
+describe('useScrollEdges', () => {
+  it('follows content scrolled out at the top and bottom', () => {
+    const element = scroller({ height: 2000, client: 500, top: 0 });
+    const { result } = renderHook(() => useScrollEdges(element));
+    expect(result.current).toEqual({ top: false, bottom: true, far: true });
+
+    act(() => {
+      element.scrollTop = 1400;
+      element.dispatchEvent(new Event('scroll'));
+    });
+    expect(result.current).toEqual({ top: true, bottom: true, far: false });
+
+    act(() => {
+      element.scrollTop = 1500;
+      element.dispatchEvent(new Event('scroll'));
+    });
+    expect(result.current).toEqual({ top: true, bottom: false, far: false });
+  });
+
+  it('shares edges already followed with the jump', () => {
+    const element = scroller({ height: 2000, client: 500, top: 0 });
+    const { result } = renderHook(() =>
+      useScrollToBottom(element, { top: false, bottom: false, far: false }),
+    );
+    expect(result.current).toBeNull();
+  });
+
+  it('has no edges without a scroller', () => {
+    const { result } = renderHook(() => useScrollEdges(null));
+    expect(result.current).toEqual({ top: false, bottom: false, far: false });
   });
 });
