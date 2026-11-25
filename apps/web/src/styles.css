@@ -1004,6 +1004,16 @@ body:has(section.board-column[data-column-color]) .column-strip {
   display: none;
 }
 
+/*
+ * How far an open page lifts the dock over quick capture's card (Drawer). It changes on every
+ * frame the drawer moves; inherited, each change restyled every card in the drawer.
+ */
+@property --drawer-reveal {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
 @property --gutter {
   syntax: "<length>";
   inherits: true;
