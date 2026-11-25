@@ -29,9 +29,9 @@ fields and text-only BlockNote descriptions (a touch screen formats from Catch's
 recoverable description drafts, and
 opens subtasks through the board's existing `openTaskId`. Catch's floating undo/redo
 (`components/HistoryToolbar`, from the description's `editorControls`) sits beside Back in the
-desktop header and above the dock on a phone; `components/ScrollToBottom` offers a jump to a
-long task's end in the card's corner or above the phone dock. Both step aside while a dock
-panel or drawer page covers the card's foot. Its real content is supplied by
+desktop header and above the dock on a phone; on a phone only, `components/ScrollToBottom`
+offers a jump to a long task's end above the dock. On a phone both step aside while a drawer
+page covers the screen's foot. Its real content is supplied by
 `TaskContentContext` at the project-board boundary; the prototype keeps its mock content.
 On a phone the same boundary hands the board's drawer the open task's dock and pickers
 (`TaskDetails/TaskControls.tsx`); the desktop pane docks them below the task's card, as

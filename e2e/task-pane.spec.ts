@@ -566,7 +566,7 @@ test('a finger formats the description from the dock while typing, as in Catch',
   await expect(formatting).toHaveCount(0);
 });
 
-test('undo and redo float beside Back or above the dock, and a long task offers a jump to its end', async ({
+test('undo and redo float beside Back or above the dock, and a long phone task offers a jump to its end', async ({
   page,
   isMobile,
 }, testInfo) => {
@@ -621,25 +621,31 @@ test('undo and redo float beside Back or above the dock, and a long task offers 
     );
   }
 
-  // A long description: the jump shows once its end is well out of view.
+  // A long description: on a phone the jump shows once its end is well out of view. A desktop
+  // pane has its scrollbar and never offers it.
   for (let line = 0; line < 40; line++) {
     await page.keyboard.press('Enter');
     await page.keyboard.type(`Step ${line + 1}`);
   }
   await viewport.evaluate((element) => element.scrollTo({ top: 0, behavior: 'instant' }));
+  if (!isMobile) {
+    await expect
+      .poll(() =>
+        viewport.evaluate(
+          (element) => element.scrollHeight - element.scrollTop - element.clientHeight,
+        ),
+      )
+      .toBeGreaterThan(400);
+    await expect(jump).toHaveCount(0);
+    return;
+  }
   await expect(jump).toBeVisible();
   const pill = await box(jump);
-  if (isMobile) {
-    const drawer = await box(page.locator('[data-drawer]'));
-    expect(pill.y + pill.height).toBeLessThanOrEqual(drawer.y);
-    expect(pill.x).toBeGreaterThan(page.viewportSize()!.width / 2);
-    const toolbar = await box(history);
-    expect(pill.x).toBeGreaterThanOrEqual(toolbar.x + toolbar.width);
-  } else {
-    const card = await box(page.locator('[data-task-card]'));
-    expect(pill.x + pill.width).toBeLessThanOrEqual(card.x + card.width);
-    expect(pill.y + pill.height).toBeLessThanOrEqual(card.y + card.height);
-  }
+  const drawer = await box(page.locator('[data-drawer]'));
+  expect(pill.y + pill.height).toBeLessThanOrEqual(drawer.y);
+  expect(pill.x).toBeGreaterThan(page.viewportSize()!.width / 2);
+  const toolbar = await box(history);
+  expect(pill.x).toBeGreaterThanOrEqual(toolbar.x + toolbar.width);
   const path = testInfo.outputPath('floating-toolbars.png');
   await page.screenshot({ path });
   await testInfo.attach('floating toolbars', { path, contentType: 'image/png' });
@@ -654,14 +660,13 @@ test('undo and redo float beside Back or above the dock, and a long task offers 
     .toBeLessThanOrEqual(1);
   await expect(jump).toHaveCount(0);
 
-  // A dock panel or drawer page takes the foot of the card: what floats there steps aside.
+  // A drawer page takes the foot of the screen: what floats there steps aside.
   await viewport.evaluate((element) => element.scrollTo({ top: 0, behavior: 'instant' }));
   await expect(jump).toBeVisible();
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await press(controls(page).getByRole('button', { name: /^Status: Working/ }));
   await expect(jump).toHaveCount(0);
-  if (isMobile) await expect(history).toHaveCount(0);
-  else await expect(history).toBeVisible();
+  await expect(history).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(jump).toBeVisible();
   await expect(history).toBeVisible();

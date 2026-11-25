@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { FloatingToolbar } from '@/components/FloatingToolbar/FloatingToolbar';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { haptics } from '@/lib/haptics';
-import { cn } from '@/lib/utils';
 
 /** How far the end must be out of view before the jump is offered, as in Catch. */
 export const END_FAR = 160;
@@ -43,18 +42,15 @@ export function useScrollToBottom(element: HTMLElement | null) {
 }
 
 /**
- * Catch's jump to the end of the open task, shown while `onJump` is offered. `hidden` slides
- * it away for something that takes its place.
+ * Catch's jump to the end of the open task, floating above a phone's dock while `onJump` is
+ * offered. `hidden` slides it away for something that takes its place.
  */
 export function ScrollToBottom({
   onJump,
-  floating = false,
   hidden = false,
   className,
 }: {
   onJump: (() => void) | null;
-  /** Above a phone's dock rather than in the corner of the pane's card. */
-  floating?: boolean;
   hidden?: boolean;
   className?: string;
 }) {
@@ -70,11 +66,8 @@ export function ScrollToBottom({
               haptics.selection();
               onJump();
             }}
-            tooltipSide={floating ? 'top' : 'left'}
-            className={cn(
-              'rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-5',
-              floating ? 'size-11' : 'size-10',
-            )}
+            tooltipSide="top"
+            className="size-11 rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-5"
           >
             <ArrowDown />
           </IconButton>

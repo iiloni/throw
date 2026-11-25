@@ -81,12 +81,10 @@ export function TaskDetails({
     },
     [shareScroll],
   );
-  const scrollToBottom = useScrollToBottom(scrollElement);
+  // Only a phone jumps to the end: a desktop pane has a scrollbar and room to see where it is.
+  const scrollToBottom = useScrollToBottom(phone ? scrollElement : null);
   const [descriptionControls, setDescriptionControls] = useState<EditorControls | null>(null);
   const hasHistory = useHasHistory(descriptionControls);
-  // A dock panel grows over the card's foot, where the jump to the end floats; it steps aside.
-  const [dockPanel, setDockPanel] = useState(false);
-  const footCovered = phone ? drawerPage : dockPanel;
   // On a phone both float just above the dock, over the content's end.
   const floating = phone && !drawerPage && (hasHistory || scrollToBottom !== null);
   const paneWidth = useContext(TaskPaneWidthContext);
@@ -330,13 +328,6 @@ export function TaskDetails({
         </div>
       </ScrollAreaViewport>
       <ScrollBar />
-      {!phone && (
-        <ScrollToBottom
-          onJump={scrollToBottom}
-          hidden={footCovered}
-          className="absolute right-3 bottom-3"
-        />
-      )}
     </ScrollArea>
   );
   return (
@@ -454,7 +445,7 @@ export function TaskDetails({
           </div>
         </TaskColumnFrame>
       )}
-      {!phone && <TaskDrawer task={task} statuses={statuses} onPanelChange={setDockPanel} />}
+      {!phone && <TaskDrawer task={task} statuses={statuses} />}
       {phone && (
         // The dock's width and place: its glass tops out 1.75rem above the safe area (or the
         // keyboard it rides), and these float 0.75rem above that, at its ends.
@@ -462,13 +453,12 @@ export function TaskDetails({
           <HistoryToolbar
             controls={descriptionControls}
             floating
-            hidden={footCovered}
+            hidden={drawerPage}
             className="pointer-events-auto absolute bottom-0 left-3"
           />
           <ScrollToBottom
             onJump={scrollToBottom}
-            floating
-            hidden={footCovered}
+            hidden={drawerPage}
             className="pointer-events-auto absolute right-3 bottom-0"
           />
         </div>
