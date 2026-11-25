@@ -338,6 +338,8 @@ test('putting the accounts in order renumbers their addresses, in every open tab
   });
   await tab.reload();
   await expect(tab).toHaveURL(/\/u\/2\/w\//, { timeout: APP_LOAD_TIMEOUT });
-  await expect(tab.getByRole('heading', { name: 'First space' })).toBeVisible();
+  await expect(tab.getByRole('heading', { name: 'First space' })).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
   await tab.close();
 });
