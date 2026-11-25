@@ -31,7 +31,9 @@ opens subtasks through the board's existing `openTaskId`. Catch's floating undo/
 (`components/HistoryToolbar`, from the description's `editorControls`) sits beside Back in the
 desktop header and above the dock on a phone; on a phone only, `components/ScrollToBottom`
 offers a jump to a long task's end above the dock. On a phone both step aside while a drawer
-page covers the screen's foot. Its real content is supplied by
+page covers the screen's foot. A phone task scrolls the full screen height under its floating Back and
+trash toolbars, and Catch's `page-top-blur` / `page-bottom-blur` scrims blur its edges while
+there is more that way (`useScrollEdges`). Its real content is supplied by
 `TaskContentContext` at the project-board boundary; the prototype keeps its mock content.
 On a phone the same boundary hands the board's drawer the open task's dock and pickers
 (`TaskDetails/TaskControls.tsx`); the desktop pane docks them below the task's card, as

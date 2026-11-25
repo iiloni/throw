@@ -30,7 +30,11 @@ import { TaskPaneWidthContext, TaskScrollContext } from '@/components/Board/task
 import type { EditorControls } from '@/components/DescriptionEditor/editorControls';
 import { HistoryToolbar, useHasHistory } from '@/components/HistoryToolbar/HistoryToolbar';
 import { IconButton } from '@/components/IconButton/IconButton';
-import { ScrollToBottom, useScrollToBottom } from '@/components/ScrollToBottom/ScrollToBottom';
+import {
+  ScrollToBottom,
+  useScrollEdges,
+  useScrollToBottom,
+} from '@/components/ScrollToBottom/ScrollToBottom';
 import { TaskRelations, useRelationGroups } from '@/components/TaskRelations/TaskRelations';
 import { TaskTags } from '@/components/TaskTags/TaskTags';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
@@ -81,8 +85,10 @@ export function TaskDetails({
     },
     [shareScroll],
   );
-  // Only a phone jumps to the end: a desktop pane has a scrollbar and room to see where it is.
-  const scrollToBottom = useScrollToBottom(phone ? scrollElement : null);
+  // Only a phone jumps to the end or blurs its edges: a desktop pane has a scrollbar, room to
+  // see where it is, and its toolbars above the card rather than over it.
+  const edges = useScrollEdges(phone ? scrollElement : null);
+  const scrollToBottom = useScrollToBottom(phone ? scrollElement : null, edges);
   const [descriptionControls, setDescriptionControls] = useState<EditorControls | null>(null);
   const hasHistory = useHasHistory(descriptionControls);
   // On a phone both float just above the dock, over the content's end.
@@ -257,22 +263,30 @@ export function TaskDetails({
     >
       <ScrollAreaViewport
         ref={attachScroll}
-        // The dock rests over the content's end, with undo and the jump to the end floating
-        // above it; focus and the caret stay clear of them.
+        // The toolbars float over the content's start, and the dock rests over its end with
+        // undo and the jump to the end floating above it; focus and the caret stay clear of
+        // them.
         className={cn(
           phone &&
-            (floating
-              ? 'scroll-pb-[calc(var(--dock-height)+var(--safe-bottom)+6.25rem)]'
-              : 'scroll-pb-[calc(var(--dock-height)+var(--safe-bottom)+2.5rem)]'),
+            cn(
+              'scroll-pt-[calc(var(--safe-top)+4.5rem)]',
+              floating
+                ? 'scroll-pb-[calc(var(--dock-height)+var(--safe-bottom)+6.25rem)]'
+                : 'scroll-pb-[calc(var(--dock-height)+var(--safe-bottom)+2.5rem)]',
+            ),
         )}
       >
         <div
           className={cn(
             'px-6 sm:px-8',
             phone
-              ? hasHistory
-                ? 'pt-5 pb-[calc(var(--dock-height)+var(--safe-bottom)+6.75rem)]'
-                : 'pt-5 pb-[calc(var(--dock-height)+var(--safe-bottom)+3rem)]'
+              ? cn(
+                  // At rest the title starts below the toolbars, where it sat beneath them.
+                  'pt-[calc(var(--safe-top)+5.75rem)]',
+                  hasHistory
+                    ? 'pb-[calc(var(--dock-height)+var(--safe-bottom)+6.75rem)]'
+                    : 'pb-[calc(var(--dock-height)+var(--safe-bottom)+3rem)]',
+                )
               : 'pt-7 pb-10',
           )}
         >
@@ -331,25 +345,42 @@ export function TaskDetails({
     </ScrollArea>
   );
   return (
-    <div
-      className={cn(
-        'relative flex min-h-0 flex-1 flex-col pb-[var(--keyboard)]',
-        phone && 'pt-[var(--safe-top)]',
+    <div className="relative flex min-h-0 flex-1 flex-col pb-[var(--keyboard)]">
+      {phone && (
+        // Catch's full-screen note: the task scrolls the whole height of the screen, under its
+        // toolbars and its dock, and blurs away beneath them while there is more that way.
+        <>
+          <div
+            aria-hidden
+            data-task-top-blur=""
+            className="page-top-blur pointer-events-none absolute inset-x-0 top-0 z-10 h-[calc(var(--safe-top)+8rem)] transition-opacity duration-200"
+            style={{ opacity: edges.top ? 1 : 0 }}
+          />
+          <div
+            aria-hidden
+            data-task-bottom-blur=""
+            className="page-bottom-blur pointer-events-none absolute inset-x-0 bottom-[var(--keyboard)] z-10 h-[calc(var(--dock-height)+var(--safe-bottom)+3rem)] transition-opacity duration-200"
+            style={{ opacity: edges.bottom ? 1 : 0 }}
+          />
+        </>
       )}
-    >
       {/* Beside the board, the toolbars sit above the task's card and line up with its edges,
-          and its controls are a dock below it, as Catch's split view holds a note. */}
+          and its controls are a dock below it, as Catch's split view holds a note. On a phone
+          they float over the task, and touches between them reach it. */}
       <header
+        data-task-header=""
         className={cn(
           'flex shrink-0 items-start justify-between gap-3',
-          phone ? 'px-3 py-3' : 'pb-3',
+          phone
+            ? 'pointer-events-none absolute inset-x-0 top-0 z-20 px-3 pt-[calc(var(--safe-top)+0.75rem)] pb-3'
+            : 'pb-3',
         )}
       >
         <div className="flex min-w-0 items-start gap-1">
           <div
             role="toolbar"
             aria-label="Task navigation"
-            className="glass flex min-w-0 items-center rounded-full p-1"
+            className="glass pointer-events-auto flex min-w-0 items-center rounded-full p-1"
           >
             <IconButton
               label={
@@ -393,7 +424,7 @@ export function TaskDetails({
         <div
           role="toolbar"
           aria-label="Task trash"
-          className="glass flex shrink-0 rounded-full p-1"
+          className="glass pointer-events-auto flex shrink-0 rounded-full p-1"
         >
           <IconButton
             label={task.deletedAt ? 'Restore task' : 'Move to trash'}
@@ -449,7 +480,7 @@ export function TaskDetails({
       {phone && (
         // The dock's width and place: its glass tops out 1.75rem above the safe area (or the
         // keyboard it rides), and these float 0.75rem above that, at its ends.
-        <div className="pointer-events-none absolute inset-x-0 bottom-[calc(var(--keyboard)+var(--safe-bottom)+var(--dock-height)+2.5rem)] mx-auto max-w-md">
+        <div className="pointer-events-none absolute inset-x-0 bottom-[calc(var(--keyboard)+var(--safe-bottom)+var(--dock-height)+2.5rem)] z-20 mx-auto max-w-md">
           <HistoryToolbar
             controls={descriptionControls}
             floating

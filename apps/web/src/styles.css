@@ -543,6 +543,29 @@
 }
 
 /*
+ * Catch's edge blurs: scrolling content blurs away beneath a full-screen page's floating
+ * controls without a visible bar edge.
+ */
+.page-top-blur,
+.page-bottom-blur {
+  background-color: var(--glass);
+  backdrop-filter: blur(24px) saturate(150%);
+
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--background);
+    backdrop-filter: none;
+  }
+}
+
+.page-top-blur {
+  mask-image: linear-gradient(to bottom, black 0%, black 35%, transparent 100%);
+}
+
+.page-bottom-blur {
+  mask-image: linear-gradient(to top, black 0%, black 35%, transparent 100%);
+}
+
+/*
  * Sonner gives every toast its column's full width (the whole screen on phones). Size each
  * to its text and center it; the extra attribute outranks Sonner's own injected rules.
  */

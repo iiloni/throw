@@ -672,6 +672,117 @@ test('undo and redo float beside Back or above the dock, and a long phone task o
   await expect(history).toBeVisible();
 });
 
+test('a phone task scrolls the full screen under floating toolbars, blurring its edges', async ({
+  page,
+  isMobile,
+  browserName,
+}, testInfo) => {
+  test.skip(!isMobile && browserName === 'chromium', 'the android project covers a phone here');
+  // Firefox has no mobile emulation: its phone is a phone-sized window.
+  if (!isMobile) await page.setViewportSize({ width: 412, height: 839 });
+  const { pane } = await fixture(page);
+  const press = (target: Locator) => (isMobile ? target.tap() : target.click());
+  const editor = pane.locator('.bn-editor[contenteditable="true"]');
+  const viewport = pane.locator('[data-task-card] [data-slot="scroll-area-viewport"]');
+  const navigation = page.getByRole('toolbar', { name: 'Task navigation', exact: true });
+  const trash = page.getByRole('toolbar', { name: 'Task trash', exact: true });
+  const title = pane.getByRole('textbox', { name: 'Task title' });
+  const topBlur = pane.locator('[data-task-top-blur]');
+  const bottomBlur = pane.locator('[data-task-bottom-blur]');
+  const box = async (target: Locator) => (await target.boundingBox())!;
+  const opacity = (target: Locator) =>
+    target.evaluate((element) => Number(getComputedStyle(element).opacity));
+  const scrollTo = (top: number) =>
+    viewport.evaluate((element, top) => element.scrollTo({ top, behavior: 'instant' }), top);
+
+  // The scroll spans the screen from its top edge, and the title rests below the toolbars.
+  await expect.poll(async () => (await box(viewport)).y).toBeLessThanOrEqual(1);
+  const toolbarsEnd = Math.max(
+    (await box(navigation)).y + (await box(navigation)).height,
+    (await box(trash)).y + (await box(trash)).height,
+  );
+  expect((await box(title)).y).toBeGreaterThan(toolbarsEnd);
+  // Nothing scrolled away yet, and the whole short task in view: neither edge blurs.
+  await expect.poll(() => opacity(topBlur)).toBe(0);
+  await expect.poll(() => opacity(bottomBlur)).toBe(0);
+
+  await press(editor);
+  for (let line = 0; line < 40; line++) {
+    await page.keyboard.press('Enter');
+    await page.keyboard.type(`Step ${line + 1}`);
+  }
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await scrollTo(0);
+  await expect.poll(() => opacity(topBlur)).toBe(0);
+  await expect.poll(() => opacity(bottomBlur)).toBe(1);
+
+  // The title scrolls on under the toolbars, where the top blurs it away.
+  await scrollTo(200);
+  await expect.poll(() => opacity(topBlur)).toBe(1);
+  expect((await box(title)).y).toBeLessThan(toolbarsEnd);
+  // Between the toolbars, a touch reaches the task beneath rather than the header.
+  const navigationBox = await box(navigation);
+  const trashBox = await box(trash);
+  const between = await page.evaluate(
+    ({ x, y }) => document.elementFromPoint(x, y)?.closest('[data-task-card]') !== null,
+    {
+      x: (navigationBox.x + navigationBox.width + trashBox.x) / 2,
+      y: navigationBox.y + navigationBox.height / 2,
+    },
+  );
+  expect(between).toBe(true);
+  const path = testInfo.outputPath('floating-header.png');
+  await page.screenshot({ path });
+  await testInfo.attach('floating header', { path, contentType: 'image/png' });
+
+  // At the end, nothing more below: the bottom blur goes.
+  await viewport.evaluate((element) =>
+    element.scrollTo({ top: element.scrollHeight, behavior: 'instant' }),
+  );
+  await expect.poll(() => opacity(bottomBlur)).toBe(0);
+  await expect.poll(() => opacity(topBlur)).toBe(1);
+
+  // A caret moved up under the toolbars scrolls back out from beneath them.
+  const line = editor.getByText('Step 10', { exact: true });
+  await line.evaluate((element, rest) => {
+    const area = element.closest<HTMLElement>('[data-slot="scroll-area-viewport"]')!;
+    area.scrollTop += element.getBoundingClientRect().top - rest;
+  }, toolbarsEnd + 30);
+  await press(line);
+  await page.keyboard.press('End');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  const caretBlock = () =>
+    page.evaluate(() => {
+      const node = getSelection()?.focusNode;
+      const element = node instanceof Element ? node : node?.parentElement;
+      const block = element?.closest('.bn-block-content');
+      return { text: block?.textContent, top: block?.getBoundingClientRect().top ?? -1 };
+    });
+  await expect.poll(async () => (await caretBlock()).text).toBe('Step 8');
+  await expect.poll(async () => (await caretBlock()).top).toBeGreaterThanOrEqual(toolbarsEnd);
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+
+  // At the top, a pull down still closes the task.
+  if (!isMobile) return;
+  await scrollTo(0);
+  await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBe(0);
+  const start = await box(title);
+  const session = await page.context().newCDPSession(page);
+  const x = start.x + start.width / 2;
+  const y = start.y + start.height + 40;
+  await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+  for (let step = 1; step <= 12; step++) {
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x, y: y + (200 * step) / 12 }],
+    });
+  }
+  await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await session.detach();
+  await expect(page.locator('[data-task-screen]')).toHaveCount(0);
+});
+
 test('the desktop dock sits below the card, its panels open above it and follow it for Tab', async ({
   page,
   isMobile,
