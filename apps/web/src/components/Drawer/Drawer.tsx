@@ -182,6 +182,15 @@ export function Drawer({
   const outgoing = (from: DrawerPage | null) =>
     !page && from && (from.dock || collapsing) ? from : null;
   const shown = page ?? leaving ?? outgoing(last.current);
+  // A page opened over one still leaving takes its place outright, as it would from a closed
+  // drawer: there is nothing to cross-fade from, and the closed page would linger as a second
+  // copy of a form until its fade ran.
+  const [opened, setOpened] = useState(0);
+  const [pageOpen, setPageOpen] = useState(paged);
+  if (paged !== pageOpen) {
+    setPageOpen(paged);
+    if (paged) setOpened((count) => count + 1);
+  }
 
   const offsets = () => {
     const at = drawerOffsets(
@@ -622,7 +631,7 @@ export function Drawer({
             // drawer's own spring while the drawer moves to the new page's height, as Catch's
             // note toolbar fades its panels with their height. The leaving page lifts out of
             // the flow so the drawer measures only the new one.
-            <AnimatePresence initial={false} mode="popLayout">
+            <AnimatePresence key={opened} initial={false} mode="popLayout">
               <PageBody
                 key={shown.key}
                 bodyRef={body}

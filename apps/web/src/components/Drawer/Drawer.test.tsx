@@ -269,6 +269,30 @@ describe('Drawer motion', () => {
     expect(mounts).toBe(1);
   });
 
+  it('drops a page still closing when another opens, rather than fading the two across', async () => {
+    motionPreference.reduced = false;
+    const edit: DrawerPage = { key: 'edit', title: 'Edit', content: <p>Edit form</p> };
+    const view = (shown: DrawerPage | null) => (
+      <Drawer
+        label="Backlog"
+        dock={<p>Dock</p>}
+        detent="closed"
+        onDetent={() => {}}
+        page={shown}
+        onClosePage={() => {}}
+      >
+        <p>Backlog list</p>
+      </Drawer>
+    );
+    const { rerender } = render(view(settings));
+    await settled();
+    rerender(view(null));
+    expect(screen.getByText('Options')).toBeInTheDocument();
+    rerender(view(edit));
+    expect(screen.queryByText('Options')).toBeNull();
+    expect(screen.getByText('Edit form').closest('[aria-hidden]')).toBeNull();
+  });
+
   it('slides by frames, so a long frame does not carry it most of the way at once', async () => {
     motionPreference.reduced = false;
     const onSettle = vi.fn();
