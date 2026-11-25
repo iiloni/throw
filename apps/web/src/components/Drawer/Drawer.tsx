@@ -1,7 +1,6 @@
 import { X } from 'lucide-react';
 import {
   AnimatePresence,
-  animate,
   type MotionStyle,
   type MotionValue,
   motion,
@@ -24,7 +23,7 @@ import {
 import { IconButton } from '@/components/IconButton/IconButton';
 import { useBackHandler } from '@/lib/backButton';
 import { haptics } from '@/lib/haptics';
-import { springs } from '@/lib/motion';
+import { animateSteadySpring, springs, stopSteady } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { trackDrawerTravel } from './travel';
 import { useDrawerGesture } from './useDrawerGesture';
@@ -109,6 +108,7 @@ export function Drawer({
   raised = false,
   card = null,
   move = null,
+  onSettle,
 }: {
   label: string;
   /** The header at rest: the dock when collapsed. */
@@ -133,6 +133,8 @@ export function Drawer({
    * height keeps its place, and the move target floats at its foot instead.
    */
   move?: ReactNode;
+  /** The drawer has come to rest after sliding: work that would hold up its frames can run. */
+  onSettle?: () => void;
 }) {
   const surface = useRef<HTMLElement>(null);
   const head = useRef<HTMLDivElement>(null);
@@ -157,8 +159,8 @@ export function Drawer({
   const pageAboveKeyboard = paged && !carded && (!raised || !page.fit);
   const modal = paged || carded;
   // Read by effects that run once per opening, after the props that opened them.
-  const latest = useRef({ page, card });
-  latest.current = { page, card };
+  const latest = useRef({ page, card, onSettle });
+  latest.current = { page, card, onSettle };
   // Retained past the render where `card` clears so an expand can exit without shrinking back.
   const cardExit = useRef<RefObject<boolean> | undefined>(undefined);
   if (card) cardExit.current = card.instantExit;
@@ -170,10 +172,25 @@ export function Drawer({
   const [typingInPage, setTypingInPage] = useState(false);
   const holding = useRef(0);
   const closeTop = () => (paged ? onClosePage() : card?.onClose());
-  // A docked page stays while the drawer settles, so closing it never shows what is beneath.
+  // A closing page stays while the drawer settles: a docked page, so closing it never shows what
+  // is beneath, and any page going down into the dock, where what is beneath would only mount
+  // out of sight, in the frames the drawer needs to start sliding. It stays from the render that
+  // closes it, so what is beneath is never mounted and taken down again before the slide.
   const [leaving, setLeaving] = useState<DrawerPage | null>(null);
   const last = useRef(page);
-  const shown = page ?? leaving;
+  const collapsing = moveInHead || sunk || detent === 'closed';
+  const outgoing = (from: DrawerPage | null) =>
+    !page && from && (from.dock || collapsing) ? from : null;
+  const shown = page ?? leaving ?? outgoing(last.current);
+  // A page opened over one still leaving takes its place outright, as it would from a closed
+  // drawer: there is nothing to cross-fade from, and the closed page would linger as a second
+  // copy of a form until its fade ran.
+  const [opened, setOpened] = useState(0);
+  const [pageOpen, setPageOpen] = useState(paged);
+  if (paged !== pageOpen) {
+    setPageOpen(paged);
+    if (paged) setOpened((count) => count + 1);
+  }
 
   const offsets = () => {
     const at = drawerOffsets(
@@ -186,15 +203,39 @@ export function Drawer({
     closedAt.current = at.closed;
     return at;
   };
-  // Where the drawer is sliding to, for `drawerTravel`.
+  // Where the drawer is sliding to, for `drawerTravel`, and the slide under way.
   const rest = useRef(0);
+  const sliding = useRef<Promise<void> | null>(null);
+  const halt = () => {
+    sliding.current = null;
+    stopSteady(y);
+    y.stop();
+  };
+  const place = (to: number) => {
+    halt();
+    y.jump(to);
+  };
+  // The drawer slides by painted frames rather than by the clock (`animateSteadySpring`).
+  // Opening or closing a page mounts its content in the slide's first frame, and on a phone
+  // that frame ran long enough for a timed spring to land most of the way in one jump.
+  // Resolves when the slide completes; never, if another one takes over first.
   // With reduced motion the drawer is placed at once, in the frame that changed it. A
   // zero-length animation would still land a frame later, showing the old height first.
   const slide = (to: number, spring = springs.smooth) => {
     rest.current = to;
-    if (!reduced) return animate(y, to, spring);
-    y.stop();
-    y.jump(to);
+    if (reduced) {
+      place(to);
+      latest.current.onSettle?.();
+      return;
+    }
+    const run = animateSteadySpring(y, to, spring);
+    sliding.current = run;
+    void run.then(() => {
+      if (sliding.current !== run) return;
+      sliding.current = null;
+      latest.current.onSettle?.();
+    });
+    return run;
   };
   const restingAt = (at: ReturnType<typeof offsets>) =>
     moveInHead ? at.closed : sunk ? at.sunk : paged ? at.page : at[detent];
@@ -209,17 +250,27 @@ export function Drawer({
     }
   }
 
+  // Measured once per pull: reading the drawer's heights on every touch move made each move
+  // wait on a style and layout pass. Nothing a pull moves changes them.
+  const pulled = useRef<ReturnType<typeof offsets> | null>(null);
+  const pullOffsets = () => {
+    pulled.current ??= offsets();
+    return pulled.current;
+  };
   useDrawerGesture(surface, {
     disabled: sunk || moving || gesturesDisabled,
     onMove: (dy) => {
-      y.stop();
-      const at = offsets();
+      halt();
+      // Pulled before it settled, the drawer shows what is beneath again.
+      if (leaving) setLeaving(null);
+      const at = pullOffsets();
       // A half page rises to full; any other page no higher than where it rests.
       const top = paged && !halfPage ? at.page : 0;
       y.set(Math.min(at.closed, Math.max(top, y.get() + dy)));
     },
     onEnd: (offset, velocity) => {
-      const at = offsets();
+      const at = pullOffsets();
+      pulled.current = null;
       if (page && halfPage) {
         // Settles at the nearer of its two heights, as the backlog does, and closes when let go
         // past half on its way down or flung toward the dock.
@@ -250,13 +301,16 @@ export function Drawer({
       );
       settle(nearest);
     },
-    onCancel: () => slide(restingAt(offsets())),
+    onCancel: () => {
+      pulled.current = null;
+      slide(restingAt(offsets()));
+    },
   });
 
   useEffect(() => {
     const element = surface.current;
     if (!element) return;
-    return trackDrawerTravel(element, () => (y.isAnimating() ? rest.current - y.get() : 0));
+    return trackDrawerTravel(element, () => (sliding.current ? rest.current - y.get() : 0));
   }, [y]);
 
   useBackHandler(detent !== 'closed' && !paged, () => onDetent('closed'));
@@ -272,7 +326,7 @@ export function Drawer({
   useLayoutEffect(() => {
     const at = offsets();
     setHidden((detent === 'half' && !paged) || pageHalf ? at.half : 0);
-    const closing = !page && last.current?.dock ? last.current : null;
+    const closing = outgoing(last.current);
     const opening = paged && !last.current;
     last.current = page;
     setLeaving(closing);
@@ -281,13 +335,13 @@ export function Drawer({
       // A picker opened over the card is already as high as the keyboard it replaces, hidden
       // behind it, so the dock only follows the keyboard down to where the picker ends.
       if (opening && carded && !typingInPage)
-        y.jump(Math.min(y.get(), at.closed - Math.min(keyboardHeight(), at.closed - at.page)));
+        place(Math.min(y.get(), at.closed - Math.min(keyboardHeight(), at.closed - at.page)));
       const settle = () => (run === holding.current ? slide(restingAt(at)) : undefined);
       // Closing a picker over the card sends focus back to its field, and the keyboard rises a
       // moment later. The picker holds its room until then, so the card does not dip between.
       const field = latest.current.card?.focus?.current;
       const settling =
-        closing && field && !typingInPage && !reduced
+        closing?.dock && field && !typingInPage && !reduced
           ? keyboardReturn(closedAt.current - y.get(), () => run !== holding.current).then(settle)
           : Promise.resolve(settle());
       void settling.then(() => {
@@ -295,7 +349,7 @@ export function Drawer({
         if (closing) setLeaving((now) => (now === closing ? null : now));
         if (!paged) setTypingInPage(false);
       });
-    } else y.jump(restingAt(at));
+    } else place(restingAt(at));
     placed.current = true;
   }, [sunk, detent, paged, page?.key, pageHalf, y, reduced, moveInHead]);
 
@@ -325,8 +379,8 @@ export function Drawer({
     const observer = new ResizeObserver(() => {
       if (element.offsetHeight === measured) return;
       measured = element.offsetHeight;
-      y.stop();
-      y.jump(offsets().page);
+      pulled.current = null;
+      place(offsets().page);
     });
     observer.observe(element);
     return () => observer.disconnect();
@@ -350,8 +404,7 @@ export function Drawer({
       const next = viewOf();
       if (next !== null && next === view) {
         const to = offsets().closed;
-        y.stop();
-        y.jump(to);
+        place(to);
         // Drawn now, in the frame the view changed height: the value alone is drawn a frame
         // later, and the drawer would trail the view's own spring by that frame.
         if (surface.current) surface.current.style.transform = `translateY(${to}px)`;
@@ -364,8 +417,9 @@ export function Drawer({
 
   useLayoutEffect(() => {
     const onResize = () => {
+      pulled.current = null;
       const at = offsets();
-      y.jump(restingAt(at));
+      place(restingAt(at));
       setHidden((detent === 'half' && !paged) || pageHalf ? at.half : 0);
     };
     window.addEventListener('resize', onResize);
@@ -471,8 +525,11 @@ export function Drawer({
         data-drop-expand={moveInHead ? '' : undefined}
         data-origin={page ? page.origin : origin}
         style={{ y, '--drawer-reveal': reveal } as MotionStyle}
+        // A layer of its own (`will-change`), as Catch's dock is over a note: sliding moves the
+        // painted drawer instead of painting it again, with all its cards, on every frame. A
+        // transform, unlike opacity or a filter, leaves the glass blurring the board behind it.
         className={cn(
-          'fixed inset-x-0 top-[calc(var(--safe-top)+0.5rem)] mx-auto flex w-full max-w-md flex-col rounded-t-[1.75rem] border border-transparent outline-none',
+          'fixed inset-x-0 top-[calc(var(--safe-top)+0.5rem)] mx-auto flex w-full max-w-md flex-col rounded-t-[1.75rem] border border-transparent outline-none will-change-transform',
           raised ? 'z-[45]' : 'z-30',
           // Over a card, the drawer keeps its full height and the keyboard rides under the dock
           // until a page reaches past it, so a picker settles low, by the fingers.
@@ -574,7 +631,7 @@ export function Drawer({
             // drawer's own spring while the drawer moves to the new page's height, as Catch's
             // note toolbar fades its panels with their height. The leaving page lifts out of
             // the flow so the drawer measures only the new one.
-            <AnimatePresence initial={false} mode="popLayout">
+            <AnimatePresence key={opened} initial={false} mode="popLayout">
               <PageBody
                 key={shown.key}
                 bodyRef={body}
@@ -643,7 +700,9 @@ function PageBody({
         if (typeof ref === 'function') ref(element);
         else if (ref) ref.current = element;
       }}
+      // A leaving page stays drawn while the drawer settles, but is gone to everything else.
       inert={!live || !isPresent}
+      aria-hidden={!live || !isPresent || undefined}
       onFocus={onFocus}
       className={className}
       initial={{ opacity: 0 }}

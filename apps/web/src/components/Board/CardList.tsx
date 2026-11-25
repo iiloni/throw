@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, memo, type ReactNode } from 'react';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { entryDelay, useEntryMotion } from '@/lib/entryMotion';
 import { cn } from '@/lib/utils';
@@ -47,8 +47,12 @@ type HeaderMode = 'hidden' | 'label' | 'open' | 'rail';
  * either folds every zone but one into rails (`compact`) or keeps its layout and dims the
  * other zones (`full`); the drag engine reads the result from the DOM. A card just lifted
  * changes nothing but its own place, which stays open as a gap, until it moves.
+ *
+ * Memoized: it reads the board itself, so a phone board's own changes (a drawer page opening,
+ * the backlog's height in the URL) need not render every card again as the drawer starts to
+ * move.
  */
-export function CardList({
+export const CardList = memo(function CardList({
   listId,
   header,
   showStatus,
@@ -283,7 +287,7 @@ export function CardList({
       )}
     </section>
   );
-}
+});
 
 /** Where the held card would land: the others part to make room for it. */
 function Gap({ active, height }: { active: boolean; height: number }) {
