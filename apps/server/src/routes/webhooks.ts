@@ -186,7 +186,7 @@ export const webhookRoutes = new Hono<AppEnv>()
         .where(and(eq(webhooks.id, id), eq(webhooks.userId, userId)))
         .returning();
       if (row && body.quietWindowSeconds !== undefined)
-        await shortenWaiting(tx, row.id, body.quietWindowSeconds);
+        await shortenWaiting(tx, row, body.quietWindowSeconds);
       return row;
     });
     if (!updated) return c.json({ error: 'Webhook not found' }, 404);

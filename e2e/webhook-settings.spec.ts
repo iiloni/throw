@@ -49,7 +49,9 @@ test('create, test, turn off and delete a webhook in Settings', async ({ page, i
     const quiet = page.getByRole('dialog', { name: 'Edit webhook' });
     await expect(quiet.getByLabel('Quiet window')).toHaveValue('0');
     await quiet.getByLabel('Quiet window').selectOption({ label: 'Wait 1 minute' });
-    await expect(quiet.getByText(/Comments and purges are sent at once/)).toBeVisible();
+    await expect(
+      quiet.getByText(/Waits until nothing this webhook follows has changed for this long/),
+    ).toBeVisible();
     await quiet.getByRole('button', { name: 'Save' }).click();
     await expect(quiet).toBeHidden();
     await expect(

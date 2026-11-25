@@ -58,6 +58,49 @@ async function createWebhook(
 
 const paragraph = (text: string) => [{ type: 'paragraph', content: [{ type: 'text', text }] }];
 
+/** Task and comment writes through the REST API, checked as they go. */
+function taskActions(
+  request: APIRequestContext,
+  account: Account,
+  projectId: string,
+  statusId: string,
+) {
+  return {
+    async createTask(title: string) {
+      const id = randomUUID();
+      const response = await request.post('/api/tasks', {
+        headers: account.headers,
+        data: {
+          id,
+          projectId,
+          title,
+          description: null,
+          descriptionVersion: null,
+          position: 'a0',
+          parentId: null,
+          statusId,
+        },
+      });
+      expect(response.status(), await response.text()).toBe(201);
+      return id;
+    },
+    async change(id: string, changes: Record<string, unknown>) {
+      const response = await request.patch(`/api/tasks/${id}`, {
+        headers: account.headers,
+        data: { changeId: randomUUID(), changes },
+      });
+      expect(response.status(), await response.text()).toBe(200);
+    },
+    async comment(taskId: string, text: string) {
+      const response = await request.post('/api/comments', {
+        headers: account.headers,
+        data: { id: randomUUID(), taskId, body: paragraph(text) },
+      });
+      expect(response.status(), await response.text()).toBe(201);
+    },
+  };
+}
+
 test('webhooks are private to their owner, reveal the secret once and refuse unsafe URLs @api', async ({
   request,
 }) => {
@@ -430,31 +473,7 @@ test('a quiet window folds a burst into one notice and drops what was undone @ap
   const done = project.statuses.find((status) => status.category === 'done')!;
   const receiver = await startReceiver();
   const window = 2;
-  const createTask = async (title: string) => {
-    const id = randomUUID();
-    const response = await request.post('/api/tasks', {
-      headers: account.headers,
-      data: {
-        id,
-        projectId: project.id,
-        title,
-        description: null,
-        descriptionVersion: null,
-        position: 'a0',
-        parentId: null,
-        statusId: backlog.id,
-      },
-    });
-    expect(response.status(), await response.text()).toBe(201);
-    return id;
-  };
-  const change = async (id: string, changes: Record<string, unknown>) => {
-    const response = await request.patch(`/api/tasks/${id}`, {
-      headers: account.headers,
-      data: { changeId: randomUUID(), changes },
-    });
-    expect(response.status(), await response.text()).toBe(200);
-  };
+  const { createTask, change, comment } = taskActions(request, account, project.id, backlog.id);
   /**
    * Waits for a task created now, with the same window, to be announced. The worker claims
    * deliveries in the order they fall due and sends each batch before claiming the next, so
@@ -537,45 +556,41 @@ test('a quiet window folds a burst into one notice and drops what was undone @ap
     await sentinel();
     expect(about(named)).toHaveLength(2);
 
-    // A comment is sent at once, ahead of the edit still waiting out its window.
+    // A comment waits with the edit beside it and is still its own notice.
     const before = receiver.received.length;
     await change(named, { title: { before: 'Wake the agent gently', after: 'Wake it' } });
-    expect(
-      (
-        await request.post('/api/comments', {
-          headers: account.headers,
-          data: { id: randomUUID(), taskId: named, body: paragraph('Ready for you') },
-        })
-      ).status(),
-    ).toBe(201);
-    const first = await receiver.next(() => true, before);
-    expect(first.payload.event).toBe('comment.created');
+    const commented = Date.now();
+    await comment(named, 'Ready for you');
+    const note = await receiver.next(({ payload }) => payload.event === 'comment.created', before);
+    expect(Date.now() - commented).toBeGreaterThanOrEqual(window * 1000);
+    expect(note.payload).toMatchObject({ taskId: named, entityType: 'comment' });
     expect(
       (await receiver.next(({ payload }) => payload.event === 'task.updated', before)).payload
         .changedFields,
     ).toEqual(['title']);
 
-    // Shortening the window applies to a delivery already waiting.
+    // Shortening the window applies to everything already waiting, comments included. A
+    // webhook that sends at once shows when the worker has had its chance.
     const patched = await request.patch(`/api/webhooks/${webhook.id}`, {
       headers: account.headers,
       data: { quietWindowSeconds: 600 },
     });
     expect(webhookResponseSchema.parse(await patched.json()).webhook.quietWindowSeconds).toBe(600);
+    await createWebhook(request, account, {
+      workspaceId,
+      projectId: project.id,
+      name: 'Probe',
+      url: receiver.url('/probe'),
+    });
     const waiting = receiver.received.length;
+    const patient = ({ url }: { url: string }) => url === '/hook';
     await change(named, { title: { before: 'Wake it', after: 'Wake it now' } });
-    // A comment is sent at once: by the time it arrives, an edit sent at once would have too.
-    expect(
-      (
-        await request.post('/api/comments', {
-          headers: account.headers,
-          data: { id: randomUUID(), taskId: named, body: paragraph('Still there?') },
-        })
-      ).status(),
-    ).toBe(201);
-    await receiver.next(({ payload }) => payload.event === 'comment.created', waiting);
-    expect(receiver.received.slice(waiting).map(({ payload }) => payload.event)).toEqual([
-      'comment.created',
-    ]);
+    await comment(named, 'Still there?');
+    await receiver.next(
+      ({ url, payload }) => url === '/probe' && payload.event === 'comment.created',
+      waiting,
+    );
+    expect(receiver.received.slice(waiting).filter(patient)).toEqual([]);
     expect(
       (
         await request.patch(`/api/webhooks/${webhook.id}`, {
@@ -584,8 +599,100 @@ test('a quiet window folds a burst into one notice and drops what was undone @ap
         })
       ).status(),
     ).toBe(200);
-    const flushed = await receiver.next(({ payload }) => payload.event === 'task.updated', waiting);
+    const flushed = await receiver.next(
+      (hook) => patient(hook) && hook.payload.event === 'task.updated',
+      waiting,
+    );
     expect(flushed.payload.changedFields).toEqual(['title']);
+    await receiver.next(
+      (hook) => patient(hook) && hook.payload.event === 'comment.created',
+      waiting,
+    );
+  } finally {
+    await receiver.close();
+  }
+});
+
+test('a quiet window waits until nothing the webhook follows has changed @api', async ({
+  request,
+}) => {
+  const account = await createAccount(request);
+  const workspaceId = (await inventory(request, account)).workspaces[0]!.id;
+  const project = await makeProject(request, account, workspaceId);
+  const backlog = project.statuses.find((status) => status.category === 'backlog')!;
+  const done = project.statuses.find((status) => status.category === 'done')!;
+  const receiver = await startReceiver();
+  const window = 3;
+  const { createTask, change, comment } = taskActions(request, account, project.id, backlog.id);
+  const pause = () => new Promise((resolve) => setTimeout(resolve, (window * 1000) / 2));
+  const about = (taskId: string) =>
+    receiver.received.filter((hook) => hook.payload.taskId === taskId);
+  try {
+    // Made before the webhook, so their creation is not announced.
+    const first = await createTask('First');
+    const second = await createTask('Second');
+    const third = await createTask('Third');
+    await createWebhook(request, account, {
+      workspaceId,
+      projectId: project.id,
+      name: 'Patient agent',
+      url: receiver.url(),
+      quietWindowSeconds: window,
+    });
+
+    // Each change comes before the last one's window is out, so all of them wait for the last:
+    // a change to another task, a blank `+` that sends nothing itself, and a comment.
+    await change(first, { title: { before: 'First', after: 'First, renamed' } });
+    await pause();
+    await change(second, { priority: { before: 3, after: 1 } });
+    await pause();
+    await createTask('New task');
+    await pause();
+    const last = Date.now();
+    await comment(third, 'Looking at this next');
+    await receiver.next(() => true);
+    expect(Date.now() - last).toBeGreaterThanOrEqual(window * 1000);
+    await receiver.next(({ payload }) => payload.event === 'comment.created');
+    await receiver.next(({ payload }) => payload.taskId === first);
+    await receiver.next(({ payload }) => payload.taskId === second);
+    // Each task is still announced on its own, with its own net change.
+    expect(about(first).map(({ payload }) => payload.changedFields)).toEqual([['title']]);
+    expect(about(second).map(({ payload }) => payload.changedFields)).toEqual([['priority']]);
+    expect(about(third).map(({ payload }) => payload.event)).toEqual(['comment.created']);
+    expect(receiver.received).toHaveLength(3);
+
+    // An undone change to one task sends nothing while another's change beside it stands.
+    let before = receiver.received.length;
+    await change(first, { statusId: { before: backlog.id, after: done.id } });
+    await change(second, { title: { before: 'Second', after: 'Second, renamed' } });
+    await change(first, { statusId: { before: done.id, after: backlog.id } });
+    const updated = await receiver.next(({ payload }) => payload.taskId === second, before);
+    expect(updated.payload).toMatchObject({ kind: 'updated', changedFields: ['title'] });
+    expect(updated.payload).not.toHaveProperty('statusTo');
+
+    // A purge waits for the board to go quiet too, and pushes back what is waiting.
+    before = receiver.received.length;
+    await change(second, { priority: { before: 1, after: 2 } });
+    await pause();
+    await change(third, { trashed: { before: false, after: true } });
+    const purged = Date.now();
+    expect(
+      (await request.delete(`/api/tasks/${third}`, { headers: account.headers })).status(),
+    ).toBe(200);
+    const gone = await receiver.next(({ payload }) => payload.event === 'task.deleted', before);
+    expect(Date.now() - purged).toBeGreaterThanOrEqual(window * 1000);
+    expect(gone.payload).toMatchObject({ taskId: third, kind: 'deleted' });
+    await receiver.next(({ payload }) => payload.taskId === second, before);
+    // Sent together, after the last change: the undone status move never was.
+    const sentinel = await createTask('Sentinel');
+    await receiver.next(({ payload }) => payload.taskId === sentinel, before);
+    expect(about(first)).toHaveLength(1);
+    expect(
+      receiver.received
+        .slice(before)
+        .map(({ payload }) => payload.event)
+        .sort(),
+    ).toEqual(['task.created', 'task.deleted', 'task.updated']);
   } finally {
     await receiver.close();
   }

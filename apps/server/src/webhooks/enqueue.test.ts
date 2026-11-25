@@ -1,6 +1,9 @@
 import { webhookPayloadSchema } from '@throw/shared';
-import { describe, expect, it } from 'vitest';
-import { buildPayload, followsChange } from './enqueue';
+import type { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
+import { describe, expect, it, vi } from 'vitest';
+import type { Transaction } from '../db/client';
+import { buildPayload, followsChange, lockQuietWindows, queuePlan } from './enqueue';
 
 const user = { userId: 'user-1' };
 const token = {
@@ -118,4 +121,50 @@ describe('buildPayload', () => {
     expect(payload).not.toHaveProperty('statusTo');
     expect(payload.actor).toEqual({ kind: 'user', viaTokenName: null });
   });
+});
+
+describe('queuePlan', () => {
+  const atOnce = { id: 'at-once', quietWindowSeconds: 0 };
+  const patient = { id: 'patient', quietWindowSeconds: 30 };
+  const slower = { id: 'slower', quietWindowSeconds: 600 };
+
+  it('folds task and structure changes for quiet webhooks and sends the rest at once', () => {
+    const plan = queuePlan([atOnce, patient, slower], 'task:1');
+    expect(plan.quiet).toEqual([patient, slower]);
+    expect(plan.folding).toEqual([patient, slower]);
+    expect(plan.direct).toEqual([{ target: atOnce, waitSeconds: null }]);
+  });
+
+  it('queues a comment on its own to wait out each quiet window, unfolded', () => {
+    const plan = queuePlan([atOnce, patient, slower], null);
+    // Quiet webhooks still push back everything they have waiting.
+    expect(plan.quiet).toEqual([patient, slower]);
+    expect(plan.folding).toEqual([]);
+    expect(plan.direct).toEqual([
+      { target: atOnce, waitSeconds: null },
+      { target: patient, waitSeconds: 30 },
+      { target: slower, waitSeconds: 600 },
+    ]);
+  });
+
+  it('sends everything at once without a window', () => {
+    for (const key of ['task:1', 'structure:1', null]) {
+      const plan = queuePlan([atOnce], key);
+      expect(plan.quiet).toEqual([]);
+      expect(plan.folding).toEqual([]);
+      expect(plan.direct).toEqual([{ target: atOnce, waitSeconds: null }]);
+    }
+  });
+});
+
+it('locks quiet windows once per workspace, whatever the spelling of its ID', async () => {
+  const execute = vi.fn(async (_query: SQL) => []);
+  const transaction = { execute } as unknown as Transaction;
+  await lockQuietWindows(transaction, token.workspaceId);
+  await lockQuietWindows(transaction, token.workspaceId.toUpperCase());
+  const dialect = new PgDialect();
+  const queries = execute.mock.calls.map(([query]) => dialect.sqlToQuery(query));
+  expect(queries[0]?.sql).toContain('pg_advisory_xact_lock');
+  expect(queries[0]?.params).toEqual([`webhooks/${token.workspaceId}`]);
+  expect(queries[1]).toEqual(queries[0]);
 });

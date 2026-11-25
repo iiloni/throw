@@ -381,7 +381,7 @@ function QuietWindow({
       </select>
       <p id={help} className="text-muted-foreground text-sm">
         {value
-          ? 'Sends one notice once a task or project has been left alone this long. Task changes that are undone send nothing, and a new task still titled “New task” waits until it is named or changed. Comments and purges are sent at once.'
+          ? 'Waits until nothing this webhook follows has changed for this long, so editing any task, comment or project starts the wait again. Then it sends one notice per task or project and one per comment. Task changes that are undone send nothing, and a new task still titled “New task” waits until it is named or changed.'
           : 'Sends a notice for every change as it happens.'}
       </p>
     </div>

@@ -1,6 +1,6 @@
 # 0015 — Outbound webhooks
 
-Status: accepted (2026-11-22); quiet windows added 2026-11-23
+Status: accepted (2026-11-22); quiet windows added 2026-11-23, made webhook-wide 2026-11-25
 
 ## Context
 
@@ -77,13 +77,22 @@ writing the task. Each webhook therefore has a **quiet window**, `quietWindowSec
 (the default: every change is sent as it happens, as before) to 600. Settings offers 30 s,
 1, 2, 5 and 10 minutes.
 
-With a window, task and structure changes wait for a pause:
+With a window, every change the webhook follows waits for a pause in all of them:
 
-- **Folding.** A change folds into the webhook's waiting (unsent) delivery for the same
-  task (`task:<id>`) or project (`structure:<projectId>`), and the window starts again from
-  that change: a trailing debounce, so a person who keeps editing keeps it waiting. The
-  delivery keeps its ID. `occurredAt` is the latest change's and the actor is the person if
-  anyone but a token took part, so an agent that skips its own writes still looks.
+- **The window is the webhook's.** Any change the webhook follows (to any task, comment or
+  project's structure) starts the window again for every delivery it has waiting: all of
+  them are due the window after the latest change, a trailing debounce over the whole
+  webhook. A person who edits one card, comments on another and triages a third keeps
+  everything waiting until they stop, and is then announced as one burst. A change that
+  sends nothing for now, such as making a blank `New task`, still counts as activity and
+  pushes the others back. Changes the webhook does not follow (another project's, its own
+  token writes when it ignores them, a device's drag reorders) do not. Held deliveries stay
+  held and retries keep their schedule.
+- **Folding.** What is announced is still kept per task and per project. A change folds into
+  the webhook's waiting (unsent) delivery for the same task (`task:<id>`) or project
+  (`structure:<projectId>`). The delivery keeps its ID. `occurredAt` is the latest change's
+  and the actor is the person if anyone but a token took part, so an agent that skips its
+  own writes still looks.
 - **Net changes.** Task changes count by their effect. Each task write passes its activity
   items, and the waiting delivery stores (in `fold`, never sent) each field, secondary tag
   and relation as it was before the window's first change to it and after the latest.
@@ -99,9 +108,14 @@ With a window, task and structure changes wait for a pause:
   created and purged within the window was never announced and its delivery is removed.
   Held deliveries last a day (below), so a task first named later than that is announced as
   `task.updated`; `list_changes` still has its creation.
-- **At once.** Comments are written on purpose and are never folded: each comment event is
-  sent at once and leaves the task's waiting delivery as it is. A purge (`task.deleted`) is
-  final, so it folds in (replacing whatever was waiting) and is sent at once.
+- **Comments** are written on purpose and are never folded: each comment event is its own
+  delivery and leaves the task's waiting delivery as it is. It still waits out the window
+  with everything else, so a comment and the edits around it reach the receiver together.
+- **Purges.** A purge (`task.deleted`) of a task announced before folds in, replacing
+  whatever was waiting, and waits like any other change: a receiver woken mid-session would
+  only find the person still working. A task created and purged within the window is
+  dropped, as above.
+- **At once.** Only Settings' `webhook.test` is sent at once; it is not queued.
 - **Structure** notices are not cancelled: they list every changed field, named after the
   first change, as within one transaction.
 
@@ -114,13 +128,19 @@ setting 0 sends waiting deliveries at once. A longer window leaves them on their
 and held deliveries stay held. Turning a window off does not unfold anything: later changes
 are sent one by one.
 
-Folding is safe under concurrent writes. A partial unique index allows one waiting (`pending`
-or `held`, never attempted) delivery per webhook and key. A write locks the waiting row
-(`FOR UPDATE`) and folds into it, or inserts with `ON CONFLICT DO NOTHING` and folds on its
-next round when a concurrent write inserted first. The worker claims with `SKIP LOCKED`, so it
-skips a row being folded; a claimed row has an attempt, leaves the index and is never changed,
-so a change after the claim starts a new delivery. After three contended rounds the change is
-queued on its own rather than lost, even one that would have been held.
+Folding is safe under concurrent writes. A write that queues for a quiet window first takes
+a transaction-level advisory lock for the workspace (`webhooks/<workspaceId>`), as does
+changing a webhook's window, so writes that push back the same webhook's deliveries never
+lock its rows in opposite orders. Only writes the workspace's quiet webhooks follow take it.
+A partial unique index allows one waiting (`pending` or `held`, never attempted) delivery per
+webhook and key. A write pushes back the webhook's pending rows, locks the waiting row for
+its key (`FOR UPDATE`) and folds into it, or inserts with `ON CONFLICT DO NOTHING` and folds
+on its next round when a concurrent write inserted first. The worker never takes the lock: it
+claims with `SKIP LOCKED`, so it skips a row being pushed back or folded, and a write that
+meets a row mid-claim waits for the claim and then leaves it alone, as it no longer counts as
+waiting. A claimed row has an attempt, leaves the index and is never changed, so a change
+after the claim starts a new delivery. After three contended rounds the change is queued on
+its own rather than lost, even one that would have been held.
 
 Every queueing or folding commit notifies the worker, which then sleeps until the earliest
 due delivery (at most the 30-second poll), so windows shorter than the poll and deliveries
@@ -192,10 +212,12 @@ server would refuse it. A webhook from an older server reads as 0.
 
 - Receivers must verify signatures and deduplicate by delivery ID. Ordering between
   deliveries is not guaranteed; the change feed is ordered.
-- Every announced write runs one indexed query for the workspace's webhooks, and one more
-  per write for webhooks with a quiet window.
-- A quiet window has no upper bound on waiting while changes keep coming: a task edited
-  continuously is announced once its editing pauses. The change feed has every change
-  meanwhile.
+- Every announced write runs one indexed query for the workspace's webhooks. For webhooks
+  with a quiet window it also takes the workspace's webhook lock, updates every delivery
+  they have waiting and folds into one, so a workspace's quiet-window writes are queued one
+  at a time.
+- A quiet window has no upper bound on waiting while changes keep coming: a board that is
+  edited continuously, on any task, is announced once all editing pauses. The change feed
+  has every change meanwhile.
 - The worker runs in the single supported server process. Multiple instances would share
   the queue safely through `SKIP LOCKED`, but each would need its own `LISTEN`.
