@@ -1,7 +1,8 @@
 # 0009: The drawer
 
 Status: accepted (2026-10-15), amended 2026-10-17 for quick capture's card, 2026-10-19
-for the move drawer and 2026-11-23 for the project switcher and half-height pages
+for the move drawer, 2026-11-23 for the project switcher and half-height pages and
+2026-11-24 for pages closing into the dock
 
 ## Context
 
@@ -51,7 +52,10 @@ the close button, Back, Escape or a pull down returns the drawer to what it show
 at the height it was. Board settings opened over the half-open backlog comes back to the
 half-open backlog. An open task's panels keep its dock as their header: the dock's buttons
 act as tabs, switching the panel beneath them, and tapping the open one closes it. While a
-panel closes, it stays in place until the drawer has settled.
+panel closes, it stays in place until the drawer has settled. So does any page closing down
+into the dock (2026-11-24): what the drawer showed before is mounted once it is at rest and out
+of sight, not in the frames it needs to start sliding. The drawer slides by painted frames, so
+a frame held up by that work delays the slide rather than skipping most of it.
 
 **Holding a card turns the drawer into the move drawer.** Lifting a card sinks the
 drawer's content out of the way, and its header becomes the move target. Bringing the card

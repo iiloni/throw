@@ -1,13 +1,21 @@
-import { animate, type MotionValue, motion, motionValue, useReducedMotion } from 'motion/react';
+import {
+  animate,
+  type MotionValue,
+  motion,
+  motionValue,
+  useMotionValue,
+  useReducedMotion,
+} from 'motion/react';
 import { memo, useCallback, useLayoutEffect, useReducer, useRef } from 'react';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { entryDelayForTop, useEntryMotion } from '@/lib/entryMotion';
-import { bandMasonry, GAP, gridFor, type Point } from '@/lib/masonry';
+import { bandMasonry, columnAt, GAP, gridFor, type Point } from '@/lib/masonry';
 import { afterPaint, springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { drag, makingWay } from './drag';
 import { PriorityIcon } from './glyphs';
 import { groupByPriority, type Priority, priorityName, type Task } from './model';
+import { settleSubtaskLists } from './SubtaskUnderlay';
 import { board, current, listTasks, sortedByField, useBoardSettings, visibleIds } from './state';
 import { TaskCard } from './TaskCard';
 import { useTaskCardHidden } from './taskTransition';
@@ -134,6 +142,20 @@ export const ZoneGallery = memo(function ZoneGallery({
   });
   // Before a single column's grid has a width, nothing is placed.
   const gapHeight = held ? held.height : 0;
+  // While the same cards stand in the same order at the same width, each keeps its column:
+  // when one grows or shrinks in place (its subtasks unfolding), the cards below it move along
+  // its column rather than crossing to others over it. Any other change lays them out afresh.
+  const arrangement = JSON.stringify([
+    grid.columns,
+    columnWidth,
+    bands.map((band) => [
+      band.heading,
+      band.items.map((item) => (item.kind === 'gap' ? null : item.task.id)),
+    ]),
+  ]);
+  const columnsKept = useRef<{ arrangement: string; columns: Map<string, number> } | null>(null);
+  const keep =
+    columnsKept.current?.arrangement === arrangement ? columnsKept.current.columns : null;
   const layout =
     width > 0
       ? bandMasonry(
@@ -142,6 +164,11 @@ export const ZoneGallery = memo(function ZoneGallery({
               item.kind === 'gap' ? gapHeight : heightOf(item.task.id),
             ),
             heading: band.heading,
+            keep: keep
+              ? band.items.map((item) =>
+                  item.kind === 'card' ? keep.get(item.task.id) : undefined,
+                )
+              : undefined,
           })),
           grid,
         )
@@ -161,6 +188,17 @@ export const ZoneGallery = memo(function ZoneGallery({
     }
   }
   const pending = tasks.some((task) => !away(task.id) && !isMeasured(task.id, columnWidth));
+  // Columns are kept from a layout of measured cards only: one laid out from estimates is
+  // laid out afresh once they are measured.
+  columnsKept.current =
+    layout && !pending
+      ? {
+          arrangement,
+          columns: new Map([...slotOf].map(([id, slot]) => [id, columnAt(slot.x, grid)])),
+        }
+      : null;
+  // The heights this layout was made with: measuring may have moved on by the time it is placed.
+  const heights = new Map(tasks.map((task) => [task.id, heightOf(task.id)]));
 
   const masonryData: MasonryData | null = layout && {
     columns: grid.columns,
@@ -187,12 +225,27 @@ export const ZoneGallery = memo(function ZoneGallery({
   const elements = useRef(new Map<string, HTMLElement>());
   const resizes = useRef<ResizeObserver | null>(null);
   const places = useRef(new Map<string, Place>());
+  // Each band heading's position and the top it is at or moving to, placed with the cards.
+  const headings = useRef(new Map<Priority, { y: MotionValue<number>; target?: number }>());
   const [, remeasured] = useReducer((count: number) => count + 1, 0);
   const measuredWidth = useRef(columnWidth);
   const resized = useRef({ width, at: 0 });
   // Cards waiting to spring to a new width, and the call that will start them.
   const settling = useRef({ places: new Set<Place>(), cancel: () => {} });
+  // The heights the cards were last placed with, which tell a card growing or shrinking in
+  // place (its subtasks unfolding, say) from the grid itself changing.
+  const placedHeights = useRef(new Map<string, number>());
+  const gridHeight = useMotionValue(layout?.height ?? 0);
   useLayoutEffect(() => () => settling.current.cancel(), []);
+
+  function headingOf(priority: Priority) {
+    let heading = headings.current.get(priority);
+    if (!heading) {
+      heading = { y: motionValue(0) };
+      headings.current.set(priority, heading);
+    }
+    return heading;
+  }
 
   function placeOf(id: string) {
     let place = places.current.get(id);
@@ -207,7 +260,8 @@ export const ZoneGallery = memo(function ZoneGallery({
     const width = measuredWidth.current;
     if (width <= 0) return;
     // A card still growing or shrinking to this width is measured as it will be, once: its
-    // height on the way there says nothing, and it changes every frame.
+    // height on the way there says nothing, and it changes every frame. So is a card whose
+    // subtasks are unfolding or folding away: it is measured at the height they spring to.
     const settled: [string, HTMLElement][] = [];
     const growing: [string, HTMLElement, string][] = [];
     for (const [id, element] of elements.current) {
@@ -218,6 +272,7 @@ export const ZoneGallery = memo(function ZoneGallery({
     }
     // Written together, then read together, so the browser lays the cards out once.
     for (const [, element] of growing) element.style.width = `${width}px`;
+    const unsettle = container.current ? settleSubtaskLists(container.current) : () => {};
     let changed = false;
     for (const [id, element] of [...settled, ...growing]) {
       const height = element.offsetHeight;
@@ -228,6 +283,7 @@ export const ZoneGallery = memo(function ZoneGallery({
       }
     }
     for (const [, element, live] of growing) element.style.width = live;
+    unsettle();
     if (changed) remeasured();
   }, []);
 
@@ -266,7 +322,10 @@ export const ZoneGallery = memo(function ZoneGallery({
     for (const id of places.current.keys()) {
       if (!elements.current.has(id)) places.current.delete(id);
     }
-    if (!layout || pending) return;
+    if (!layout || pending) {
+      gridHeight.jump(layout?.height ?? 0);
+      return;
+    }
     let resizing = false;
     let continuous = false;
     let shift = 0;
@@ -279,12 +338,38 @@ export const ZoneGallery = memo(function ZoneGallery({
       if (anchor === 'end' && !continuous) shift = width - resized.current.width;
       resized.current = { width, at: now };
     }
+    // A card that grew or shrank in place springs its height with `springs.pane` (its
+    // subtasks unfolding: `SubtaskUnderlay`). The cards it moves, and the grid's own height,
+    // take the same spring from the same frame, so they keep in step with its edge: no gap
+    // opens behind it and none of them runs over it.
+    let grewInPlace = false;
+    for (const [id, height] of heights) {
+      const before = placedHeights.current.get(id);
+      if (before !== undefined && before !== height) grewInPlace = true;
+    }
+    placedHeights.current = heights;
+    const following = grewInPlace && !resizing && !held && !reducedMotion;
+    const transition = following ? springs.pane : springs.smooth;
+    const gridTarget = layout.height;
+    if (!following) gridHeight.jump(gridTarget);
+    const headingMoves: [MotionValue<number>, number][] = [];
+    for (const [index, band] of bands.entries()) {
+      if (band.priority === null) continue;
+      const heading = headingOf(band.priority);
+      const top = layout.bands[index]?.top ?? 0;
+      if (heading.target === undefined || reducedMotion) heading.y.jump(top);
+      else if (heading.target !== top) {
+        if (following) headingMoves.push([heading.y, top]);
+        else animate(heading.y, top, springs.smooth);
+      }
+      heading.target = top;
+    }
     const spring = (place: Place) => {
       if (!place.target || place.targetWidth === undefined) return;
-      animate(place.x, place.target.x, springs.smooth);
-      animate(place.y, place.target.y, springs.smooth);
+      animate(place.x, place.target.x, transition);
+      animate(place.y, place.target.y, transition);
       // The width is animated itself rather than scaled, so text reflows and stays crisp.
-      animate(place.width, place.targetWidth, springs.smooth);
+      animate(place.width, place.targetWidth, transition);
     };
     let visible: { top: number; bottom: number } | undefined;
     const onScreen = (y: number, height: number) => {
@@ -329,18 +414,23 @@ export const ZoneGallery = memo(function ZoneGallery({
       } else if (continuous) {
         place.width.jump(columnWidth);
         if (moved) spring(place);
-      } else if (resizing) {
+      } else if (resizing || following) {
         settling.current.places.add(place);
       } else {
         spring(place);
       }
     }
-    if (resizing && settling.current.places.size > 0) {
+    if ((resizing && settling.current.places.size > 0) || following) {
       // A resize is a long frame (every card is measured again, and the pane or gallery may
       // be mounting beside the grid). Springs keep time, so started now they would lose their
       // first moments to it and show up most of the way there. They start once it is painted.
+      // So does a card's growing in place, after the same paint as its subtask list.
       settling.current.cancel();
       settling.current.cancel = afterPaint(() => {
+        if (following) {
+          animate(gridHeight, gridTarget, springs.pane);
+          for (const [y, top] of headingMoves) animate(y, top, springs.pane);
+        }
         for (const place of settling.current.places) spring(place);
         settling.current.places.clear();
       });
@@ -378,22 +468,21 @@ export const ZoneGallery = memo(function ZoneGallery({
                       : 'Nothing closed.'}
               </p>
             )}
-            <div
+            <motion.div
               ref={container}
               data-masonry={masonryData ? JSON.stringify(masonryData) : undefined}
-              className={cn('relative', anchor === 'end' && 'ml-auto')}
-              style={{ width: Math.max(0, width), height: layout?.height ?? 0 }}
+              className={cn('relative transition-none', anchor === 'end' && 'ml-auto')}
+              style={{ width: Math.max(0, width), height: gridHeight }}
             >
               {layout &&
-                bands.map((band, index) => {
+                bands.map((band) => {
                   if (band.priority === null) return null;
-                  const box = layout.bands[index];
                   return (
                     <BandHeading
                       key={band.priority}
                       priority={band.priority}
                       name={priorityName(project, band.priority)}
-                      top={box?.top ?? 0}
+                      y={headingOf(band.priority).y}
                       shown={band.heading}
                       current={band.at !== null && placing}
                       reducedMotion={Boolean(reducedMotion)}
@@ -431,7 +520,7 @@ export const ZoneGallery = memo(function ZoneGallery({
                   );
                 }),
               )}
-            </div>
+            </motion.div>
           </div>
         </ScrollAreaViewport>
         <ScrollBar />
@@ -443,14 +532,15 @@ export const ZoneGallery = memo(function ZoneGallery({
 function BandHeading({
   priority,
   name,
-  top,
+  y,
   shown,
   current,
   reducedMotion,
 }: {
   priority: Priority;
   name: string;
-  top: number;
+  /** Where the grid places it, as it places its cards. */
+  y: MotionValue<number>;
   shown: boolean;
   current: boolean;
   reducedMotion: boolean;
@@ -462,13 +552,10 @@ function BandHeading({
       data-current={current ? '' : undefined}
       aria-hidden={!shown || undefined}
       className="zone-header absolute inset-x-0 top-0"
+      style={{ y }}
       initial={false}
-      animate={{ y: top, opacity: shown ? 1 : 0 }}
-      transition={
-        reducedMotion
-          ? { duration: 0 }
-          : { y: springs.smooth, opacity: { duration: shown ? 0.2 : 0.12 } }
-      }
+      animate={{ opacity: shown ? 1 : 0 }}
+      transition={reducedMotion ? { duration: 0 } : { duration: shown ? 0.2 : 0.12 }}
     >
       <div className="zone-header-face">
         <span className="truncate">{name}</span>
@@ -513,7 +600,9 @@ function GridCard({
       data-slot={task.id}
       data-zone={task.priority}
       hidden={hidden}
-      className="absolute top-0 left-0"
+      // Motion places it. Reduced motion's global CSS transition would hold it back a frame
+      // behind its neighbours, which are not transitioned (a subtask list opening to auto).
+      className="absolute top-0 left-0 transition-none"
       style={{
         x: place.x,
         y: place.y,

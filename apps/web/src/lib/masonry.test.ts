@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { bandMasonry, columnsFor, dropIndex, GAP, gridFor, HEADING, masonry } from './masonry';
+import {
+  bandMasonry,
+  columnAt,
+  columnsFor,
+  dropIndex,
+  GAP,
+  gridFor,
+  HEADING,
+  masonry,
+} from './masonry';
 
 const grid = { columns: 2, columnWidth: 100, gap: 10 };
 
@@ -48,6 +57,47 @@ describe('masonry', () => {
 
   it('is empty without cards', () => {
     expect(masonry([], grid)).toEqual({ slots: [], height: 0 });
+  });
+});
+
+describe('masonry keeping columns', () => {
+  it('moves the cards below a grown card down its column instead of across', () => {
+    const before = masonry([100, 50, 60, 40], grid);
+    const keep = before.slots.map((slot) => columnAt(slot.x, grid));
+    expect(keep).toEqual([0, 1, 1, 0]);
+    // The first card grows by 200: afresh, the fourth card would cross to the short column.
+    expect(masonry([300, 50, 60, 40], grid).slots[3]).toEqual({ x: 110, y: 130 });
+    const { slots, height } = masonry([300, 50, 60, 40], grid, keep);
+    expect(slots).toEqual([
+      { x: 0, y: 0 },
+      { x: 110, y: 0 },
+      { x: 110, y: 60 },
+      { x: 0, y: 310 },
+    ]);
+    expect(height).toBe(350);
+    // Shrinking back gives the layout it started from.
+    expect(masonry([100, 50, 60, 40], grid, keep).slots).toEqual(before.slots);
+  });
+
+  it('places a card without a column it can keep in the shortest one', () => {
+    expect(masonry([100, 50, 60], grid, [0, undefined, 5]).slots).toEqual([
+      { x: 0, y: 0 },
+      { x: 110, y: 0 },
+      { x: 110, y: 60 },
+    ]);
+  });
+
+  it('keeps columns band by band', () => {
+    const layout = bandMasonry(
+      [
+        { heights: [100, 50, 40], heading: false, keep: [0, 1, 0] },
+        { heights: [30], heading: true, keep: [1] },
+      ],
+      grid,
+    );
+    expect(layout.slots[2]).toEqual({ x: 0, y: 110 });
+    // The first band ends at 150, the bigger of its columns.
+    expect(layout.slots[3]).toEqual({ x: 110, y: 150 + 10 + HEADING });
   });
 });
 

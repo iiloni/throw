@@ -232,6 +232,14 @@
   --accent: light-dark(#e3f2ec, #173d34);
   --accent-foreground: var(--foreground);
   --destructive: light-dark(oklch(0.56 0.2 27), oklch(0.72 0.16 22));
+  /*
+   * Priority chevrons, from urgent warm to quiet cool. The default rank stays neutral. Each
+   * keeps at least 3:1 against cards and every tag tint in both themes.
+   */
+  --priority-critical: var(--destructive);
+  --priority-high: light-dark(oklch(0.57 0.14 60), oklch(0.8 0.14 68));
+  --priority-low: light-dark(oklch(0.55 0.09 240), oklch(0.76 0.08 240));
+  --priority-lowest: light-dark(oklch(0.58 0.03 250), oklch(0.66 0.025 250));
   --border: light-dark(oklch(0.885 0.01 85), oklch(0.34 0.012 70));
   --input: var(--border);
   --ring: light-dark(#0b7765, #70ddc6);
@@ -474,6 +482,10 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-priority-critical: var(--priority-critical);
+  --color-priority-high: var(--priority-high);
+  --color-priority-low: var(--priority-low);
+  --color-priority-lowest: var(--priority-lowest);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -1000,8 +1012,68 @@ body:has(section.board-column[data-column-color]) .column-strip {
   --edge-top: 0px;
   --edge-bottom: 0px;
 }
+/*
+ * The board's sides (DesktopBoard, WorkspaceDesktopBoard): columns scrolled out to the left
+ * fade where they go, at the board's start or under a sticky backlog rail; and while a task
+ * is open beside the board, columns that run on under it fade out before the split view's
+ * seam (or before a sticky closed rail there) rather than being cut down a straight line
+ * beside the grip. As at a column's ends, a fade and no shadow, so it reads the same on light
+ * and dark. The mask stays and only its widths change, so the seam's fade eases in and out
+ * with the pane instead of popping. Not inherited: the board's cards are not restyled on every
+ * frame of it. A mask leaves hit testing alone, so the faded cards still take clicks and drags.
+ */
+@property --edge-left {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --edge-right {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+/* What of the scroller's ends a sticky rail lies over: the columns end at its edge. */
+@property --inset-left {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --inset-right {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+[data-slot="scroll-area"][data-seam] > [data-slot="scroll-area-viewport"] {
+  --side-fade: 1rem;
+  transition:
+    --edge-left 160ms ease,
+    --edge-right 160ms ease;
+  mask-image: linear-gradient(
+    to right,
+    #0000 var(--inset-left),
+    #000 calc(var(--inset-left) + var(--edge-left)),
+    #000 calc(100% - var(--inset-right) - var(--edge-right)),
+    #0000 calc(100% - var(--inset-right))
+  );
+}
+[data-slot="scroll-area"][data-seam][data-more-left] > [data-slot="scroll-area-viewport"] {
+  --edge-left: var(--side-fade);
+}
+[data-slot="scroll-area"][data-seam="open"][data-more-right] > [data-slot="scroll-area-viewport"] {
+  --edge-right: var(--side-fade);
+}
 :root[data-hide-scrollbars] [data-slot="scroll-area-scrollbar"] {
   display: none;
+}
+
+/*
+ * How far an open page lifts the dock over quick capture's card (Drawer). It changes on every
+ * frame the drawer moves; inherited, each change restyled every card in the drawer.
+ */
+@property --drawer-reveal {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
 }
 
 @property --gutter {
