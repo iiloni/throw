@@ -82,7 +82,7 @@ Run these from inside the worktree; they always target that worktree's stack.
 ./scripts/dev.sh psql
 ./scripts/dev.sh shell
 ./scripts/dev.sh install        # after pulling a lockfile change
-./scripts/dev.sh down           # stop, keeping data
+./scripts/dev.sh down           # stop, keeping data (on Linux, also stops `android` live reload)
 ./scripts/dev.sh reset [-y]     # wipe this worktree's volumes and start fresh
 ```
 
@@ -125,9 +125,17 @@ Removal refuses the primary checkout, the checkout running the command, and work
 uncommitted changes, untracked files or unexpected ignored files. Dependencies, build output
 and test reports are treated as disposable; pass `--strict` to
 refuse those too. It then deletes that worktree's Compose volumes and the app image Compose
-built for it (asking first unless `-y`), and removes the checkout. Pulled images such as
-Postgres and Electric are shared and kept. The branch is kept unless `--delete-branch` is
-given, which uses a non-forced `git branch -d`, so unmerged work is never deleted.
+built for it (asking first unless `-y`), stops host processes left running for it, and
+removes the checkout. Pulled images such as Postgres and Electric are shared and kept. The
+branch is kept unless `--delete-branch` is given, which uses a non-forced `git branch -d`,
+so unmerged work is never deleted.
+
+Host processes are the `./scripts/dev.sh android` session (recorded in the worktree's Git
+directory) and any `cap run android` started from the checkout, with their children. Removal
+and `./scripts/dev.sh down` or `destroy` interrupt them as Ctrl+C would, then terminate and
+finally kill what is left; removal stops if any are still running. Shells, editors and agents
+working in the checkout are left alone, as is everything the command runs under. This needs
+Linux's `/proc`: on other hosts, stop live reload with Ctrl+C.
 
 To remove every non-main worktree, run this from the primary checkout while it is on `main`:
 
