@@ -6,6 +6,12 @@ import { settleSubtaskLists } from './SubtaskUnderlay';
 import { board, initialBoard } from './state';
 import { TaskCard } from './TaskCard';
 
+const spotlit = vi.hoisted(() => new Set<string>());
+vi.mock('./blockers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./blockers')>()),
+  useIsBlockerSpotlightTarget: (taskId: string) => spotlit.has(taskId),
+}));
+
 const project: Project = {
   id: 'app',
   key: 'APP',
@@ -15,6 +21,12 @@ const project: Project = {
   statuses: [
     { id: 'todo', name: 'Todo', category: 'backlog', isDefault: true },
     { id: 'done', name: 'Done', category: 'done', isDefault: true },
+    { id: 'ideas', name: 'Ideas', category: 'backlog', isDefault: false, color: 'blue' },
+    { id: 'shipped', name: 'Shipped', category: 'done', isDefault: false, color: 'green' },
+    { id: 'cancelled', name: 'Cancelled', category: 'cancelled', isDefault: true, color: null },
+    { id: 'review', name: 'Review', category: 'active', isDefault: false, color: 'violet' },
+    { id: 'doing', name: 'Doing', category: 'active', isDefault: false },
+    { id: 'dropped', name: 'Dropped', category: 'cancelled', isDefault: false, color: 'red' },
   ],
   tags: [],
   priorityNames: [null, null, null, null, null],
@@ -77,6 +89,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  spotlit.clear();
   cleanup();
   preferReducedMotion(false);
   vi.unstubAllGlobals();
@@ -109,6 +122,68 @@ describe('SubtaskUnderlay', () => {
     await waitFor(() => expect(list.style.height).toBe(''));
     fireEvent.click(toggle);
     await waitFor(() => expect(list.style.height).toBe('0px'));
+  });
+});
+
+describe('SubtaskPip', () => {
+  function renderWith(statusIds: string[]) {
+    const tasks = statusIds.map((statusId, index) =>
+      task(`sub-${index + 1}`, index + 2, { parentId: 'parent', statusId }),
+    );
+    board.set(initialBoard([{ project, tasks: [parent, ...tasks] }]));
+    renderCard();
+    return tasks.map(
+      (subtask) => document.querySelector<HTMLElement>(`[data-subtask-pip="${subtask.id}"]`)!,
+    );
+  }
+
+  it('uses more of the status accent as work progresses', () => {
+    const [ideas, review, shipped] = renderWith(['ideas', 'review', 'shipped']);
+    expect(ideas).toHaveClass('bg-[color:var(--column-accent)]/35');
+    expect(shipped).toHaveClass('bg-[color:var(--column-accent)]');
+    expect(review).toHaveAttribute('data-column-color', 'violet');
+    expect(review).toHaveAttribute('data-category', 'active');
+    expect(review).toHaveClass('bg-[color:var(--column-accent)]/80');
+  });
+
+  it('keeps the neutral steps for uncolored statuses', () => {
+    const [todo, doing, done] = renderWith(['todo', 'doing', 'done']);
+    for (const pip of [todo, doing, done]) expect(pip).not.toHaveAttribute('data-column-color');
+    expect(todo).toHaveClass('bg-foreground/15');
+    expect(doing).toHaveClass('bg-foreground/45');
+    expect(done).toHaveClass('bg-foreground/80');
+  });
+
+  it('stays hollow when cancelled, tinting only its outline', () => {
+    const [dropped, cancelled] = renderWith(['dropped', 'cancelled']);
+    expect(cancelled).not.toHaveAttribute('data-column-color');
+    expect(cancelled).toHaveClass('bg-transparent', 'outline-1', 'outline-foreground/20');
+    expect(dropped).toHaveAttribute('data-column-color', 'red');
+    expect(dropped).toHaveClass(
+      'bg-transparent',
+      'outline-1',
+      'outline-[color:var(--column-accent)]/45',
+    );
+  });
+
+  it('uses destructive fill even for a colored, cancelled blocker', () => {
+    spotlit.add('sub-1');
+    const [dropped, doing] = renderWith(['dropped', 'doing']);
+    expect(dropped).toHaveAttribute('data-spotlight', 'blocker');
+    expect(dropped).toHaveClass('bg-destructive');
+    expect(dropped).not.toHaveClass('outline-1');
+    expect(dropped).not.toHaveClass('bg-transparent');
+    expect(doing).not.toHaveAttribute('data-spotlight');
+    expect(doing).not.toHaveClass('bg-destructive');
+  });
+
+  it("colors each row's status glyph by its status", () => {
+    renderWith(['review', 'doing']);
+    const glyphs = document.querySelectorAll(
+      '[data-subtask-list] button[aria-label^="Status:"] svg',
+    );
+    expect(glyphs[0]).toHaveAttribute('data-column-color', 'violet');
+    expect(glyphs[1]).not.toHaveAttribute('data-column-color');
   });
 });
 

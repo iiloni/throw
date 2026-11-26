@@ -1,3 +1,4 @@
+import type { Color } from '@throw/shared';
 import { ChevronDown } from 'lucide-react';
 import { animate, useMotionValue, useReducedMotion } from 'motion/react';
 import { useLayoutEffect, useRef } from 'react';
@@ -51,9 +52,18 @@ export function SubtaskUnderlay({ parent, subtasks, inert = false }: Props) {
       >
         {/* One pip per subtask: the shape of the work, not only a fraction. */}
         <span aria-hidden className="flex min-w-0 flex-1 items-center gap-1">
-          {subtasks.map((task) => (
-            <SubtaskPip key={task.id} taskId={task.id} category={category(task)} inert={inert} />
-          ))}
+          {subtasks.map((task) => {
+            const status = statusById(project, task.statusId);
+            return (
+              <SubtaskPip
+                key={task.id}
+                taskId={task.id}
+                category={status?.category ?? 'backlog'}
+                color={status?.color ?? null}
+                inert={inert}
+              />
+            );
+          })}
         </span>
         <span
           className={cn(
@@ -167,14 +177,29 @@ export function settleSubtaskLists(root: ParentNode) {
   };
 }
 
+const neutralPip = {
+  backlog: 'bg-foreground/15',
+  active: 'bg-foreground/45',
+  done: 'bg-foreground/80',
+  cancelled: 'outline-foreground/20',
+};
+const coloredPip = {
+  backlog: 'bg-[color:var(--column-accent)]/35',
+  active: 'bg-[color:var(--column-accent)]/80',
+  done: 'bg-[color:var(--column-accent)]',
+  cancelled: 'outline-[color:var(--column-accent)]/45',
+};
+
 /** One pip in the subtask underlay bar; turns destructive red while this subtask is spotlighted. */
 function SubtaskPip({
   taskId,
   category,
+  color,
   inert,
 }: {
   taskId: string;
   category: Category;
+  color: Color | null;
   inert: boolean;
 }) {
   const isBlocker = useIsBlockerSpotlightTarget(taskId);
@@ -182,13 +207,13 @@ function SubtaskPip({
   return (
     <span
       data-category={category}
+      data-column-color={color ?? undefined}
       data-subtask-pip={taskId}
       data-spotlight={highlighted ? 'blocker' : undefined}
       className={cn(
         'h-1.5 max-w-6 flex-1 rounded-full transition-colors',
-        highlighted
-          ? 'bg-destructive'
-          : 'bg-foreground/15 data-[category=active]:bg-foreground/45 data-[category=done]:bg-foreground/80 data-[category=cancelled]:bg-transparent data-[category=cancelled]:outline data-[category=cancelled]:outline-1 data-[category=cancelled]:outline-foreground/20',
+        highlighted ? 'bg-destructive' : (color ? coloredPip : neutralPip)[category],
+        !highlighted && category === 'cancelled' && 'bg-transparent outline-1',
       )}
     />
   );
@@ -220,7 +245,7 @@ function SubtaskRow({ project, task }: { project: Project; task: Task }) {
             aria-label={`Status: ${status.name}. Change`}
             className="flex size-9 shrink-0 items-center justify-center rounded-xl outline-none hover:bg-foreground/[0.07] focus-visible:ring-[3px] focus-visible:ring-ring/60"
           >
-            <StatusGlyph category={status.category} className="size-4" />
+            <StatusGlyph category={status.category} color={status.color} className="size-4" />
           </button>
         </Hint>
       </StatusMenu>

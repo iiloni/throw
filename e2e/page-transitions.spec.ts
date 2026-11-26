@@ -2,11 +2,12 @@ import { expect, type Page, test } from '@playwright/test';
 import { card, workspaceFixture } from './board-helpers';
 import { switcherItem } from './helpers';
 
-type Transition = { types: string[]; names: string[]; animations: string[] };
+type Transition = { types: string[]; names: string[]; animations: string[]; dockBlur: string };
 
 /**
  * Records every view transition the app starts: its types, the names the rail and dock take
- * while it runs, and the animations on its pseudo-elements once they start.
+ * while it runs, the animations on its pseudo-elements once they start, and the blur the
+ * dock's group lays over the pages under it.
  */
 async function recordTransitions(page: Page) {
   await page.addInitScript(() => {
@@ -19,13 +20,17 @@ async function recordTransitions(page: Page) {
     ) => {
       const transition = start(update);
       const types = update && typeof update === 'object' && update.types ? [...update.types] : [];
-      const entry: Transition = { types, names: [], animations: [] };
+      const entry: Transition = { types, names: [], animations: [], dockBlur: 'none' };
       log.push(entry);
       transition.ready.then(
         () => {
           entry.names = [...document.querySelectorAll('[data-rail], [data-drawer]')]
             .map((element) => getComputedStyle(element).viewTransitionName)
             .filter((name) => name !== 'none');
+          entry.dockBlur = getComputedStyle(
+            document.documentElement,
+            '::view-transition-group(dock)',
+          ).backdropFilter;
           entry.animations = document.documentElement
             .getAnimations({ subtree: true })
             .flatMap((animation) => {
@@ -77,6 +82,8 @@ test('boards cross-fade, ordered pages slide, and the rail and dock stay put', a
   const { workspaceId } = await workspaceFixture(page);
   await expect(card(page, 'Water tomatoes')).toBeVisible();
   const live = isMobile ? 'dock' : 'rail';
+  // On a phone the dock stays live between pages that both show it, blurring them as they move.
+  const docked = (type: string) => (isMobile ? [type, 'docked'] : [type]);
 
   // A project switch cross-fades the board.
   let count = (await transitions(page)).length;
@@ -89,8 +96,9 @@ test('boards cross-fade, ordered pages slide, and the rail and dock stay put', a
       .getByRole('link', { name: 'Kitchen', exact: true })
       .click();
   const fade = await nextTransition(page, count);
-  expect(fade.types).toEqual(['fade']);
+  expect(fade.types).toEqual(docked('fade'));
   expect(fade.names).toContain(live);
+  if (isMobile) expect(fade.dockBlur).toContain('blur(32px)');
   expect(fade.animations).toContain('::view-transition-new(root) page-fade-in');
   expect(fade.animations.some((name) => /\((rail|dock)\)/.test(name))).toBe(false);
   await expect(card(page, 'Bake bread')).toBeVisible();
@@ -113,7 +121,8 @@ test('boards cross-fade, ordered pages slide, and the rail and dock stay put', a
     await page.getByRole('menuitem', { name: 'Project settings', exact: true }).click();
   }
   const forward = await nextTransition(page, count);
-  expect(forward.types).toEqual(['forward']);
+  expect(forward.types).toEqual(docked('forward'));
+  if (isMobile) expect(forward.dockBlur).toContain('blur(32px)');
   expect(forward.animations).toContain('::view-transition-new(root) page-from-right');
   await expect(page.getByLabel('Project name', { exact: true })).toBeVisible();
 
@@ -131,7 +140,7 @@ test('boards cross-fade, ordered pages slide, and the rail and dock stay put', a
       .click();
   const page2 = await nextTransition(page, count);
   if (isMobile) {
-    expect(page2.types).toEqual(['forward']);
+    expect(page2.types).toEqual(['forward', 'docked']);
     expect(page2.names).toContain('dock');
   } else {
     expect(page2.types).toEqual(['inner']);
@@ -155,7 +164,7 @@ test('boards cross-fade, ordered pages slide, and the rail and dock stay put', a
       .click();
   const page3 = await nextTransition(page, count);
   if (isMobile) {
-    expect(page3.types).toEqual(['forward']);
+    expect(page3.types).toEqual(['forward', 'docked']);
     expect(page3.names).toContain('dock');
   } else {
     expect(page3.types).toEqual(['inner']);
@@ -167,7 +176,7 @@ test('boards cross-fade, ordered pages slide, and the rail and dock stay put', a
   count = (await transitions(page)).length;
   await page.goBack();
   const back = await nextTransition(page, count);
-  expect(back.types).toEqual(['back']);
+  expect(back.types).toEqual(docked('back'));
   await expect(card(page, 'Bake bread')).toBeVisible();
 
   // The workspace trash has no place in the order, so it rises softly into view.
@@ -180,7 +189,9 @@ test('boards cross-fade, ordered pages slide, and the rail and dock stay put', a
     await page.getByRole('menuitem', { name: 'Workspace trash', exact: true }).click();
   }
   const enter = await nextTransition(page, count);
+  // The trash has no dock, so the board's fades with the page rather than leaving its blur behind.
   expect(enter.types).toEqual(['enter']);
+  expect(enter.dockBlur).toBe('none');
   expect(enter.animations).toContain('::view-transition-new(root) page-rise');
   await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/trash$`));
 });

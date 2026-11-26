@@ -70,9 +70,17 @@ test('tag workshop manages a real tree and both task roles with touch and keyboa
   await edit.click();
   const editing = page.getByRole('dialog', { name: 'Edit tag', exact: true });
   await editing.getByRole('textbox', { name: 'Name', exact: true }).fill('Quality checks');
-  await editing
-    .getByLabel('Parent tag', { exact: true })
-    .selectOption({ label: 'Product / Features' });
+  // The parent list is Throw's own, not the system's: beside the field on desktop, and in
+  // place under it in the drawer on a phone.
+  await editing.getByRole('button', { name: 'Parent tag Top level', exact: true }).click();
+  const parents = isMobile ? editing : page.getByRole('dialog', { name: 'Parent tag' });
+  await parents.getByRole('combobox', { name: 'Search tags' }).fill('product / feat');
+  // A path finds the branch as well as the tag, the tag itself first.
+  await expect(parents.getByRole('option')).toHaveText([/^Features/, /^Mobile/]);
+  await parents.getByRole('option', { name: /^Features/ }).click();
+  await expect(
+    editing.getByRole('button', { name: 'Parent tag Features', exact: true }),
+  ).toBeFocused();
   await editing.getByRole('button', { name: 'Save tag' }).click();
   await expect(
     manager.getByRole('button', { name: 'Edit Product / Features / Quality checks', exact: true }),

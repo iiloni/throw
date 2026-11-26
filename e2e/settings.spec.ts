@@ -101,6 +101,9 @@ test('settings pages switch from the side list or the phone dock, and the accoun
   await expect(form).toHaveCount(0);
   const signedIn = page.getByRole('region', { name: 'Signed in as' });
   await expect(signedIn.getByText('Renamed Person').first()).toBeVisible();
+  await expect(
+    page.getByRole('list', { name: 'Accounts' }).getByRole('button', { name: /Renamed Person/ }),
+  ).toHaveAttribute('aria-current', 'true');
   await page.reload();
   await expect(signedIn.getByText('Renamed Person').first()).toBeVisible({
     timeout: APP_LOAD_TIMEOUT,

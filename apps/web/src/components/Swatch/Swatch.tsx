@@ -25,7 +25,8 @@ export function Swatch({
   pressed: boolean;
   /**
    * Shown but not pickable. It stays hoverable and focusable (`aria-disabled`, not
-   * `disabled`), so its hint can say why.
+   * `disabled`), so its hint can say why. It keeps its full color, as Catch's taken swatches
+   * do: the caller marks it, such as with the icon of the tag that holds it.
    */
   unavailable?: boolean;
   onClick: () => void;
@@ -46,7 +47,7 @@ export function Swatch({
           if (!unavailable) onClick();
         }}
         className={cn(
-          'flex size-10 shrink-0 items-center justify-center rounded-full border outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-disabled:cursor-not-allowed aria-disabled:opacity-25',
+          'flex size-10 shrink-0 items-center justify-center rounded-full border outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-disabled:cursor-not-allowed',
           color ? 'bg-tint text-tint-accent' : 'bg-card text-muted-foreground',
           pressed ? 'border-foreground/70 ring-2 ring-foreground/15' : 'border-foreground/10',
         )}

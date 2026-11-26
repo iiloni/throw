@@ -50,7 +50,7 @@ import { toast } from 'sonner';
 import { uuidv7 } from 'uuidv7';
 import { z } from 'zod';
 import { ApiError, api } from './api';
-import { getAuthToken, resolveSignedInUser } from './auth';
+import { getAuthToken, removedKey, resolveSignedInUser } from './auth';
 import { clearCommentDrafts } from './commentDrafts';
 import { CompatibilityError } from './compatibility';
 import { clearDescriptionDrafts, settleDescriptionDraft } from './descriptionDrafts';
@@ -723,6 +723,11 @@ for (const queued of await executor.peekOutbox()) {
  * them, which offline can be much later.
  */
 export function write(mutate: () => void): Transaction {
+  if (user && localStorage.getItem(removedKey(user.id)) === 'true') {
+    const reason = 'This account is signing out. Changes cannot be saved.';
+    reportUnsaved(reason);
+    throw new Error(reason);
+  }
   const offline = executor.createOfflineTransaction({
     mutationFnName: 'push',
     autoCommit: false,

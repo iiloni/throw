@@ -107,8 +107,10 @@ export const ZoneGallery = memo(function ZoneGallery({
   const banded = backlog && !resorted;
   const dragging = held?.phase === 'dragging';
 
-  // The board makes room for the active statuses while a card is held, so the gallery narrows;
-  // its cards narrow with it rather than flowing into fewer columns under the card.
+  // The gallery keeps its width while a card is held (the active statuses' dropzones stand in
+  // the strip beside it), so its cards stay where the card is aimed at them. Should it change
+  // anyway, as when the window is resized, its cards narrow rather than flowing into fewer
+  // columns under the card.
   const frozen = useRef<number | null>(null);
   const columnsNow = gridFor(Math.max(0, width)).columns;
   if (!dragging) frozen.current = null;

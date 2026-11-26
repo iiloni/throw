@@ -16,6 +16,12 @@ export type TaskRect = {
    * the screen dissolves out of and back into it rather than wearing a card's face.
    */
   row: boolean;
+  /**
+   * The card's own border colour, shadow and lift over its fill, which the screen wears as it
+   * lands so the card shown in its place changes nothing, such as a subtask card raised off its
+   * parent's tint.
+   */
+  edge: { border: string; shadow: string; raise: string };
   /** The exact DOM node the task grew out of, so closing lands back in it when several exist. */
   element: HTMLElement;
 };
@@ -71,15 +77,17 @@ export function findTaskCard(
 /** Where a card is on screen now. */
 export function taskCardRect(card: HTMLElement): TaskRect {
   const box = card.getBoundingClientRect();
+  const style = getComputedStyle(card);
   return {
     x: box.left,
     y: box.top,
     width: box.width,
     height: box.height,
-    radius: Number.parseFloat(getComputedStyle(card).borderTopLeftRadius) || 16,
+    radius: Number.parseFloat(style.borderTopLeftRadius) || 16,
     showStatus: card.dataset.showStatus !== undefined,
     statusControl: card.dataset.statusControl !== undefined,
     row: card.dataset.taskOrigin !== undefined,
+    edge: { border: style.borderTopColor, shadow: style.boxShadow, raise: style.backgroundImage },
     element: card,
   };
 }
@@ -139,6 +147,11 @@ export function landTaskCard(taskId: string) {
 
 export function useTaskCardLanding(taskId: string) {
   return landing.use().has(taskId);
+}
+
+/** Whether a task screen is open from the card, or landing in it, outside React. */
+export function isTaskCardHidden(taskId: string) {
+  return hidden.get().has(taskId) || landing.get().has(taskId);
 }
 
 export function useTaskCardHidden(taskId: string) {

@@ -69,6 +69,11 @@ development only. The board color helper is `taskTagColor` in `@throw/shared`. T
 pane picks and lists tags, and its unified Tags panel (Primary / Secondary tabs) makes new
 tags through the shell's `NewTagHost` (`components/NewTag`); project settings mounts tag
 management.
+The tag form picks a parent with Catch's `components/SearchSelect` in place of a native
+select: a popover beside the field on desktop, and a list opened in place under it on a phone,
+where the form is already a drawer page (ADR 0009).
+Every tag tree (pickers, tag settings, board filters) shares one device-wide set of collapsed
+branches (`TagTree/useCollapsedTags.ts`); a tag search opens branches without changing it.
 Task relations (blocks, duplicates, relates to) link tasks across a workspace's projects:
 actions in `lib/taskRelations.ts`, the pane's list, relation picker (opened inline from the
 Links tab / open side column or from the dock's More panel) and card blocked mark in
@@ -97,7 +102,12 @@ from the cards' own blockers, so Blocked matches the blocked mark; the prototype
 hides them. A sorted list is `data-drop-send`:
 drops there send. The Updated sort reads each task's activity log (`updatedAtByTask`).
 Cards move on both boards by drag, keyboard,
-phone long press and the move drawer (ADR 0008). A selection (Ctrl/⌘/Shift click or right
+phone long press and the move drawer (ADR 0008). A move that is not a drag (the task pane, a
+menu, a bulk move, the keyboard carry, sync, a filter) is animated from the old layout by
+`Board/rearrange.tsx`: a class component in `CardList` reads `[data-rearrange]` places in
+`getSnapshotBeforeUpdate` and again after the commit, springs what changed place
+(`springs.smooth`), flies a card between visible columns as a still copy, and lets one go into
+its folded column or fade. A held card settles it all at once, and reduced motion skips it. A selection (Ctrl/⌘/Shift click or right
 click on desktop, long press on a phone) is edited together through `Board/SelectionActions.tsx`:
 the desktop `SelectionBar` and the phone `MovePanel` share its controls, and the boundaries
 supply the priority, size and tag panels and the trash action (`components/BulkActions`) through
@@ -118,6 +128,12 @@ is held and turns drops into `moveTask` and `sendTask` calls; `Board/carry.ts` i
 keyboard carry. The collection hooks hold
 their last rows through a reconnect's full snapshot (`lib/steadyRows.ts`), so the board
 does not unmount while a shape reloads.
+
+Several accounts can be signed in on one device (ADR 0016): `lib/auth.ts` keeps the list,
+the tab's account (`sessionStorage`) and the `/u/<n>` address prefix the router strips and
+adds (`routerRewrite`); `lib/accounts.ts` switches (a full load) and signs one account out.
+The desktop rail, phone project switcher and Account settings share the account list in
+`components/AccountSwitcher`. Swiping the rail or phone avatar cycles through accounts.
 
 ## Layout
 
@@ -452,6 +468,9 @@ ids. Do not add a dependency on Catch's repository; the two release independentl
   signed token from `set-auth-token` works as a bearer token.
 - Sign-up closes after the first account unless `REGISTRATION=open`, which dev stacks set.
   Catch's invite links have not been ported, so a closed server has one account.
+- With several accounts signed in, browser addresses start with `/u/<n>` (ADR 0016). The
+  router never sees it, but `window.location.pathname` does: compare `currentPath()` and
+  build a raw `<a href>` or a full page load within the account with `pagePath`.
 - The app draws edge to edge. Pad fixed UI with the `--safe-top` / `--safe-bottom` tokens.
   The root sets `--keyboard` through browser viewport/VirtualKeyboard tracking; the shell
   uses `--dock-*` for the phone dock. Catch's native KeyboardInsets plugin owns system

@@ -6,7 +6,7 @@ import { getServerUrl } from './serverUrl';
 // A new comment lives only in its editor until it is posted, so its text is kept per task
 // on this device until it is posted or cancelled: closing the task or a reload keeps it.
 const listeners = new Set<() => void>();
-const prefix = () => `throw-comment:${getServerUrl()}:${getSignedInUser()?.id}:`;
+const prefix = (userId = getSignedInUser()?.id) => `throw-comment:${getServerUrl()}:${userId}:`;
 const key = (taskId: string) => `${prefix()}${taskId}`;
 
 function read(raw: string | null): Description {
@@ -32,8 +32,9 @@ export function storeCommentDraft(taskId: string, document: Description) {
   for (const listener of listeners) listener();
 }
 
-export function clearCommentDrafts() {
-  const owned = prefix();
+/** Forgets an account's drafts on this device: this page's, or another signed out. */
+export function clearCommentDrafts(userId?: string) {
+  const owned = prefix(userId);
   for (const name of Object.keys(localStorage))
     if (name.startsWith(owned)) localStorage.removeItem(name);
   for (const listener of listeners) listener();
