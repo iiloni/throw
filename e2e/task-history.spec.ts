@@ -114,7 +114,7 @@ async function compose(page: Page, text: string) {
   await page.getByRole('button', { name: 'Write a comment…', exact: true }).click();
   await expect(editor(page)).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
   await editor(page).fill(text);
-  await page.getByRole('button', { name: 'Post comment', exact: true }).click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
 }
 
 test('comment drafts survive closing and reloading, and can be posted from the keyboard', async ({
@@ -223,7 +223,7 @@ test('comments add, edit and delete; another workspace member has no editing con
   await expect(own).not.toContainText('Pending sync');
   await own.getByRole('button', { name: 'Edit comment', exact: true }).click();
   await editor(page).fill('My revised comment');
-  await page.getByRole('button', { name: 'Save comment', exact: true }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(own).toContainText('My revised comment');
   await expect(own).toContainText('Edited');
   const member = await createAccount(page.request);
@@ -282,11 +282,11 @@ test('offline comments survive reload, sync in server order, and refused changes
     await expect(pending).toContainText('Pending sync');
     await pending.getByRole('button', { name: 'Edit comment', exact: true }).click();
     await editor(page).fill('Written and edited offline');
-    await page.getByRole('button', { name: 'Save comment', exact: true }).click();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
     const old = f.history.getByRole('article').filter({ hasText: 'Edit offline' });
     await old.getByRole('button', { name: 'Edit comment', exact: true }).click();
     await editor(page).fill('Existing comment edited offline');
-    await page.getByRole('button', { name: 'Save comment', exact: true }).click();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
     const deleted = f.history.getByRole('article').filter({ hasText: 'Delete offline' });
     await deleted.getByRole('button', { name: 'Delete comment', exact: true }).click();
     await deleted.getByRole('button', { name: 'Delete comment', exact: true }).click();
@@ -403,7 +403,7 @@ test('comment composition stays clear of the phone keyboard and dock in both the
       }),
     )
     .toBe(true);
-  const post = page.getByRole('button', { name: 'Post comment', exact: true });
+  const post = page.getByRole('button', { name: 'Send', exact: true });
   if (phone) {
     await expect
       .poll(async () => {

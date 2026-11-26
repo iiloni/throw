@@ -134,7 +134,8 @@ export function DescriptionEditor({
           ) || 0;
         const view = editor.prosemirrorView;
         const area = view.dom.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
-        if (!area) return;
+        // Something on the page is already scrolling itself into view around the editor.
+        if (!area || area.dataset.revealing !== undefined) return;
         const style = getComputedStyle(area);
         const covered = Number.parseFloat(style.scrollPaddingBottom) || 0;
         const coveredTop = Number.parseFloat(style.scrollPaddingTop) || 0;

@@ -58,21 +58,27 @@ const REVEAL_MS = 900;
 const leaveEasing = `cubic-bezier(${curves.enter.ease.join(',')})`;
 
 /**
- * Scrolls the pane just enough that `element`'s foot clears whatever covers the pane's foot
+ * How far the pane must scroll for `element`'s foot to clear whatever covers the pane's foot
  * (a phone's dock declares itself as the pane's bottom scroll padding; the keyboard shortens
  * the pane), without taking its head above the pane's top.
  */
-function revealInPane(element: HTMLElement) {
-  const area = element.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
-  if (!area) return;
+function revealDistance(element: HTMLElement, area: HTMLElement) {
   const style = getComputedStyle(area);
   const pane = area.getBoundingClientRect();
   const top = pane.top + (Number.parseFloat(style.scrollPaddingTop) || 0) + 12;
   const bottom = pane.bottom - (Number.parseFloat(style.scrollPaddingBottom) || 0) - 12;
   const box = element.getBoundingClientRect();
-  const by = Math.min(box.bottom - bottom, box.top - top);
-  if (by > 0.5) area.scrollTop += by;
+  return Math.min(box.bottom - bottom, box.top - top);
 }
+
+const keyboardInset = () =>
+  Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--keyboard')) || 0;
+
+/**
+ * How quickly a reveal takes up a sudden change, such as the dock's undo and redo appearing
+ * over the pane's foot: settled within the swap's own spring.
+ */
+const REVEAL_EASE_MS = (springs.pane.visualDuration * 1000) / 4;
 
 /**
  * Shows one of several contents, named by `swapKey`, on one surface (`className`) that
@@ -168,22 +174,38 @@ function Swap({
     stopRevealing.current = undefined;
     if (!reveal || !box.current) return;
     const target = box.current;
+    const area = target.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
+    if (!area) return;
+    // The editor's own caret keeping waits, so the two never pull the pane apart.
+    area.dataset.revealing = '';
     const started = performance.now();
+    let last = started;
+    let keyboard = keyboardInset();
     let frame = requestAnimationFrame(function follow(now) {
       // A panel closing around it is on its way out, not to be scrolled to.
-      if (target.closest('[inert]')) return;
-      revealInPane(target);
+      if (target.closest('[inert]')) return stopRevealing.current?.();
+      const by = revealDistance(target, area);
+      // The keyboard is followed as it moves, as the page rides it in native apps; the rest
+      // (the surface growing, toolbars appearing) is eased in rather than jumped to.
+      const inset = keyboardInset();
+      const along = Math.min(Math.max(by, 0), Math.max(inset - keyboard, 0));
+      keyboard = inset;
+      if (by > 0.5)
+        area.scrollTop += along + (by - along) * (1 - Math.exp(-(now - last) / REVEAL_EASE_MS));
+      last = now;
       if (now - started < REVEAL_MS || springing.current) frame = requestAnimationFrame(follow);
+      else stopRevealing.current?.();
     });
     // The reader's own scroll ends it.
-    const stop = () => cancelAnimationFrame(frame);
-    const area = target.closest('[data-slot="scroll-area-viewport"]');
-    area?.addEventListener('wheel', stop, { once: true, passive: true });
-    area?.addEventListener('touchstart', stop, { once: true, passive: true });
+    const stop = () => stopRevealing.current?.();
+    area.addEventListener('wheel', stop, { once: true, passive: true });
+    area.addEventListener('touchstart', stop, { once: true, passive: true });
     stopRevealing.current = () => {
-      stop();
-      area?.removeEventListener('wheel', stop);
-      area?.removeEventListener('touchstart', stop);
+      cancelAnimationFrame(frame);
+      delete area.dataset.revealing;
+      area.removeEventListener('wheel', stop);
+      area.removeEventListener('touchstart', stop);
+      stopRevealing.current = undefined;
     };
   });
   useEffect(
@@ -495,7 +517,7 @@ export function CommentPrompt({
       ) : (
         <button
           type="button"
-          className="flex min-h-12 w-full items-center gap-2.5 rounded-2xl px-3.5 text-left text-foreground/70 text-sm outline-none transition-colors hover:bg-foreground/[0.035] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60 focus-visible:ring-inset sm:px-4"
+          className="flex min-h-12 w-full items-center gap-2.5 rounded-2xl px-3.5 text-left text-foreground/80 text-sm outline-none transition-colors hover:bg-foreground/[0.035] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60 focus-visible:ring-inset sm:px-4"
           onClick={onCompose}
         >
           <span

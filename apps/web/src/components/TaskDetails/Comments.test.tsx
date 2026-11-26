@@ -116,7 +116,7 @@ it('edits on the comment’s own card, and cancelling brings the text back', asy
   fireEvent.click(within(own).getByRole('button', { name: 'Edit comment' }));
   expect(within(own).getByRole('region', { name: 'Comment editor' })).toBeInTheDocument();
   expect(within(own).queryByRole('button', { name: 'Edit comment' })).toBeNull();
-  expect(within(own).getByRole('button', { name: 'Save comment' })).toHaveAttribute(
+  expect(within(own).getByRole('button', { name: 'Save' })).toHaveAttribute(
     'aria-keyshortcuts',
     'Control+Enter Meta+Enter',
   );

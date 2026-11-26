@@ -52,11 +52,12 @@ export function CommentComposer({
     if (draftFor) storeCommentDraft(draftFor, null);
     onCancel();
   }
-  const verb = initialContent ? 'save' : 'post';
+  const verb = initialContent ? 'save' : 'send';
   return (
     <section
       aria-label="Comment editor"
       className={cn(
+        'comment-composer',
         !bare &&
           cn(
             commentSurface,
@@ -81,7 +82,8 @@ export function CommentComposer({
         initialContent={start}
         editable
         sideMenu={false}
-        scrollClearance={96}
+        // The footer under the caret: Cancel and Send stay in view as lines are added.
+        scrollClearance={40}
         autoFocus
         placeholder="Write a comment…"
         onChange={(document) => {
@@ -94,7 +96,7 @@ export function CommentComposer({
           {error}
         </p>
       )}
-      <div className="mt-2 flex items-center gap-1 border-foreground/[0.07] border-t pt-2">
+      <div className="mt-2 flex items-center gap-1">
         {/* A keyboard's shortcut, where there is a keyboard to press it on. */}
         <span
           aria-hidden
@@ -120,7 +122,7 @@ export function CommentComposer({
           onClick={save}
         >
           <SendHorizontal aria-hidden />
-          {initialContent ? 'Save comment' : 'Post comment'}
+          {initialContent ? 'Save' : 'Send'}
         </Button>
       </div>
     </section>
