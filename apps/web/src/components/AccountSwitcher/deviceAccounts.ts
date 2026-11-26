@@ -48,7 +48,13 @@ export const signOutRequest = createStore<{ account: Account; pending: number } 
 /** Signing out deletes the account's data on the device, so it is always asked first. */
 export async function askToSignOut(account: Account) {
   if (account.user.id === getSignedInUser()?.id && !canLeave('signing out')) return false;
-  const pending = await unsyncedChanges(account);
+  let pending: number;
+  try {
+    pending = await unsyncedChanges(account);
+  } catch {
+    toast.error('Could not check for unsynced changes. Your account is still signed in.');
+    return false;
+  }
   haptics.toggle();
   signOutRequest.set({ account, pending });
   return true;

@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   unsyncedChanges: vi.fn(),
   reorderAccounts: vi.fn(),
   blocked: vi.fn(() => false),
-  toast: vi.fn(),
+  toast: Object.assign(vi.fn(), { error: vi.fn() }),
 }));
 vi.mock('@/lib/auth', () => ({
   getAccounts: () => mocks.accounts,
@@ -26,7 +26,7 @@ vi.mock('@/lib/accounts', () => ({
   unsyncedChanges: mocks.unsyncedChanges,
 }));
 vi.mock('@/lib/useUpdateReloadBlocked', () => ({ isUpdateReloadBlocked: mocks.blocked }));
-vi.mock('sonner', () => ({ toast: Object.assign(mocks.toast, { error: vi.fn() }) }));
+vi.mock('sonner', () => ({ toast: mocks.toast }));
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a>,
 }));
@@ -125,6 +125,20 @@ describe('AccountSwitcher', () => {
     await screen.findByRole('dialog', { name: 'Sign out bob@example.com?' });
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mocks.signOutAccount).not.toHaveBeenCalled();
+  });
+
+  it('keeps the account and explains when its outbox cannot be read', async () => {
+    mocks.unsyncedChanges.mockRejectedValueOnce(new Error('Outbox unavailable'));
+    renderSwitcher();
+    openList();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out bob@example.com' }));
+    await waitFor(() =>
+      expect(mocks.toast.error).toHaveBeenCalledWith(
+        'Could not check for unsynced changes. Your account is still signed in.',
+      ),
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(mocks.signOutAccount).not.toHaveBeenCalled();
   });
 
