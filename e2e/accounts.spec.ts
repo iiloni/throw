@@ -197,6 +197,8 @@ test('tabs show different accounts side by side, and signing one out leaves the 
   isMobile,
 }) => {
   test.skip(isMobile, 'Tabs and signing out do not depend on the layout.');
+  // This scenario signs in three times and loads both tabs repeatedly.
+  test.slow();
   const first = await signUp(page);
   await nameWorkspace(page, 'First space');
   const second = await addAccount(page);
@@ -227,7 +229,37 @@ test('tabs show different accounts side by side, and signing one out leaves the 
   await expect(page.getByRole('heading', { name: 'First renamed' })).toBeVisible();
 
   expect(await storedFor(page, second)).toEqual({ database: true, outbox: true });
-  await signOutAccount(page, second);
+  // Hold the server response so a write in the other tab lands during sign-out.
+  let finishSignOut = () => {};
+  const waitForRelease = new Promise<void>((resolve) => {
+    finishSignOut = resolve;
+  });
+  await page.route(
+    '**/api/auth/sign-out',
+    async (route) => {
+      await waitForRelease;
+      await route.continue();
+    },
+    { times: 1 },
+  );
+  const request = page.waitForRequest('**/api/auth/sign-out');
+  const leaving = signOutAccount(page, second);
+  try {
+    await request;
+    const blocked = await tab.evaluate(async () => {
+      const { write } = await import(/* @vite-ignore */ '/src/lib/collections.ts');
+      try {
+        write(() => {});
+        return false;
+      } catch (error) {
+        return error instanceof Error && error.message.includes('signing out');
+      }
+    });
+    expect(blocked).toBe(true);
+  } finally {
+    finishSignOut();
+    await leaving;
+  }
   // This page stays as it is.
   await expect(page.getByRole('heading', { name: 'First renamed' })).toBeVisible();
   // The tab that showed the signed-out account moves to the one left, which needs no number,

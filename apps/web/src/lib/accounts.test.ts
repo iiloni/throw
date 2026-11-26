@@ -93,6 +93,8 @@ describe('signing out', () => {
 
     const account = auth.getAccounts().find(({ user }) => user.id === first.id);
     if (!account) throw new Error('First account is not listed');
+    // Another tab most recently selected the account being removed.
+    auth.activateAccount(first.id);
     await accounts.signOutAccount(account);
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -110,6 +112,9 @@ describe('signing out', () => {
     expect(auth.getAccounts()).toEqual([{ user: second, token: 'second-token' }]);
     expect(auth.getSignedInUser()).toEqual(second);
     expect(assign).not.toHaveBeenCalled();
+    sessionStorage.clear();
+    await load();
+    expect(auth.getSignedInUser()).toEqual(second);
   });
 
   it('carries on as the account left after signing out the one in use', async () => {
@@ -143,6 +148,8 @@ describe('signing out', () => {
     expect(await accounts.unsyncedChanges(secondAccount)).toBe(2);
     expect(await accounts.unsyncedChanges(firstAccount)).toBe(3);
     expect(mocks.countQueuedWrites).toHaveBeenCalledWith(first.id);
+    mocks.countQueuedWrites.mockRejectedValueOnce(new Error('Outbox unavailable'));
+    await expect(accounts.unsyncedChanges(firstAccount)).rejects.toThrow('Outbox unavailable');
   });
 });
 
@@ -181,9 +188,10 @@ describe('following other tabs', () => {
     localStorage.setItem('throw-user', JSON.stringify(first));
     localStorage.setItem('throw-active-account', first.id);
     window.dispatchEvent(new StorageEvent('storage', { storageArea: localStorage }));
-    await Promise.resolve();
+    await vi.dynamicImportSettled();
     expect(assign).not.toHaveBeenCalled();
 
+    expect(mocks.clearLocalData).not.toHaveBeenCalled();
     release();
     await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('/'));
     expect(mocks.clearLocalData).toHaveBeenCalledOnce();
@@ -195,7 +203,7 @@ describe('following other tabs', () => {
     const stop = accounts.followAccountChanges();
     auth.activateAccount(first.id);
     window.dispatchEvent(new StorageEvent('storage', { storageArea: localStorage }));
-    await Promise.resolve();
+    await vi.dynamicImportSettled();
     expect(assign).not.toHaveBeenCalled();
     expect(auth.getSignedInUser()).toEqual(second);
     stop();

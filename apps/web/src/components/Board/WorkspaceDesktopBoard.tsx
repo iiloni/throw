@@ -8,7 +8,7 @@ import {
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { BoardColumn, ColumnHeader } from './BoardColumn';
 import { useSpotlightCleanup } from './blockers';
-import { OpenTaskPane, SelectionBar, useWidth } from './DesktopBoard';
+import { OpenTaskPane, SelectionBar, seamOf, useWidth } from './DesktopBoard';
 import { drag, makingWay } from './drag';
 import { PriorityIcon } from './glyphs';
 import {
@@ -54,7 +54,7 @@ export function WorkspaceDesktopBoard() {
       <div ref={frame} className="flex min-w-0 flex-1">
         {docked && <BoardSearchSidebar />}
         <div className="relative flex min-w-0 flex-1">
-          <ScrollArea className="min-w-0 flex-1">
+          <ScrollArea sides data-seam={seamOf(state)} className="min-w-0 flex-1">
             <ScrollAreaViewport
               data-autoscroll-x=""
               className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3 [&>div]:px-6"

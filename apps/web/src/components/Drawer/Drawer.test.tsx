@@ -1,11 +1,13 @@
 import { act, createEvent, fireEvent, render, screen } from '@testing-library/react';
+import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/haptics', () => ({ haptics: { selection: vi.fn(), toggle: vi.fn() } }));
-// Placed at once, so each test reads where the drawer comes to rest.
+// Placed at once, so each test reads where the drawer comes to rest, unless a test slides it.
+const motionPreference = vi.hoisted(() => ({ reduced: true }));
 vi.mock('motion/react', async (original) => ({
   ...(await original<typeof import('motion/react')>()),
-  useReducedMotion: () => true,
+  useReducedMotion: () => motionPreference.reduced,
 }));
 
 import { Drawer, type DrawerPage } from './Drawer';
@@ -13,14 +15,18 @@ import { Drawer, type DrawerPage } from './Drawer';
 const HEIGHT = 800;
 const HALF = Math.round(HEIGHT * 0.42);
 let now = 0;
+let measured = 0;
 
 beforeEach(() => {
   now = 0;
+  measured = 0;
+  motionPreference.reduced = true;
   vi.spyOn(performance, 'now').mockImplementation(() => now);
   // jsdom lays nothing out; the drawer is a screen tall and its header has no height.
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
     this: HTMLElement,
   ) {
+    measured++;
     return this.hasAttribute('data-drawer') ? HEIGHT : 0;
   });
 });
@@ -202,5 +208,123 @@ describe('Drawer full pages', () => {
     await settled();
     expect(offset()).toBe(0);
     expect(onClosePage).not.toHaveBeenCalled();
+  });
+});
+
+describe('Drawer motion', () => {
+  it('measures its heights once per pull rather than on every move', async () => {
+    setup(settings);
+    await settled();
+    const title = screen.getByRole('heading');
+    act(() => touch(title, 'start', 400));
+    const before = measured;
+    act(() => {
+      for (let step = 1; step <= 10; step++) {
+        now += 16;
+        touch(title, 'move', 400 + step * 4);
+      }
+    });
+    // One measurement: the drawer, its header, the safe area.
+    expect(measured - before).toBeLessThanOrEqual(3);
+    act(() => {
+      now += 200;
+      touch(title, 'end', 440);
+    });
+  });
+
+  it('keeps a page closing into the dock until it settles, without mounting what is beneath', async () => {
+    let mounts = 0;
+    function Beneath() {
+      useEffect(() => {
+        mounts++;
+      }, []);
+      return <p>Backlog list</p>;
+    }
+    const onSettle = vi.fn();
+    const view = (shown: DrawerPage | null) => (
+      <Drawer
+        label="Backlog"
+        dock={<p>Dock</p>}
+        detent="closed"
+        onDetent={() => {}}
+        page={shown}
+        onClosePage={() => {}}
+        onSettle={onSettle}
+      >
+        <Beneath />
+      </Drawer>
+    );
+    const { rerender } = render(view(settings));
+    await settled();
+    onSettle.mockClear();
+    rerender(view(null));
+    expect(screen.getByText('Options')).toBeInTheDocument();
+    expect(screen.getByText('Options').closest('[aria-hidden]')).not.toBeNull();
+    expect(screen.queryByText('Backlog list')).toBeNull();
+    expect(mounts).toBe(0);
+    await settled();
+    expect(onSettle).toHaveBeenCalled();
+    expect(screen.queryByText('Options')).toBeNull();
+    expect(screen.getByText('Backlog list')).toBeInTheDocument();
+    expect(mounts).toBe(1);
+  });
+
+  it('drops a page still closing when another opens, rather than fading the two across', async () => {
+    motionPreference.reduced = false;
+    const edit: DrawerPage = { key: 'edit', title: 'Edit', content: <p>Edit form</p> };
+    const view = (shown: DrawerPage | null) => (
+      <Drawer
+        label="Backlog"
+        dock={<p>Dock</p>}
+        detent="closed"
+        onDetent={() => {}}
+        page={shown}
+        onClosePage={() => {}}
+      >
+        <p>Backlog list</p>
+      </Drawer>
+    );
+    const { rerender } = render(view(settings));
+    await settled();
+    rerender(view(null));
+    expect(screen.getByText('Options')).toBeInTheDocument();
+    rerender(view(edit));
+    expect(screen.queryByText('Options')).toBeNull();
+    expect(screen.getByText('Edit form').closest('[aria-hidden]')).toBeNull();
+  });
+
+  it('slides by frames, so a long frame does not carry it most of the way at once', async () => {
+    motionPreference.reduced = false;
+    const onSettle = vi.fn();
+    const view = (shown: DrawerPage | null) => (
+      <Drawer
+        label="Backlog"
+        dock={<p>Dock</p>}
+        detent="closed"
+        onDetent={() => {}}
+        page={shown}
+        onClosePage={() => {}}
+        onSettle={onSettle}
+      >
+        <p>Backlog list</p>
+      </Drawer>
+    );
+    const { rerender } = render(view(null));
+    await settled();
+    expect(offset()).toBe(HEIGHT);
+    rerender(view(settings));
+    // A frame held up for half a second, as mounting a heavy page can on a phone.
+    now += 500;
+    await settled();
+    now += 16;
+    await settled();
+    expect(offset()).toBeGreaterThan(HEIGHT / 2);
+    expect(onSettle).not.toHaveBeenCalled();
+    for (let frame = 0; frame < 120 && !onSettle.mock.calls.length; frame++) {
+      now += 16;
+      await settled();
+    }
+    expect(onSettle).toHaveBeenCalledTimes(1);
+    expect(offset()).toBe(0);
   });
 });

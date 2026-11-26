@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronUp, Plus, Search } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { type ReactNode, useContext, useLayoutEffect, useRef } from 'react';
+import { memo, type ReactNode, useContext, useLayoutEffect, useRef } from 'react';
 import { NarrowedBar } from '@/components/BoardSearch/BoardFilters';
 import { Drawer } from '@/components/Drawer/Drawer';
 import { boardDrawerPage } from '@/components/ManagementSurface/ManagementSurface';
@@ -181,9 +181,10 @@ export function WorkspacePhoneBoard({
 
 /**
  * A category's cards from every project, banded by priority. The page itself takes a card
- * carried onto it, sending it to its project's default status for the category.
+ * carried onto it, sending it to its project's default status for the category. Memoized, as
+ * `CardList` is: it reads the board itself, so the drawer's changes need not render its cards.
  */
-function CategoryPage({ category }: { category: Category }) {
+const CategoryPage = memo(function CategoryPage({ category }: { category: Category }) {
   const state = board.use();
   const held = drag.use();
   const { project } = current(state);
@@ -263,4 +264,4 @@ function CategoryPage({ category }: { category: Category }) {
       </ScrollArea>
     </section>
   );
-}
+});

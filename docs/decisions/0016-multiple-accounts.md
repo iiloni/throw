@@ -52,7 +52,8 @@ middle-click opens in a new tab).
   follow their account to its new number without loading (`followAccountNumber`, on the
   storage event in other tabs). The switcher that calls it is not built yet.
 - An address with no number means the tab's account, or for a new tab the one last used. It
-  gains the number when the page loads if several accounts are signed in. With one account,
+  gains the number when the page loads with several accounts or when another tab adds the
+  second account. With one account,
   addresses stay as they were: there is nobody to tell apart, and an existing bookmark or the
   installed app's start address needs no number.
 - An address whose number belongs to nobody signed in goes to the sign-in page, keeping the
@@ -66,7 +67,8 @@ Otherwise a page would send one account's queued writes with another's token in 
 before it reloads. A page whose account has signed out has no session at all. A tab that sees
 its account signed out in another tab leaves for another account or the sign-in page
 (`followAccountChanges`, from `routes/_app.tsx`), waiting first for any held draft
-(`holdUpdateReload`) to close. It also deletes the account's database if the tab that signed
+(`holdUpdateReload`) to close. The write path checks the removal marker before starting a
+transaction, including while another tab is waiting for the server to sign out. The tab also deletes the account's database if the tab that signed
 it out could not, because this one had it open (`throw-account-removed:<id>`).
 
 **An older build's sign-out is noticed.** A build from before the list changes only the

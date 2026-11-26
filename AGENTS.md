@@ -46,6 +46,10 @@ On a phone the same boundary hands the board's drawer the open task's dock and p
 Catch's split view does (`TaskDrawer`). A desktop pane at least 620 px wide moves the task's
 tags and subtasks to a side column beside the card while it has any (ADR 0012,
 `TaskDetails/TaskColumn.tsx`); later extras such as link previews join it there.
+Columns that run on under an open desktop pane fade out at the seam (`[data-seam]` in
+`styles.css`, from `ScrollArea`'s `sides` marks and `seamOf`), and columns scrolled out to the
+left fade at the board's start; each fade stands at a sticky rail's edge where one lies over
+that end of the scroller.
 Outbound webhooks (ADR 0015) are server-only: `apps/server/src/webhooks` queues deliveries
 in the write's transaction, checks receivers against its SSRF policy and sends them from a
 worker; Settings manages them at `/settings/webhooks`. A webhook's quiet window is a
@@ -59,6 +63,8 @@ development only. The board color helper is `taskTagColor` in `@throw/shared`. T
 pane picks and lists tags, and its unified Tags panel (Primary / Secondary tabs) makes new
 tags through the shell's `NewTagHost` (`components/NewTag`); project settings mounts tag
 management.
+Every tag tree (pickers, tag settings, board filters) shares one device-wide set of collapsed
+branches (`TagTree/useCollapsedTags.ts`); a tag search opens branches without changing it.
 Task relations (blocks, duplicates, relates to) link tasks across a workspace's projects:
 actions in `lib/taskRelations.ts`, the pane's list, relation picker (opened inline from the
 Links tab / open side column or from the dock's More panel) and card blocked mark in
@@ -71,6 +77,9 @@ on `lib/masonry.ts`, Catch's `NoteGrid` springs): a single column, a width their
 was dragged to (`SplitHandle`, kept by `useRailWidths` in `Board/state.ts`) or a gallery across
 the board. `railGeometry` and `useRailSpring` in `Board/SideZone.tsx` spring a rail only when
 its state changes and track its width exactly as the row or its edge is resized.
+A card's subtask list springs its own height (`useUnfold` in `Board/SubtaskUnderlay.tsx`); the
+gallery measures it at its end (`settleSubtaskLists`) and moves the cards below with the same
+spring from the same paint, each keeping its column while only heights change.
 Desktop columns on both boards fold to a strip, as Catch's deck does
 (`Board/BoardColumn.tsx`, remembered per project by `useCollapsedColumns` in `Board/state.ts`).
 A phone's project board reads the same folds: its pager skips folded columns, which stay as
@@ -136,6 +145,8 @@ checkout's stack. Never hard-code container or project names.
   against this worktree's stack. Select the affected specs or cases; see the E2E policy below.
 - `./scripts/dev.sh android [--static] [--usb] [--target <id>]`: install Throw Dev; use
   `--static` for bundled code and offline testing. Host JDK 21, SDK 36 and adb are required.
+  Live reload runs until Ctrl+C. On Linux, `down`, `destroy` and worktree removal also stop
+  it; elsewhere it keeps running until Ctrl+C.
 - `./scripts/dev.sh generate`: create a migration after editing `apps/server/src/db/schema.ts`.
   Commit the generated SQL and journal.
 - `./scripts/dev.sh backup <command>`: server backups for this worktree. See `docs/backups.md`.

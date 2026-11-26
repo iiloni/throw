@@ -1,6 +1,9 @@
+import type { Color } from '@throw/shared';
 import { ChevronDown } from 'lucide-react';
-import { useReducedMotion } from 'motion/react';
+import { animate, useMotionValue, useReducedMotion } from 'motion/react';
+import { useLayoutEffect, useRef } from 'react';
 import { Hint } from '@/components/Hint/Hint';
+import { afterPaint, springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { useIsBlockerSpotlightTarget, useParentHasSpotlightBlocker } from './blockers';
 import { StatusGlyph } from './glyphs';
@@ -29,6 +32,7 @@ export function SubtaskUnderlay({ parent, subtasks, inert = false }: Props) {
   const done = subtasks.filter((task) => category(task) === 'done').length;
   const open = subtasks.filter((task) => !isClosed(category(task))).length;
   const spotlightBlocker = useParentHasSpotlightBlocker(parent.id, !inert);
+  const list = useUnfold(expanded, Boolean(reduced));
 
   return (
     <div
@@ -48,9 +52,18 @@ export function SubtaskUnderlay({ parent, subtasks, inert = false }: Props) {
       >
         {/* One pip per subtask: the shape of the work, not only a fraction. */}
         <span aria-hidden className="flex min-w-0 flex-1 items-center gap-1">
-          {subtasks.map((task) => (
-            <SubtaskPip key={task.id} taskId={task.id} category={category(task)} inert={inert} />
-          ))}
+          {subtasks.map((task) => {
+            const status = statusById(project, task.statusId);
+            return (
+              <SubtaskPip
+                key={task.id}
+                taskId={task.id}
+                category={status?.category ?? 'backlog'}
+                color={status?.color ?? null}
+                inert={inert}
+              />
+            );
+          })}
         </span>
         <span
           className={cn(
@@ -70,13 +83,13 @@ export function SubtaskUnderlay({ parent, subtasks, inert = false }: Props) {
         />
       </button>
       <div
+        ref={list}
         data-subtask-list=""
-        className={cn(
-          'grid transition-[grid-template-rows] duration-300 ease-[var(--ease-emphasized)]',
-          expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
-        )}
+        data-expanded={expanded ? '' : undefined}
+        // The spring draws its height: no CSS transition, not even reduced motion's brief one.
+        className="overflow-hidden transition-none"
       >
-        <ul inert={!expanded || inert} className="min-h-0 overflow-hidden">
+        <ul inert={!expanded || inert}>
           {subtasks.map((task) => (
             <SubtaskRow key={task.id} project={project} task={task} />
           ))}
@@ -88,14 +101,105 @@ export function SubtaskUnderlay({ parent, subtasks, inert = false }: Props) {
   );
 }
 
+/**
+ * Springs the list's height between nothing and its rows, which stay drawn from the top while
+ * it clips them. At rest an open list is as tall as its rows, so a subtask added or renamed
+ * while it is open shows at once.
+ *
+ * The height is a spring on the element rather than a CSS transition so that a gallery can lay
+ * its cards out once, for the height the list is going to (`settleSubtaskLists`), and move them
+ * with the same spring: they keep in step with the list instead of chasing every frame of it.
+ */
+function useUnfold(expanded: boolean, reduced: boolean) {
+  const list = useRef<HTMLDivElement>(null);
+  const height = useMotionValue(0);
+  const shown = useRef(expanded);
+  const pending = useRef(() => {});
+  // The height is the spring's alone: React leaves it be, so the list is still drawn where it
+  // was when it is told to open or close.
+  useLayoutEffect(() => {
+    const element = list.current;
+    if (!element) return;
+    if (!shown.current) element.style.height = '0px';
+    const unsubscribe = height.on('change', (value) => {
+      element.style.height = `${value}px`;
+    });
+    return () => {
+      unsubscribe();
+      pending.current();
+      height.stop();
+    };
+  }, [height]);
+  useLayoutEffect(() => {
+    const element = list.current;
+    if (!element || shown.current === expanded) return;
+    shown.current = expanded;
+    const rows =
+      element.firstElementChild instanceof HTMLElement ? element.firstElementChild : null;
+    const to = expanded ? (rows?.offsetHeight ?? 0) : 0;
+    pending.current();
+    if (reduced) {
+      height.stop();
+      element.style.height = expanded ? '' : '0px';
+      return;
+    }
+    // From where it is drawn: a list already moving keeps its speed, one at rest starts still.
+    if (!height.isAnimating()) height.jump(element.offsetHeight);
+    // The board draws again for the change, which is a long frame; a spring started now would
+    // lose its first moments to it. A gallery starts its cards' springs after the same paint
+    // (`ZoneGallery`), so the two still move as one. Not stopped when it turns back: the next
+    // spring takes the value over with its speed.
+    pending.current = afterPaint(() => {
+      void animate(height, to, springs.pane).then(() => {
+        if (shown.current && height.get() === to) element.style.height = '';
+      });
+    });
+  }, [expanded, reduced, height]);
+  return list;
+}
+
+/**
+ * Draws every subtask list under `root` at the height it is opening or closing to, until the
+ * returned call puts them back: what a grid measures a card by, so it lays the card out once
+ * for where it is going rather than once a frame on the way. Measured as set, not worked out
+ * from the list's height now, which the browser rounds differently on every frame.
+ */
+export function settleSubtaskLists(root: ParentNode) {
+  const moving: [HTMLElement, string][] = [];
+  for (const list of root.querySelectorAll<HTMLElement>('[data-subtask-list]')) {
+    const to = list.hasAttribute('data-expanded') ? '' : '0px';
+    if (list.style.height === to) continue;
+    moving.push([list, list.style.height]);
+    list.style.height = to;
+  }
+  return () => {
+    for (const [list, height] of moving) list.style.height = height;
+  };
+}
+
+const neutralPip = {
+  backlog: 'bg-foreground/15',
+  active: 'bg-foreground/45',
+  done: 'bg-foreground/80',
+  cancelled: 'outline-foreground/20',
+};
+const coloredPip = {
+  backlog: 'bg-[color:var(--column-accent)]/35',
+  active: 'bg-[color:var(--column-accent)]/80',
+  done: 'bg-[color:var(--column-accent)]',
+  cancelled: 'outline-[color:var(--column-accent)]/45',
+};
+
 /** One pip in the subtask underlay bar; turns destructive red while this subtask is spotlighted. */
 function SubtaskPip({
   taskId,
   category,
+  color,
   inert,
 }: {
   taskId: string;
   category: Category;
+  color: Color | null;
   inert: boolean;
 }) {
   const isBlocker = useIsBlockerSpotlightTarget(taskId);
@@ -103,13 +207,13 @@ function SubtaskPip({
   return (
     <span
       data-category={category}
+      data-column-color={color ?? undefined}
       data-subtask-pip={taskId}
       data-spotlight={highlighted ? 'blocker' : undefined}
       className={cn(
         'h-1.5 max-w-6 flex-1 rounded-full transition-colors',
-        highlighted
-          ? 'bg-destructive'
-          : 'bg-foreground/15 data-[category=active]:bg-foreground/45 data-[category=done]:bg-foreground/80 data-[category=cancelled]:bg-transparent data-[category=cancelled]:outline data-[category=cancelled]:outline-1 data-[category=cancelled]:outline-foreground/20',
+        highlighted ? 'bg-destructive' : (color ? coloredPip : neutralPip)[category],
+        !highlighted && category === 'cancelled' && 'bg-transparent outline-1',
       )}
     />
   );
@@ -141,7 +245,7 @@ function SubtaskRow({ project, task }: { project: Project; task: Task }) {
             aria-label={`Status: ${status.name}. Change`}
             className="flex size-9 shrink-0 items-center justify-center rounded-xl outline-none hover:bg-foreground/[0.07] focus-visible:ring-[3px] focus-visible:ring-ring/60"
           >
-            <StatusGlyph category={status.category} className="size-4" />
+            <StatusGlyph category={status.category} color={status.color} className="size-4" />
           </button>
         </Hint>
       </StatusMenu>
