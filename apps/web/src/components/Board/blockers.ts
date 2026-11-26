@@ -127,10 +127,11 @@ export function blockedHint(blockers: readonly TaskBlocker[], project: Project) 
 
 /**
  * How long the pointer must linger on a card's blocked badge before spotlighting its blockers
- * across the board: long enough that passing over the icon or reading its tooltip does not
- * flash the board, short enough to feel responsive once you pause.
+ * across the board: long enough that a pointer passing over the icon does not flash the board,
+ * and just after the badge's tooltip (the shell's 300 ms hint delay), so the two arrive as one
+ * response to a pause rather than as separate waits.
  */
-export const SPOTLIGHT_DWELL_MS = 1100;
+export const SPOTLIGHT_DWELL_MS = 400;
 
 export type BlockerSpotlight = {
   /** The blocked task whose badge is being lingered on. */
