@@ -242,6 +242,12 @@
   --priority-lowest: light-dark(oklch(0.58 0.03 250), oklch(0.66 0.025 250));
   --border: light-dark(oklch(0.885 0.01 85), oklch(0.34 0.012 70));
   --input: var(--border);
+  /*
+   * A card raised on a surface of its own colour, such as a subtask in its parent. Dark
+   * shadows vanish on dark surfaces, so in dark mode a raised card is lighter instead; light
+   * mode leaves it to the shadow.
+   */
+  --raise: light-dark(transparent, oklch(1 0 0 / 0.05));
   --ring: light-dark(#0b7765, #70ddc6);
 
   /* Explicit UI palette, independent of icon/channel tokens and their transforms. */

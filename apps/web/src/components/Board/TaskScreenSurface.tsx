@@ -141,6 +141,10 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
     return rect && !rect.row ? rect.edge.shadow : ROW_SHADOW;
   });
   const shadowOpacity = useTransform(() => edgeOpacity.get() * opacity.get());
+  const edgeRaise = useTransform(() => {
+    const rect = card.get();
+    return rect && !rect.row ? rect.edge.raise : 'none';
+  });
 
   useEffect(() => {
     const resize = () => viewport.set({ width: innerWidth, height: innerHeight });
@@ -331,6 +335,12 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
               </TaskEditorReadyContext.Provider>
             </TaskScrollContext.Provider>
           </motion.div>
+          <motion.div
+            aria-hidden
+            data-task-raise=""
+            className="pointer-events-none absolute inset-0"
+            style={{ opacity: edgeOpacity, backgroundImage: edgeRaise }}
+          />
           <motion.div
             aria-hidden
             data-task-face=""

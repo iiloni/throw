@@ -208,7 +208,12 @@ export function TaskDetails({
             return (
               <TaskCard
                 key={child.id}
-                className={placement === 'inline' ? 'border-foreground/20 shadow-sm' : undefined}
+                className={
+                  placement === 'inline'
+                    ? // Over its own tint, so a subtask keeps its colour, lifted off its parent's.
+                      'border-foreground/20 bg-[image:linear-gradient(var(--raise),var(--raise))] shadow-sm'
+                    : undefined
+                }
                 task={{
                   ...boardTask(child, tags),
                   secondaryTagIds: boardTasks.get(child.id)?.secondaryTagIds ?? [],

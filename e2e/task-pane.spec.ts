@@ -155,6 +155,11 @@ test('inline subtasks have a visible edge and keep their own tint in both themes
       await page.emulateMedia({ colorScheme });
       await expect(first).toHaveClass(/border-foreground\/20/);
       await expect(first).toHaveClass(/shadow-sm/);
+      // Dark shadows vanish on dark surfaces, so there the card is lifted by a lighter wash.
+      const raise = await first.evaluate((el) => getComputedStyle(el).backgroundImage);
+      expect(raise).toMatch(/gradient/);
+      if (colorScheme === 'dark') expect(raise).not.toMatch(/rgba\(0, 0, 0, 0\)/);
+      else expect(raise).toMatch(/rgba\(0, 0, 0, 0\)/);
       const fill = await first.evaluate((el) => getComputedStyle(el).backgroundColor);
       await expect(other).not.toHaveCSS('background-color', fill);
       await list.screenshot({ path: testInfo.outputPath(`inline-${surface}-${colorScheme}.png`) });
