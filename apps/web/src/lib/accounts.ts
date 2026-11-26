@@ -9,6 +9,7 @@ import {
   getAccounts,
   getSignedInUser,
   pageAccountGone,
+  removedKey,
   SWITCHED_KEY,
 } from './auth';
 import { clearCommentDrafts } from './commentDrafts';
@@ -25,15 +26,6 @@ import { isUpdateReloadBlocked, watchUpdateReloadBlocked } from './useUpdateRelo
  * accounts side by side. An account open in no tab keeps its session and its copy of its
  * data until it is switched to.
  */
-
-// Left for a tab that still has a signed-out account's database open, where the tab that
-// signed it out could not delete it: that tab deletes it on its way out. Not set by an expired
-// session, which keeps the device's data for the sign-in that follows.
-const removedKey = (userId: string) => `throw-account-removed:${userId}`;
-{
-  const user = getSignedInUser();
-  if (user) localStorage.removeItem(removedKey(user.id));
-}
 
 /** Changes the account this tab shows and loads `path` as it. A full load, so the collections
  * open that account's data. */
@@ -99,7 +91,7 @@ export function arrivedBySwitching() {
 export async function unsyncedChanges(account: Account) {
   return account.user.id === getSignedInUser()?.id
     ? getSyncStatus().pending
-    : countQueuedWrites(account.user.id).catch(() => 0);
+    : countQueuedWrites(account.user.id);
 }
 
 /**

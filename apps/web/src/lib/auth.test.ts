@@ -409,6 +409,16 @@ describe('several accounts on one device', () => {
       expect(address()).toBe('/u/1/settings?task=abc');
     });
 
+    it('numbers an open page when another account joins the device', async () => {
+      signIn('first-token');
+      await load();
+      expect(auth.basePath()).toBe('');
+      signIn('second-token', other);
+      auth.followAccountNumber();
+      expect(auth.getSignedInUser()).toEqual(user);
+      expect(auth.pagePath('/settings')).toBe('/u/1/settings');
+    });
+
     it('moves another tab’s address when it hears of a reorder', async () => {
       await signInBoth();
       window.history.replaceState(null, '', '/u/2/settings');

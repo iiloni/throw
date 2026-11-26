@@ -305,7 +305,8 @@ export function reorderAccounts(userIds: string[]) {
  * or in another tab. The page stays as it is: only the number in the address bar changes.
  */
 export function followAccountNumber() {
-  if (!prefix || !pageUserId || pageAccountGone()) return;
+  if (!numbersAddresses() || !pageUserId || pageAccountGone()) return;
+  if (!prefix && getAccounts().length < 2) return;
   const next = prefixFor(pageUserId);
   if (next === prefix) return;
   prefix = next;
@@ -343,8 +344,12 @@ export function pageAccountGone() {
 /** Forgets an account's session on this device. Its data here is the caller's to remove. */
 export function forgetAccount(userId: string) {
   const wasActive = activeUser()?.id === userId;
-  writeAccounts(getAccounts().filter(({ user }) => user.id !== userId));
-  if (wasActive) clearActive();
+  const remaining = getAccounts().filter(({ user }) => user.id !== userId);
+  writeAccounts(remaining);
+  if (wasActive) {
+    if (remaining[0]) writeActive(remaining[0]);
+    else clearActive();
+  }
 }
 
 /** Forgets the session this page uses, leaving the device's other accounts signed in. */
@@ -357,6 +362,9 @@ export function clearAuthToken() {
     clearActive();
   }
 }
+
+/** Blocks new writes until a fresh sign-in and marks local data for cleanup in other tabs. */
+export const removedKey = (userId: string) => sessionKey(`throw-account-removed:${userId}`);
 
 const EXPIRED_KEY = 'throw-expired-user';
 
@@ -410,6 +418,7 @@ export const authClient = createAuthClient({
         // outbox are still that account's, and must not send with the new one's token.
         const user = userOf(context.data);
         if (user) {
+          localStorage.removeItem(removedKey(user.id));
           saveAccount({ user, token }, true);
           // The load that follows is this tab's, as the account that just signed in.
           sessionStorage.setItem(sessionKey(TAB_KEY), user.id);
