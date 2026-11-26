@@ -46,7 +46,7 @@ export function Swatch({
           if (!unavailable) onClick();
         }}
         className={cn(
-          'flex size-10 shrink-0 items-center justify-center rounded-full border outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-disabled:cursor-not-allowed aria-disabled:opacity-25',
+          'flex size-10 shrink-0 items-center justify-center rounded-full border outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-disabled:cursor-not-allowed aria-disabled:opacity-45',
           color ? 'bg-tint text-tint-accent' : 'bg-card text-muted-foreground',
           pressed ? 'border-foreground/70 ring-2 ring-foreground/15' : 'border-foreground/10',
         )}

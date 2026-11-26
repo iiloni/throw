@@ -1065,7 +1065,7 @@ test('the unified tags panel makes a tag in either tab’s corner and assigns it
   await panel.getByRole('button', { name: 'Red: Launch', exact: true }).click();
   await expect(panel.getByRole('button', { name: 'Back from Launch' })).toBeVisible();
   await newTag.click();
-  await expect(form.getByRole('combobox', { name: 'Parent tag' })).toHaveValue(launch);
+  await expect(form.getByRole('button', { name: 'Parent tag Launch', exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(form).toHaveCount(0);
   await expect(panel.getByRole('button', { name: 'Back from Launch' })).toBeVisible();
@@ -1085,7 +1085,9 @@ test('the unified tags panel makes a tag in either tab’s corner and assigns it
     .getByRole('tabpanel', { name: /^Secondary/ })
     .getByRole('button', { name: 'New tag', exact: true });
   await secondaryNewTag.click();
-  await expect(form.getByRole('combobox', { name: 'Parent tag' })).toHaveValue('');
+  await expect(
+    form.getByRole('button', { name: 'Parent tag Top level', exact: true }),
+  ).toBeVisible();
   await form.getByRole('textbox', { name: 'Name' }).fill('Docs');
   await form.getByRole('button', { name: 'Save tag', exact: true }).click();
   await expect(form).toHaveCount(0);
