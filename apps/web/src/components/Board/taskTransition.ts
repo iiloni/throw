@@ -141,6 +141,11 @@ export function useTaskCardLanding(taskId: string) {
   return landing.use().has(taskId);
 }
 
+/** Whether a task screen is open from the card, or landing in it, outside React. */
+export function isTaskCardHidden(taskId: string) {
+  return hidden.get().has(taskId) || landing.get().has(taskId);
+}
+
 export function useTaskCardHidden(taskId: string) {
   return hidden.use().has(taskId);
 }
