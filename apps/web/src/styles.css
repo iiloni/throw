@@ -1,8 +1,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* Catch's editor surface inherits the task's tint, type and theme. */
-.bn-container.task-editor[data-color-scheme] {
+/*
+ * Catch's editor surface inherits the task's tint, type and theme. Its menus are portalled
+ * to a themed root of their own beside the page (DescriptionEditor), which takes the type too.
+ */
+.bn-root.task-editor[data-color-scheme] {
   --bn-colors-editor-background: transparent;
   --bn-colors-editor-text: var(--foreground);
   --bn-font-family: var(--font-sans);
@@ -207,6 +210,28 @@
 }
 .bn-container.task-editor a {
   color: var(--brand-link);
+}
+/*
+ * The block handle sits in the card's padding beside the text (DescriptionSideMenu), so it
+ * is narrower than BlockNote's: its grip, not its box, should take the gutter's middle.
+ */
+.bn-root.task-editor .bn-side-menu .bn-button {
+  width: 1.25rem;
+  min-width: 1.25rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+  border-radius: 0.375rem;
+  color: var(--muted-foreground);
+  cursor: grab;
+}
+.bn-root.task-editor .bn-side-menu .bn-button > svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+/* The handle's menu is laid out inside the handle, which would wrap it to the handle's width. */
+.bn-root.task-editor .bn-drag-handle-menu {
+  width: max-content;
+  min-width: 8rem;
 }
 
 /*
