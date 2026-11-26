@@ -45,53 +45,68 @@ test.describe('subtask underlay transitions on a phone', () => {
     cardBottom: number;
     /** The top of what is drawn of the underlay, after its reveal's clip. */
     drawnTop: number;
+    /** How much of the underlay is drawn below that top. */
+    drawnHeight: number;
     shown: boolean;
+    cardShown: boolean;
     moved: boolean;
   };
 
-  /** Every frame from the call until the parent's card has been shown for a few frames. */
-  function sampleLanding(page: Page, parentId: string) {
-    return page.evaluate(async (id) => {
-      const frames: Frame[] = [];
-      const start = performance.now();
-      await new Promise<void>((resolve) => {
-        const step = () => {
-          const article = document.querySelector<HTMLElement>(
-            `[data-card-id="${id}"]:not([data-overlay])`,
-          )!;
-          const underlay =
-            article.parentElement!.querySelector<HTMLElement>('[data-subtask-underlay]')!;
-          const wrapper = underlay.parentElement!;
-          const cardBox = article.getBoundingClientRect();
-          const box = underlay.getBoundingClientRect();
-          const clip = getComputedStyle(wrapper).clipPath;
-          // `polygon(x y, …)`: the first point's y is the clip's top, in the wrapper's box.
-          const clipTop = clip.startsWith('polygon')
-            ? Number.parseFloat(
-                clip
-                  .slice(clip.indexOf('(') + 1)
-                  .split(',')[0]!
-                  .trim()
-                  .split(/\s+/)[1]!,
-              )
-            : Number.NEGATIVE_INFINITY;
-          frames.push({
-            surface: !!document.querySelector('[data-task-surface]'),
-            cardTop: cardBox.top,
-            cardBottom: cardBox.bottom,
-            drawnTop: Math.max(box.top, wrapper.getBoundingClientRect().top + clipTop),
-            shown: getComputedStyle(wrapper).visibility === 'visible',
-            moved: getComputedStyle(wrapper).transform !== 'none',
-          });
-          const gone = frames.findIndex((frame) => !frame.surface);
-          if (gone >= 0 && frames.length > gone + 30) return resolve();
-          if (performance.now() - start > 5000) return resolve();
+  /**
+   * Every frame from the call until the parent's card has been shown again for a few frames
+   * (`landing`), or its underlay has been put away for a few (`opening`).
+   */
+  function sampleUnderlay(page: Page, parentId: string, until: 'landing' | 'opening') {
+    return page.evaluate(
+      async ([id, until]) => {
+        const frames: Frame[] = [];
+        const start = performance.now();
+        await new Promise<void>((resolve) => {
+          const step = () => {
+            const article = document.querySelector<HTMLElement>(
+              `[data-card-id="${id}"]:not([data-overlay])`,
+            )!;
+            const underlay =
+              article.parentElement!.querySelector<HTMLElement>('[data-subtask-underlay]')!;
+            const wrapper = underlay.parentElement!;
+            const cardBox = article.getBoundingClientRect();
+            const box = underlay.getBoundingClientRect();
+            const clip = getComputedStyle(wrapper).clipPath;
+            // `polygon(x y, …)`: the first point's y is the clip's top, in the wrapper's box.
+            const clipTop = clip.startsWith('polygon')
+              ? Number.parseFloat(
+                  clip
+                    .slice(clip.indexOf('(') + 1)
+                    .split(',')[0]!
+                    .trim()
+                    .split(/\s+/)[1]!,
+                )
+              : Number.NEGATIVE_INFINITY;
+            const drawnTop = Math.max(box.top, wrapper.getBoundingClientRect().top + clipTop);
+            frames.push({
+              surface: !!document.querySelector('[data-task-surface]'),
+              cardTop: cardBox.top,
+              cardBottom: cardBox.bottom,
+              drawnTop,
+              drawnHeight: Math.max(0, box.bottom - drawnTop),
+              shown: getComputedStyle(wrapper).visibility === 'visible',
+              cardShown: getComputedStyle(article).visibility === 'visible',
+              moved: getComputedStyle(wrapper).transform !== 'none',
+            });
+            const end =
+              until === 'landing'
+                ? frames.findIndex((frame) => !frame.surface)
+                : frames.findIndex((frame) => frame.surface && !frame.shown);
+            if (end >= 0 && frames.length > end + 30) return resolve();
+            if (performance.now() - start > 5000) return resolve();
+            requestAnimationFrame(step);
+          };
           requestAnimationFrame(step);
-        };
-        requestAnimationFrame(step);
-      });
-      return frames;
-    }, parentId);
+        });
+        return frames;
+      },
+      [parentId, until] as const,
+    );
   }
 
   function expectNeverAboveCard(frames: Frame[], reduced: boolean) {
@@ -120,11 +135,40 @@ test.describe('subtask underlay transitions on a phone', () => {
       await unfold(page, 'Tall epic');
       await unfold(page, 'Short epic');
       for (const parent of ['Tall epic', 'Short epic', 'Folded epic']) {
+        const opening = sampleUnderlay(page, board.ids[parent]!, 'opening');
         await card(page, parent).click();
         const screen = page.getByLabel('Task', { exact: true });
         await expect(screen.getByRole('textbox', { name: 'Task title' })).toHaveValue(parent);
+        const opened = await opening;
+        const report = JSON.stringify(
+          opened.map((frame) => [
+            frame.cardShown,
+            frame.shown,
+            Math.round(frame.drawnHeight),
+            Math.round(frame.drawnTop),
+            Math.round(frame.cardBottom),
+            Math.round(frame.cardTop),
+          ]),
+        );
+        for (const frame of opened.filter((frame) => frame.shown))
+          expect(frame.drawnTop, report).toBeGreaterThanOrEqual(frame.cardBottom - 12 - 1);
+        if (!reduced) {
+          // The card gathers it up as the screen leaves: it is still drawn, below the card's
+          // foot, once the card is hidden, and is put away only after it has slid in.
+          const full = opened.find((frame) => frame.shown)!.drawnHeight;
+          const gathering = opened.filter((frame) => !frame.cardShown && frame.shown);
+          expect(
+            gathering.some((frame) => frame.drawnHeight > full * 0.5),
+            report,
+          ).toBe(true);
+          expect(
+            gathering.some((frame) => frame.drawnHeight < full * 0.5),
+            report,
+          ).toBe(true);
+          expect(opened.at(-1)!.shown, report).toBe(false);
+        }
         await page.waitForTimeout(600);
-        const frames = sampleLanding(page, board.ids[parent]!);
+        const frames = sampleUnderlay(page, board.ids[parent]!, 'landing');
         await screen.getByRole('button', { name: 'Back to the board' }).click();
         expectNeverAboveCard(await frames, reduced);
         await expect(page.locator('[data-task-screen]')).toHaveCount(0);
@@ -232,7 +276,7 @@ test.describe('subtask underlay transitions on a phone', () => {
     await expect(screen.getByRole('textbox', { name: 'Task title' })).toHaveValue('Crumb epic');
     await expect(page.locator('[data-task-screen]')).toHaveCount(1);
     await page.waitForTimeout(600);
-    const frames = sampleLanding(page, board.ids['Crumb epic']!);
+    const frames = sampleUnderlay(page, board.ids['Crumb epic']!, 'landing');
     await screen.getByRole('button', { name: 'Back to the board' }).click();
     expectNeverAboveCard(await frames, false);
     await expect(page.locator('[data-task-screen]')).toHaveCount(0);

@@ -8,11 +8,12 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
+  useState,
 } from 'react';
 import { Hint } from '@/components/Hint/Hint';
 import { TaskTags } from '@/components/TaskTags/TaskTags';
 import { haptics } from '@/lib/haptics';
-import { springs } from '@/lib/motion';
+import { afterPaint, animateSteadySpring, springs, stopSteady } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { CARD_HELP_ID } from './BoardAnnouncer';
 import {
@@ -55,6 +56,82 @@ type Props = {
 
 /** Room a revealing underlay's clip leaves beside and below it, for its shadow and rings. */
 const CLIP_SPARE = '48px';
+
+/**
+ * Slides a card's subtask underlay out from behind it, or back in, as its task screen leaves or
+ * lands: it is hidden only once tucked away. An open list is taller than its card, so it moves
+ * behind the card and is clipped at the card's bottom edge (less the tuck under its corners)
+ * rather than rising above its top: it is drawn out of, and gathered into, the card's foot.
+ */
+function useUnderlayTuck(hidden: boolean, reduced: boolean) {
+  const ref = useRef<HTMLDivElement>(null);
+  const y = useMotionValue(0);
+  const [stowed, setStowed] = useState(hidden);
+  const stowedNow = useRef(hidden);
+  const was = useRef(hidden);
+  const release = useRef(() => {});
+  useLayoutEffect(
+    () => () => {
+      release.current();
+      stopSteady(y);
+      y.stop();
+    },
+    [y],
+  );
+  useLayoutEffect(() => {
+    const wrapper = ref.current;
+    if (was.current === hidden) return;
+    was.current = hidden;
+    release.current();
+    const stow = (value: boolean) => {
+      stowedNow.current = value;
+      setStowed(value);
+    };
+    if (!wrapper || reduced) {
+      y.jump(0);
+      wrapper?.style.removeProperty('clip-path');
+      stow(hidden);
+      return;
+    }
+    // The wrapper holds only the strip below the card; the underlay's top already tucks under.
+    const tuck = Math.max(0, -((wrapper.firstElementChild as HTMLElement | null)?.offsetTop ?? 0));
+    const clip = (value: number) => {
+      const top = -value - tuck;
+      wrapper.style.clipPath = `polygon(-${CLIP_SPARE} ${top}px, calc(100% + ${CLIP_SPARE}) ${top}px, calc(100% + ${CLIP_SPARE}) calc(100% + ${CLIP_SPARE}), -${CLIP_SPARE} calc(100% + ${CLIP_SPARE}))`;
+    };
+    // From behind the card when it was put away; one still being gathered up turns back.
+    if (!hidden && stowedNow.current) y.jump(-wrapper.offsetHeight);
+    if (!hidden) stow(false);
+    clip(y.get());
+    const unsubscribe = y.on('change', clip);
+    let current = true;
+    let cancel = () => {};
+    release.current = () => {
+      current = false;
+      cancel();
+      unsubscribe();
+    };
+    const settle = () => {
+      if (!current) return;
+      release.current();
+      release.current = () => {};
+      wrapper.style.removeProperty('clip-path');
+      if (hidden) stow(true);
+    };
+    if (hidden) {
+      // The task's screen mounts in this same long frame, which a spring timed by the clock
+      // would skip to its end: it starts after paint with the screen's own growth, by frames.
+      cancel = afterPaint(() => {
+        cancel = () => stopSteady(y);
+        void animateSteadySpring(y, -wrapper.offsetHeight, springs.smooth).then(settle);
+      });
+    } else {
+      stopSteady(y);
+      void animate(y, 0, springs.smooth).then(settle);
+    }
+  }, [hidden, reduced, y]);
+  return { ref, y, stowed };
+}
 
 function closedAgo(closedAt: number) {
   const days = Math.max(0, Math.round((Date.now() - closedAt) / 86_400_000));
@@ -220,46 +297,11 @@ export function TaskCard({
   const spotlightRole = useCardSpotlightRole(task.id, state.subtasksAsCards, spotlightEnabled);
   const lifted = useTaskCardHidden(task.id);
   // As in Catch, a task shrinking back into its card lands without the underlay, which slides
-  // out from behind the card as the task settles, as if the card were setting it down.
+  // out from behind the card as the task settles, as if the card were setting it down. Opening,
+  // the card gathers it up the same way before it is hidden, rather than dropping it at once.
   const settling = useTaskCardLanding(task.id);
   const underlayHidden = lifted && !settling;
-  const underlay = useRef<HTMLDivElement>(null);
-  const underlayY = useMotionValue(0);
-  const wasHidden = useRef(underlayHidden);
-  useLayoutEffect(() => {
-    const wrapper = underlay.current;
-    if (wasHidden.current && !underlayHidden && wrapper && !reduced) {
-      // The wrapper holds only the strip below the card; the underlay's top already tucks under.
-      // An open list is taller than its card, so it starts behind the card and is clipped at the
-      // card's bottom edge (less the tuck under its corners) rather than rising above its top:
-      // it is drawn out of the card's foot as it slides down.
-      const tuck = Math.max(
-        0,
-        -((wrapper.firstElementChild as HTMLElement | null)?.offsetTop ?? 0),
-      );
-      const clip = (y: number) => {
-        const top = -y - tuck;
-        wrapper.style.clipPath = `polygon(-${CLIP_SPARE} ${top}px, calc(100% + ${CLIP_SPARE}) ${top}px, calc(100% + ${CLIP_SPARE}) calc(100% + ${CLIP_SPARE}), -${CLIP_SPARE} calc(100% + ${CLIP_SPARE}))`;
-      };
-      underlayY.set(-wrapper.offsetHeight);
-      clip(underlayY.get());
-      const unsubscribe = underlayY.on('change', clip);
-      const controls = animate(underlayY, 0, springs.smooth);
-      void controls.then(() => {
-        unsubscribe();
-        wrapper.style.clipPath = '';
-      });
-      wasHidden.current = underlayHidden;
-      return () => {
-        unsubscribe();
-        // Stopped only by unmounting or hiding it again, which jumps it home unclipped.
-        controls.stop();
-        underlayY.jump(0);
-        wrapper.style.clipPath = '';
-      };
-    }
-    wasHidden.current = underlayHidden;
-  }, [underlayHidden, underlayY, reduced]);
+  const underlay = useUnderlayTuck(underlayHidden, !!reduced);
   // The real card waits unseen while its copy flies home.
   const landing = !overlay && dragState?.phase === 'landing' && dragState.ids.includes(task.id);
   // Where a list cannot close up around a held card, its place stays, faded.
@@ -427,9 +469,9 @@ export function TaskCard({
     >
       {card}
       <motion.div
-        ref={underlay}
-        className={cn('-z-10 relative flex flex-col', underlayHidden && 'invisible')}
-        style={{ y: underlayY }}
+        ref={underlay.ref}
+        className={cn('-z-10 relative flex flex-col', underlay.stowed && 'invisible')}
+        style={{ y: underlay.y }}
       >
         <SubtaskUnderlay parent={task} subtasks={subtasks} inert={overlay} />
       </motion.div>
