@@ -7,6 +7,7 @@ import {
   railGeometry,
   STRIP_WIDTH,
   settleRail,
+  showsRailEdge,
   ZONE_GAP,
 } from './SideZone';
 
@@ -167,5 +168,24 @@ describe('settleRail', () => {
       view: 'panel',
       width: PANEL_WIDTH,
     });
+  });
+});
+
+describe('showsRailEdge', () => {
+  it('gives a panel an edge, and neither a strip nor a gallery', () => {
+    expect(showsRailEdge('panel', false, false)).toBe(true);
+    expect(showsRailEdge('strip', false, false)).toBe(false);
+    expect(showsRailEdge('full', false, false)).toBe(false);
+  });
+
+  it('keeps a held edge until it is let go, even past the gallery’s snap', () => {
+    expect(showsRailEdge('panel', true, false)).toBe(true);
+    expect(showsRailEdge('full', true, false)).toBe(true);
+    expect(showsRailEdge('full', false, false)).toBe(false);
+  });
+
+  it('hides the edge while the rail stands in as dropzones', () => {
+    expect(showsRailEdge('panel', false, true)).toBe(false);
+    expect(showsRailEdge('panel', true, true)).toBe(false);
   });
 });
