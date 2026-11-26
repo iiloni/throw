@@ -220,25 +220,39 @@ test.describe('the board beside a task on a narrow desktop', () => {
     ).toEqual({ kept: true, opacity: '1' });
   });
 
-  test('cross-fades into the half at its resting width, on the tapped card’s view and column', async ({
+  test('carries the cards into the half at its resting width, on the tapped card’s view and column', async ({
     page,
   }) => {
     await page.setViewportSize(FOLDABLE);
     await fixture(page);
+    type Frame = { width: number | null; morphing: boolean; card: { x: number; y: number } | null };
     await page.evaluate(() => {
-      const frames: { width: number | null; still: boolean; filled: boolean }[] = [];
-      (window as unknown as { frames_: typeof frames }).frames_ = frames;
+      const frames: Frame[] = [];
+      (window as unknown as { frames_: Frame[] }).frames_ = frames;
+      // Where the tapped card is drawn: its copy while one carries it, or the card itself.
+      const drawn = () => {
+        const layer = document.querySelector('[data-layout-morph]');
+        const copies = [...(layer?.children ?? [])]
+          .filter((holder) => holder.textContent?.includes('Review this'))
+          .map((holder) => holder.getBoundingClientRect())
+          .sort((a, b) => a.width * a.height - b.width * b.height);
+        const card = [...document.querySelectorAll<HTMLElement>('[data-card-id]')].find(
+          (element) =>
+            element.textContent?.includes('Review this') && !element.closest('[data-layout-morph]'),
+        );
+        const box =
+          copies[0] ??
+          (card && card.closest<HTMLElement>('[data-rearrange-card]')?.style.opacity !== '0'
+            ? card.getBoundingClientRect()
+            : null);
+        return box ? { x: box.x, y: box.y } : null;
+      };
       const sample = () => {
         const board = document.querySelector('[data-compact-board]');
-        const still = document.querySelector('[data-layout-swap]');
         frames.push({
           width: board ? board.getBoundingClientRect().width : null,
-          still: still !== null,
-          // The half shows something: the layout going, still, or the one coming.
-          filled:
-            still !== null ||
-            board !== null ||
-            document.querySelector('[data-board-layout]') !== null,
+          morphing: document.querySelector('[data-layout-morph]') !== null,
+          card: drawn(),
         });
         if (frames.length < 90) requestAnimationFrame(sample);
       };
@@ -249,20 +263,25 @@ test.describe('the board beside a task on a narrow desktop', () => {
     await page.waitForFunction(
       () => (window as unknown as { frames_: unknown[] }).frames_.length >= 90,
     );
-    const frames = await page.evaluate(
-      () =>
-        (
-          window as unknown as {
-            frames_: { width: number | null; still: boolean; filled: boolean }[];
-          }
-        ).frames_,
-    );
+    const frames = await page.evaluate(() => (window as unknown as { frames_: Frame[] }).frames_);
     const compact = frames.filter((frame) => frame.width !== null);
     expect(compact.length).toBeGreaterThan(0);
-    expect(frames.every((frame) => frame.filled)).toBe(true);
-    // The layout going fades out over the one coming, and is gone once it has.
-    expect(compact[0]!.still).toBe(true);
-    await expect(page.locator('[data-layout-swap]')).toHaveCount(0);
+    // The cards are carried across from the first frame the new layout is drawn in.
+    expect(compact[0]!.morphing).toBe(true);
+    await expect(page.locator('[data-layout-morph]')).toHaveCount(0);
+    // The tapped card is drawn in every frame, and travels to its new place rather than jumping.
+    const path = frames.map((frame) => frame.card);
+    expect(path.every((point) => point !== null)).toBe(true);
+    const steps = path
+      .slice(1)
+      .map((point, index) => Math.hypot(point!.x - path[index]!.x, point!.y - path[index]!.y));
+    const start = path[0]!;
+    const end = path[path.length - 1]!;
+    const distance = Math.hypot(end.x - start.x, end.y - start.y);
+    expect(distance).toBeGreaterThan(100);
+    // A frame held up by laying the new board out still leaves most of the way to travel.
+    expect(Math.max(...steps)).toBeLessThan(distance * 0.4);
+    expect(steps.filter((step) => step > 2).length).toBeGreaterThanOrEqual(4);
     // Laid out once, at the width it rests at, while the pane slides in beside it.
     const widths = compact.map((frame) => frame.width!);
     expect(Math.max(...widths) - Math.min(...widths)).toBeLessThan(1);

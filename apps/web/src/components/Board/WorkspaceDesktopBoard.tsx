@@ -10,13 +10,7 @@ import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scrol
 import { cn } from '@/lib/utils';
 import { BoardColumn, ColumnHeader } from './BoardColumn';
 import { useSpotlightCleanup } from './blockers';
-import {
-  CompactFrame,
-  CompactPager,
-  LayoutSwap,
-  useBoardHandoff,
-  useCompactBoard,
-} from './CompactSplitBoard';
+import { CompactFrame, CompactPager, useBoardHandoff, useCompactBoard } from './CompactSplitBoard';
 import {
   boardRestWidth,
   OpenTaskPane,
@@ -27,6 +21,7 @@ import {
 } from './DesktopBoard';
 import { drag, makingWay } from './drag';
 import { PriorityIcon } from './glyphs';
+import { LayoutMorph } from './LayoutMorph';
 import {
   CATEGORIES,
   type Category,
@@ -90,7 +85,6 @@ export function WorkspaceDesktopBoard() {
       <div ref={frame} className="flex min-w-0 flex-1">
         {docked && <BoardSearchSidebar />}
         <div ref={row} className={cn('relative flex min-w-0 flex-1', compact && 'overflow-hidden')}>
-          <LayoutSwap root={row} compact={compact} reduced={reduced} />
           {compact ? (
             <CompactFrame width={restWidth}>
               <CompactPager
@@ -141,6 +135,7 @@ export function WorkspaceDesktopBoard() {
           )}
           {!docked && <BoardSearch />}
           <SelectionBar />
+          <LayoutMorph root={row} compact={compact} reduced={reduced} />
         </div>
         <OpenTaskPane frameWidth={frameWidth} />
       </div>

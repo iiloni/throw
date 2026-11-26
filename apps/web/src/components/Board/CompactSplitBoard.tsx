@@ -9,7 +9,6 @@ import {
   useTransform,
 } from 'motion/react';
 import {
-  Component,
   type ReactNode,
   type RefObject,
   useEffect,
@@ -21,7 +20,7 @@ import {
 import { AnimatedHeight } from '@/components/AnimatedHeight/AnimatedHeight';
 import { SEARCH_SPACE } from '@/components/BoardSearch/BoardSearch';
 import { haptics } from '@/lib/haptics';
-import { afterPaint, curves, springs } from '@/lib/motion';
+import { afterPaint, springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { CardList } from './CardList';
 import { drag, makingWay, PAGE_HOLD_MS, pageStride } from './drag';
@@ -111,7 +110,7 @@ export function restoreLists(root: HTMLElement, handoff: BoardHandoff) {
  * Carries the board's place between its full and compact layouts, under `root`: the column in
  * view and each list's scroll are kept as they change, and given to whichever layout takes
  * over. Selection and the open task live in the board's store, so they carry over on their
- * own. `LayoutSwap` cross-fades from one layout to the other.
+ * own. `LayoutMorph` carries the cards across from one layout to the other.
  */
 export function useBoardHandoff(
   root: RefObject<HTMLElement | null>,
@@ -186,126 +185,6 @@ export function CompactFrame({ width, children }: { width?: number; children: Re
   );
 }
 
-/** Attributes a still copy keeps: the ones styles read. The rest are the board's handles. */
-const STILL_ATTRIBUTES = new Set([
-  'data-active',
-  'data-color',
-  'data-column-color',
-  'data-content-type',
-  'data-covers',
-  'data-current',
-  'data-dim',
-  'data-disabled',
-  'data-edges',
-  'data-folded',
-  'data-hide-scrollbars',
-  'data-highlighted',
-  'data-inset',
-  'data-mode',
-  'data-more-bottom',
-  'data-more-left',
-  'data-more-right',
-  'data-more-top',
-  'data-seam',
-  'data-side',
-  'data-size',
-  'data-state',
-  'data-sunk',
-  'data-surface',
-  'data-tinted',
-  'data-variant',
-]);
-
-type Still = {
-  layer: HTMLElement;
-  scrolls: { element: HTMLElement; top: number; left: number }[];
-};
-
-/**
- * A still copy of what is under `root`, drawn over it: nothing in it can be found, focused or
- * dropped on, and its scrollers are put where the originals were once it is in place.
- */
-function stillOf(root: HTMLElement): Still {
-  const { width, height } = root.getBoundingClientRect();
-  const layer = document.createElement('div');
-  layer.setAttribute('aria-hidden', 'true');
-  layer.inert = true;
-  layer.dataset.layoutSwap = '';
-  // Clipped to the half as it narrows, so the task pane slides in over the copy.
-  layer.className = 'pointer-events-none absolute inset-0 z-50 overflow-hidden';
-  const frame = document.createElement('div');
-  frame.className = root.className;
-  frame.style.width = `${width}px`;
-  frame.style.height = `${height}px`;
-  layer.append(frame);
-  const scrolls: Still['scrolls'] = [];
-  for (const child of root.children) {
-    if (!(child instanceof HTMLElement) || child.dataset.layoutSwap !== undefined) continue;
-    const copy = child.cloneNode(true) as HTMLElement;
-    const originals = [child, ...child.querySelectorAll<HTMLElement>('*')];
-    const copies = [copy, ...copy.querySelectorAll<HTMLElement>('*')];
-    originals.forEach((original, index) => {
-      const element = copies[index]!;
-      for (const { name } of [...element.attributes])
-        if (name === 'id' || (name.startsWith('data-') && !STILL_ATTRIBUTES.has(name)))
-          element.removeAttribute(name);
-      if (original.scrollTop || original.scrollLeft)
-        scrolls.push({ element, top: original.scrollTop, left: original.scrollLeft });
-    });
-    frame.append(copy);
-  }
-  return { layer, scrolls };
-}
-
-/**
- * Cross-fades the board from one layout to the other as `compact` changes: before the change
- * is drawn it takes a still copy of the layout going, and fades it out over the one coming,
- * so the half never stands empty. Reduced motion switches in place.
- */
-export class LayoutSwap extends Component<{
-  root: RefObject<HTMLElement | null>;
-  compact: boolean;
-  reduced: boolean;
-}> {
-  private still: Animation | null = null;
-
-  override getSnapshotBeforeUpdate(previous: { compact: boolean }) {
-    const root = this.props.root.current;
-    if (previous.compact === this.props.compact || this.props.reduced || !root) return null;
-    return stillOf(root);
-  }
-
-  override componentDidUpdate(_: unknown, __: unknown, still: Still | null) {
-    const root = this.props.root.current;
-    if (!still || !root) return;
-    this.still?.cancel();
-    root.append(still.layer);
-    for (const { element, top, left } of still.scrolls) {
-      element.scrollTop = top;
-      element.scrollLeft = left;
-    }
-    const fade = still.layer.animate([{ opacity: 1 }, { opacity: 0 }], {
-      duration: curves.enter.duration * 1000,
-      easing: `cubic-bezier(${curves.enter.ease.join(',')})`,
-    });
-    const end = () => {
-      still.layer.remove();
-      if (this.still === fade) this.still = null;
-    };
-    fade.onfinish = end;
-    fade.oncancel = end;
-    this.still = fade;
-  }
-
-  override componentWillUnmount() {
-    this.still?.cancel();
-  }
-
-  override render() {
-    return null;
-  }
-}
-
 /**
  * A board's columns one at a time, as a phone pages through them, under the flow track that
  * names the current one and folds and opens them. A held card turns the page at either side.
@@ -362,7 +241,9 @@ export function CompactPager({
   }, [shown]);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <FlowTrack statuses={pages} page={page} onTurn={turnTo} folding={folding} />
+      <div data-morph-enter="">
+        <FlowTrack statuses={pages} page={page} onTurn={turnTo} folding={folding} />
+      </div>
       {/* Clipped, so the pages peeking in at its sides stay inside the board's half. */}
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <div
@@ -605,7 +486,9 @@ export function CompactSplitBoard({
           layer(
             zone,
             <div data-origin={zone} className="flex min-h-0 flex-1 flex-col">
-              <StatusFilter zone={zone} className="px-5" />
+              <div data-morph-enter="">
+                <StatusFilter zone={zone} className="px-5" />
+              </div>
               <div className="relative flex min-h-0 flex-1 flex-col">
                 <ZoneGallery
                   zone={zone}

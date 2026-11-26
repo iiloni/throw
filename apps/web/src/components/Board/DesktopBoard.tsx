@@ -37,13 +37,9 @@ import { BoardColumn, ColumnHeader } from './BoardColumn';
 import { BoardSettingsPanel } from './BoardSettingsPanel';
 import { useSpotlightCleanup } from './blockers';
 import { CardList } from './CardList';
-import {
-  CompactSplitBoard,
-  LayoutSwap,
-  useBoardHandoff,
-  useCompactBoard,
-} from './CompactSplitBoard';
+import { CompactSplitBoard, useBoardHandoff, useCompactBoard } from './CompactSplitBoard';
 import { drag, makingWay } from './drag';
+import { LayoutMorph } from './LayoutMorph';
 import type { Status, Task } from './model';
 import {
   SelectionControls,
@@ -310,7 +306,6 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
             ref={row}
             className={cn('relative flex min-w-0 flex-1', compact && 'overflow-hidden')}
           >
-            <LayoutSwap root={row} compact={compact} reduced={reduced} />
             {compact ? (
               <CompactSplitBoard handoff={handoff} restWidth={restWidth} searchDocked={docked} />
             ) : (
@@ -357,6 +352,7 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
             )}
             {!docked && <BoardSearch />}
             <SelectionBar />
+            <LayoutMorph root={row} compact={compact} reduced={reduced} />
           </div>
 
           <OpenTaskPane frameWidth={frameWidth} />
