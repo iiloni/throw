@@ -475,6 +475,9 @@ ids. Do not add a dependency on Catch's repository; the two release independentl
   insets and keyboard animations on Android;
   Capacitor SystemBars inset handling is disabled to avoid competing owners. Android Back
   dismisses open sheets through `lib/backButton.ts` before navigating history.
+- Android WebView can drop the page's tiles while the app is in the background and then show
+  only its background on return until the first touch. `MainActivity` asks for a fresh frame on
+  every warm resume (`ResumeRepaint.java`); keep that in place when changing its lifecycle.
 - On a phone every sheet is the drawer (ADR 0009): one shell-owned glass surface whose
   collapsed header is the dock. Show content in it rather than adding a sheet, overlay or
   `BottomSheet`. Desktop has no drawer: use the rail, a panel sized to the window or a
