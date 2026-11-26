@@ -35,13 +35,43 @@ const REPOSITORY_HINT = 'Enter the repository as owner/name, or paste its GitHub
 export function GithubConnectionSettings({ projectId }: { projectId: string }) {
   const settings = useContext(GithubConnectionContext);
   if (!settings) return null;
-  const { state, retry } = settings;
-  if (state.status === 'ready')
-    return state.connection ? (
-      <Connected connection={state.connection} />
-    ) : (
-      <Connect projectId={projectId} />
+  const { state, retry, dismissSecret } = settings;
+  if (state.status === 'ready') {
+    if (!state.connection) return <Connect projectId={projectId} />;
+    return (
+      <>
+        <Connected connection={state.connection} />
+        {state.setup && (
+          <ManagementSurface
+            open
+            title={state.setup.rotated ? 'Copy the new secret' : 'Add the webhook on GitHub'}
+            onClose={dismissSecret}
+            fit
+          >
+            {state.setup.rotated ? (
+              <div className="flex flex-col gap-4 px-4 pb-4">
+                <p className="text-muted-foreground text-sm">
+                  Paste it into the webhook’s Secret field on GitHub. Throw only shows it once.
+                </p>
+                <CopyField label="Secret" value={state.setup.secret} />
+                <div className="flex justify-end">
+                  <Button type="button" onClick={dismissSecret}>
+                    Done
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <WebhookSetup
+                connection={state.connection}
+                secret={state.setup.secret}
+                onDone={dismissSecret}
+              />
+            )}
+          </ManagementSurface>
+        )}
+      </>
     );
+  }
   return (
     <SettingsSection title="GitHub">
       {state.status === 'loading' ? (
@@ -186,10 +216,6 @@ function Connect({ projectId }: { projectId: string }) {
   const [token, setToken] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [created, setCreated] = useState<{ connection: GithubConnection; secret: string } | null>(
-    null,
-  );
-
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
@@ -213,7 +239,7 @@ function Connect({ projectId }: { projectId: string }) {
         ...(body.data.token === undefined ? {} : { token: body.data.token }),
       });
       haptics.success();
-      setCreated(result);
+      settings.showSecret(result, false);
     } catch (failure) {
       setError(webhookErrorMessage(failure, 'Could not connect the repository. Try again.'));
     } finally {
@@ -260,20 +286,6 @@ function Connect({ projectId }: { projectId: string }) {
           </div>
         </form>
       </SettingsSection>
-      {created && (
-        <ManagementSurface
-          open
-          title="Add the webhook on GitHub"
-          onClose={() => settings.changed(created.connection)}
-          fit
-        >
-          <WebhookSetup
-            connection={created.connection}
-            secret={created.secret}
-            onDone={() => settings.changed(created.connection)}
-          />
-        </ManagementSurface>
-      )}
     </div>
   );
 }
@@ -371,7 +383,7 @@ function deliveryLabel(delivery: GithubDelivery | null) {
   return `Refused ${event} · ${at}`;
 }
 
-type Surface = 'edit' | 'secret' | 'url' | 'disconnect' | { secret: string };
+type Surface = 'edit' | 'secret' | 'url' | 'disconnect';
 
 function Connected({ connection }: { connection: GithubConnection }) {
   const settings = useContext(GithubConnectionContext)!;
@@ -523,8 +535,8 @@ function Connected({ connection }: { connection: GithubConnection }) {
           action="Make new secret"
           onConfirm={async () => {
             const rotated = await api.rotateGithubSecret(connection.projectId);
-            settings.changed(rotated.connection);
-            setSurface({ secret: rotated.secret });
+            close();
+            settings.showSecret(rotated, true);
           }}
           onClose={close}
         />
@@ -540,21 +552,6 @@ function Connected({ connection }: { connection: GithubConnection }) {
           }}
           onClose={close}
         />
-      )}
-      {typeof surface === 'object' && surface !== null && (
-        <ManagementSurface open title="Copy the new secret" onClose={close} fit>
-          <div className="flex flex-col gap-4 px-4 pb-4">
-            <p className="text-muted-foreground text-sm">
-              Paste it into the webhook’s Secret field on GitHub. Throw only shows it once.
-            </p>
-            <CopyField label="Secret" value={surface.secret} />
-            <div className="flex justify-end">
-              <Button type="button" onClick={close}>
-                Done
-              </Button>
-            </div>
-          </div>
-        </ManagementSurface>
       )}
       {surface === 'disconnect' && <Disconnect connection={connection} onClose={close} />}
     </div>

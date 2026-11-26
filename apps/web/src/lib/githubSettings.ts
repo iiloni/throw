@@ -1,69 +1,81 @@
 import type { GithubConnection } from '@throw/shared';
-import { createContext, useCallback, useEffect, useState } from 'react';
+import { createContext, useCallback, useEffect, useMemo } from 'react';
 import { ApiError, api } from './api';
+import { createStore } from './store';
 
 type State =
   | { status: 'loading' | 'unavailable' | 'error' }
-  | { status: 'ready'; connection: GithubConnection | null };
+  | {
+      status: 'ready';
+      connection: GithubConnection | null;
+      setup?: { secret: string; rotated: boolean };
+    };
 
-/**
- * A project's GitHub connection (ADR 0017). An older server without the API answers 404 and
- * hides the page; so does having no project to ask about.
- */
+/** Project settings keeps the one-time setup in memory until dismissed or the project changes. */
 export function useGithubConnection(projectId: string | undefined) {
-  const [stored, setStored] = useState<{ projectId: string | undefined; state: State }>({
-    projectId,
-    state: { status: projectId ? 'loading' : 'unavailable' },
-  });
-  // Another project starts from loading rather than showing the last one's connection.
-  const state: State =
-    stored.projectId === projectId
-      ? stored.state
-      : { status: projectId ? 'loading' : 'unavailable' };
-  const loading = state.status === 'loading';
-
+  const project = useMemo(
+    () => ({
+      state: createStore<State>({ status: projectId ? 'loading' : 'unavailable' }),
+      revision: 0,
+    }),
+    [projectId],
+  );
+  const state = project.state.use();
   const load = useCallback(
-    (signal: AbortSignal, quiet: boolean) => {
+    async (signal: AbortSignal, quiet: boolean) => {
       if (!projectId) return;
+      const revision = ++project.revision;
       const timed =
         typeof AbortSignal.any === 'function'
           ? AbortSignal.any([signal, AbortSignal.timeout(10_000)])
           : signal;
-      void api.githubConnection(projectId, timed).then(
-        ({ connection }) => {
-          if (!signal.aborted) setStored({ projectId, state: { status: 'ready', connection } });
-        },
-        (error: unknown) => {
-          // A refresh that fails keeps what the page shows.
-          if (signal.aborted || quiet) return;
-          setStored({
-            projectId,
-            state: {
-              status: error instanceof ApiError && error.status === 404 ? 'unavailable' : 'error',
-            },
-          });
-        },
-      );
+      try {
+        const { connection } = await api.githubConnection(projectId, timed);
+        if (signal.aborted || revision !== project.revision) return;
+        const current = project.state.get();
+        const setup =
+          current.status === 'ready' &&
+          connection &&
+          connection.createdAt === current.connection?.createdAt
+            ? current.setup
+            : undefined;
+        project.state.set({ status: 'ready', connection, setup });
+      } catch (error) {
+        if (signal.aborted || revision !== project.revision || quiet) return;
+        project.state.set({
+          status: error instanceof ApiError && error.status === 404 ? 'unavailable' : 'error',
+        });
+      }
     },
-    [projectId],
+    [project, projectId],
   );
 
   useEffect(() => {
-    if (!loading) return;
+    if (state.status !== 'loading') return;
     const abort = new AbortController();
-    load(abort.signal, false);
+    void load(abort.signal, false);
     return () => abort.abort();
-  }, [loading, load]);
+  }, [state.status, load]);
 
-  const refresh = useCallback(() => load(new AbortController().signal, true), [load]);
-
-  const set = (connection: GithubConnection | null) =>
-    setStored({ projectId, state: { status: 'ready', connection } });
-
+  const refresh = useCallback(() => {
+    void load(new AbortController().signal, true);
+  }, [load]);
+  const set = (
+    connection: GithubConnection | null,
+    setup?: { secret: string; rotated: boolean },
+  ) => {
+    project.revision++;
+    project.state.set({ status: 'ready', connection, setup });
+  };
   return {
     state,
-    retry: () => setStored({ projectId, state: { status: 'loading' } }),
-    /** Reads the connection again in place, such as to see a delivery GitHub just made. */
+    showSecret: (result: { connection: GithubConnection; secret: string }, rotated: boolean) =>
+      set(result.connection, { secret: result.secret, rotated }),
+    dismissSecret: () => {
+      const current = project.state.get();
+      if (current.status === 'ready') set(current.connection);
+    },
+    retry: () => project.state.set({ status: 'loading' }),
     refresh,
     changed: set,
     removed: () => set(null),

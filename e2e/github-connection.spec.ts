@@ -137,22 +137,24 @@ test('a project connects to GitHub and receives signed, deduplicated deliveries 
     expect(response.status(), `${method} ${path}`).toBe(404);
   }
   expect((await request.delete(managed(project.id), { headers: stranger.headers })).status()).toBe(
-    204,
+    404,
   );
   expect(await connection(request, owner, project.id)).toMatchObject({ enabled: true });
 
-  // GitHub's ping, with a redelivery, is recorded once.
+  // Redelivering the ping updates the latest receipt without dispatching it again.
   const delivery = randomUUID();
   const ping = await deliver(request, made.webhookUrl, secret, { delivery });
   expect(ping.status(), await ping.text()).toBe(200);
   expect(await ping.json()).toEqual({ ok: true, status: 'ok' });
+  const intervening = await deliver(request, made.webhookUrl, secret, { event: 'push' });
+  expect(intervening.status()).toBe(202);
   const again = await deliver(request, made.webhookUrl, secret, { delivery });
   expect(await again.json()).toEqual({ ok: true, duplicate: true });
   expect((await connection(request, owner, project.id))?.lastDelivery).toMatchObject({
     id: delivery,
     event: 'ping',
-    status: 'ok',
-    detail: null,
+    status: 'ignored',
+    detail: 'This delivery was already received.',
   });
 
   // Unhandled events are verified and ignored; refusals say why.
@@ -210,6 +212,9 @@ test('a project connects to GitHub and receives signed, deduplicated deliveries 
     ).status(),
   ).toBe(400);
 
+  expect((await request.delete(managed(project.id), { headers: owner.headers })).status()).toBe(
+    204,
+  );
   expect((await request.delete(managed(project.id), { headers: owner.headers })).status()).toBe(
     204,
   );

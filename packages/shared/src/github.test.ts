@@ -67,8 +67,11 @@ describe('connection bodies', () => {
         .success,
     ).toBe(true);
     expect(
-      createGithubConnectionSchema.safeParse({ repository: 'o/r', authMode: 'token', token: 'a b' })
-        .success,
+      createGithubConnectionSchema.safeParse({
+        repository: 'o/r',
+        authMode: 'token',
+        token: `${token} suffix`,
+      }).success,
     ).toBe(false);
   });
 

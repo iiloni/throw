@@ -194,14 +194,17 @@ export const githubRoutes = new Hono<AppEnv>()
   )
   .delete('/projects/:projectId', projectParam, async (c) => {
     const { projectId } = c.req.valid('param');
-    await db
+    const [deleted] = await db
       .delete(githubConnections)
       .where(
         and(
           eq(githubConnections.projectId, projectId),
           inArray(githubConnections.workspaceId, memberWorkspaces(db, c.get('user')!.id)),
         ),
-      );
+      )
+      .returning({ id: githubConnections.id });
+    if (!deleted && !(await reachableProject(c.get('user')!.id, projectId)))
+      return c.json(notFound, 404);
     return c.body(null, 204);
   })
   /** Replaces the webhook secret, which is shown once. */

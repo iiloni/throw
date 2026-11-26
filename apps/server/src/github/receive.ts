@@ -190,7 +190,10 @@ export function githubReceiver({
         await record('error', RECEIVER_ERRORS.failed);
         return c.json({ error: RECEIVER_ERRORS.failed }, 500);
       }
-      if (handled === 'duplicate') return c.json({ ok: true, duplicate: true });
+      if (handled === 'duplicate') {
+        await record('ignored', 'This delivery was already received.');
+        return c.json({ ok: true, duplicate: true });
+      }
       return handled.status === 'ok'
         ? c.json({ ok: true, status: 'ok' })
         : c.json({ ok: true, status: 'ignored', reason: handled.reason }, 202);

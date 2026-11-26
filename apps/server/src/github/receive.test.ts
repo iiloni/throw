@@ -161,7 +161,12 @@ describe('githubReceiver', () => {
     });
     expect((await deliver(body, { event: 'pull_request', delivery: 'd-2' })).status).toBe(200);
     expect(handled).toHaveBeenCalledTimes(2);
-    expect(last).toHaveLength(2);
+    expect(last[1]).toMatchObject({
+      id: 'd-1',
+      status: 'ignored',
+      detail: 'This delivery was already received.',
+    });
+    expect(last).toHaveLength(3);
   });
 
   it('leaves a failed delivery unclaimed, so GitHub’s redelivery is handled', async () => {
