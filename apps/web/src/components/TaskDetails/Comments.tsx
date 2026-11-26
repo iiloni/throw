@@ -142,14 +142,19 @@ function Swap({
     const old = ghost.current;
     ghost.current = null;
     const from = measured.current;
-    const to = element.offsetHeight;
-    measured.current = to;
-    if (reducedMotion || from === undefined || Math.abs(from - to) < 1) settle();
-    else {
+    const animate = !reducedMotion && from !== undefined;
+    // The box holds the old height before the new content is measured: Firefox clamps the
+    // pane's scroll at that layout, taking a shrink off it in one frame.
+    if (animate && box.current) {
       // Picks up from where a spring still running has got to.
       if (!springing.current) room.jump(from);
-      springTo(to);
+      box.current.style.overflow = 'clip';
+      box.current.style.height = `${room.get()}px`;
     }
+    const to = element.offsetHeight;
+    measured.current = to;
+    if (!animate || Math.abs(from - to) < 1) settle();
+    else springTo(to);
     if (old && box.current && typeof old.animate === 'function') {
       for (const node of [old, ...old.querySelectorAll('[id], [contenteditable]')]) {
         node.removeAttribute('id');
