@@ -155,7 +155,7 @@ export function TagEditor({
                     unavailable={!!owner}
                     onClick={() => setColor(value)}
                   >
-                    {owner && <TagIcon name={owner.icon} className="size-4" />}
+                    {owner && <TagIcon name={owner.icon} className="size-5 text-foreground" />}
                   </Swatch>
                 );
               })}
