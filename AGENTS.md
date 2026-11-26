@@ -56,6 +56,10 @@ worker; Settings manages them at `/settings/webhooks`. A webhook's quiet window 
 debounce over the whole webhook: any change it follows, comments included, pushes back all
 its waiting deliveries. Within it, a task's or project's changes fold into one delivery that
 sends only their net effect (`webhooks/fold.ts`).
+A project can connect to one GitHub repository (ADR 0017), from project settings' GitHub page
+(`components/GithubConnection`). `apps/server/src/github` verifies GitHub's signed webhooks at
+`/api/integrations/github/webhooks/<token>`, deduplicates them by `X-GitHub-Delivery` and hands
+them to `githubHandlers` in `github/dispatch.ts`, where the integration's later parts add theirs.
 The activity log syncs to devices and comments are built (`lib/comments.ts`), with a
 timeline query in `collections.ts` and a task history view in `TaskDetails/TaskTimeline.tsx`.
 Tags have their data layer and reusable controls in `components/Tag*`, with a real-data `/prototype/tags` workshop in

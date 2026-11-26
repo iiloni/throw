@@ -1,3 +1,4 @@
+import { GITHUB_WEBHOOK_PATH } from '@throw/shared';
 import type { MiddlewareHandler } from 'hono';
 
 /** Query parameters that carry a credential, such as a backup download ticket. */
@@ -8,6 +9,8 @@ export function loggedPath(url: string) {
   const { pathname, searchParams } = new URL(url);
   // MCP has no query parameters. A misplaced bearer credential must stay out of logs.
   if (/^\/api\/mcp\/*$/.test(pathname)) return pathname;
+  // A GitHub webhook's URL token finds its connection, so it is kept out of logs too.
+  if (pathname.startsWith(`${GITHUB_WEBHOOK_PATH}/`)) return `${GITHUB_WEBHOOK_PATH}/redacted`;
   for (const name of SECRET_PARAMS) if (searchParams.has(name)) searchParams.set(name, 'redacted');
   const query = searchParams.toString();
   return query ? `${pathname}?${query}` : pathname;

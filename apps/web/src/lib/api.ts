@@ -1,5 +1,6 @@
 import type {
   CreateComment,
+  CreateGithubConnection,
   CreateMcpToken,
   CreateProject,
   CreateStatus,
@@ -12,6 +13,7 @@ import type {
   TagWriteResponse,
   TxidResponse,
   UpdateComment,
+  UpdateGithubConnection,
   UpdateProject,
   UpdateStatus,
   UpdateTag,
@@ -23,6 +25,8 @@ import type {
 } from '@throw/shared';
 import {
   createMcpTokenResponseSchema,
+  githubConnectionResponseSchema,
+  githubConnectionSecretResponseSchema,
   mcpTokensResponseSchema,
   webhookResponseSchema,
   webhookSecretResponseSchema,
@@ -136,6 +140,38 @@ export const api = {
       method: 'POST',
       signal: AbortSignal.timeout(30_000),
     }).then(webhookTestResponseSchema.parse),
+  githubConnection: (projectId: string, signal?: AbortSignal) =>
+    request<unknown>(`/integrations/github/projects/${projectId}`, {
+      cache: 'no-store',
+      signal,
+    }).then(githubConnectionResponseSchema.parse),
+  createGithubConnection: (projectId: string, body: CreateGithubConnection) =>
+    request<unknown>(`/integrations/github/projects/${projectId}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20_000),
+    }).then(githubConnectionSecretResponseSchema.parse),
+  updateGithubConnection: (projectId: string, body: UpdateGithubConnection) =>
+    request<unknown>(`/integrations/github/projects/${projectId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20_000),
+    }).then(githubConnectionResponseSchema.parse),
+  deleteGithubConnection: (projectId: string) =>
+    apiResponse(`/integrations/github/projects/${projectId}`, {
+      method: 'DELETE',
+      signal: AbortSignal.timeout(20_000),
+    }),
+  rotateGithubSecret: (projectId: string) =>
+    request<unknown>(`/integrations/github/projects/${projectId}/secret`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(20_000),
+    }).then(githubConnectionSecretResponseSchema.parse),
+  rotateGithubUrl: (projectId: string) =>
+    request<unknown>(`/integrations/github/projects/${projectId}/url`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(20_000),
+    }).then(githubConnectionResponseSchema.parse),
   versionInfo: () => bootstrap<VersionInfo>('/updates'),
   releases: () => bootstrap<ReleasesResponse>('/updates/releases'),
   createWorkspace: (body: CreateWorkspace) =>

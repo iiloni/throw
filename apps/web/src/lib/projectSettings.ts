@@ -1,7 +1,13 @@
 import { type Project, projectKeySchema, type Status, type Task } from '@throw/shared';
 import { z } from 'zod';
 
-export const settingsSectionSchema = z.enum(['general', 'statuses', 'priorities', 'tags']);
+export const settingsSectionSchema = z.enum([
+  'general',
+  'statuses',
+  'priorities',
+  'tags',
+  'github',
+]);
 export type SettingsSection = z.infer<typeof settingsSectionSchema>;
 
 export function projectKeyIssue(project: Project, key: string, projects: readonly Project[]) {

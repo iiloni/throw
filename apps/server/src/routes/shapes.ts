@@ -11,7 +11,7 @@ const MEMBER_WORKSPACES = 'SELECT workspace_id FROM workspace_members WHERE user
  * What clients may sync: an explicit column list per table, and the filter that keeps a
  * shape to rows in the user's workspaces. Server-only columns stay out.
  */
-const SHAPES: Record<string, { table: string; columns: string[]; where: string }> = {
+export const SHAPES: Record<string, { table: string; columns: string[]; where: string }> = {
   workspaces: {
     table: 'workspaces',
     columns: ['id', 'name', 'position'],

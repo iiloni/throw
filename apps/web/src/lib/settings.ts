@@ -6,6 +6,7 @@ import {
   Columns3,
   DatabaseBackup,
   Download,
+  GitPullRequest,
   KeyRound,
   type LucideIcon,
   SlidersHorizontal,
@@ -43,6 +44,7 @@ const PROJECT_PAGES = {
   statuses: { label: 'Statuses', icon: Columns3 },
   priorities: { label: 'Priorities', icon: ArrowUpDown },
   tags: { label: 'Tags', icon: Tags },
+  github: { label: 'GitHub', icon: GitPullRequest },
 } as const satisfies Record<ProjectSection, { label: string; icon: LucideIcon }>;
 
 export type ProjectSettingsPage = ProjectSection | 'trash';
@@ -51,19 +53,24 @@ export function projectSettingsPageKey(projectId: string, page: ProjectSettingsP
   return `project:${projectId}:${page}`;
 }
 
-/** A project's pages in the unified settings list, in the order they appear. */
-export function projectSettingsPages(project: Project) {
+/**
+ * A project's pages in the unified settings list, in the order they appear. GitHub is listed
+ * once the server answers that it has the integration's API.
+ */
+export function projectSettingsPages(project: Project, { github = false } = {}) {
   const params = { workspaceId: project.workspaceId, projectId: project.id };
   return [
-    ...settingsSectionSchema.options.map((section) => ({
-      key: projectSettingsPageKey(project.id, section),
-      ...PROJECT_PAGES[section],
-      link: linkOptions({
-        to: '/w/$workspaceId/p/$projectId/settings',
-        params,
-        search: section === 'general' ? {} : { section },
-      }),
-    })),
+    ...settingsSectionSchema.options
+      .filter((section) => section !== 'github' || github)
+      .map((section) => ({
+        key: projectSettingsPageKey(project.id, section),
+        ...PROJECT_PAGES[section],
+        link: linkOptions({
+          to: '/w/$workspaceId/p/$projectId/settings',
+          params,
+          search: section === 'general' ? {} : { section },
+        }),
+      })),
     {
       key: projectSettingsPageKey(project.id, 'trash'),
       label: 'Trash',
