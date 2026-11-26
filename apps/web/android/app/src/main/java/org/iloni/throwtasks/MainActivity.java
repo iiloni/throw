@@ -15,6 +15,7 @@ public class MainActivity extends BridgeActivity {
     private final Runnable launchTimeout = this::finishLaunch;
     private boolean launching = true;
     private LaunchScreenAnimation launchScreen;
+    private ResumeRepaint resumeRepaint;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -40,6 +41,25 @@ public class MainActivity extends BridgeActivity {
         webView.setBackgroundColor(getColor(R.color.splashBackground));
         webView.setVerticalScrollBarEnabled(false);
         webView.setHorizontalScrollBarEnabled(false);
+        resumeRepaint = new ResumeRepaint(webView);
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        resumeRepaint.resumed();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) resumeRepaint.focused();
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        resumeRepaint.stopped();
     }
 
     void onLaunchPageReady() {
@@ -67,6 +87,7 @@ public class MainActivity extends BridgeActivity {
         launching = false;
         mainThread.removeCallbacks(launchTimeout);
         if (launchScreen != null) launchScreen.cancel();
+        if (resumeRepaint != null) resumeRepaint.destroyed();
         super.onDestroy();
     }
 }
