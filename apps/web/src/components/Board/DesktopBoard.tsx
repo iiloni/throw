@@ -37,7 +37,12 @@ import { BoardColumn, ColumnHeader } from './BoardColumn';
 import { BoardSettingsPanel } from './BoardSettingsPanel';
 import { useSpotlightCleanup } from './blockers';
 import { CardList } from './CardList';
-import { CompactSplitBoard, useBoardHandoff, useCompactBoard } from './CompactSplitBoard';
+import {
+  CompactSplitBoard,
+  LayoutSwap,
+  useBoardHandoff,
+  useCompactBoard,
+} from './CompactSplitBoard';
 import { drag, makingWay } from './drag';
 import type { Status, Task } from './model';
 import {
@@ -188,6 +193,7 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
   // Beside a task on a narrow window or an unfolded foldable, the board takes a phone's layout.
   const compact = useCompactBoard(restWidth, state.openTaskId !== null && paneSpace === 0);
   const handoff = useBoardHandoff(row, compact, project.id);
+  const reduced = useReducedMotion() ?? false;
   const rails = railGeometry({
     rowWidth,
     restWidth,
@@ -300,9 +306,13 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
         {/* No title row: the rail names the project, and the board keeps the height. */}
         <div className="flex min-h-0 flex-1">
           {docked && <BoardSearchSidebar />}
-          <div ref={row} className="relative flex min-w-0 flex-1">
+          <div
+            ref={row}
+            className={cn('relative flex min-w-0 flex-1', compact && 'overflow-hidden')}
+          >
+            <LayoutSwap root={row} compact={compact} reduced={reduced} />
             {compact ? (
-              <CompactSplitBoard handoff={handoff} searchDocked={docked} />
+              <CompactSplitBoard handoff={handoff} restWidth={restWidth} searchDocked={docked} />
             ) : (
               <>
                 {!backlogBound && backlogRail}

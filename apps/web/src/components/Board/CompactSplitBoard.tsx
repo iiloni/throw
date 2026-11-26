@@ -9,6 +9,7 @@ import {
   useTransform,
 } from 'motion/react';
 import {
+  Component,
   type ReactNode,
   type RefObject,
   useEffect,
@@ -27,9 +28,9 @@ import { drag, makingWay, PAGE_HOLD_MS, pageStride } from './drag';
 import { GALLERY_INSET, ZoneGallery } from './Gallery';
 import type { Status } from './model';
 import { FlowTrack, PeekEdge, pageClass } from './PhoneBoard';
-import { StatusFilter, ZONES, type Zone, zoneStatuses } from './SideZone';
+import { StatusFilter, ZONES, zoneStatuses } from './SideZone';
 import { StatusTile } from './StatusTile';
-import { board, countIn, createTask, current, useCollapsedColumns } from './state';
+import { type BoardState, board, createTask, current, useCollapsedColumns } from './state';
 import { useColumnPager } from './useColumnPager';
 
 /**
@@ -110,7 +111,7 @@ export function restoreLists(root: HTMLElement, handoff: BoardHandoff) {
  * Carries the board's place between its full and compact layouts, under `root`: the column in
  * view and each list's scroll are kept as they change, and given to whichever layout takes
  * over. Selection and the open task live in the board's store, so they carry over on their
- * own. The full layout fades back in as the compact one does (`CompactFrame`).
+ * own. `LayoutSwap` cross-fades from one layout to the other.
  */
 export function useBoardHandoff(
   root: RefObject<HTMLElement | null>,
@@ -121,8 +122,6 @@ export function useBoardHandoff(
   if (memory.current?.scope !== scope)
     memory.current = { scope, column: null, lists: new Map(), view: null };
   const handoff = memory.current;
-  const reduced = useReducedMotion();
-
   useEffect(() => {
     const element = root.current;
     if (!element) return;
@@ -161,14 +160,6 @@ export function useBoardHandoff(
         scroller.getBoundingClientRect().left + Number(scroller.dataset.insetStart ?? 0);
       scroller.scrollLeft += column.getBoundingClientRect().left - start - COLUMN_MARGIN;
     }
-    if (reduced) return;
-    for (const layer of element.querySelectorAll<HTMLElement>(
-      ':scope > .board-rail, :scope > [data-board-layout]',
-    ))
-      layer.animate([{ opacity: 0 }, { opacity: 1 }], {
-        duration: curves.enter.duration * 1000,
-        easing: `cubic-bezier(${curves.enter.ease.join(',')})`,
-      });
   }, [compact]);
 
   return handoff;
@@ -177,21 +168,142 @@ export function useBoardHandoff(
 /** Room left before a column brought back into view, as the board's own edge leaves. */
 const COLUMN_MARGIN = 20;
 
-/** The compact board's surface, fading in over the layout it replaces. */
-export function CompactFrame({ children }: { children: ReactNode }) {
-  const reduced = useReducedMotion();
+/**
+ * The compact board's surface. It takes its resting width (`boardRestWidth`) at once, as the
+ * full layout's rails do, so its cards are laid out once rather than on every frame of the
+ * task pane's slide; the half clips it while the pane is on its way.
+ */
+export function CompactFrame({ width, children }: { width?: number; children: ReactNode }) {
   return (
-    <motion.div
+    <div
       data-board-layout=""
       data-compact-board=""
-      className="relative flex min-w-0 flex-1 flex-col pt-[calc(var(--safe-top)+1.25rem)]"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={reduced ? { duration: 0 } : curves.enter}
+      className="relative flex min-w-0 flex-1 shrink-0 flex-col pt-[calc(var(--safe-top)+1.25rem)]"
+      style={width ? { width, flex: 'none' } : undefined}
     >
       {children}
-    </motion.div>
+    </div>
   );
+}
+
+/** Attributes a still copy keeps: the ones styles read. The rest are the board's handles. */
+const STILL_ATTRIBUTES = new Set([
+  'data-active',
+  'data-color',
+  'data-column-color',
+  'data-content-type',
+  'data-covers',
+  'data-current',
+  'data-dim',
+  'data-disabled',
+  'data-edges',
+  'data-folded',
+  'data-hide-scrollbars',
+  'data-highlighted',
+  'data-inset',
+  'data-mode',
+  'data-more-bottom',
+  'data-more-left',
+  'data-more-right',
+  'data-more-top',
+  'data-seam',
+  'data-side',
+  'data-size',
+  'data-state',
+  'data-sunk',
+  'data-surface',
+  'data-tinted',
+  'data-variant',
+]);
+
+type Still = {
+  layer: HTMLElement;
+  scrolls: { element: HTMLElement; top: number; left: number }[];
+};
+
+/**
+ * A still copy of what is under `root`, drawn over it: nothing in it can be found, focused or
+ * dropped on, and its scrollers are put where the originals were once it is in place.
+ */
+function stillOf(root: HTMLElement): Still {
+  const { width, height } = root.getBoundingClientRect();
+  const layer = document.createElement('div');
+  layer.setAttribute('aria-hidden', 'true');
+  layer.inert = true;
+  layer.dataset.layoutSwap = '';
+  // Clipped to the half as it narrows, so the task pane slides in over the copy.
+  layer.className = 'pointer-events-none absolute inset-0 z-50 overflow-hidden';
+  const frame = document.createElement('div');
+  frame.className = root.className;
+  frame.style.width = `${width}px`;
+  frame.style.height = `${height}px`;
+  layer.append(frame);
+  const scrolls: Still['scrolls'] = [];
+  for (const child of root.children) {
+    if (!(child instanceof HTMLElement) || child.dataset.layoutSwap !== undefined) continue;
+    const copy = child.cloneNode(true) as HTMLElement;
+    const originals = [child, ...child.querySelectorAll<HTMLElement>('*')];
+    const copies = [copy, ...copy.querySelectorAll<HTMLElement>('*')];
+    originals.forEach((original, index) => {
+      const element = copies[index]!;
+      for (const { name } of [...element.attributes])
+        if (name === 'id' || (name.startsWith('data-') && !STILL_ATTRIBUTES.has(name)))
+          element.removeAttribute(name);
+      if (original.scrollTop || original.scrollLeft)
+        scrolls.push({ element, top: original.scrollTop, left: original.scrollLeft });
+    });
+    frame.append(copy);
+  }
+  return { layer, scrolls };
+}
+
+/**
+ * Cross-fades the board from one layout to the other as `compact` changes: before the change
+ * is drawn it takes a still copy of the layout going, and fades it out over the one coming,
+ * so the half never stands empty. Reduced motion switches in place.
+ */
+export class LayoutSwap extends Component<{
+  root: RefObject<HTMLElement | null>;
+  compact: boolean;
+  reduced: boolean;
+}> {
+  private still: Animation | null = null;
+
+  override getSnapshotBeforeUpdate(previous: { compact: boolean }) {
+    const root = this.props.root.current;
+    if (previous.compact === this.props.compact || this.props.reduced || !root) return null;
+    return stillOf(root);
+  }
+
+  override componentDidUpdate(_: unknown, __: unknown, still: Still | null) {
+    const root = this.props.root.current;
+    if (!still || !root) return;
+    this.still?.cancel();
+    root.append(still.layer);
+    for (const { element, top, left } of still.scrolls) {
+      element.scrollTop = top;
+      element.scrollLeft = left;
+    }
+    const fade = still.layer.animate([{ opacity: 1 }, { opacity: 0 }], {
+      duration: curves.enter.duration * 1000,
+      easing: `cubic-bezier(${curves.enter.ease.join(',')})`,
+    });
+    const end = () => {
+      still.layer.remove();
+      if (this.still === fade) this.still = null;
+    };
+    fade.onfinish = end;
+    fade.oncancel = end;
+    this.still = fade;
+  }
+
+  override componentWillUnmount() {
+    this.still?.cancel();
+  }
+
+  override render() {
+    return null;
+  }
 }
 
 /**
@@ -221,10 +333,12 @@ export function CompactPager({
   const state = board.use();
   const { project } = current(state);
   const collapsed = useCollapsedColumns(project);
+  // Opened beside a task, it opens on the task's own column.
+  const opened = openStatusOf(state);
   const { pagerRef, pages, page, pager, turnTo, folding } = useColumnPager(
     columns,
     collapsed,
-    handoff.column ?? start,
+    columns.some((column) => column.id === opened) ? opened : (handoff.column ?? start),
   );
   const id = pages[page]?.id ?? null;
   useEffect(() => {
@@ -341,6 +455,25 @@ export function useDockScroll(
   return enabled && hidden;
 }
 
+/** The status of the task open beside the board, if it is among the board's tasks. */
+function openStatusOf(state: BoardState) {
+  const { tasks, hiddenTasks = [] } = current(state);
+  const id = state.openTaskId;
+  if (id === null) return null;
+  return (
+    tasks.find((task) => task.id === id)?.statusId ??
+    hiddenTasks.find((task) => task.id === id)?.statusId ??
+    null
+  );
+}
+
+/** The compact board's view holding a status's tasks. */
+function viewOf(status: Status | undefined): CompactView | null {
+  if (!status) return null;
+  if (status.category === 'active') return 'board';
+  return ZONES.backlog.categories.includes(status.category) ? 'backlog' : 'closed';
+}
+
 /**
  * The project board beside an open task when there is too little room for its row: a phone's
  * board in the desktop's half. The backlog, the columns and the closed tasks are three views
@@ -353,9 +486,12 @@ export function useDockScroll(
  */
 export function CompactSplitBoard({
   handoff,
+  restWidth,
   searchDocked = false,
 }: {
   handoff: BoardHandoff;
+  /** Its resting width, for `CompactFrame`. */
+  restWidth?: number;
   /** Search is a sidebar beside the board rather than a bar over its foot. */
   searchDocked?: boolean;
 }) {
@@ -366,8 +502,10 @@ export function CompactSplitBoard({
   const body = useRef<HTMLDivElement>(null);
   const dock = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
+  // It opens on the view holding the task beside it, where the card just tapped is.
   const [view, setViewState] = useState<CompactView>(
     () =>
+      viewOf(project.statuses.find((status) => status.id === openStatusOf(state))) ??
       handoff.view ??
       (state.backlog === 'full' ? 'backlog' : state.closed === 'full' ? 'closed' : 'board'),
   );
@@ -378,11 +516,6 @@ export function CompactSplitBoard({
   const [column, setColumn] = useState(handoff.column);
   const active = project.statuses.filter((status) => status.category === 'active');
   const dragging = makingWay(held);
-  const count = (zone: Zone) =>
-    zoneStatuses(zone, project.statuses).reduce(
-      (sum, status) => sum + countIn(state, status.id),
-      0,
-    );
 
   useLayoutEffect(() => {
     const element = body.current;
@@ -418,21 +551,9 @@ export function CompactSplitBoard({
 
   const tab = (value: CompactView) => ({ id: `${ids}-${value}-tab`, controls: `${ids}-${value}` });
   const tabs: DockTab[] = [
-    {
-      value: 'backlog',
-      ...tab('backlog'),
-      label: ZONES.backlog.title,
-      icon: Inbox,
-      count: count('backlog'),
-    },
+    { value: 'backlog', ...tab('backlog'), label: ZONES.backlog.title, icon: Inbox },
     { value: 'board', ...tab('board'), label: 'Board', icon: Columns3 },
-    {
-      value: 'closed',
-      ...tab('closed'),
-      label: ZONES.closed.title,
-      icon: CheckCheck,
-      count: count('closed'),
-    },
+    { value: 'closed', ...tab('closed'), label: ZONES.closed.title, icon: CheckCheck },
   ];
   // Where a held card can go that is not in front of it.
   const targets =
@@ -460,7 +581,7 @@ export function CompactSplitBoard({
   );
 
   return (
-    <CompactFrame>
+    <CompactFrame width={restWidth}>
       <div ref={body} className="relative min-h-0 flex-1">
         {layer(
           'board',
@@ -665,12 +786,11 @@ type DockTab = {
   controls: string;
   label: string;
   icon: LucideIcon;
-  count?: number;
 };
 
 /**
  * The dock's switch, as Catch's tabs: equal segments on the glass, one indicator sliding
- * between them. Each shows its icon and count, and its name where the dock is wide enough.
+ * between them. Each shows its icon, and its name where the dock is wide enough.
  */
 function DockTabs({
   label,
@@ -728,7 +848,7 @@ function DockTabs({
             role="tab"
             aria-selected={selected}
             aria-controls={item.controls}
-            aria-label={item.count === undefined ? item.label : `${item.label}, ${item.count}`}
+            aria-label={item.label}
             tabIndex={selected ? 0 : -1}
             onClick={() => !selected && onChange(item.value)}
             className={cn(
@@ -741,11 +861,6 @@ function DockTabs({
             <span aria-hidden className="hidden truncate @min-[21rem]:inline">
               {item.label}
             </span>
-            {item.count !== undefined && (
-              <span aria-hidden className="text-muted-foreground text-xs tabular-nums">
-                {item.count}
-              </span>
-            )}
           </button>
         );
       })}

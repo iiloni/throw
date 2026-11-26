@@ -115,7 +115,7 @@ test.describe('the board beside a task on a narrow desktop', () => {
   }) => {
     await page.setViewportSize(FOLDABLE);
     const board = await fixture(page);
-    await card(page, 'Review this').click();
+    await card(page, 'Earlier position').click();
     await expect(compactBoard(page)).toBeVisible();
 
     // A column's card dropped on a closed status finishes it.
@@ -163,7 +163,7 @@ test.describe('the board beside a task on a narrow desktop', () => {
     const board = await fixture(page);
     for (let index = 0; index < 8; index++)
       await board.add(`More work ${index + 1}`, 'Build', 3, `b${index}`);
-    await card(page, 'Review this').click();
+    await card(page, 'Earlier position').click();
     await expect(compactBoard(page)).toBeVisible();
     await expect(card(page, 'More work 8')).toBeAttached();
     await expect(dock(page)).toBeInViewport();
@@ -198,8 +198,9 @@ test.describe('the board beside a task on a narrow desktop', () => {
     await card(page, 'Review this').click();
     await expect(compactBoard(page)).toBeVisible();
     await page.waitForTimeout(600);
-    // The create button floats beside the dock, not in it.
-    const create = page.getByRole('button', { name: 'New task in Build', exact: true });
+    // The create button floats beside the dock, not in it, and makes a task in the column on
+    // screen: the opened task's own.
+    const create = page.getByRole('button', { name: 'New task in Review', exact: true });
     await expect(create).toBeVisible();
     await expect(dock(page).locator('.glass-thick').getByRole('button')).toHaveCount(0);
     await compactBoard(page).evaluate((frame) => {
@@ -217,6 +218,73 @@ test.describe('the board beside a task on a narrow desktop', () => {
         opacity: getComputedStyle(frame).opacity,
       })),
     ).toEqual({ kept: true, opacity: '1' });
+  });
+
+  test('cross-fades into the half at its resting width, on the tapped card’s view and column', async ({
+    page,
+  }) => {
+    await page.setViewportSize(FOLDABLE);
+    await fixture(page);
+    await page.evaluate(() => {
+      const frames: { width: number | null; still: boolean; filled: boolean }[] = [];
+      (window as unknown as { frames_: typeof frames }).frames_ = frames;
+      const sample = () => {
+        const board = document.querySelector('[data-compact-board]');
+        const still = document.querySelector('[data-layout-swap]');
+        frames.push({
+          width: board ? board.getBoundingClientRect().width : null,
+          still: still !== null,
+          // The half shows something: the layout going, still, or the one coming.
+          filled:
+            still !== null ||
+            board !== null ||
+            document.querySelector('[data-board-layout]') !== null,
+        });
+        if (frames.length < 90) requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    });
+    await card(page, 'Review this').click();
+    await expect(compactBoard(page)).toBeVisible();
+    await page.waitForFunction(
+      () => (window as unknown as { frames_: unknown[] }).frames_.length >= 90,
+    );
+    const frames = await page.evaluate(
+      () =>
+        (
+          window as unknown as {
+            frames_: { width: number | null; still: boolean; filled: boolean }[];
+          }
+        ).frames_,
+    );
+    const compact = frames.filter((frame) => frame.width !== null);
+    expect(compact.length).toBeGreaterThan(0);
+    expect(frames.every((frame) => frame.filled)).toBe(true);
+    // The layout going fades out over the one coming, and is gone once it has.
+    expect(compact[0]!.still).toBe(true);
+    await expect(page.locator('[data-layout-swap]')).toHaveCount(0);
+    // Laid out once, at the width it rests at, while the pane slides in beside it.
+    const widths = compact.map((frame) => frame.width!);
+    expect(Math.max(...widths) - Math.min(...widths)).toBeLessThan(1);
+    // Its resting width is the half's.
+    const half = await compactBoard(page).evaluate((frame) => ({
+      frame: frame.getBoundingClientRect().width,
+      row: frame.parentElement!.getBoundingClientRect().width,
+    }));
+    expect(Math.abs(half.frame - half.row)).toBeLessThan(1);
+    // It opens on the tapped card's column.
+    await expect(card(page, 'Review this')).toBeInViewport();
+
+    // A backlog card opens it on the backlog.
+    await page.getByRole('button', { name: 'Back to the board', exact: true }).click();
+    await expect(compactBoard(page)).toHaveCount(0);
+    await page.getByRole('button', { name: /^Open backlog,/ }).click();
+    await card(page, 'Idea for later').click();
+    await expect(views(page).getByRole('tab', { name: /Backlog/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await expect(card(page, 'Idea for later')).toBeInViewport();
   });
 
   test('the cross-project board pages through its categories beside a task', async ({ page }) => {

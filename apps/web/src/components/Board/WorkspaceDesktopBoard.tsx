@@ -7,9 +7,16 @@ import {
   SEARCH_SPACE,
 } from '@/components/BoardSearch/BoardSearch';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
 import { BoardColumn, ColumnHeader } from './BoardColumn';
 import { useSpotlightCleanup } from './blockers';
-import { CompactFrame, CompactPager, useBoardHandoff, useCompactBoard } from './CompactSplitBoard';
+import {
+  CompactFrame,
+  CompactPager,
+  LayoutSwap,
+  useBoardHandoff,
+  useCompactBoard,
+} from './CompactSplitBoard';
 import {
   boardRestWidth,
   OpenTaskPane,
@@ -68,19 +75,24 @@ export function WorkspaceDesktopBoard() {
   const docked = frameWidth >= SEARCH_SIDEBAR_MIN;
   const paneSpace = usePaneSpace(state, frameWidth);
   // Beside a task on a narrow window or an unfolded foldable, one category a page, as on a phone.
-  const compact = useCompactBoard(
-    boardRestWidth({ frameWidth, rowWidth: 0, searching: state.searching, paneSpace }),
-    state.openTaskId !== null && paneSpace === 0,
-  );
+  const restWidth = boardRestWidth({
+    frameWidth,
+    rowWidth: 0,
+    searching: state.searching,
+    paneSpace,
+  });
+  const compact = useCompactBoard(restWidth, state.openTaskId !== null && paneSpace === 0);
   const row = useRef<HTMLDivElement>(null);
   const handoff = useBoardHandoff(row, compact, project.id);
+  const reduced = useReducedMotion() ?? false;
   return (
     <div className="flex h-full overflow-hidden">
       <div ref={frame} className="flex min-w-0 flex-1">
         {docked && <BoardSearchSidebar />}
-        <div ref={row} className="relative flex min-w-0 flex-1">
+        <div ref={row} className={cn('relative flex min-w-0 flex-1', compact && 'overflow-hidden')}>
+          <LayoutSwap root={row} compact={compact} reduced={reduced} />
           {compact ? (
-            <CompactFrame>
+            <CompactFrame width={restWidth}>
               <CompactPager
                 columns={COLUMNS}
                 handoff={handoff}

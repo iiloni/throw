@@ -53,7 +53,9 @@ unfolded foldable or a narrow window), both desktop boards take a phone's layout
 become views under a switch in a Catch-style dock at the half's foot. It slides away as a list
 scrolls down and back as it scrolls up (`useDockScroll`), and a held card's status targets take
 its face. `useBoardHandoff`
-carries the column in view and list scrolls between the two layouts.
+carries the column in view and list scrolls between the two layouts, and `LayoutSwap` cross-fades
+from a still copy of the layout going; the compact one takes its resting width at once and
+opens on the open task's own view and column.
 Columns that run on under an open desktop pane fade out at the seam (`[data-seam]` in
 `styles.css`, from `ScrollArea`'s `sides` marks and `seamOf`), and columns scrolled out to the
 left fade at the board's start; each fade stands at a sticky rail's edge where one lies over
