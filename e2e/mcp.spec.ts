@@ -1459,8 +1459,6 @@ test('GitHub deliveries reach the offline collection and MCP, with scoped manual
       draft: true,
       updated_at: '2026-11-25T09:00:00Z',
     };
-    await send('pull_request', { pull_request: pr });
-    await send('pull_request', { pull_request: pr });
     await send('issues', { issue: { ...pr, title: 'THR-1 follow-up', number: 24 } });
     await send('pull_request_review', {
       pull_request: pr,
@@ -1476,6 +1474,8 @@ test('GitHub deliveries reach the offline collection and MCP, with scoped manual
     };
     await send('check_suite', { check_suite: check });
     await send('check_run', { check_run: check });
+    await send('pull_request', { pull_request: pr });
+    await send('pull_request', { pull_request: pr });
     await send('check_run', { check_run: { ...check, id: 10, conclusion: 'failure' } });
     const second = await call(client, 'create_task', { projectId: project.id, title: 'Verify' });
     await send('push', {
@@ -1514,7 +1514,6 @@ test('GitHub deliveries reach the offline collection and MCP, with scoped manual
         const { taskGithubLinksCollection: c } = await import(
           /* @vite-ignore */ '/src/lib/collections.ts'
         );
-        c.startSyncImmediate();
         return c.get(id);
       }, link.id);
     await expect.poll(synced, { timeout: 30000 }).toMatchObject(link);

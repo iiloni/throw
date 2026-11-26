@@ -62,7 +62,7 @@ export function buildPayload(
         }),
     actor:
       'integration' in actor
-        ? { kind: 'integration', viaTokenName: 'GitHub' }
+        ? { kind: 'token', viaTokenName: 'GitHub', integration: 'github' }
         : actor.tokenId
           ? { kind: 'token', viaTokenName: actor.viaTokenName }
           : { kind: 'user', viaTokenName: null },

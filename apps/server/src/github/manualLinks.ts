@@ -9,6 +9,8 @@ import { memberWorkspaces } from '../lib/workspaces';
 import type { WriteActor } from '../lib/writeActor';
 import { activeTask, publicLink, recordLink, taskFields } from './linkData';
 
+import { reconcileSignals } from './linkSignals';
+
 const visible = (tx: Transaction, actor: WriteActor, taskId: string) =>
   and(
     eq(tasks.id, taskId),
@@ -40,7 +42,11 @@ export async function addGithubLink(
       .for('share', { of: tasks });
     if (!task) throw new LinkError('Task not found', 404);
     const [connection] = await tx
-      .select({ repo: githubConnections.repository, enabled: githubConnections.enabled })
+      .select({
+        id: githubConnections.id,
+        repo: githubConnections.repository,
+        enabled: githubConnections.enabled,
+      })
       .from(githubConnections)
       .where(eq(githubConnections.projectId, task.projectId))
       .for('no key update');
@@ -60,10 +66,22 @@ export async function addGithubLink(
     const existing = known.find((link) => link.taskId === taskId);
     if (existing) return { link: publicLink(existing), txid: null };
     const source = known[0];
+    const signals =
+      item.kind === 'pr'
+        ? await reconcileSignals(
+            tx,
+            connection.id,
+            item.repo,
+            item.number,
+            source?.headSha ?? null,
+            source ?? {},
+          )
+        : {};
     const [row] = await tx
       .insert(links)
       .values({
         ...source,
+        ...signals,
         ...item,
         id: uuidv7(),
         taskId,

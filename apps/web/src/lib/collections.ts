@@ -271,6 +271,7 @@ export const taskTagsCollection = createCollection(
 export const taskGithubLinksCollection = createCollection(
   persisted(
     electricCollectionOptions({
+      ...alwaysSynced,
       id: 'task-github-links',
       schema: taskGithubLinkSchema,
       getKey: (link) => link.id,

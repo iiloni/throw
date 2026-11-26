@@ -123,8 +123,13 @@ The membership-filtered `task-github-links` shape exposes card metadata, includi
 The per-reviewer and per-check records used for aggregation stay on the server. The new
 read-only collection has its own SQLite schema version 1 and requires no outbox migration.
 Link additions, removals and state changes use the existing protocol-1 relations history
-format, with the repository, number and state in its display names. A verified delivery
-records GitHub as its source, with no user or MCP token ID, and emits a task update webhook.
+format, with the repository, number and state in its display names. A delivery that adds a link or changes its state
+records GitHub as its source and emits a task update webhook. Its actor uses the existing
+machine actor kind (`token`), the display name GitHub and an additive `integration: github`
+marker. Reviews, checks and other metadata-only refreshes update the synced link quietly.
+The receiver keeps normalized review and check signals with their seven-day delivery
+receipts. A newly linked PR or a change of head reconciles earlier signals in the same
+transaction. Raw webhook bodies never enter these receipts.
 
 `POST /api/integrations/github/tasks/:taskId/links` takes a GitHub PR or issue URL,
 plus optional title and state. Manual links reuse metadata from the same project's other

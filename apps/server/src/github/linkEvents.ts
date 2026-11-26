@@ -2,9 +2,10 @@ import { githubItemUrl } from '@throw/shared';
 import { and, eq, inArray, or } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { z } from 'zod';
-import { githubConnections, taskGithubLinks as links, projects, tasks } from '../db/schema';
+import { taskGithubLinks as links, projects, tasks } from '../db/schema';
 import type { GithubEventHandler } from './dispatch';
-import { activeTask, type LinkRow, recordLink, taskFields } from './linkData';
+import { activeTask, recordLink, taskFields } from './linkData';
+import { reconcileSignals } from './linkSignals';
 
 const item = z.object({
   number: z.int().positive().max(2147483647),
@@ -89,15 +90,20 @@ export const handleItem: GithubEventHandler = async (tx, { connection, event, pa
       mergeCommitSha: pull?.merge_commit_sha ?? null,
       mergedAt: pull?.merged_at ? new Date(pull.merged_at) : null,
     } as const;
+    const signals =
+      pull && (!link || link.headSha !== pull.head.sha)
+        ? await reconcileSignals(tx, connection.id, repo, data.number, pull.head.sha, {
+            ...(link ?? previous),
+            runs: previous?.headSha === pull.head.sha ? previous.runs : null,
+            checksSummary: previous?.headSha === pull.head.sha ? previous.checksSummary : null,
+          })
+        : {};
     if (!link) {
       const [created] = await tx
         .insert(links)
         .values({
           ...metadata,
-          reviews: previous?.reviews,
-          reviewDecision: previous?.reviewDecision,
-          runs: previous?.headSha === metadata.headSha ? previous?.runs : null,
-          checksSummary: previous?.headSha === metadata.headSha ? previous?.checksSummary : null,
+          ...signals,
           id: uuidv7(),
           taskId: task.taskId,
           workspaceId,
@@ -114,8 +120,7 @@ export const handleItem: GithubEventHandler = async (tx, { connection, event, pa
         .update(links)
         .set({
           ...metadata,
-          updatedAt: new Date(),
-          ...(link.headSha !== metadata.headSha ? { runs: null, checksSummary: null } : {}),
+          ...signals,
         })
         .where(eq(links.id, link.id));
       if (link.state !== state) await recordLink(tx, task, link, link.state, state);
@@ -123,156 +128,6 @@ export const handleItem: GithubEventHandler = async (tx, { connection, event, pa
   }
   return { status: 'ok' };
 };
-
-const review = z.object({
-  id: z.int().positive(),
-  user: z.object({ id: z.int().positive() }),
-  state: z.string(),
-});
-const run = z.object({
-  id: z.int().positive(),
-  head_sha: z.string(),
-  check_suite: z.object({ id: z.int().positive() }).optional(),
-  name: z.string().optional(),
-  status: z.string(),
-  conclusion: z.string().nullable(),
-  completed_at: z.iso.datetime().nullish(),
-  started_at: z.iso.datetime().nullish(),
-  updated_at: z.iso.datetime().nullish(),
-  pull_requests: z.array(z.object({ number: z.int() })).optional(),
-});
-type Runs = NonNullable<LinkRow['runs']>;
-export function summarize(runs: Runs): NonNullable<LinkRow['checksSummary']> {
-  const states = Object.values(runs).map((r) => r.state);
-  const count = (value: (typeof states)[number]) => states.filter((s) => s === value).length;
-  const passed = count('passing'),
-    failed = count('failing'),
-    pending = count('pending');
-  return {
-    passed,
-    failed,
-    pending,
-    state: failed ? 'failing' : pending ? 'pending' : passed ? 'passing' : 'neutral',
-  };
-}
-export const handleSignal: GithubEventHandler = async (tx, { connection, event, payload }) => {
-  const reviewing = event === 'pull_request_review';
-  const r = reviewing ? review.safeParse(payload.review).data : null;
-  const target = reviewing
-    ? item.pick({ number: true }).safeParse(payload.pull_request).data
-    : null;
-  const check = reviewing ? null : run.safeParse(payload[event]).data;
-  if (reviewing ? !r || !target : !check) return ignored('Missing GitHub signal metadata');
-  const rows = await tx
-    .select()
-    .from(links)
-    .where(
-      and(
-        eq(links.projectId, connection.projectId),
-        eq(links.repo, connection.repository.toLowerCase()),
-        eq(links.kind, 'pr'),
-        target ? eq(links.number, target.number) : eq(links.headSha, check!.head_sha),
-        check?.pull_requests?.length
-          ? inArray(
-              links.number,
-              check.pull_requests.map((p) => p.number),
-            )
-          : undefined,
-      ),
-    )
-    .for('update');
-  for (const row of rows) {
-    if (r) {
-      const state = r.state.toLowerCase();
-      if (!['approved', 'changes_requested', 'dismissed'].includes(state)) continue;
-      const reviews = { ...row.reviews };
-      const prior = reviews[String(r.user.id)];
-      if (prior && (prior.id > r.id || (prior.id === r.id && prior.state === 'pending'))) continue;
-      reviews[String(r.user.id)] = {
-        id: r.id,
-        state:
-          state === 'approved'
-            ? 'approved'
-            : state === 'changes_requested'
-              ? 'changes_requested'
-              : 'pending',
-      };
-      const states = Object.values(reviews).map((v) => v.state);
-      const reviewDecision = states.includes('changes_requested')
-        ? 'changes_requested'
-        : states.includes('approved')
-          ? 'approved'
-          : 'pending';
-      await tx
-        .update(links)
-        .set({ reviews, reviewDecision, updatedAt: new Date() })
-        .where(eq(links.id, row.id));
-    } else if (check) {
-      // Count runs when available. Suites are the fallback for a suite-only subscription.
-      const runs = { ...row.runs };
-      const suiteId = event === 'check_suite' ? check.id : check.check_suite?.id;
-      const key =
-        event === 'check_suite'
-          ? `suite/${suiteId}`
-          : `run/${suiteId ?? 'unknown'}/${check.name ?? check.id}`;
-      const prior = runs[key];
-      if (prior?.id && prior.id > check.id) continue;
-      const at = check.completed_at ?? check.updated_at ?? check.started_at ?? '';
-      if (
-        prior?.id === check.id &&
-        (prior.at > at ||
-          (prior.at === at && prior.state !== 'pending' && check.status !== 'completed'))
-      )
-        continue;
-      runs[key] = {
-        id: check.id,
-        at,
-        state:
-          check.status !== 'completed'
-            ? 'pending'
-            : check.conclusion === 'success'
-              ? 'passing'
-              : ['skipped', 'neutral'].includes(check.conclusion ?? '')
-                ? 'neutral'
-                : 'failing',
-      };
-      const covered = new Set(
-        Object.keys(runs)
-          .filter((k) => k.startsWith('run/'))
-          .map((k) => k.split('/')[1]),
-      );
-      const actual = Object.fromEntries(
-        Object.entries(runs).filter(([k]) => !k.startsWith('suite/') || !covered.has(k.slice(6))),
-      );
-      await tx
-        .update(links)
-        .set({
-          runs,
-          checksSummary: summarize(actual),
-          updatedAt: new Date(),
-        })
-        .where(eq(links.id, row.id));
-    }
-  }
-  return { status: 'ok' };
-};
-
-// Serialize deliveries and manual additions on the connection before reading prior state.
-export const connected =
-  (handler: GithubEventHandler): GithubEventHandler =>
-  async (tx, event) => {
-    const [current] = await tx
-      .select()
-      .from(githubConnections)
-      .where(eq(githubConnections.id, event.connection.id))
-      .for('no key update');
-    if (
-      !current?.enabled ||
-      current.repository.toLowerCase() !== event.connection.repository.toLowerCase()
-    )
-      return ignored('Connection changed');
-    return handler(tx, event);
-  };
 
 const push = z.object({
   after: z.string(),

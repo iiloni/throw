@@ -149,7 +149,8 @@ export const webhookPayloadSchema = z.object({
   taskId: z.uuid().optional(),
   taskKey: z.string().nullable().optional(),
   actor: z.object({
-    kind: z.enum(['user', 'token', 'integration']),
+    kind: z.enum(['user', 'token']),
+    integration: z.literal('github').optional(),
     viaTokenName: z.string().nullable().optional(),
   }),
   changedFields: z.array(z.string()).optional(),

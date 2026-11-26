@@ -631,11 +631,14 @@ export const githubDeliveries = pgTable(
       .notNull()
       .references(() => githubConnections.id, { onDelete: 'cascade' }),
     deliveryId: text().notNull(),
+    signalKey: text(),
+    signal: jsonb(),
     event: text().notNull(),
     receivedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     primaryKey({ columns: [table.connectionId, table.deliveryId] }),
+    index().on(table.connectionId, table.signalKey).where(sql`${table.signalKey} IS NOT NULL`),
     index().on(table.receivedAt),
   ],
 );
@@ -665,7 +668,7 @@ export const taskGithubLinks = pgTable(
     mergeCommitSha: text(),
     mergedAt: timestamp({ withTimezone: true }),
     createdAt: createdAt(),
-    updatedAt: createdAt(),
+    updatedAt: updatedAt(),
     // Delivery ordering and aggregation data stay off the shape.
     headSha: text(),
     sourceUpdatedAt: timestamp({ withTimezone: true }),
@@ -681,6 +684,7 @@ export const taskGithubLinks = pgTable(
   (t) => [
     index().on(t.workspaceId),
     index().on(t.projectId, t.repo, t.kind, t.number),
+    index('task_github_links_head').on(t.projectId, t.repo, t.kind, t.headSha, t.branch),
     uniqueIndex('task_github_links_item').on(t.taskId, t.repo, t.kind, t.number),
   ],
 );

@@ -34,6 +34,39 @@ export const githubReceiverStore: GithubReceiverStore = {
 
   accept(connection, delivery, handle) {
     return db.transaction(async (tx) => {
+      // Lock before claiming: a delivery racing a disable remains eligible for redelivery.
+      const [current] = await tx
+        .select({
+          enabled: githubConnections.enabled,
+          repo: githubConnections.repository,
+          secret: githubConnections.encryptedWebhookSecret,
+          trashed: projects.deletedAt,
+        })
+        .from(githubConnections)
+        .innerJoin(projects, eq(projects.id, githubConnections.projectId))
+        .where(eq(githubConnections.id, connection.id))
+        .for('no key update');
+      if (
+        !current?.enabled ||
+        current.trashed ||
+        current.repo.toLowerCase() !== connection.repository.toLowerCase() ||
+        current.secret !== connection.encryptedWebhookSecret
+      ) {
+        const reason = 'Connection changed before the delivery was claimed.';
+        await tx
+          .update(githubConnections)
+          .set(
+            lastDelivery({
+              at: new Date(),
+              id: delivery.id,
+              event: delivery.event,
+              status: 'ignored',
+              detail: reason,
+            }),
+          )
+          .where(eq(githubConnections.id, connection.id));
+        return { status: 'ignored' as const, reason };
+      }
       await tx
         .delete(githubDeliveries)
         .where(

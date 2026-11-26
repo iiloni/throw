@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { summarize, taskNumbers } from './linkEvents';
+import { taskNumbers } from './linkEvents';
+import { summarize } from './linkSignals';
 
 describe('project task keys', () => {
   it('matches distinct whole keys in branch names and text within the database integer range', () => {
