@@ -70,6 +70,7 @@ export function WorkspaceDesktopBoard() {
   // Beside a task on a narrow window or an unfolded foldable, one category a page, as on a phone.
   const compact = useCompactBoard(
     boardRestWidth({ frameWidth, rowWidth: 0, searching: state.searching, paneSpace }),
+    state.openTaskId !== null && paneSpace === 0,
   );
   const row = useRef<HTMLDivElement>(null);
   const handoff = useBoardHandoff(row, compact, project.id);

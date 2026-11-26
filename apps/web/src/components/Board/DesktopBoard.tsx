@@ -186,7 +186,7 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
   const covered = state.backlog === 'full' || state.closed === 'full';
   const restWidth = boardRestWidth({ frameWidth, rowWidth, searching: state.searching, paneSpace });
   // Beside a task on a narrow window or an unfolded foldable, the board takes a phone's layout.
-  const compact = useCompactBoard(restWidth);
+  const compact = useCompactBoard(restWidth, state.openTaskId !== null && paneSpace === 0);
   const handoff = useBoardHandoff(row, compact, project.id);
   const rails = railGeometry({
     rowWidth,

@@ -56,10 +56,14 @@ export function compactFor(restWidth: number, compact: boolean) {
  * Whether the board lays itself out compactly, from its resting width (`boardRestWidth`): the
  * width it will have once the task pane has slid open or shut, so the layout changes once, as
  * the pane starts to move, rather than part way through.
+ *
+ * `arriving` is a task opened before its card has reached the board, as one just made is for a
+ * render: the pane's room is unknown until it does, so the board keeps the layout it has
+ * rather than taking the full one for a frame and starting over.
  */
-export function useCompactBoard(restWidth: number) {
+export function useCompactBoard(restWidth: number, arriving = false) {
   const [compact, setCompact] = useState(false);
-  const next = compactFor(restWidth, compact);
+  const next = arriving ? compact : compactFor(restWidth, compact);
   if (next !== compact) setCompact(next);
   return next;
 }
@@ -340,8 +344,9 @@ export function useDockScroll(
 /**
  * The project board beside an open task when there is too little room for its row: a phone's
  * board in the desktop's half. The backlog, the columns and the closed tasks are three views
- * of the same width under one switch in a dock along the foot, as Catch's tabs are, so cards
- * keep the whole half rather than sharing it with two rails' strips. The columns page one at a
+ * of the same width under one switch in a dock along the foot, as Catch's tabs are, with the
+ * create button floating beside it, so cards keep the whole half rather than sharing it with
+ * two rails' strips. The columns page one at a
  * time. The dock slides away as a list scrolls down and back as it scrolls up, and gives its
  * place to the search and selection bars. While a card is held it holds the statuses of the
  * other views, and holding the card on the board's own target opens the columns to place it in.
@@ -492,7 +497,21 @@ export function CompactSplitBoard({
           ),
         )}
       </div>
-      <CompactDock dockRef={dock} away={!dragging && (away || scrolledAway)} inert={away}>
+      <CompactDock
+        dockRef={dock}
+        away={!dragging && (away || scrolledAway)}
+        inert={away}
+        action={
+          state.actions &&
+          !dragging && (
+            <CreateButton
+              key="create"
+              label={into ? `New task in ${into.name}` : 'New task in the backlog'}
+              onCreate={() => createTask(into?.id)}
+            />
+          )
+        }
+      >
         {dragging ? (
           <DockFace key="targets">
             {/* Wraps into rows, growing the dock upward. */}
@@ -510,7 +529,7 @@ export function CompactSplitBoard({
           </DockFace>
         ) : (
           <DockFace key="views">
-            <div className="flex items-center gap-1 p-1">
+            <div className="flex p-1">
               <DockTabs
                 label="Board view"
                 value={view}
@@ -520,21 +539,6 @@ export function CompactSplitBoard({
                   setView(next);
                 }}
               />
-              {state.actions && (
-                <motion.button
-                  type="button"
-                  aria-label={into ? `New task in ${into.name}` : 'New task in the backlog'}
-                  onClick={() => {
-                    haptics.toggle();
-                    createTask(into?.id);
-                  }}
-                  whileTap={{ scale: 0.88 }}
-                  transition={springs.snappy}
-                  className="flex size-[calc(var(--dock-height)-0.5rem)] shrink-0 items-center justify-center rounded-[calc(var(--dock-radius)-0.25rem)] bg-brand text-brand-foreground shadow-[0_2px_6px_-2px_color-mix(in_oklab,var(--brand)_45%,transparent),inset_0_1px_0_rgb(255_255_255/0.35)] outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
-                >
-                  <Plus className="size-7" strokeWidth={2.25} aria-hidden />
-                </motion.button>
-              )}
             </div>
           </DockFace>
         )}
@@ -552,12 +556,15 @@ function CompactDock({
   dockRef,
   away,
   inert,
+  action,
   children,
 }: {
   dockRef: RefObject<HTMLDivElement | null>;
   away: boolean;
   /** Its place is taken: keyboard focus passes it by. */
   inert: boolean;
+  /** A button floating beside the dock, as Catch's create button floats beside its tabs. */
+  action?: ReactNode;
   children: ReactNode;
 }) {
   const reduced = useReducedMotion();
@@ -581,20 +588,55 @@ function CompactDock({
       className="pointer-events-none absolute inset-x-0 bottom-0 z-40 flex justify-center overflow-hidden px-5 pt-6"
       style={{ paddingBottom: DOCK_LIFT }}
     >
+      {/* Bottom-aligned: a held card's targets grow the dock upward beside the button. */}
       <motion.div
         ref={dockRef}
         data-compact-dock=""
         data-drop-block=""
         data-away={away ? '' : undefined}
         inert={inert}
-        className="glass-thick pointer-events-auto w-full max-w-md overflow-hidden rounded-[var(--dock-radius)]"
+        className="flex w-full max-w-md items-end"
         style={{ y }}
       >
-        <AnimatedHeight>
-          <AnimatePresence initial={false}>{children}</AnimatePresence>
-        </AnimatedHeight>
+        <div className="glass-thick pointer-events-auto min-w-0 flex-1 overflow-hidden rounded-[var(--dock-radius)]">
+          <AnimatedHeight>
+            <AnimatePresence initial={false}>{children}</AnimatePresence>
+          </AnimatedHeight>
+        </div>
+        <AnimatePresence initial={false}>{action}</AnimatePresence>
       </motion.div>
     </div>
+  );
+}
+
+/**
+ * The create button floating beside the dock, as Catch's is: it folds away into the dock's
+ * side while a card is held, so the targets take the width.
+ */
+function CreateButton({ label, onCreate }: { label: string; onCreate: () => void }) {
+  const reduced = useReducedMotion();
+  return (
+    <motion.div
+      className="pointer-events-auto shrink-0"
+      initial={{ width: 0, marginLeft: 0, opacity: 0, scale: 0.4 }}
+      animate={{ width: 64, marginLeft: 12, opacity: 1, scale: 1 }}
+      exit={{ width: 0, marginLeft: 0, opacity: 0, scale: 0.4 }}
+      transition={reduced ? { duration: 0 } : springs.smooth}
+    >
+      <motion.button
+        type="button"
+        aria-label={label}
+        onClick={() => {
+          haptics.toggle();
+          onCreate();
+        }}
+        whileTap={{ scale: 0.88 }}
+        transition={springs.snappy}
+        className="flex size-[var(--dock-height)] items-center justify-center rounded-[var(--dock-radius)] bg-brand text-brand-foreground shadow-[0_8px_24px_-6px_color-mix(in_oklab,var(--brand)_45%,transparent),inset_0_1px_0_rgb(255_255_255/0.35)] outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+      >
+        <Plus className="size-7" strokeWidth={2.25} aria-hidden />
+      </motion.button>
+    </motion.div>
   );
 }
 

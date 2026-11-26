@@ -264,6 +264,9 @@ export const ZoneGallery = memo(function ZoneGallery({
   const measure = useCallback(() => {
     const width = measuredWidth.current;
     if (width <= 0) return;
+    // A grid out of the layout (a view hidden behind another) has cards of no height. Measured
+    // so, they would stack at its top and spring back down each time it is shown again.
+    if (container.current?.getClientRects().length === 0) return;
     // A card still growing or shrinking to this width is measured as it will be, once: its
     // height on the way there says nothing, and it changes every frame. So is a card whose
     // subtasks are unfolding or folding away: it is measured at the height they spring to.

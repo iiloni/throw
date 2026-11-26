@@ -60,10 +60,20 @@ test.describe('the board beside a task on a narrow desktop', () => {
       .click();
     await expect(card(page, 'Idea for later')).toBeVisible();
     await expect(card(page, 'Review this')).toBeHidden();
+    const idea = (await (await settled(card(page, 'Idea for later'))).boundingBox())!;
     await views(page)
       .getByRole('tab', { name: /Closed/ })
       .click();
     await expect(card(page, 'Finished')).toBeVisible();
+    await views(page).getByRole('tab', { name: /Board/ }).click();
+    await expect(card(page, 'Review this')).toBeInViewport();
+    // Shown again, the backlog's cards are where they were, not laid out afresh.
+    await views(page)
+      .getByRole('tab', { name: /Backlog/ })
+      .click();
+    expect(await card(page, 'Idea for later').boundingBox()).toEqual(idea);
+    await page.waitForTimeout(300);
+    expect(await card(page, 'Idea for later').boundingBox()).toEqual(idea);
     await views(page).getByRole('tab', { name: /Board/ }).click();
     await expect(card(page, 'Review this')).toBeInViewport();
 
@@ -178,6 +188,35 @@ test.describe('the board beside a task on a narrow desktop', () => {
     await expect(dock(page)).toHaveAttribute('data-away', '');
     await flow(page).getByRole('button', { name: 'Review', exact: true }).click();
     await expect(dock(page)).not.toHaveAttribute('data-away');
+  });
+
+  test('opens a task made from its create button beside it, without starting over', async ({
+    page,
+  }) => {
+    await page.setViewportSize(FOLDABLE);
+    await fixture(page);
+    await card(page, 'Review this').click();
+    await expect(compactBoard(page)).toBeVisible();
+    await page.waitForTimeout(600);
+    // The create button floats beside the dock, not in it.
+    const create = page.getByRole('button', { name: 'New task in Build', exact: true });
+    await expect(create).toBeVisible();
+    await expect(dock(page).locator('.glass-thick').getByRole('button')).toHaveCount(0);
+    await compactBoard(page).evaluate((frame) => {
+      (frame as HTMLElement & { kept?: boolean }).kept = true;
+    });
+    await create.click();
+    await expect(page.getByRole('region', { name: 'Task', exact: true })).toContainText(
+      /BRD-\d+|Pending/,
+    );
+    await expect(card(page, 'New task')).toBeVisible();
+    // The same board, still at full strength: it never took the full layout in between.
+    expect(
+      await compactBoard(page).evaluate((frame) => ({
+        kept: (frame as HTMLElement & { kept?: boolean }).kept,
+        opacity: getComputedStyle(frame).opacity,
+      })),
+    ).toEqual({ kept: true, opacity: '1' });
   });
 
   test('the cross-project board pages through its categories beside a task', async ({ page }) => {
