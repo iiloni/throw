@@ -32,3 +32,12 @@ it('omits every query parameter on the MCP endpoint', () => {
   expect(loggedPath('http://app/api/mcp?token=test-token&source=client')).toBe('/api/mcp');
   expect(loggedPath('http://app/api/mcp/?token=test-token')).toBe('/api/mcp/');
 });
+
+it('keeps GitHub webhook URL tokens out of the log', () => {
+  expect(
+    loggedPath('http://app/api/integrations/github/webhooks/abcdefghijklmnopqrstuvwxyz012345'),
+  ).toBe('/api/integrations/github/webhooks/redacted');
+  expect(loggedPath('http://app/api/integrations/github/projects/p1')).toBe(
+    '/api/integrations/github/projects/p1',
+  );
+});

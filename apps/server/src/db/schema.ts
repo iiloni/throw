@@ -4,6 +4,8 @@ import type {
   Color,
   CommentBody,
   Description,
+  GithubAuthMode,
+  GithubDeliveryStatus,
   Priority,
   PriorityNames,
   Size,
@@ -569,5 +571,70 @@ export const webhookDeliveries = pgTable(
       .where(sql`${table.status} IN ('pending', 'held') AND ${table.attempts} = 0`),
     index().on(table.webhookId),
     index().on(table.createdAt),
+  ],
+);
+
+/**
+ * A project's connection to one GitHub repository (ADR 0017). Server-only like webhooks:
+ * never synced, excluded from backups and cleared by a restore, because it holds the inbound
+ * webhook secret and an optional access token, both encrypted under the server's auth secret.
+ * It belongs to the project, so any member of its workspace manages it (ADR 0004).
+ */
+export const githubConnections = pgTable(
+  'github_connections',
+  {
+    id: uuid().primaryKey(),
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    projectId: uuid()
+      .notNull()
+      .unique()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    /** `owner/repo` as it was entered; deliveries compare it without regard to case. */
+    repository: text().notNull(),
+    authMode: text().$type<GithubAuthMode>().notNull().default('webhook'),
+    enabled: boolean().notNull().default(true),
+    /** The inbound URL's last segment. It finds the connection; the signature proves the sender. */
+    webhookToken: text().notNull().unique(),
+    encryptedWebhookSecret: text().notNull(),
+    encryptedToken: text(),
+    createdBy: text().references(() => user.id, { onDelete: 'set null' }),
+    lastDeliveryAt: timestamp({ withTimezone: true }),
+    lastDeliveryId: text(),
+    lastDeliveryEvent: text(),
+    lastDeliveryStatus: text().$type<GithubDeliveryStatus>(),
+    lastDeliveryDetail: text(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    index().on(table.workspaceId),
+    check('github_connections_auth_mode', sql`${table.authMode} IN ('webhook', 'token')`),
+    check(
+      'github_connections_token_mode',
+      sql`(${table.authMode} = 'token') = (${table.encryptedToken} IS NOT NULL)`,
+    ),
+  ],
+);
+
+/**
+ * The `X-GitHub-Delivery` IDs a connection has accepted, so a redelivery is answered without
+ * being handled twice. Recorded in the transaction that handles the delivery, and kept for a
+ * week: GitHub redelivers on request for three days.
+ */
+export const githubDeliveries = pgTable(
+  'github_deliveries',
+  {
+    connectionId: uuid()
+      .notNull()
+      .references(() => githubConnections.id, { onDelete: 'cascade' }),
+    deliveryId: text().notNull(),
+    event: text().notNull(),
+    receivedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.connectionId, table.deliveryId] }),
+    index().on(table.receivedAt),
   ],
 );

@@ -15,6 +15,7 @@ const access = vi.hoisted(() => ({
   desktop: true,
   mcpStatus: 'ready' as 'loading' | 'ready' | 'unavailable' | 'error',
   webhooksStatus: 'ready' as 'loading' | 'ready' | 'unavailable' | 'error',
+  githubStatus: 'ready' as 'loading' | 'ready' | 'unavailable' | 'error',
 }));
 
 vi.mock('@tanstack/react-router', () => ({
@@ -73,6 +74,19 @@ vi.mock('@/lib/webhookSettings', async (actual) => ({
     removed: vi.fn(),
   }),
 }));
+vi.mock('@/lib/githubSettings', async (actual) => ({
+  ...(await actual<typeof import('@/lib/githubSettings')>()),
+  useGithubConnection: () => ({
+    state:
+      access.githubStatus === 'ready'
+        ? { status: 'ready', connection: null }
+        : { status: access.githubStatus },
+    retry: vi.fn(),
+    refresh: vi.fn(),
+    changed: vi.fn(),
+    removed: vi.fn(),
+  }),
+}));
 vi.mock('@/lib/settings', async (actual) => ({
   ...(await actual<typeof import('@/lib/settings')>()),
   useAdminAccess: () => access.admin,
@@ -102,6 +116,7 @@ beforeEach(() => {
   access.desktop = true;
   access.mcpStatus = 'ready';
   access.webhooksStatus = 'ready';
+  access.githubStatus = 'ready';
 });
 
 it('shows project pages beside User and Admin sections and Back to board when a project is active', () => {
@@ -115,7 +130,7 @@ it('shows project pages beside User and Admin sections and Back to board when a 
   expect(within(nav).getByRole('link', { name: 'Back to board' })).toBeInTheDocument();
 
   const projectGroup = within(nav).getByRole('region', { name: 'Kitchen' });
-  for (const label of ['General', 'Statuses', 'Priorities', 'Tags', 'Trash']) {
+  for (const label of ['General', 'Statuses', 'Priorities', 'Tags', 'GitHub', 'Trash']) {
     expect(within(projectGroup).getByRole('link', { name: label })).toBeInTheDocument();
   }
   expect(within(projectGroup).getByRole('link', { name: 'General' })).not.toHaveAttribute(
@@ -180,4 +195,41 @@ it('omits the project section and Back to board gracefully when no project exist
   expect(within(nav).queryByRole('link', { name: 'Back to board' })).not.toBeInTheDocument();
   expect(within(nav).getByRole('region', { name: 'User' })).toBeInTheDocument();
   expect(within(nav).queryByRole('region', { name: 'Kitchen' })).not.toBeInTheDocument();
+});
+
+it('lists the GitHub page once the server confirms it, or while it is open', () => {
+  access.githubStatus = 'unavailable';
+  const { rerender } = render(
+    <SettingsHub project={project}>
+      <p>Body</p>
+    </SettingsHub>,
+  );
+  const projectGroup = () =>
+    within(screen.getByRole('navigation', { name: 'Settings pages' })).getByRole('region', {
+      name: 'Kitchen',
+    });
+  expect(within(projectGroup()).queryByRole('link', { name: 'GitHub' })).not.toBeInTheDocument();
+
+  access.githubStatus = 'loading';
+  rerender(
+    <SettingsHub project={project}>
+      <p>Body</p>
+    </SettingsHub>,
+  );
+  expect(within(projectGroup()).queryByRole('link', { name: 'GitHub' })).not.toBeInTheDocument();
+
+  routerState.match = {
+    routeId: '/_app/w/$workspaceId/p/$projectId_/settings',
+    pathname: '/w/ws-1/p/proj-1/settings',
+    search: { section: 'github' },
+  };
+  rerender(
+    <SettingsHub project={project}>
+      <p>GitHub body</p>
+    </SettingsHub>,
+  );
+  expect(within(projectGroup()).getByRole('link', { name: 'GitHub' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
 });

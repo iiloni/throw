@@ -7,6 +7,7 @@ import {
   type SettingsPage,
   type SettingsPageGroup,
 } from '@/components/SettingsLayout/SettingsLayout';
+import { GithubConnectionContext, useGithubConnection } from '@/lib/githubSettings';
 import { McpSettingsContext, useMcpSettings } from '@/lib/mcpSettings';
 import { useDesktop } from '@/lib/media';
 import { settingsSectionSchema } from '@/lib/projectSettings';
@@ -35,6 +36,7 @@ export function SettingsHub({ project, children }: { project?: Project; children
   const admin = useAdminAccess();
   const mcp = useMcpSettings();
   const webhooks = useWebhookSettings();
+  const github = useGithubConnection(project?.id);
   const wide = useDesktop();
 
   const appPage = settingsPageFor(pathname);
@@ -47,7 +49,21 @@ export function SettingsHub({ project, children }: { project?: Project; children
     (appPage?.path === '/settings/mcp' && !showMcp) ||
     (appPage?.path === '/settings/webhooks' && !showWebhooks);
 
-  const projectPages = project ? projectSettingsPages(project) : [];
+  const projectSection =
+    routeId === '/_app/w/$workspaceId/p/$projectId_/settings'
+      ? settingsSectionSchema
+          .catch('general')
+          .parse(
+            match?.search && typeof match.search === 'object' && 'section' in match.search
+              ? match.search.section
+              : undefined,
+          )
+      : null;
+  const projectPages = project
+    ? projectSettingsPages(project, {
+        github: listed(github.state.status, projectSection === 'github'),
+      })
+    : [];
   const groups: SettingsPageGroup[] = [
     ...(project
       ? [
@@ -76,13 +92,8 @@ export function SettingsHub({ project, children }: { project?: Project; children
   if (routeId === '/_app/w/$workspaceId/p/$projectId_/trash' && project) {
     const key = projectSettingsPageKey(project.id, 'trash');
     current = projectPages.find((page) => page.key === key) ?? null;
-  } else if (routeId === '/_app/w/$workspaceId/p/$projectId_/settings' && project) {
-    const rawSection =
-      match?.search && typeof match.search === 'object' && 'section' in match.search
-        ? match.search.section
-        : undefined;
-    const section = settingsSectionSchema.catch('general').parse(rawSection);
-    const key = projectSettingsPageKey(project.id, section);
+  } else if (projectSection && project) {
+    const key = projectSettingsPageKey(project.id, projectSection);
     current = projectPages.find((page) => page.key === key) ?? null;
   } else if (!appHidden) {
     current = appPage;
@@ -102,16 +113,18 @@ export function SettingsHub({ project, children }: { project?: Project; children
   return (
     <McpSettingsContext value={mcp}>
       <WebhookSettingsContext value={webhooks}>
-        <SettingsLayout
-          title="Settings"
-          groups={groups}
-          current={current}
-          wide={wide}
-          back={back}
-          roomy={!appHidden && appPage?.section === 'Admin'}
-        >
-          {children}
-        </SettingsLayout>
+        <GithubConnectionContext value={github}>
+          <SettingsLayout
+            title="Settings"
+            groups={groups}
+            current={current}
+            wide={wide}
+            back={back}
+            roomy={!appHidden && appPage?.section === 'Admin'}
+          >
+            {children}
+          </SettingsLayout>
+        </GithubConnectionContext>
       </WebhookSettingsContext>
     </McpSettingsContext>
   );

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useShell } from '@/components/AppShell/shell';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
+import { GithubConnectionSettings } from '@/components/GithubConnection/GithubConnection';
 import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
 import { ProjectIconPicker } from '@/components/ProjectIconPicker/ProjectIconPicker';
 import { SettingsSection } from '@/components/SettingsSection/SettingsSection';
@@ -62,6 +63,7 @@ export function ProjectSettings({
         ))}
       {section === 'priorities' && <PrioritySettings project={project} />}
       {section === 'tags' && <TagManager projectId={project.id} titled={false} />}
+      {section === 'github' && <GithubConnectionSettings projectId={project.id} />}
     </>
   );
 }

@@ -32,6 +32,7 @@ integrations.
   agent used for each change. Throw itself never moves or completes a task on a schedule.
 - **Few integrations, all opt-in.** The first is [MCP](decisions/0014-mcp-server.md).
   [Webhooks](decisions/0015-webhooks.md) are its push companion: they tell an agent to look.
+  A project can follow a GitHub repository ([ADR 0017](decisions/0017-github-integration.md)).
 - **Boards are for managing, task views are for executing.** A card carries enough to manage
   a task's lifecycle; the work happens in the task's own view.
 
@@ -74,6 +75,10 @@ integrations.
 - Outbound webhooks that wake an external agent when a workspace or project changes. Each
   sends a small signed notice and the agent reads the change from the MCP feed. A user
   creates them in Settings; they run no rules and change nothing in Throw.
+- An opt-in GitHub connection per project, in project settings: GitHub sends the project's
+  repository events as signed webhooks, which Throw verifies and records. Linking pull
+  requests and issues, status changes on their events and releases build on it
+  ([ADR 0017](decisions/0017-github-integration.md)).
 
 ### Out of scope
 
@@ -87,7 +92,7 @@ integrations.
 | List view | The board is the only layout. |
 | Filtering by tag across projects | Tags are per project. |
 | Automation inside Throw | Scheduled jobs and rules that change tasks are out of scope. Webhooks only notify. |
-| Other integrations, import, export | Out of scope for the first version. |
+| Other integrations, import, export | Out of scope for the first version, beyond MCP, webhooks and GitHub. |
 | Reports (cycle time, burndown) | Later; the activity log makes them possible. |
 | Time tracking | Out of scope until further notice. |
 | Moving a task to another project | Not supported for now. A task filed in the wrong project is recreated. |
@@ -847,8 +852,8 @@ dock rather than opening as a page. Desktop has no drawer. The rules are in
   opens its search and replaces the view with `board`.
 - `/w/:workspaceId/p/:projectId/settings` manages a project inside the unified Settings hub
   alongside User and Admin pages: General (name, color and icon, saved as they change; the key;
-  deleting the project), Statuses, Priorities and Tags, with Trash beside them. Opening Settings
-  from the rail or phone title menu shows the active or remembered project's pages in the same
+  deleting the project), Statuses, Priorities, Tags and GitHub, with Trash beside them.
+  Opening Settings from the rail or phone title menu shows the active or remembered project's pages in the same
   sidebar (desktop) or dock page picker (phone); the rail's project `...` menu and the phone
   board's title menu jump directly to a project's settings. The optional `section` search
   parameter keeps the chosen page across reloads and reconnects.

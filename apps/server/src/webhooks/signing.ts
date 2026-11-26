@@ -10,11 +10,17 @@ export function signWebhookBody(secret: string, body: string | Uint8Array) {
   return `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`;
 }
 
-/** The secret's encryption key, derived from the server's auth secret. */
-export function secretKey(serverSecret: string) {
-  return Buffer.from(
-    hkdfSync('sha256', serverSecret, 'throw-webhooks', 'webhook signing secret v1', 32),
-  );
+const WEBHOOK_SECRETS = { salt: 'throw-webhooks', info: 'webhook signing secret v1' };
+
+/**
+ * An encryption key derived from the server's auth secret. Each kind of stored secret has its
+ * own salt and label, so a key never decrypts another kind's values.
+ */
+export function secretKey(
+  serverSecret: string,
+  { salt, info }: { salt: string; info: string } = WEBHOOK_SECRETS,
+) {
+  return Buffer.from(hkdfSync('sha256', serverSecret, salt, info, 32));
 }
 
 const VERSION = 'v1';

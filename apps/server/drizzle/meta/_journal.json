@@ -92,6 +92,13 @@
       "when": 1795474085635,
       "tag": "0012_webhook_quiet_window",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795706913056,
+      "tag": "0013_github_connections",
+      "breakpoints": true
     }
   ]
 }
