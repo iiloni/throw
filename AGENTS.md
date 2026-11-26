@@ -93,7 +93,12 @@ from the cards' own blockers, so Blocked matches the blocked mark; the prototype
 hides them. A sorted list is `data-drop-send`:
 drops there send. The Updated sort reads each task's activity log (`updatedAtByTask`).
 Cards move on both boards by drag, keyboard,
-phone long press and the move drawer (ADR 0008). A selection (Ctrl/⌘/Shift click or right
+phone long press and the move drawer (ADR 0008). A move that is not a drag (the task pane, a
+menu, a bulk move, the keyboard carry, sync, a filter) is animated from the old layout by
+`Board/rearrange.tsx`: a class component in `CardList` reads `[data-rearrange]` places in
+`getSnapshotBeforeUpdate` and again after the commit, springs what changed place
+(`springs.smooth`), flies a card between visible columns as a still copy, and lets one go into
+its folded column or fade. A held card settles it all at once, and reduced motion skips it. A selection (Ctrl/⌘/Shift click or right
 click on desktop, long press on a phone) is edited together through `Board/SelectionActions.tsx`:
 the desktop `SelectionBar` and the phone `MovePanel` share its controls, and the boundaries
 supply the priority, size and tag panels and the trash action (`components/BulkActions`) through

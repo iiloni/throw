@@ -47,15 +47,7 @@ import {
   selectionTabs,
   selectionTabTitle,
 } from './SelectionActions';
-import {
-  type RailGeometry,
-  railGeometry,
-  SideZone,
-  TILES_WIDTH,
-  useRailSpring,
-  ZONE_GAP,
-} from './SideZone';
-import { StatusTile } from './StatusTile';
+import { type RailGeometry, railGeometry, SideZone, useRailSpring, ZONE_GAP } from './SideZone';
 import {
   type BoardState,
   board,
@@ -188,8 +180,8 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
   const resizing = railResize.use();
   const active = project.statuses.filter((status) => status.category === 'active');
   const dragging = makingWay(held);
-  // A gallery covers the columns. A held card still needs somewhere to go, so they come
-  // back as dropzones for as long as it is held.
+  // A gallery covers the columns. A held card still needs somewhere to go, so their statuses
+  // join the dropzones of the rail beside it (`SideZone`), which leaves the gallery its width.
   const covered = state.backlog === 'full' || state.closed === 'full';
   const rails = railGeometry({
     rowWidth,
@@ -323,25 +315,10 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
                   ) : (
                     <ColumnsEdge geometry={rails.backlog} />
                   )}
-                  {covered
-                    ? dragging && (
-                        <motion.div
-                          className="mt-[calc(var(--safe-top)+1.25rem)] mb-6 flex shrink-0 flex-col gap-2.5 p-1"
-                          style={{ width: TILES_WIDTH }}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                        >
-                          <p className="px-1 pt-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
-                            Active
-                          </p>
-                          {active.map((status) => (
-                            <StatusTile key={status.id} status={status} />
-                          ))}
-                        </motion.div>
-                      )
-                    : active.map((status, index) => (
-                        <StatusColumn key={status.id} status={status} index={index} />
-                      ))}
+                  {!covered &&
+                    active.map((status, index) => (
+                      <StatusColumn key={status.id} status={status} index={index} />
+                    ))}
                   {closedBound ? (
                     <>
                       <RailGap />
