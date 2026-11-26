@@ -63,6 +63,8 @@ development only. The board color helper is `taskTagColor` in `@throw/shared`. T
 pane picks and lists tags, and its unified Tags panel (Primary / Secondary tabs) makes new
 tags through the shell's `NewTagHost` (`components/NewTag`); project settings mounts tag
 management.
+Every tag tree (pickers, tag settings, board filters) shares one device-wide set of collapsed
+branches (`TagTree/useCollapsedTags.ts`); a tag search opens branches without changing it.
 Task relations (blocks, duplicates, relates to) link tasks across a workspace's projects:
 actions in `lib/taskRelations.ts`, the pane's list, relation picker (opened inline from the
 Links tab / open side column or from the dock's More panel) and card blocked mark in
