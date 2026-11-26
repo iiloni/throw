@@ -277,6 +277,46 @@ test.describe('desktop', () => {
       })
       .toBe(true);
   });
+  test('a gallery keeps its width under a held card, with the active statuses beside it', async ({
+    page,
+  }) => {
+    const board = await fixture(page);
+    for (const [title, position] of [
+      ['Steady one', 'a1'],
+      ['Steady two', 'a2'],
+      ['Steady three', 'a3'],
+    ] as const)
+      await board.add(title, 'Ideas', 3, position);
+    const opener = page.getByRole('button', { name: /^Open backlog,/ });
+    if (await opener.count()) await opener.click();
+    const backlog = page.getByRole('complementary', { name: 'Backlog' });
+    await backlog.getByRole('button', { name: 'Open as a gallery' }).click();
+    const gallery = backlog.getByRole('region', { name: 'Backlog tasks' });
+    const steady = card(page, 'Steady one');
+    const before = (await (await settled(steady)).boundingBox())!;
+    const width = (await gallery.boundingBox())!.width;
+    const closed = page.getByRole('complementary', { name: 'Closed' });
+    const review = closed.locator(`[data-drop-status="${board.status('Review')}"]`);
+    // Carried to the strip beside the gallery, where the covered columns' statuses wait.
+    await carry(page, card(page, 'Steady three'), [closed], { drop: false });
+    await expect(review).toBeVisible();
+    await expect(closed.locator(`[data-drop-status="${board.status('Done')}"]`)).toBeVisible();
+    // Nothing gave the dropzones room: the gallery and its cards keep their widths, and the
+    // cards their columns, so a card set down among them lands where it was aimed.
+    await settled(steady);
+    expect((await gallery.boundingBox())!.width).toBe(width);
+    const during = (await steady.boundingBox())!;
+    expect(during.x).toBe(before.x);
+    expect(during.width).toBe(before.width);
+    const target = await centre(review);
+    await page.mouse.move(target.x, target.y, { steps: 6 });
+    await expect(review).toHaveClass(/border-brand/);
+    await page.mouse.up();
+    await expect
+      .poll(async () => (await taskRow(page, board.headers, board.ids['Steady three']!))?.status_id)
+      .toBe(board.status('Review'));
+    expect((await gallery.boundingBox())!.width).toBe(width);
+  });
 });
 
 test.describe('sync', () => {

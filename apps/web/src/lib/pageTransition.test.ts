@@ -8,7 +8,7 @@ const board = at('/w/a/p/one', { view: 'board' });
 describe('pageTransition', () => {
   it('cross-fades between boards, across projects and workspaces', () => {
     expect(pageTransition(board, at('/w/a/p/two'), true)).toEqual(['fade']);
-    expect(pageTransition(board, at('/w/b/p/three'), false)).toEqual(['fade']);
+    expect(pageTransition(board, at('/w/b/p/three'), false)).toEqual(['fade', 'docked']);
     expect(pageTransition(at('/w/a/board'), board, true)).toEqual(['fade']);
   });
 
@@ -29,26 +29,28 @@ describe('pageTransition', () => {
     const settings = at('/w/a/p/one/settings');
     expect(pageTransition(board, settings, true)).toEqual(['forward']);
     expect(pageTransition(settings, board, true)).toEqual(['back']);
-    expect(pageTransition(board, at('/settings/general'), false)).toEqual(['forward']);
-    expect(pageTransition(at('/settings/account'), board, false)).toEqual(['back']);
-    expect(pageTransition(settings, at('/settings/general'), false)).toEqual(['forward']);
-    expect(pageTransition(at('/settings/general'), settings, false)).toEqual(['back']);
+    expect(pageTransition(board, at('/settings/general'), false)).toEqual(['forward', 'docked']);
+    expect(pageTransition(at('/settings/account'), board, false)).toEqual(['back', 'docked']);
+    expect(pageTransition(settings, at('/settings/general'), false)).toEqual(['forward', 'docked']);
+    expect(pageTransition(at('/settings/general'), settings, false)).toEqual(['back', 'docked']);
   });
 
   it('slides between settings pages in list order on a phone', () => {
     expect(pageTransition(at('/settings/general'), at('/settings/update'), false)).toEqual([
       'forward',
+      'docked',
     ]);
     expect(pageTransition(at('/settings/admin/backups'), at('/settings/account'), false)).toEqual([
       'back',
+      'docked',
     ]);
     const general = at('/w/a/p/one/settings');
     const tags = at('/w/a/p/one/settings', { section: 'tags' });
     const trash = at('/w/a/p/one/trash');
-    expect(pageTransition(general, tags, false)).toEqual(['forward']);
-    expect(pageTransition(trash, tags, false)).toEqual(['back']);
+    expect(pageTransition(general, tags, false)).toEqual(['forward', 'docked']);
+    expect(pageTransition(trash, tags, false)).toEqual(['back', 'docked']);
     expect(pageTransition(tags, at('/w/a/p/one/settings', { section: 'statuses' }), false)).toEqual(
-      ['back'],
+      ['back', 'docked'],
     );
   });
 
@@ -74,6 +76,16 @@ describe('pageTransition', () => {
     expect(pageTransition(at('/w/a/p/one/settings'), at('/w/a/p/two/settings'), true)).toEqual([
       'enter',
     ]);
+    expect(pageTransition(at('/w/a/p/one/settings'), at('/w/a/p/two/settings'), false)).toEqual([
+      'enter',
+      'docked',
+    ]);
+  });
+
+  it('keeps the dock live on a phone only between pages that both show it', () => {
+    expect(pageTransition(board, at('/w/a/p/two'), true)).toEqual(['fade']);
+    expect(pageTransition(board, at('/w/a/trash'), false)).toEqual(['enter']);
+    expect(pageTransition(at('/w/a/trash'), at('/settings/general'), false)).toEqual(['enter']);
   });
 
   it('reads a bad section as the general page', () => {

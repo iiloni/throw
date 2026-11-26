@@ -13,6 +13,8 @@ import {
   receiveBoard,
   update,
 } from '@/components/Board/state';
+import { TagTree } from '@/components/TagTree/TagTree';
+import { COLLAPSED_TAGS_KEY } from '@/components/TagTree/useCollapsedTags';
 import { BoardSearch, BoardSearchSidebar, searchSidebarOpen } from './BoardSearch';
 
 const project: Project = {
@@ -68,6 +70,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  localStorage.removeItem(COLLAPSED_TAGS_KEY);
   board.set(initialBoard());
   receiveBoard(
     projectBoardData(
@@ -278,6 +281,22 @@ describe('the docked search sidebar', () => {
 
     fireEvent.keyDown(field(), { key: 'Escape' });
     expect(board.get().searching).toBe(false);
+  });
+
+  it('remembers collapsed tag branches across reopening and shares them with tag pickers', () => {
+    const sidebar = render(<BoardSearchSidebar />);
+    const tagsRegion = () => screen.getByRole('region', { name: 'Tags' });
+    fireEvent.click(within(tagsRegion()).getByRole('button', { name: 'Collapse Home' }));
+    expect(within(tagsRegion()).queryByRole('button', { name: /^Home \/ Garden,/ })).toBeNull();
+    sidebar.unmount();
+
+    render(<BoardSearchSidebar />);
+    expect(within(tagsRegion()).getByRole('button', { name: 'Expand Home' })).toBeInTheDocument();
+    expect(within(tagsRegion()).queryByRole('button', { name: /^Home \/ Garden,/ })).toBeNull();
+
+    render(<TagTree tags={tags} renderTag={(tag) => <button type="button">{tag.name}</button>} />);
+    expect(screen.getAllByRole('button', { name: 'Expand Home' })).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Garden' })).toBeNull();
   });
 
   it('shows Find tags for large tag lists and clears the tag query before board filters on Escape', () => {

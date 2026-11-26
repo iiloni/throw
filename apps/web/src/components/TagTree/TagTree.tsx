@@ -1,11 +1,12 @@
 import type { Tag } from '@throw/shared';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, X } from 'lucide-react';
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { springs } from '@/lib/motion';
 import { indexTagTree } from '@/lib/tagTreeIndex';
 import { cn } from '@/lib/utils';
+import { useCollapsedTags } from './useCollapsedTags';
 
 export function TagTree({
   tags,
@@ -22,9 +23,10 @@ export function TagTree({
   searchAccessory?: (focused: boolean) => ReactNode;
   estimatedRowHeight?: number;
 }) {
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  const [collapsed, toggleCollapsed] = useCollapsedTags();
   const [search, setSearch] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
+  const searchField = useRef<HTMLInputElement>(null);
   const reducedMotion = useReducedMotion();
   const query = search.trim().toLowerCase();
   const index = useMemo(() => indexTagTree(tags), [tags]);
@@ -44,14 +46,31 @@ export function TagTree({
       )}
     >
       <input
+        ref={searchField}
         aria-label="Find tags"
         placeholder="Find tags"
         value={search}
         onChange={(event) => setSearch(event.target.value)}
         onFocus={() => setSearchFocused(true)}
         onBlur={() => setSearchFocused(false)}
-        className="h-10 min-w-0 flex-1 rounded-xl border border-border bg-background/40 px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        className="h-10 min-w-0 flex-1 rounded-xl border border-border bg-background/40 pr-11 pl-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       />
+      {search && (
+        <button
+          type="button"
+          aria-label="Clear tag search"
+          // A press leaves focus where it was, so the keyboard neither rises nor drops.
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={(event) => {
+            // The button is about to unmount, which would lose focus reached by keyboard.
+            if (event.currentTarget === document.activeElement) searchField.current?.focus();
+            setSearch('');
+          }}
+          className="relative -ml-11 flex size-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        >
+          <X className="size-4" aria-hidden />
+        </button>
+      )}
       {searchAccessory?.(searchFocused)}
     </div>
   );
@@ -90,14 +109,7 @@ export function TagTree({
                         aria-label={`${expanded ? 'Collapse' : 'Expand'} ${tag.name}`}
                         aria-expanded={expanded}
                         disabled={!!query}
-                        onClick={() =>
-                          setCollapsed((current) => {
-                            const next = new Set(current);
-                            if (next.has(tag.id)) next.delete(tag.id);
-                            else next.add(tag.id);
-                            return next;
-                          })
-                        }
+                        onClick={() => toggleCollapsed(tag.id)}
                         className="flex h-11 w-9 shrink-0 items-center justify-center rounded-lg outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <motion.span

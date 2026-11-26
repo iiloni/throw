@@ -394,7 +394,7 @@ export function TaskCard({
         spotlightRole === 'dimmed' ? 'dimmed' : spotlightRole !== 'none' ? 'active' : undefined
       }
       data-spotlight-instant={reduced ? '' : undefined}
-      className={cn('board-card-group isolate flex flex-col', landing && 'invisible')}
+      className={cn('board-card-group isolate flex min-w-0 flex-col', landing && 'invisible')}
     >
       {card}
       <motion.div

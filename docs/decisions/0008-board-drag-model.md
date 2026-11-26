@@ -112,7 +112,11 @@ card from elsewhere is sent to one of its statuses.
 
 **The rails do not move the board during a drag.** The backlog and closed rails turn into
 dropzones at the place they already occupy. Widening them would slide the columns out from
-under the held card, and floating them over the board hid the last column.
+under the held card, and floating them over the board hid the last column. A gallery covers
+the active columns, so their statuses join the dropzones of the strip beside it, which widens
+over the gallery's gap up to its edge (2026-11-25). The gallery keeps its width: giving the
+active statuses a column of their own narrowed every card and re-wrapped it under the held
+card, and back again at the drop, so a card rarely settled where it was set down.
 
 **On touch, a long press selects and movement after it drags.** A press that moves before
 it completes is a scroll. A card dragged this way alone is not left selected.

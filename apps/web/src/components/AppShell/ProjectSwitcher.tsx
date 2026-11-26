@@ -15,6 +15,10 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { accountLabel } from '@/components/AccountAvatar/AccountAvatar';
+import { AccountList } from '@/components/AccountSwitcher/AccountList';
+import { AccountSwipeButton } from '@/components/AccountSwitcher/AccountSwipeButton';
+import { useDeviceAccounts } from '@/components/AccountSwitcher/deviceAccounts';
 import { AnimatedHeight } from '@/components/AnimatedHeight/AnimatedHeight';
 import { useShell } from '@/components/AppShell/shell';
 import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
@@ -22,7 +26,7 @@ import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
-type View = 'projects' | 'workspaces';
+type View = 'projects' | 'workspaces' | 'accounts';
 
 /** Tiles past this many arrive together, so a long list is never kept waiting. */
 const STAGGERED = 8;
@@ -30,8 +34,9 @@ const STAGGERED = 8;
 /**
  * The phone's project switcher: a drawer page (ADR 0009) of the workspace's projects
  * as tinted tiles, low on the screen where a thumb reaches them. Workspaces and the occasional
- * actions sit around the tiles rather than among them: the workspace is a quiet row above that
- * opens its own view, and settings and the trash are a footer below.
+ * actions sit around the tiles rather than among them: the account and the workspace are quiet
+ * rows above that open their own views, and settings and the trash are a footer below. A swipe
+ * across the account's avatar changes to the next account on the device (ADR 0016).
  */
 export function ProjectSwitcher({ open, onClose }: { open: boolean; onClose: () => void }) {
   const shell = useShell();
@@ -74,15 +79,15 @@ export function ProjectSwitcher({ open, onClose }: { open: boolean; onClose: () 
     action();
   };
   const { workspace, project } = shell;
+  const { accounts, current: account } = useDeviceAccounts();
+  const titles: Record<View, string> = {
+    projects: 'Projects',
+    workspaces: 'Workspaces',
+    accounts: 'Accounts',
+  };
 
   return (
-    <ManagementSurface
-      open={open}
-      title={view === 'projects' ? 'Projects' : 'Workspaces'}
-      onClose={onClose}
-      dismiss={dismiss}
-      fit
-    >
+    <ManagementSurface open={open} title={titles[view]} onClose={onClose} dismiss={dismiss} fit>
       <AnimatedHeight anchor="top">
         {/* The view leaving lifts out of the flow, so the height springs to the arriving one. */}
         <div className="relative">
@@ -102,6 +107,28 @@ export function ProjectSwitcher({ open, onClose }: { open: boolean; onClose: () 
             >
               {view === 'projects' ? (
                 <>
+                  {account && (
+                    <AccountSwipeButton
+                      accounts={accounts}
+                      current={account}
+                      avatarClassName="mx-0.5"
+                      onClick={() => setView('accounts')}
+                      className="-mx-1 flex min-h-12 items-center gap-3 rounded-2xl px-1 text-left outline-none transition-colors active:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-muted-foreground text-xs">Account</span>
+                        <span className="block truncate font-semibold text-sm">
+                          {accountLabel(account)}
+                        </span>
+                      </span>
+                      {accounts.length > 1 && (
+                        <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
+                          {accounts.length}
+                        </span>
+                      )}
+                      <ChevronRight aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+                    </AccountSwipeButton>
+                  )}
                   {workspace && (
                     <button
                       type="button"
@@ -181,16 +208,14 @@ export function ProjectSwitcher({ open, onClose }: { open: boolean; onClose: () 
                     />
                   </div>
                 </>
+              ) : view === 'accounts' ? (
+                <>
+                  <BackToProjects onSelect={() => setView('projects')} />
+                  <AccountList onLeave={onClose} className="-mx-1" />
+                </>
               ) : (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => setView('projects')}
-                    className="-ml-1 flex min-h-11 items-center gap-1 self-start rounded-xl pr-3 pl-1 text-muted-foreground text-sm outline-none active:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <ChevronLeft aria-hidden className="size-4" />
-                    Projects
-                  </button>
+                  <BackToProjects onSelect={() => setView('projects')} />
                   <ul aria-label="Workspaces" className="flex flex-col gap-1.5">
                     {shell.workspaces.map((item) => {
                       const active = item.id === workspace?.id;
@@ -371,6 +396,19 @@ function FooterAction({
       <span className="line-clamp-2 max-w-full text-balance text-center leading-tight">
         {short ?? label}
       </span>
+    </button>
+  );
+}
+
+function BackToProjects({ onSelect }: { onSelect: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="-ml-1 flex min-h-11 items-center gap-1 self-start rounded-xl pr-3 pl-1 text-muted-foreground text-sm outline-none active:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <ChevronLeft aria-hidden className="size-4" />
+      Projects
     </button>
   );
 }

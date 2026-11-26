@@ -168,7 +168,12 @@ function TaskBody({ task, underDock = false }: { task: Task; underDock?: boolean
                             onClick={() => update({ openTaskId: subtask.id })}
                             className="flex min-h-10 w-full items-center gap-2.5 rounded-xl px-2 text-left text-sm outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/60"
                           >
-                            {subtaskStatus && <StatusGlyph category={subtaskStatus.category} />}
+                            {subtaskStatus && (
+                              <StatusGlyph
+                                category={subtaskStatus.category}
+                                color={subtaskStatus.color}
+                              />
+                            )}
                             <span className="min-w-0 flex-1 truncate">{subtask.title}</span>
                             <span className="text-foreground/50 text-xs">
                               {subtaskStatus?.name}

@@ -53,6 +53,42 @@ export function deleteOutbox(userId: string) {
   indexedDB.deleteDatabase(outboxName(userId));
 }
 
+/**
+ * How many writes wait in an account's outbox, read from its store without starting it: for
+ * an account this page has not opened, whose sign-out would delete them.
+ */
+export function countQueuedWrites(userId: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(outboxName(userId));
+    let missing = false;
+    request.onupgradeneeded = (event) => {
+      missing = event.oldVersion === 0;
+      request.transaction?.abort();
+    };
+    request.onerror = () => (missing ? resolve(0) : reject(request.error));
+    request.onsuccess = () => {
+      const outbox = request.result;
+      try {
+        const count = outbox.transaction('transactions').objectStore('transactions').count();
+        count.onsuccess = () => resolve(count.result);
+        count.onerror = () => reject(count.error);
+      } catch (error) {
+        reject(error);
+      } finally {
+        // Closing lets the count transaction finish and releases the outbox for deletion.
+        outbox.close();
+      }
+    };
+  });
+}
+
+/** Deletes the database of an account this page has not opened: one that is not in use. */
+export async function deleteLocalDatabase(userId: string) {
+  const name = databaseName(userId);
+  if (Capacitor.isNativePlatform()) await (await openNativeDatabase(name)).destroy();
+  else await removeBrowserDatabase(name);
+}
+
 /** The VFS keeps a database and its journals as files named after it. */
 async function removeBrowserDatabase(name: string) {
   const root = await navigator.storage.getDirectory();
