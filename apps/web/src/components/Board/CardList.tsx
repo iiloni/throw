@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { CARD_SPACING, drag, makingWay } from './drag';
 import { hasPriorityIcon, PriorityIcon } from './glyphs';
 import { groupByPriority, type Priority, priorityName, taskColor } from './model';
+import { RearrangeBoundary } from './rearrange';
 import {
   board,
   createTask,
@@ -131,6 +132,8 @@ export const CardList = memo(function CardList({
             )}
             style={endSpace ? { paddingBottom: endSpace } : undefined}
           >
+            {/* Renders with the list, to read where everything was before each commit. */}
+            <RearrangeBoundary />
             {groups.map(({ priority, tasks: zone }) => {
               if (priority === null)
                 return (
@@ -140,6 +143,8 @@ export const CardList = memo(function CardList({
                         key={task.id}
                         data-slot={task.id}
                         data-zone={task.priority}
+                        data-rearrange={task.id}
+                        data-rearrange-card=""
                         className="board-slot"
                       >
                         <div>
@@ -164,6 +169,7 @@ export const CardList = memo(function CardList({
                 <Fragment key={priority}>
                   <div
                     data-zone-header={priority}
+                    data-rearrange={`zone:${listId}:${priority}`}
                     data-drop-rail={headerMode === 'rail' ? priority : undefined}
                     data-mode={headerMode}
                     data-current={moving && place?.priority === priority ? '' : undefined}
@@ -229,6 +235,8 @@ export const CardList = memo(function CardList({
                         <div
                           data-slot={task.id}
                           data-zone={priority}
+                          data-rearrange={task.id}
+                          data-rearrange-card=""
                           hidden={away && !gathered}
                           data-folded={folded || (gathered && moving) ? '' : undefined}
                           data-dim={inPlace && place?.priority !== priority ? '' : undefined}
@@ -260,6 +268,7 @@ export const CardList = memo(function CardList({
             {state.actions && (
               <button
                 type="button"
+                data-rearrange={`add:${listId}`}
                 aria-label={`Add task to ${listId === 'backlog' ? 'backlog' : project.statuses.find((status) => status.id === listId.slice(7))?.name}`}
                 onClick={() => createTask(listId === 'backlog' ? undefined : listId.slice(7))}
                 className="mt-1 hidden min-h-11 items-center rounded-xl px-4 text-left text-muted-foreground text-sm outline-none hover:bg-foreground/[0.05] focus-visible:ring-2 focus-visible:ring-ring md:flex"
@@ -317,7 +326,12 @@ function EnteringCard({
   const hidden = useTaskCardHidden(taskId);
   const entry = useEntryMotion(`card:${taskId}`, true, delay, skip || hidden);
   return (
-    <motion.div className="relative pb-3" style={entry}>
+    <motion.div
+      className="relative pb-3"
+      // Marks a card mounting into its first entry, which a rearrangement leaves to it.
+      data-entering={entry.opacity.get() < 1 ? '' : undefined}
+      style={entry}
+    >
       {children}
     </motion.div>
   );
