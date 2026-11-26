@@ -63,6 +63,9 @@ development only. The board color helper is `taskTagColor` in `@throw/shared`. T
 pane picks and lists tags, and its unified Tags panel (Primary / Secondary tabs) makes new
 tags through the shell's `NewTagHost` (`components/NewTag`); project settings mounts tag
 management.
+The tag form picks a parent with Catch's `components/SearchSelect` in place of a native
+select: a popover beside the field on desktop, and a list opened in place under it on a phone,
+where the form is already a drawer page (ADR 0009).
 Every tag tree (pickers, tag settings, board filters) shares one device-wide set of collapsed
 branches (`TagTree/useCollapsedTags.ts`); a tag search opens branches without changing it.
 Task relations (blocks, duplicates, relates to) link tasks across a workspace's projects:
