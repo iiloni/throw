@@ -91,7 +91,7 @@ export function SubtaskUnderlay({ parent, subtasks, inert = false }: Props) {
       >
         <ul inert={!expanded || inert}>
           {subtasks.map((task) => (
-            <SubtaskRow key={task.id} project={project} task={task} />
+            <SubtaskRow key={task.id} project={project} task={task} origin={!inert} />
           ))}
           <li aria-hidden className="h-1.5" />
           <li className="sr-only">{open} still open</li>
@@ -219,15 +219,22 @@ function SubtaskPip({
   );
 }
 
-/** A subtask on its parent's card: its status changes here, and a tap opens it. */
-function SubtaskRow({ project, task }: { project: Project; task: Task }) {
+/**
+ * A subtask on its parent's card: its status changes here, and a tap opens it. On a phone the
+ * row stands for the task, as a relation row does: its screen opens out of it and closes back
+ * in. A dragged copy's rows are not where a task can go.
+ */
+function SubtaskRow({ project, task, origin }: { project: Project; task: Task; origin: boolean }) {
   const status = statusById(project, task.statusId);
   const spotlightBlocker = useIsBlockerSpotlightTarget(task.id);
+  const rowRef = useRef<HTMLLIElement>(null);
   if (!status) return null;
   const closed = isClosed(status.category);
   return (
     // One inset row with one hover fill; the glyph lines up under the progress pips above.
     <li
+      ref={rowRef}
+      data-task-origin={origin ? task.id : undefined}
       data-spotlight={spotlightBlocker ? 'blocker' : undefined}
       className={cn(
         'mx-1.5 flex min-h-9 items-center rounded-xl transition-colors hover:bg-foreground/[0.05]',
@@ -251,7 +258,7 @@ function SubtaskRow({ project, task }: { project: Project; task: Task }) {
       </StatusMenu>
       <button
         type="button"
-        onClick={() => update({ openTaskId: task.id })}
+        onClick={() => update({ openTaskId: task.id }, rowRef.current)}
         className="flex min-h-9 min-w-0 flex-1 items-center self-stretch rounded-xl pr-3 pl-1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
       >
         <span

@@ -38,6 +38,7 @@ const surfaces = createStore(0);
 export function isVisibleOrigin(card: HTMLElement): boolean {
   if (!card.isConnected) return false;
   const box = card.getBoundingClientRect();
+  if (card.dataset.taskOrigin !== undefined && !isShownRow(card, box)) return false;
   const top = box.top + drawerTravel(card);
   return !(
     !box.width ||
@@ -47,6 +48,20 @@ export function isVisibleOrigin(card: HTMLElement): boolean {
     box.right <= 0 ||
     box.left >= innerWidth
   );
+}
+
+/**
+ * Whether a row is drawn where it stands. A card is hidden on purpose while its task is out of
+ * it and still counts; a row never is, so one under a hidden parent card, or in a subtask list
+ * that is folded or still folding over it, is not somewhere a task can grow from or land in.
+ */
+function isShownRow(row: HTMLElement, box: DOMRect) {
+  if (row.checkVisibility?.({ visibilityProperty: true }) === false) return false;
+  const list = row.closest<HTMLElement>('[data-subtask-list]');
+  if (!list) return true;
+  if (!list.hasAttribute('data-expanded')) return false;
+  const shown = list.getBoundingClientRect();
+  return Math.min(box.bottom, shown.bottom) - Math.max(box.top, shown.top) > 0;
 }
 
 /**

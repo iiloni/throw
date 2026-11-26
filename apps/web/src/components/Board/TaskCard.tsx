@@ -53,6 +53,9 @@ type Props = {
   statusControl?: ReactNode;
 };
 
+/** Room a revealing underlay's clip leaves beside and below it, for its shadow and rings. */
+const CLIP_SPARE = '48px';
+
 function closedAgo(closedAt: number) {
   const days = Math.max(0, Math.round((Date.now() - closedAt) / 86_400_000));
   return days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days}d ago`;
@@ -224,13 +227,39 @@ export function TaskCard({
   const underlayY = useMotionValue(0);
   const wasHidden = useRef(underlayHidden);
   useLayoutEffect(() => {
-    if (wasHidden.current && !underlayHidden && underlay.current) {
+    const wrapper = underlay.current;
+    if (wasHidden.current && !underlayHidden && wrapper && !reduced) {
       // The wrapper holds only the strip below the card; the underlay's top already tucks under.
-      underlayY.set(-underlay.current.offsetHeight);
-      void animate(underlayY, 0, springs.smooth);
+      // An open list is taller than its card, so it starts behind the card and is clipped at the
+      // card's bottom edge (less the tuck under its corners) rather than rising above its top:
+      // it is drawn out of the card's foot as it slides down.
+      const tuck = Math.max(
+        0,
+        -((wrapper.firstElementChild as HTMLElement | null)?.offsetTop ?? 0),
+      );
+      const clip = (y: number) => {
+        const top = -y - tuck;
+        wrapper.style.clipPath = `polygon(-${CLIP_SPARE} ${top}px, calc(100% + ${CLIP_SPARE}) ${top}px, calc(100% + ${CLIP_SPARE}) calc(100% + ${CLIP_SPARE}), -${CLIP_SPARE} calc(100% + ${CLIP_SPARE}))`;
+      };
+      underlayY.set(-wrapper.offsetHeight);
+      clip(underlayY.get());
+      const unsubscribe = underlayY.on('change', clip);
+      const controls = animate(underlayY, 0, springs.smooth);
+      void controls.then(() => {
+        unsubscribe();
+        wrapper.style.clipPath = '';
+      });
+      wasHidden.current = underlayHidden;
+      return () => {
+        unsubscribe();
+        // Stopped only by unmounting or hiding it again, which jumps it home unclipped.
+        controls.stop();
+        underlayY.jump(0);
+        wrapper.style.clipPath = '';
+      };
     }
     wasHidden.current = underlayHidden;
-  }, [underlayHidden, underlayY]);
+  }, [underlayHidden, underlayY, reduced]);
   // The real card waits unseen while its copy flies home.
   const landing = !overlay && dragState?.phase === 'landing' && dragState.ids.includes(task.id);
   // Where a list cannot close up around a held card, its place stays, faded.

@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { trackDrawerTravel } from '@/components/Drawer/travel';
 import {
   findTaskCard,
+  isVisibleOrigin,
   measureTaskCard,
   presetTaskOrigin,
   rememberTaskOrigin,
@@ -120,4 +121,57 @@ it('remembers the exact origin element when a task is both a subtask card and a 
   // Filtering by kind keeps card landings on cards and row lookups on rows.
   expect(findTaskCard('task', 'card')).toBe(subtask);
   expect(findTaskCard('task', 'row')).toBe(row);
+});
+
+function box(element: HTMLElement, y: number, height: number) {
+  element.getBoundingClientRect = () => ({
+    x: 20,
+    y,
+    left: 20,
+    top: y,
+    right: 320,
+    bottom: y + height,
+    width: 300,
+    height,
+    toJSON: () => {},
+  });
+}
+
+it('grows a subtask out of its row on an open underlay, never out of a folded one', () => {
+  const list = document.createElement('div');
+  list.dataset.subtaskList = '';
+  const row = document.createElement('li');
+  row.dataset.taskOrigin = 'task';
+  list.append(row);
+  document.body.append(list);
+  // A folded list clips its rows to nothing, though they are still laid out at full height.
+  box(list, 200, 0);
+  box(row, 200, 36);
+  expect(isVisibleOrigin(row)).toBe(false);
+  rememberTaskOrigin('task', row);
+  expect(takeTaskOrigin('task')).toBeNull();
+
+  list.dataset.expanded = '';
+  box(list, 200, 120);
+  expect(isVisibleOrigin(row)).toBe(true);
+  rememberTaskOrigin('task', row);
+  expect(takeTaskOrigin('task')).toMatchObject({ y: 200, height: 36, row: true, element: row });
+
+  // Still unfolding: a row below what the list shows so far is not there yet.
+  box(row, 340, 36);
+  expect(isVisibleOrigin(row)).toBe(false);
+});
+
+it('skips a row hidden with its parent card', () => {
+  const row = document.createElement('li');
+  row.dataset.taskOrigin = 'task';
+  document.body.append(row);
+  box(row, 200, 36);
+  row.checkVisibility = () => false;
+  expect(isVisibleOrigin(row)).toBe(false);
+  expect(findTaskCard('task')).toBeNull();
+  // A card hidden while its task is out of it is still where the task lands.
+  const hidden = card(20, 80);
+  hidden.checkVisibility = () => false;
+  expect(isVisibleOrigin(hidden)).toBe(true);
 });
