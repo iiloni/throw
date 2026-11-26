@@ -35,20 +35,25 @@ export const githubReceiverStore: GithubReceiverStore = {
   accept(connection, delivery, handle) {
     return db.transaction(async (tx) => {
       // Lock before claiming: a delivery racing a disable remains eligible for redelivery.
+      // Project purging locks the project before cascading to its connection.
+      const [project] = await tx
+        .select({ trashed: projects.deletedAt })
+        .from(projects)
+        .where(eq(projects.id, connection.projectId))
+        .for('share');
+      if (!project) return { status: 'ignored' as const, reason: 'Project removed.' };
       const [current] = await tx
         .select({
           enabled: githubConnections.enabled,
           repo: githubConnections.repository,
           secret: githubConnections.encryptedWebhookSecret,
-          trashed: projects.deletedAt,
         })
         .from(githubConnections)
-        .innerJoin(projects, eq(projects.id, githubConnections.projectId))
         .where(eq(githubConnections.id, connection.id))
         .for('no key update');
       if (
         !current?.enabled ||
-        current.trashed ||
+        project.trashed ||
         current.repo.toLowerCase() !== connection.repository.toLowerCase() ||
         current.secret !== connection.encryptedWebhookSecret
       ) {

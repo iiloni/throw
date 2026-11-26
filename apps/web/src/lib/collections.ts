@@ -65,7 +65,7 @@ import {
 import { orderQueuedWrites } from './orderQueuedWrites';
 import { reportRefusedChanges } from './refusedChanges';
 import { getServerUrl } from './serverUrl';
-import { shapeFetch } from './shapeFetch';
+import { githubLinksShapeFetch, shapeFetch } from './shapeFetch';
 import { noteLocalWrite, useSteadyRows } from './steadyRows';
 import {
   addPendingWrite,
@@ -275,7 +275,7 @@ export const taskGithubLinksCollection = createCollection(
       id: 'task-github-links',
       schema: taskGithubLinkSchema,
       getKey: (link) => link.id,
-      shapeOptions: shapeOptions('task-github-links'),
+      shapeOptions: { ...shapeOptions('task-github-links'), fetchClient: githubLinksShapeFetch },
     }),
     1,
   ),

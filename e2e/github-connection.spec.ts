@@ -225,66 +225,73 @@ test('a project connects to GitHub and receives signed, deduplicated deliveries 
   expect((await deliver(request, moved.webhookUrl, rotated.secret)).status()).toBe(404);
 });
 
-test('a GitHub delivery racing a disable can be redelivered after re-enabling @api', async ({
-  request,
-}) => {
-  const owner = await createAccount(request);
-  const project = await makeProject(request, owner);
-  const response = await request.post(managed(project.id), {
-    headers: owner.headers,
-    data: { repository: 'octo-org/website' },
-  });
-  const {
-    connection: { webhookUrl },
-    secret,
-  } = githubConnectionSecretResponseSchema.parse(await response.json());
-  const delivery = randomUUID();
-  const writer = spawn('./scripts/dev.sh', ['psql', '-XqAt', '-v', 'ON_ERROR_STOP=1']);
-  const lines = createInterface({ input: writer.stdout });
-  const exited = once(writer, 'close');
-  try {
-    const ready = once(lines, 'line');
-    writer.stdin.write(`BEGIN;
-      UPDATE github_connections SET enabled=false WHERE project_id='${project.id}';
-      SELECT pg_backend_pid();
-`);
-    const [line] = await Promise.race([ready, exited]);
-    const pid = Number(line);
-    expect(pid).toBeGreaterThan(0);
-    const racing = deliver(request, webhookUrl, secret, { delivery });
-    await expect
-      .poll(() =>
-        execFileSync(
-          './scripts/dev.sh',
-          [
-            'psql',
-            '-XqAt',
-            '-c',
-            `SELECT EXISTS(SELECT FROM pg_stat_activity WHERE ${pid}=ANY(pg_blocking_pids(pid)))`,
-          ],
-          { encoding: 'utf8' },
-        ).trim(),
-      )
-      .toBe('t');
-    writer.stdin.end('COMMIT;\n');
-    expect((await racing).status()).toBe(202);
-    expect(
-      (
-        await request.patch(managed(project.id), {
-          headers: owner.headers,
-          data: { enabled: true },
-        })
-      ).status(),
-    ).toBe(200);
-    expect(await (await deliver(request, webhookUrl, secret, { delivery })).json()).toEqual({
-      ok: true,
-      status: 'ok',
+for (const action of ['disable', 'purge'] as const) {
+  test(`a GitHub delivery racing a ${action} is ignored safely @api`, async ({ request }) => {
+    const owner = await createAccount(request);
+    const project = await makeProject(request, owner);
+    const response = await request.post(managed(project.id), {
+      headers: owner.headers,
+      data: { repository: 'octo-org/website' },
     });
-  } finally {
-    if (!writer.stdin.destroyed && !writer.stdin.writableEnded) writer.stdin.end('ROLLBACK;\n');
-    await exited;
-  }
-});
+    const {
+      connection: { webhookUrl },
+      secret,
+    } = githubConnectionSecretResponseSchema.parse(await response.json());
+    const delivery = randomUUID();
+    const writer = spawn('./scripts/dev.sh', ['psql', '-XqAt', '-v', 'ON_ERROR_STOP=1']);
+    const lines = createInterface({ input: writer.stdout });
+    const exited = once(writer, 'close');
+    try {
+      const ready = once(lines, 'line');
+      const lock =
+        action === 'purge'
+          ? `SELECT pg_backend_pid() FROM projects WHERE id='${project.id}' FOR UPDATE`
+          : `UPDATE github_connections SET enabled=false WHERE project_id='${project.id}'; SELECT pg_backend_pid()`;
+      writer.stdin.write(`BEGIN; ${lock};\n`);
+      const [line] = await Promise.race([ready, exited]);
+      const pid = Number(line);
+      expect(pid).toBeGreaterThan(0);
+      const racing = deliver(request, webhookUrl, secret, { delivery });
+      await expect
+        .poll(() =>
+          execFileSync(
+            './scripts/dev.sh',
+            [
+              'psql',
+              '-XqAt',
+              '-c',
+              `SELECT EXISTS(SELECT FROM pg_stat_activity WHERE ${pid}=ANY(pg_blocking_pids(pid)))`,
+            ],
+            { encoding: 'utf8' },
+          ).trim(),
+        )
+        .toBe('t');
+      if (action === 'purge')
+        writer.stdin.write(`DELETE FROM projects WHERE id='${project.id}';\n`);
+      writer.stdin.end('COMMIT;\n');
+      expect((await racing).status()).toBe(202);
+      if (action === 'purge') {
+        expect((await deliver(request, webhookUrl, secret, { delivery })).status()).toBe(404);
+        return;
+      }
+      expect(
+        (
+          await request.patch(managed(project.id), {
+            headers: owner.headers,
+            data: { enabled: true },
+          })
+        ).status(),
+      ).toBe(200);
+      expect(await (await deliver(request, webhookUrl, secret, { delivery })).json()).toEqual({
+        ok: true,
+        status: 'ok',
+      });
+    } finally {
+      if (!writer.stdin.destroyed && !writer.stdin.writableEnded) writer.stdin.end('ROLLBACK;\n');
+      await exited;
+    }
+  });
+}
 
 async function openGithubPage(page: Page, isMobile: boolean) {
   if (isMobile) {

@@ -62,6 +62,7 @@ describe('protocol gate', () => {
       ...SUPPORTED_API_PROTOCOLS,
       taskSize: true,
       statusColor: true,
+      githubTaskLinks: true,
     });
   });
 

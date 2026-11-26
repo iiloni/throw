@@ -120,6 +120,8 @@ current PR head, with individual runs replacing their suite count as they arrive
 
 `task_github_links` belongs to the task and survives a disconnect or backup/restore.
 The membership-filtered `task-github-links` shape exposes card metadata, including counts.
+Bootstrap advertises the optional `githubTaskLinks` capability. Devices load cached rows
+independently and start the remote stream once the server advertises support.
 The per-reviewer and per-check records used for aggregation stay on the server. The new
 read-only collection has its own SQLite schema version 1 and requires no outbox migration.
 Link additions, removals and state changes use the existing protocol-1 relations history

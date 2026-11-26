@@ -22,6 +22,24 @@ afterEach(() => {
 });
 
 describe('client compatibility transport', () => {
+  it('keeps the GitHub stream idle on older protocol-1 servers and starts it after an upgrade', async () => {
+    const url = 'https://throw.example/api/shapes/task-github-links';
+    fetcher.mockResolvedValueOnce(json(compatible));
+    const { githubLinksShapeFetch } = await import('./shapeFetch');
+    const { checkCompatibility } = await import('./compatibility');
+    const pending = githubLinksShapeFetch(url);
+    await checkCompatibility();
+    expect(fetcher.mock.calls.map(([input]) => input)).toEqual([
+      'https://throw.example/api/compatibility',
+    ]);
+    fetcher
+      .mockResolvedValueOnce(json({ ...compatible, githubTaskLinks: true }))
+      .mockResolvedValueOnce(json([]));
+    await checkCompatibility(true);
+    await expect(pending.then((r) => r.status)).resolves.toBe(200);
+    expect(fetcher.mock.lastCall?.[0]).toBe(url);
+  });
+
   it('keeps color writes queued on a protocol 1 server without status color', async () => {
     fetcher.mockResolvedValueOnce(json(compatible)).mockResolvedValueOnce(json({ txid: null }));
     const { api } = await import('./api');

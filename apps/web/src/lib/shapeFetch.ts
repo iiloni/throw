@@ -1,5 +1,5 @@
 import { uuidv7 } from 'uuidv7';
-import { compatibleShapeFetch } from './compatibility';
+import { compatibleShapeFetch, waitForGithubLinks } from './compatibility';
 
 /** Keep HTTP development sync from occupying every browser connection (ADR 0007). */
 export const shapeFetch: typeof fetch = async (input, init) => {
@@ -42,4 +42,9 @@ export const shapeFetch: typeof fetch = async (input, init) => {
     statusText: response.statusText,
     headers,
   });
+};
+
+export const githubLinksShapeFetch: typeof fetch = async (input, init) => {
+  await waitForGithubLinks(init?.signal ?? (input instanceof Request ? input.signal : undefined));
+  return shapeFetch(input, init);
 };
