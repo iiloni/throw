@@ -175,11 +175,11 @@ test('lingering on a blocked card badge spotlights blockers, highlights collapse
 
   // Brief hover shows no spotlight flash across the board.
   await badge.hover();
-  await page.waitForTimeout(350);
+  await page.waitForTimeout(150);
   await expect(blockedCard).not.toHaveAttribute('data-spotlight');
   await expect(unrelatedCard).not.toHaveAttribute('data-spotlight');
   await page.mouse.move(10, 10);
-  await page.waitForTimeout(900);
+  await page.waitForTimeout(600);
   await expect(blockedCard).not.toHaveAttribute('data-spotlight');
 
   // Lingering on the badge activates the spotlight smoothly.

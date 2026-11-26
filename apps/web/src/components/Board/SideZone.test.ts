@@ -49,7 +49,7 @@ describe('railGeometry', () => {
     expect(held.closed.tracking).toBe(false);
   });
 
-  it('takes the board as a gallery, less the dropzones while a card is held', () => {
+  it('takes the board as a gallery, and keeps its width while a card is held', () => {
     const full = railGeometry({ ...base, views: { backlog: 'full', closed: 'strip' } });
     expect(full.backlog.zone).toBe(rowWidth - STRIP_WIDTH - 2 * ZONE_GAP);
     const holding = railGeometry({
@@ -58,9 +58,17 @@ describe('railGeometry', () => {
       holding: true,
       origin: 'backlog',
     });
-    expect(holding.backlog.zone).toBeLessThan(full.backlog.zone);
-    // A change of state springs; the same state at another width does not.
-    expect(holding.backlog.mode).not.toBe(full.backlog.mode);
+    // The cards keep their columns and places under the held card, and after the drop.
+    expect(holding.backlog).toMatchObject({
+      zone: full.backlog.zone,
+      drawn: full.backlog.drawn,
+      content: full.backlog.content,
+    });
+    // The strip beside it takes the gallery's gap for the active dropzones, up to its edge.
+    expect(holding.closed.zone).toBe(STRIP_WIDTH);
+    expect(holding.closed.drawn).toBe(STRIP_WIDTH + 2 * ZONE_GAP);
+    expect(holding.backlog.zone + holding.closed.drawn).toBe(rowWidth);
+    // The same state at another width does not spring.
     expect(railGeometry({ ...base, rowWidth: 900 }).backlog.mode).toBe(
       railGeometry(base).backlog.mode,
     );

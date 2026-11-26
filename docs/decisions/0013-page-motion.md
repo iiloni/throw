@@ -1,6 +1,6 @@
 # 0013: Page motion
 
-Status: accepted (2026-11-20); board switch revised 2026-11-24
+Status: accepted (2026-11-20); board switch revised 2026-11-24; dock glass revised 2026-11-25
 
 ## Context
 
@@ -58,9 +58,15 @@ Redirects (`/`, a workspace's first project) and first loads change in place.
 **The rail and the phone's dock stay live and still.** Each gets a `view-transition-name`
 (`rail`, `dock`) only while a transition runs, with no animation, and the outgoing copy is
 hidden once the incoming live one is there. A named element is a backdrop root, so a permanent
-name would stop their glass from blurring the page behind. A sunk drawer (`data-sunk`) is out
-of sight and goes with the page. A dock that only exists on one side (the trash has none at
-rest) fades with the page. The moving page is clipped where the page column starts
+name would stop their glass from blurring the page behind. While it is named, the drawer is
+captured on its own, with nothing behind its glass to blur, so its bare tint let the moving
+pages read through it sharply. Its `::view-transition-group(dock)` lies over the page images,
+so the group carries the glass's blur under the drawer's rounded top while the tint stays in
+the live image (Chromium blurs nothing from the image itself or its isolated image pair). The
+group stays for the whole transition, so it blurs only under the `docked` type, which
+`pageTransition` adds on a phone when both pages show the dock. A sunk drawer (`data-sunk`) is
+out of sight and goes with the page. A dock that only exists on one side (the trash has none
+at rest) fades with the page, unblurred. The moving page is clipped where the page column starts
 (`--page-inset`, measured from the rail as the transition begins), so it never slides under
 the rail's glass.
 

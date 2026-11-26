@@ -63,6 +63,8 @@ development only. The board color helper is `taskTagColor` in `@throw/shared`. T
 pane picks and lists tags, and its unified Tags panel (Primary / Secondary tabs) makes new
 tags through the shell's `NewTagHost` (`components/NewTag`); project settings mounts tag
 management.
+Every tag tree (pickers, tag settings, board filters) shares one device-wide set of collapsed
+branches (`TagTree/useCollapsedTags.ts`); a tag search opens branches without changing it.
 Task relations (blocks, duplicates, relates to) link tasks across a workspace's projects:
 actions in `lib/taskRelations.ts`, the pane's list, relation picker (opened inline from the
 Links tab / open side column or from the dock's More panel) and card blocked mark in
@@ -117,6 +119,11 @@ is held and turns drops into `moveTask` and `sendTask` calls; `Board/carry.ts` i
 keyboard carry. The collection hooks hold
 their last rows through a reconnect's full snapshot (`lib/steadyRows.ts`), so the board
 does not unmount while a shape reloads.
+
+Several accounts can be signed in on one device (ADR 0016): `lib/auth.ts` keeps the list,
+the tab's account (`sessionStorage`) and the `/u/<n>` address prefix the router strips and
+adds (`routerRewrite`); `lib/accounts.ts` switches (a full load) and signs one account out.
+The account switcher UI is not built yet.
 
 ## Layout
 
@@ -451,6 +458,9 @@ ids. Do not add a dependency on Catch's repository; the two release independentl
   signed token from `set-auth-token` works as a bearer token.
 - Sign-up closes after the first account unless `REGISTRATION=open`, which dev stacks set.
   Catch's invite links have not been ported, so a closed server has one account.
+- With several accounts signed in, browser addresses start with `/u/<n>` (ADR 0016). The
+  router never sees it, but `window.location.pathname` does: compare `currentPath()` and
+  build a raw `<a href>` or a full page load within the account with `pagePath`.
 - The app draws edge to edge. Pad fixed UI with the `--safe-top` / `--safe-bottom` tokens.
   The root sets `--keyboard` through browser viewport/VirtualKeyboard tracking; the shell
   uses `--dock-*` for the phone dock. Catch's native KeyboardInsets plugin owns system

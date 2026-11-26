@@ -46,7 +46,7 @@ import { SettingsHub } from '@/components/SettingsLayout/SettingsHub';
 import { type ShellForm, ShellForms } from '@/components/ShellForms/ShellForms';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
-import { getSignedInUser } from '@/lib/auth';
+import { getSignedInUser, pagePath } from '@/lib/auth';
 import { useProjects, useWorkspaces } from '@/lib/collections';
 import { useDesktop, useMedia } from '@/lib/media';
 import { springs } from '@/lib/motion';
@@ -638,7 +638,8 @@ function RailButton({
     return hint(
       <a
         {...props}
-        href={href}
+        // Opened in a new tab, the link stays with this tab's account (ADR 0016).
+        href={pagePath(href)}
         onClick={(event) => {
           if (
             event.button !== 0 ||

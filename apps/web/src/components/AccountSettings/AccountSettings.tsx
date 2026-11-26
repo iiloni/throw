@@ -6,10 +6,10 @@ import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurf
 import { SettingsRow, SettingsSection } from '@/components/SettingsSection/SettingsSection';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { signOutCurrentAccount as endSession } from '@/lib/accounts';
 import { authClient, changeAccountName, getSignedInUser, type SignedInUser } from '@/lib/auth';
 import { haptics } from '@/lib/haptics';
 import { getServerUrl } from '@/lib/serverUrl';
-import { signOut as endSession } from '@/lib/signOut';
 import { updateSyncStatus, useSyncStatus } from '@/lib/syncStatus';
 import { holdUpdateReload } from '@/lib/useUpdateReloadBlocked';
 import { cn } from '@/lib/utils';

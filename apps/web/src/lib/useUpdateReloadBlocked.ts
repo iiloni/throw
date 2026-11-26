@@ -19,3 +19,8 @@ export function holdUpdateReload() {
 
 export const isUpdateReloadBlocked = () => holders.get() > 0;
 export const useUpdateReloadBlocked = () => holders.use() > 0;
+/** Calls back whenever a hold is taken or released. Returns the unsubscribe. */
+export const watchUpdateReloadBlocked = (listener: () => void): (() => void) => {
+  const stop = holders.subscribe(listener);
+  return () => void stop();
+};

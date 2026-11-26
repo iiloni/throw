@@ -7,8 +7,12 @@ import { SETTINGS_TABS } from './settings';
  * - `fade` cross-fades one board into another when the project or workspace changes;
  * - `enter` lets a page with no place in an order rise softly into view;
  * - `inner` changes only the open page beside a settings list that stays put.
+ *
+ * On a phone, `docked` joins one of them when both pages show the dock, which stays live
+ * through the transition and blurs the pages moving under it.
  */
 export type PageTransition = 'forward' | 'back' | 'fade' | 'enter' | 'inner';
+type Transition = [PageTransition] | [PageTransition, 'docked'];
 
 type Location = { pathname: string; search: unknown };
 
@@ -65,26 +69,35 @@ export function pageAt({ pathname, search }: Location): Page | null {
  * view changes only the search params of the same page and has its own motion. A redirect
  * (`/`, a workspace's first project) has nothing to show yet, so it changes in place.
  *
- * `wide` is the desktop layout, where settings list their pages beside the open one.
+ * `wide` is the desktop layout, where settings list their pages beside the open one and
+ * there is no dock.
  */
 export function pageTransition(
   from: Location | undefined,
   to: Location,
   wide: boolean,
-): [PageTransition] | false {
+): Transition | false {
   const before = from && pageAt(from);
   const after = pageAt(to);
   if (!before || !after || before.key === after.key) return false;
-  if (before.kind === 'board' && after.kind === 'board') return ['fade'];
+  // Boards and settings pages have a dock on a phone; the workspace trash has none.
   if (before.kind === 'other' || after.kind === 'other') return ['enter'];
+  const type = pageBetween(before, after, wide);
+  return wide ? [type] : [type, 'docked'];
+}
+
+type OrderedPage = Exclude<Page, { kind: 'other' }>;
+
+function pageBetween(before: OrderedPage, after: OrderedPage, wide: boolean): PageTransition {
+  if (before.kind === 'board' && after.kind === 'board') return 'fade';
   if (before.kind === 'settings' && after.kind === 'settings') {
     // Switching from one project's settings to another's replaces the project group and has no order.
     if (before.frame !== after.frame && before.frame !== 'app' && after.frame !== 'app')
-      return ['enter'];
+      return 'enter';
     // Side by side, the unified settings list stays put while only the open page changes.
-    if (wide) return ['inner'];
+    if (wide) return 'inner';
   }
-  return [after.order > before.order ? 'forward' : 'back'];
+  return after.order > before.order ? 'forward' : 'back';
 }
 
 function transitionIs(types: string) {

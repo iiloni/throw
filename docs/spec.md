@@ -869,6 +869,11 @@ dock rather than opening as a page. Desktop has no drawer. The rules are in
 - `/` restores the device's last workspace and project for the signed-in account.
   `/w/:workspaceId` restores that workspace's last project, otherwise its first project
   by position, otherwise the create-project prompt.
+- Several accounts can be signed in on one device (ADR 0016). Each tab shows one of them,
+  and while several are signed in a browser's addresses start with the account's number on
+  the device (`/u/2/w/…`), so bookmarks and new tabs keep their account. Signing in from the
+  sign-in page while signed in adds an account; signing out removes only that one. The account
+  switcher UI is still to come.
 
 Workspace and project segments are UUIDs so names and future task prefixes can change
 without breaking bookmarks. The open task is the `task` search parameter on either board,

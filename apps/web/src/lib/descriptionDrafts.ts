@@ -14,11 +14,12 @@ const draftSchema = z.object({
 export type DescriptionDraft = z.infer<typeof draftSchema>;
 
 const listeners = new Set<() => void>();
-const prefix = () => `throw-description:${getServerUrl()}:${getSignedInUser()?.id}:`;
+const prefix = (userId = getSignedInUser()?.id) => `throw-description:${getServerUrl()}:${userId}:`;
 const key = (taskId: string) => `${prefix()}${taskId}`;
 
-export function clearDescriptionDrafts() {
-  const owned = prefix();
+/** Forgets an account's drafts on this device: this page's, or another signed out. */
+export function clearDescriptionDrafts(userId?: string) {
+  const owned = prefix(userId);
   for (const name of Object.keys(localStorage))
     if (name.startsWith(owned)) localStorage.removeItem(name);
   for (const listener of listeners) listener();

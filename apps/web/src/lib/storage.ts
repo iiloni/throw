@@ -3,6 +3,19 @@ import type { z } from 'zod';
 
 const listeners = new Set<() => void>();
 
+// Devices that deny storage or exhaust their quota keep preferences for this session.
+const sessionPreferences = new Map<string, string>();
+
+function preferenceSnapshot(key: string) {
+  const session = sessionPreferences.get(key);
+  if (session !== undefined) return session;
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
 function subscribe(listener: () => void) {
   listeners.add(listener);
   window.addEventListener('storage', listener);
@@ -21,7 +34,7 @@ export function readPreference<T extends z.ZodType>(
   fallback: z.infer<T>,
 ): z.infer<T> {
   try {
-    const raw = localStorage.getItem(key);
+    const raw = preferenceSnapshot(key);
     if (raw === null) return fallback;
     const parsed = schema.safeParse(JSON.parse(raw));
     return parsed.success ? parsed.data : fallback;
@@ -32,7 +45,13 @@ export function readPreference<T extends z.ZodType>(
 
 /** Stores a preference and tells every reader in this tab. */
 export function writePreference(key: string, value: unknown) {
-  localStorage.setItem(key, JSON.stringify(value));
+  const raw = JSON.stringify(value);
+  try {
+    localStorage.setItem(key, raw);
+    sessionPreferences.delete(key);
+  } catch {
+    sessionPreferences.set(key, raw);
+  }
   for (const listener of listeners) listener();
 }
 
@@ -45,7 +64,7 @@ export function usePersistentState<T extends z.ZodType>(
   schema: T,
   fallback: z.infer<T>,
 ): [z.infer<T>, (value: z.infer<T>) => void] {
-  const raw = useSyncExternalStore(subscribe, () => localStorage.getItem(key));
+  const raw = useSyncExternalStore(subscribe, () => preferenceSnapshot(key));
 
   let value: z.infer<T> = fallback;
   if (raw !== null) {

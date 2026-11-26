@@ -42,6 +42,8 @@ outside the outbox is open, waits for pending writes to reach durable storage, a
 device's copy so the same account resumes syncing where it was. If another account signs in
 instead, it starts at `/`, and the first account's copy stays on the device until that
 account signs in and out again, as in Catch.
+Several accounts can be signed in at once (ADR 0016): signing out removes one account and
+its data, and the device carries on as another.
 
 **A collection has a `schemaVersion`.** Changing the columns a shape syncs bumps it, and
 devices drop and resync that collection.
