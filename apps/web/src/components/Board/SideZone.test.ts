@@ -1,13 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { act, renderHook } from '@testing-library/react';
+import type { MouseEvent, PointerEvent } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SEARCH_SIDEBAR_MIN, SIDEBAR_WIDTH } from '@/components/BoardSearch/BoardSearch';
 import { boardRestWidth } from './DesktopBoard';
 import {
   PANEL_WIDTH,
   RAIL_SNAP,
   railGeometry,
+  STRIP_HOLD_MS,
   STRIP_WIDTH,
   settleRail,
   showsRailEdge,
+  useStripPress,
   ZONE_GAP,
 } from './SideZone';
 
@@ -187,5 +191,80 @@ describe('showsRailEdge', () => {
   it('hides the edge while the rail stands in as dropzones', () => {
     expect(showsRailEdge('panel', false, true)).toBe(false);
     expect(showsRailEdge('panel', true, true)).toBe(false);
+  });
+});
+
+describe('useStripPress', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function strip() {
+    const onPress = vi.fn();
+    const onHold = vi.fn();
+    const { result, unmount } = renderHook(() => useStripPress({ onPress, onHold }));
+    const pointer = (pointerType: string, x = 0, y = 0, button = 0) =>
+      ({ pointerType, button, clientX: x, clientY: y }) as PointerEvent<HTMLElement>;
+    const mouse = (detail: number) => {
+      const event = { detail, preventDefault: vi.fn() };
+      return event as typeof event & MouseEvent<HTMLElement>;
+    };
+    return { press: () => result.current, onPress, onHold, pointer, mouse, unmount };
+  }
+
+  it('opens a column on a quick tap, and on a keyboard click', () => {
+    const { press, onPress, onHold, pointer, mouse } = strip();
+    press().onPointerDown(pointer('touch'));
+    act(() => vi.advanceTimersByTime(STRIP_HOLD_MS - 50));
+    press().onPointerUp();
+    press().onClick(mouse(1));
+    act(() => vi.advanceTimersByTime(STRIP_HOLD_MS));
+    press().onClick(mouse(0));
+    expect(onPress).toHaveBeenCalledTimes(2);
+    expect(onHold).not.toHaveBeenCalled();
+  });
+
+  it('opens the gallery on a hold and swallows the click that follows', () => {
+    const { press, onPress, onHold, pointer, mouse } = strip();
+    press().onPointerDown(pointer('mouse'));
+    act(() => vi.advanceTimersByTime(STRIP_HOLD_MS));
+    expect(onHold).toHaveBeenCalledOnce();
+    const menu = mouse(0);
+    press().onContextMenu(menu);
+    expect(menu.preventDefault).toHaveBeenCalled();
+    press().onPointerUp();
+    const click = mouse(1);
+    press().onClick(click);
+    expect(click.preventDefault).toHaveBeenCalled();
+    expect(onPress).not.toHaveBeenCalled();
+    // Only the one click: the next one opens a column again.
+    press().onClick(mouse(1));
+    expect(onPress).toHaveBeenCalledOnce();
+  });
+
+  it('lets go of a hold that moves, leaves, is cancelled or unmounts', () => {
+    const { press, onHold, pointer, unmount } = strip();
+    press().onPointerDown(pointer('pen', 0, 0));
+    press().onPointerMove(pointer('pen', 4, 4));
+    press().onPointerMove(pointer('pen', 12, 0));
+    act(() => vi.advanceTimersByTime(STRIP_HOLD_MS));
+    for (const end of ['onPointerLeave', 'onPointerCancel'] as const) {
+      press().onPointerDown(pointer('touch'));
+      press()[end]();
+      act(() => vi.advanceTimersByTime(STRIP_HOLD_MS));
+    }
+    press().onPointerDown(pointer('touch'));
+    unmount();
+    act(() => vi.advanceTimersByTime(STRIP_HOLD_MS));
+    expect(onHold).not.toHaveBeenCalled();
+  });
+
+  it('ignores the secondary mouse buttons, and leaves their menu alone', () => {
+    const { press, onHold, pointer, mouse } = strip();
+    press().onPointerDown(pointer('mouse', 0, 0, 2));
+    act(() => vi.advanceTimersByTime(STRIP_HOLD_MS));
+    const menu = mouse(0);
+    press().onContextMenu(menu);
+    expect(onHold).not.toHaveBeenCalled();
+    expect(menu.preventDefault).not.toHaveBeenCalled();
   });
 });

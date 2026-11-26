@@ -8,7 +8,14 @@ import {
   Plus,
 } from 'lucide-react';
 import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion } from 'motion/react';
-import { Fragment, useLayoutEffect, useRef } from 'react';
+import {
+  Fragment,
+  type MouseEvent,
+  type PointerEvent,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
@@ -216,6 +223,67 @@ export function useRailSpring(target: number, mode: string, tracking: boolean) {
   return { value, width: moving ? value : target };
 }
 
+/** How long a strip is held to open straight into the gallery. */
+export const STRIP_HOLD_MS = 400;
+/** How far a held pointer may wander before the press stops counting as a hold. */
+const STRIP_HOLD_SLOP = 10;
+
+/**
+ * A strip's press: a tap or click opens it as a column, and holding it opens the gallery
+ * outright. The click that follows a hold is swallowed, so letting go does not take the
+ * gallery back to a column; a keyboard's click (detail 0) never comes from a hold.
+ */
+export function useStripPress({ onPress, onHold }: { onPress: () => void; onHold: () => void }) {
+  const timer = useRef<number | undefined>(undefined);
+  const origin = useRef({ x: 0, y: 0 });
+  const held = useRef(false);
+
+  const cancel = () => {
+    window.clearTimeout(timer.current);
+    timer.current = undefined;
+  };
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+
+  return {
+    onPointerDown(event: PointerEvent<HTMLElement>) {
+      held.current = false;
+      cancel();
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      origin.current = { x: event.clientX, y: event.clientY };
+      timer.current = window.setTimeout(() => {
+        timer.current = undefined;
+        held.current = true;
+        haptics.threshold();
+        onHold();
+      }, STRIP_HOLD_MS);
+    },
+    onPointerMove(event: PointerEvent<HTMLElement>) {
+      if (
+        timer.current !== undefined &&
+        Math.hypot(event.clientX - origin.current.x, event.clientY - origin.current.y) >
+          STRIP_HOLD_SLOP
+      )
+        cancel();
+    },
+    onPointerUp: cancel,
+    onPointerCancel: cancel,
+    onPointerLeave: cancel,
+    // A touch held this long would also bring up the browser's menu over the gallery.
+    onContextMenu(event: MouseEvent<HTMLElement>) {
+      if (timer.current !== undefined || held.current) event.preventDefault();
+    },
+    onClick(event: MouseEvent<HTMLElement>) {
+      if (held.current && event.detail !== 0) {
+        held.current = false;
+        event.preventDefault();
+        return;
+      }
+      held.current = false;
+      onPress();
+    },
+  };
+}
+
 export function zoneStatuses(zone: Zone, statuses: Status[]) {
   return statuses.filter((status) => ZONES[zone].categories.includes(status.category));
 }
@@ -269,6 +337,10 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
   // The snap the held edge would make if let go now, to mark crossing into another.
   const snap = useRef<ZoneState>(view);
   const galleryToggle = useRef<HTMLButtonElement>(null);
+  const stripPress = useStripPress({
+    onPress: () => setView('panel'),
+    onHold: () => setView('full'),
+  });
 
   function commit(next: { view: ZoneState; width: number }) {
     if (next.view === 'panel') setRailWidth(zone, next.width);
@@ -357,8 +429,8 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
               aria-label={`Open ${title.toLowerCase()}, ${count} tasks`}
               data-spotlight={hasBlocker ? 'blocker' : undefined}
               data-spotlight-instant={reduced ? '' : undefined}
-              onClick={() => setView('panel')}
-              className="spotlight-strip group absolute inset-0 flex flex-col items-center gap-4 pt-[calc(var(--safe-top)+2.375rem)] text-muted-foreground outline-none hover:bg-foreground/[0.04] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60 focus-visible:ring-inset"
+              {...stripPress}
+              className="spotlight-strip group absolute inset-0 flex select-none flex-col items-center gap-4 pt-[calc(var(--safe-top)+2.375rem)] text-muted-foreground outline-none [-webkit-touch-callout:none] hover:bg-foreground/[0.04] hover:text-foreground active:bg-foreground/[0.07] focus-visible:ring-[3px] focus-visible:ring-ring/60 focus-visible:ring-inset"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
