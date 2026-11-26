@@ -688,10 +688,16 @@ body:has(section.board-column[data-column-color]) .column-strip {
   }
 }
 
-/* A card's place in a column. Folding is a grid row closing, which needs no measured height. */
+/*
+ * A card's place in a column. Folding is a grid row closing, which needs no measured height.
+ * The column track is the slot's width, never its card's: an implicit `auto` track would grow
+ * to a card's unwrapped one-line text (a subtask's title, even folded away) and carry the card
+ * past the column's edge (THR-142).
+ */
 .board-slot {
   display: grid;
   flex-shrink: 0;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 1fr;
   transition:
     grid-template-rows 260ms var(--ease-emphasized),
@@ -699,6 +705,7 @@ body:has(section.board-column[data-column-color]) .column-strip {
 }
 .board-slot > div {
   min-height: 0;
+  min-width: 0;
   /* Clips the card as its row closes, but leaves room for its shadow at rest. */
   overflow: clip;
   overflow-clip-margin: 14px;
