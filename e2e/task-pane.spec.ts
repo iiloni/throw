@@ -1215,17 +1215,35 @@ test("a subtask lands in its card in the parent with the card's face and edge", 
   // The last frame of the surface, before the card is shown again in its place.
   const last = page.evaluate(
     () =>
-      new Promise<{ status: DOMRect; edge: number } | null>((resolve) => {
-        let seen: { status: DOMRect; edge: number } | null = null;
+      new Promise<{
+        status: DOMRect;
+        edge: number;
+        border: string;
+        shadow: string;
+        shadowOpacity: number;
+      } | null>((resolve) => {
+        let seen: {
+          status: DOMRect;
+          edge: number;
+          border: string;
+          shadow: string;
+          shadowOpacity: number;
+        } | null = null;
         const start = performance.now();
         const frame = () => {
           const surface = document.querySelector('[aria-label="Closing task"] [data-task-surface]');
           if (!surface && seen) return resolve(seen);
           if (surface) {
             const edge = surface.querySelector('[data-task-edge]');
+            const shadow = getComputedStyle(
+              document.querySelector('[aria-label="Closing task"] [data-task-shadow]')!,
+            );
             seen = {
               status: surface.querySelector('[data-task-face] .truncate')!.getBoundingClientRect(),
               edge: edge ? Number(getComputedStyle(edge).opacity) : 0,
+              border: edge ? getComputedStyle(edge).borderTopColor : '',
+              shadow: shadow.boxShadow,
+              shadowOpacity: Number(shadow.opacity),
             };
           }
           if (performance.now() - start > 5000) return resolve(null);
@@ -1240,6 +1258,14 @@ test("a subtask lands in its card in the parent with the card's face and edge", 
   expect(Math.abs(landed.status.x - status.x)).toBeLessThan(1);
   expect(Math.abs(landed.status.y - status.y)).toBeLessThan(1);
   expect(landed.edge).toBeGreaterThan(0.95);
+  // It wears the inline card's raised edge, so the border and shadow do not pop in on landing.
+  const resting = await card.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { border: style.borderTopColor, shadow: style.boxShadow };
+  });
+  expect(landed.border).toBe(resting.border);
+  expect(landed.shadow).toBe(resting.shadow);
+  expect(landed.shadowOpacity).toBeGreaterThan(0.95);
 });
 
 test('the open task lives in the URL: reload keeps it, Back closes it, a stale link says so', async ({
