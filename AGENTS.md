@@ -50,7 +50,9 @@ When the board beside an open desktop pane would rest narrower than `COMPACT_BEL
 unfolded foldable or a narrow window), both desktop boards take a phone's layout in that half
 (`Board/CompactSplitBoard.tsx`): columns page one at a time under the `FlowTrack` (the pager is
 `useColumnPager`, shared with `PhoneBoard`), and the project board's backlog and closed rails
-become views under a switch, whose place a held card's status targets take. `useBoardHandoff`
+become views under a switch in a Catch-style dock at the half's foot. It slides away as a list
+scrolls down and back as it scrolls up (`useDockScroll`), and a held card's status targets take
+its face. `useBoardHandoff`
 carries the column in view and list scrolls between the two layouts.
 Columns that run on under an open desktop pane fade out at the seam (`[data-seam]` in
 `styles.css`, from `ScrollArea`'s `sides` marks and `seamOf`), and columns scrolled out to the
