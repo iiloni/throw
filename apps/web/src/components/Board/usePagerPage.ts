@@ -13,7 +13,10 @@ export function usePagerPage(first = 0) {
   const seen = useRef(first);
   const touched = useRef(false);
   const onScroll = useCallback((event: UIEvent<HTMLElement>) => {
-    const next = Math.round(event.currentTarget.scrollLeft / pageStride(event.currentTarget));
+    const stride = pageStride(event.currentTarget);
+    // A pager hidden behind another view (the compact board's) has no pages to measure.
+    if (!(stride > 0)) return;
+    const next = Math.round(event.currentTarget.scrollLeft / stride);
     if (next === seen.current) return;
     seen.current = next;
     if (touched.current && !drag.get()) haptics.selection();

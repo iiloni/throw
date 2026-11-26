@@ -1,4 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { useRef } from 'react';
 import {
   BoardSearch,
   BoardSearchSidebar,
@@ -8,7 +9,15 @@ import {
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { BoardColumn, ColumnHeader } from './BoardColumn';
 import { useSpotlightCleanup } from './blockers';
-import { OpenTaskPane, SelectionBar, seamOf, useWidth } from './DesktopBoard';
+import { CompactFrame, CompactPager, useBoardHandoff, useCompactBoard } from './CompactSplitBoard';
+import {
+  boardRestWidth,
+  OpenTaskPane,
+  SelectionBar,
+  seamOf,
+  usePaneSpace,
+  useWidth,
+} from './DesktopBoard';
 import { drag, makingWay } from './drag';
 import { PriorityIcon } from './glyphs';
 import {
@@ -34,6 +43,14 @@ import {
 import { TaskCard } from './TaskCard';
 
 /** The categories a phone folds away: closed work. Desktop folds any column. */
+/** The categories as the compact board's pages, in the order work moves. */
+const COLUMNS = CATEGORIES.map((category) => ({
+  id: categoryTarget(category),
+  name: CATEGORY_NAMES[category],
+  category,
+  isDefault: true,
+}));
+
 export function foldableCategory(category: string): 'done' | 'cancelled' | null {
   return category === 'done' || category === 'cancelled' ? category : null;
 }
@@ -49,42 +66,66 @@ export function WorkspaceDesktopBoard() {
   const [frame, frameWidth] = useWidth();
   const { isCollapsed, setCollapsed } = useCollapsedColumns(project);
   const docked = frameWidth >= SEARCH_SIDEBAR_MIN;
+  const paneSpace = usePaneSpace(state, frameWidth);
+  // Beside a task on a narrow window or an unfolded foldable, one category a page, as on a phone.
+  const compact = useCompactBoard(
+    boardRestWidth({ frameWidth, rowWidth: 0, searching: state.searching, paneSpace }),
+  );
+  const row = useRef<HTMLDivElement>(null);
+  const handoff = useBoardHandoff(row, compact, project.id);
   return (
     <div className="flex h-full overflow-hidden">
       <div ref={frame} className="flex min-w-0 flex-1">
         {docked && <BoardSearchSidebar />}
-        <div className="relative flex min-w-0 flex-1">
-          <ScrollArea sides data-seam={seamOf(state)} className="min-w-0 flex-1">
-            <ScrollAreaViewport
-              data-autoscroll-x=""
-              className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3 [&>div]:px-6"
+        <div ref={row} className="relative flex min-w-0 flex-1">
+          {compact ? (
+            <CompactFrame>
+              <CompactPager
+                columns={COLUMNS}
+                handoff={handoff}
+                start={categoryTarget('active')}
+                origin={(column) => column.category}
+                page={(column) => <CategoryColumn category={column.category} />}
+              />
+            </CompactFrame>
+          ) : (
+            <ScrollArea
+              sides
+              data-seam={seamOf(state)}
+              data-board-layout=""
+              className="min-w-0 flex-1"
             >
-              {CATEGORIES.map((category, index) => {
-                const target = categoryTarget(category);
-                return (
-                  <BoardColumn
-                    key={category}
-                    columnId={target}
-                    name={CATEGORY_NAMES[category]}
-                    category={category}
-                    count={countIn(state, target)}
-                    collapsed={isCollapsed(target)}
-                    onToggle={(value) => setCollapsed(target, value)}
-                    index={index}
-                    className="min-w-[18rem] max-w-[200rem] grow basis-[18rem]"
-                  >
-                    {() => (
-                      <CategoryColumn
-                        category={category}
-                        onCollapse={() => setCollapsed(target, true)}
-                      />
-                    )}
-                  </BoardColumn>
-                );
-              })}
-            </ScrollAreaViewport>
-            <ScrollBar orientation="horizontal" />
-          </ScrollArea>
+              <ScrollAreaViewport
+                data-autoscroll-x=""
+                className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3 [&>div]:px-6"
+              >
+                {CATEGORIES.map((category, index) => {
+                  const target = categoryTarget(category);
+                  return (
+                    <BoardColumn
+                      key={category}
+                      columnId={target}
+                      name={CATEGORY_NAMES[category]}
+                      category={category}
+                      count={countIn(state, target)}
+                      collapsed={isCollapsed(target)}
+                      onToggle={(value) => setCollapsed(target, value)}
+                      index={index}
+                      className="min-w-[18rem] max-w-[200rem] grow basis-[18rem]"
+                    >
+                      {() => (
+                        <CategoryColumn
+                          category={category}
+                          onCollapse={() => setCollapsed(target, true)}
+                        />
+                      )}
+                    </BoardColumn>
+                  );
+                })}
+              </ScrollAreaViewport>
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+          )}
           {!docked && <BoardSearch />}
           <SelectionBar />
         </div>
@@ -99,7 +140,14 @@ export function WorkspaceDesktopBoard() {
  * card's own project's statuses for the category; under several, the column takes them all,
  * each to its project's default status there. Folded, its strip takes either at the default.
  */
-function CategoryColumn({ category, onCollapse }: { category: Category; onCollapse: () => void }) {
+function CategoryColumn({
+  category,
+  onCollapse,
+}: {
+  category: Category;
+  /** Without it, no header: the compact board names the column in its flow track, and folds it there. */
+  onCollapse?: () => void;
+}) {
   const state = board.use();
   const [settings] = useBoardSettings();
   const held = drag.use();
@@ -128,7 +176,9 @@ function CategoryColumn({ category, onCollapse }: { category: Category; onCollap
       data-over={over ? '' : undefined}
       className="board-column relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl"
     >
-      <ColumnHeader name={name} count={count} category={category} onCollapse={onCollapse} />
+      {onCollapse && (
+        <ColumnHeader name={name} count={count} category={category} onCollapse={onCollapse} />
+      )}
       <ScrollArea edges className="card-scroller min-h-0 flex-1 [--scrollbar-inset:0.5rem]">
         <ScrollAreaViewport data-autoscroll="">
           <div className="flex flex-col px-3.5 pt-1" style={{ paddingBottom: SEARCH_SPACE }}>

@@ -106,16 +106,17 @@ async function assertSides(
   // A card in the fade still takes the pointer.
   await takesPointer(seam, 'right');
 
-  // Nor does the fade stand in the handle's way.
+  // Nor does the fade stand in the handle's way. It narrows the task: widened, it would leave
+  // the board too little room for its rails, and the board would take its compact layout.
   const grip = (await handle.boundingBox())!;
   const before = Number(await handle.getAttribute('aria-valuenow'));
   await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
   await page.mouse.down();
-  await page.mouse.move(grip.x + grip.width / 2 - 60, grip.y + grip.height / 2, { steps: 6 });
+  await page.mouse.move(grip.x + grip.width / 2 + 60, grip.y + grip.height / 2, { steps: 6 });
   await page.mouse.up();
   await expect
     .poll(async () => Number(await handle.getAttribute('aria-valuenow')))
-    .toBeGreaterThan(before + 40);
+    .toBeLessThan(before - 40);
 
   // Scrolled along, the columns that leave on the left fade too, at a sticky backlog rail's
   // edge where one lies over the scroller's start.
@@ -165,12 +166,14 @@ test.describe('board side fades', () => {
     });
 
     // Bound, the closed rail scrolls with the columns and runs on under the task.
-    await page.evaluate(() =>
+    await page.evaluate(() => {
       localStorage.setItem(
         'throw-board-settings',
         JSON.stringify({ backlogRail: 'sticky', closedRail: 'bound' }),
-      ),
-    );
+      );
+      // The task opens at its first width again, so the columns run on under it.
+      localStorage.removeItem('throw-task-pane-width');
+    });
     await page.reload();
     await expect(card(page, 'Low priority')).toBeVisible({ timeout: 30_000 });
     await assertSides(page, card(page, 'Low priority'), { stickyBacklog: true });

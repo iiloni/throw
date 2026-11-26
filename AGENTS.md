@@ -46,6 +46,12 @@ On a phone the same boundary hands the board's drawer the open task's dock and p
 Catch's split view does (`TaskDrawer`). A desktop pane at least 620 px wide moves the task's
 tags and subtasks to a side column beside the card while it has any (ADR 0012,
 `TaskDetails/TaskColumn.tsx`); later extras such as link previews join it there.
+When the board beside an open desktop pane would rest narrower than `COMPACT_BELOW` (an
+unfolded foldable or a narrow window), both desktop boards take a phone's layout in that half
+(`Board/CompactSplitBoard.tsx`): columns page one at a time under the `FlowTrack` (the pager is
+`useColumnPager`, shared with `PhoneBoard`), and the project board's backlog and closed rails
+become views under a switch, whose place a held card's status targets take. `useBoardHandoff`
+carries the column in view and list scrolls between the two layouts.
 Columns that run on under an open desktop pane fade out at the seam (`[data-seam]` in
 `styles.css`, from `ScrollArea`'s `sides` marks and `seamOf`), and columns scrolled out to the
 left fade at the board's start; each fade stands at a sticky rail's edge where one lies over

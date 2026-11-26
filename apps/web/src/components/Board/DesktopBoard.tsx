@@ -37,6 +37,7 @@ import { BoardColumn, ColumnHeader } from './BoardColumn';
 import { BoardSettingsPanel } from './BoardSettingsPanel';
 import { useSpotlightCleanup } from './blockers';
 import { CardList } from './CardList';
+import { CompactSplitBoard, useBoardHandoff, useCompactBoard } from './CompactSplitBoard';
 import { drag, makingWay } from './drag';
 import type { Status, Task } from './model';
 import {
@@ -191,9 +192,13 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
   // A gallery covers the columns. A held card still needs somewhere to go, so they come
   // back as dropzones for as long as it is held.
   const covered = state.backlog === 'full' || state.closed === 'full';
+  const restWidth = boardRestWidth({ frameWidth, rowWidth, searching: state.searching, paneSpace });
+  // Beside a task on a narrow window or an unfolded foldable, the board takes a phone's layout.
+  const compact = useCompactBoard(restWidth);
+  const handoff = useBoardHandoff(row, compact, project.id);
   const rails = railGeometry({
     rowWidth,
-    restWidth: boardRestWidth({ frameWidth, rowWidth, searching: state.searching, paneSpace }),
+    restWidth,
     views: { backlog: state.backlog, closed: state.closed },
     widths: railWidths,
     resize: resizing,
@@ -304,59 +309,65 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
         <div className="flex min-h-0 flex-1">
           {docked && <BoardSearchSidebar />}
           <div ref={row} className="relative flex min-w-0 flex-1">
-            {!backlogBound && backlogRail}
-            <div className="absolute inset-0 flex">
-              {/* The columns carry the top and bottom margin, so a rail in here runs full height. */}
-              <ScrollArea sides data-seam={seamOf(state)} className="flex-1">
-                <ScrollAreaViewport
-                  data-origin="active"
-                  data-autoscroll-x=""
-                  data-inset-start={backlogBound ? 0 : rails.backlog.drawn}
-                  data-inset-end={closedBound ? 0 : rails.closed.drawn}
-                  className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3"
-                >
-                  {backlogBound ? (
-                    <>
-                      {backlogRail}
-                      <RailGap />
-                    </>
-                  ) : (
-                    <ColumnsEdge geometry={rails.backlog} />
-                  )}
-                  {covered
-                    ? dragging && (
-                        <motion.div
-                          className="mt-[calc(var(--safe-top)+1.25rem)] mb-6 flex shrink-0 flex-col gap-2.5 p-1"
-                          style={{ width: TILES_WIDTH }}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                        >
-                          <p className="px-1 pt-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
-                            Active
-                          </p>
-                          {active.map((status) => (
-                            <StatusTile key={status.id} status={status} />
+            {compact ? (
+              <CompactSplitBoard handoff={handoff} />
+            ) : (
+              <>
+                {!backlogBound && backlogRail}
+                <div data-board-layout="" className="absolute inset-0 flex">
+                  {/* The columns carry the top and bottom margin, so a rail in here runs full height. */}
+                  <ScrollArea sides data-seam={seamOf(state)} className="flex-1">
+                    <ScrollAreaViewport
+                      data-origin="active"
+                      data-autoscroll-x=""
+                      data-inset-start={backlogBound ? 0 : rails.backlog.drawn}
+                      data-inset-end={closedBound ? 0 : rails.closed.drawn}
+                      className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3"
+                    >
+                      {backlogBound ? (
+                        <>
+                          {backlogRail}
+                          <RailGap />
+                        </>
+                      ) : (
+                        <ColumnsEdge geometry={rails.backlog} />
+                      )}
+                      {covered
+                        ? dragging && (
+                            <motion.div
+                              className="mt-[calc(var(--safe-top)+1.25rem)] mb-6 flex shrink-0 flex-col gap-2.5 p-1"
+                              style={{ width: TILES_WIDTH }}
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                            >
+                              <p className="px-1 pt-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
+                                Active
+                              </p>
+                              {active.map((status) => (
+                                <StatusTile key={status.id} status={status} />
+                              ))}
+                            </motion.div>
+                          )
+                        : active.map((status, index) => (
+                            <StatusColumn key={status.id} status={status} index={index} />
                           ))}
-                        </motion.div>
-                      )
-                    : active.map((status, index) => (
-                        <StatusColumn key={status.id} status={status} index={index} />
-                      ))}
-                  {closedBound ? (
-                    <>
-                      <RailGap />
-                      {closedRail}
-                    </>
-                  ) : (
-                    <ColumnsEdge geometry={rails.closed} trailing />
-                  )}
-                </ScrollAreaViewport>
-                <ScrollBar orientation="horizontal" />
-              </ScrollArea>
-            </div>
-            {/* Keeps a sticky closed rail at the far edge when the backlog is not beside it. */}
-            <span aria-hidden className="pointer-events-none flex-1" />
-            {!closedBound && closedRail}
+                      {closedBound ? (
+                        <>
+                          <RailGap />
+                          {closedRail}
+                        </>
+                      ) : (
+                        <ColumnsEdge geometry={rails.closed} trailing />
+                      )}
+                    </ScrollAreaViewport>
+                    <ScrollBar orientation="horizontal" />
+                  </ScrollArea>
+                </div>
+                {/* Keeps a sticky closed rail at the far edge when the backlog is not beside it. */}
+                <span aria-hidden className="pointer-events-none flex-1" />
+                {!closedBound && closedRail}
+              </>
+            )}
             {!docked && <BoardSearch />}
             <SelectionBar />
           </div>
@@ -452,7 +463,7 @@ export function boardRestWidth({
  * board lays its galleries out for at once, as Catch's page takes its width beside a note, so
  * their cards move once instead of on every frame of the slide.
  */
-function usePaneSpace(state: BoardState, frameWidth: number) {
+export function usePaneSpace(state: BoardState, frameWidth: number) {
   const paneWidth = useEffectivePaneWidth(frameWidth);
   return openTaskOf(state) ? paneWidth + HANDLE_WIDTH + PANE_MARGIN : 0;
 }
