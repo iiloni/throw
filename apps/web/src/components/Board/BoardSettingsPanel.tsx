@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Popover } from 'radix-ui';
 import type { ReactNode } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
+import { ScrollBox } from '@/components/ui/scroll-area';
 import { haptics } from '@/lib/haptics';
 import { useDesktop, useMedia } from '@/lib/media';
 import { springs } from '@/lib/motion';
@@ -147,10 +148,15 @@ export function BoardSettingsPanel({
           sideOffset={10}
           collisionPadding={12}
           aria-label="Board settings"
-          className="shell-menu glass-thick z-50 max-h-[var(--radix-popover-content-available-height)] w-[22rem] max-w-[calc(100vw-1.5rem)] overflow-y-auto overscroll-contain rounded-3xl px-5 py-4 outline-none"
+          className="shell-menu glass-thick z-50 flex w-[22rem] max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-3xl outline-none"
         >
-          <h2 className="pb-1 font-display font-semibold text-lg tracking-[-0.01em]">Board</h2>
-          <BoardSettingsContent onReset={onReset} crossBoard={crossBoard} />
+          <ScrollBox
+            className="max-h-[var(--radix-popover-content-available-height)] [--scrollbar-inset:1rem]"
+            viewportClassName="px-5 py-4"
+          >
+            <h2 className="pb-1 font-display font-semibold text-lg tracking-[-0.01em]">Board</h2>
+            <BoardSettingsContent onReset={onReset} crossBoard={crossBoard} />
+          </ScrollBox>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

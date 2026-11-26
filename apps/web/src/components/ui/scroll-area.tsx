@@ -109,6 +109,7 @@ function ScrollBar({
   className,
   orientation = 'vertical',
   style,
+  onMouseDown,
   ...props
 }: React.ComponentProps<typeof ScrollAreaPrimitive.ScrollAreaScrollbar>) {
   return (
@@ -135,6 +136,11 @@ function ScrollBar({
             }),
         ...style,
       }}
+      onMouseDown={(event) => {
+        // Keep the editor's caret (and any focused field) while Radix drags the thumb.
+        event.preventDefault();
+        onMouseDown?.(event);
+      }}
       {...props}
     >
       <ScrollAreaPrimitive.ScrollAreaThumb
@@ -145,4 +151,35 @@ function ScrollBar({
   );
 }
 
-export { ScrollArea, ScrollAreaViewport, ScrollBar };
+/**
+ * A list, menu or panel that grows with its content and scrolls under Catch's overlay bar once
+ * it reaches its `max-h-*`, or the room its flex parent leaves it. The viewport takes the
+ * root's maximum height, so a box sized by its content needs no fixed height.
+ */
+function ScrollBox({
+  className,
+  viewportClassName,
+  viewportRef,
+  viewportProps,
+  children,
+  ...props
+}: React.ComponentProps<typeof ScrollArea> & {
+  viewportClassName?: string;
+  viewportRef?: React.Ref<HTMLDivElement>;
+  viewportProps?: Omit<React.ComponentProps<typeof ScrollAreaViewport>, 'className' | 'ref'>;
+}) {
+  return (
+    <ScrollArea className={cn('flex flex-col', className)} {...props}>
+      <ScrollAreaViewport
+        ref={viewportRef}
+        className={cn('h-auto max-h-[inherit] min-h-0 flex-1', viewportClassName)}
+        {...viewportProps}
+      >
+        {children}
+      </ScrollAreaViewport>
+      <ScrollBar />
+    </ScrollArea>
+  );
+}
+
+export { ScrollArea, ScrollAreaViewport, ScrollBar, ScrollBox };

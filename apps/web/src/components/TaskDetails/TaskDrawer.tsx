@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { projectOf } from '@/components/Board/model';
 import { board, current } from '@/components/Board/state';
+import { ScrollBox } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
 import { springs } from '@/lib/motion';
 import {
@@ -76,6 +77,17 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
     trigger.current = element;
     setPanel(panel === next ? null : next);
   }
+  const content = panel && (
+    <TaskPanelContent
+      panel={panel}
+      task={task}
+      statuses={statuses}
+      project={project}
+      onDone={collapse}
+      onLink={() => setPanel('relations')}
+      onClose={collapse}
+    />
+  );
   // The dock keeps its place in the pane's flow below the card, so it rises with the keyboard
   // and the safe area. As Catch's split view docks a note, it is one glass surface of a fixed
   // width that grows upward over the card's foot to show a panel, with no header of its own.
@@ -112,23 +124,16 @@ export function TaskDrawer({ task, statuses }: { task: Task; statuses: Status[] 
               label={panelTitle[panel]}
               reduced={!!reduced}
             >
-              <div
-                className={
-                  panel === 'relations' || panel === 'tags'
-                    ? 'flex max-h-[min(55dvh,28rem)] flex-col overflow-hidden [--tags-max:min(55dvh,28rem)]'
-                    : 'max-h-[min(55dvh,28rem)] overflow-y-auto overscroll-contain [scrollbar-width:thin]'
-                }
-              >
-                <TaskPanelContent
-                  panel={panel}
-                  task={task}
-                  statuses={statuses}
-                  project={project}
-                  onDone={collapse}
-                  onLink={() => setPanel('relations')}
-                  onClose={collapse}
-                />
-              </div>
+              {panel === 'relations' || panel === 'tags' ? (
+                // These scroll their own lists beneath fixed controls.
+                <div className="flex max-h-[min(55dvh,28rem)] flex-col overflow-hidden [--tags-max:min(55dvh,28rem)]">
+                  {content}
+                </div>
+              ) : (
+                <ScrollBox className="max-h-[min(55dvh,28rem)] [--scrollbar-inset:0.5rem]">
+                  {content}
+                </ScrollBox>
+              )}
             </DockPanelFrame>
           )}
         </AnimatePresence>

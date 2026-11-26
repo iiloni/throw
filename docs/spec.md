@@ -358,10 +358,11 @@ motion.
   the list scrolls.
 - Where cards are scrolled out of a column, the visible area's corners take the card radius
   at the cards' own edges, so a card that is cut off still shows four round corners.
-- Scrollbars are off by default, since the fades do their job with less noise. A
-  [setting](#board-settings) turns them on for people who need the bar. They are then
-  Catch's overlay scrollbars: drawn over the content, shown on hover on desktop and never
-  on touch screens.
+- Scrollbars are Catch's overlay scrollbars, on by default as in Catch: drawn over the
+  content, shown on hover on desktop and never on touch screens. Every scrolling list,
+  menu, picker and dialog draws them, not only the board. A [setting](#board-settings) turns
+  them off everywhere for people who find the fades enough. Dragging a thumb never takes
+  focus, so an editor keeps its caret.
 - A wheel turned where nothing scrolls up and down (the page, a rail's strip, a column short
   enough to fit) scrolls the columns sideways.
 
@@ -384,7 +385,7 @@ never drawn.
 | Column backgrounds | On | Gives each active column a faint surface. |
 | Backlog rail, Closed rail | Sticky | One setting for each. Sticky keeps the rail at the window's edge with the columns scrolling beneath it. With board puts it at its end of the columns, and it scrolls away with them. |
 | Subtasks as cards | Off | Shows subtasks as top-level cards; see [Subtasks on the board](#subtasks-on-the-board). |
-| Scrollbars | Off | Draws scrollbars. Off, a faded edge shows where a list goes on. |
+| Scrollbars | On | Draws overlay scrollbars across the app. Off, a faded edge shows where a list goes on. |
 | Holding a card | Compact | Compact or Full; see [Ordering and priority](#ordering-and-priority). |
 | Theme | System | System, Light or Dark. The browser and installed app bars follow the chosen theme. |
 

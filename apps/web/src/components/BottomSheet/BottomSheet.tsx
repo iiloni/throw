@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useDragControls, useReducedMotion } from 'moti
 import { Dialog } from 'radix-ui';
 import { type ReactNode, type RefObject, useRef } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
+import { ScrollBox } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
 import { useDesktop } from '@/lib/media';
 import { springs } from '@/lib/motion';
@@ -97,7 +98,9 @@ export function BottomSheet({
                   </Dialog.Close>
                 </div>
                 <Dialog.Description className="sr-only">{title}</Dialog.Description>
-                <div className="min-h-0 overflow-y-auto overscroll-contain px-5">{children}</div>
+                <ScrollBox className="[--scrollbar-inset:0.25rem]" viewportClassName="px-5">
+                  {children}
+                </ScrollBox>
               </motion.div>
             </Dialog.Content>
           </Dialog.Portal>

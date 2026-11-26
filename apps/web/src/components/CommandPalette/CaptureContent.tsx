@@ -2,6 +2,7 @@ import { ArrowUp, ChevronsUpDown, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useState } from 'react';
 import { useShell } from '@/components/AppShell/shell';
+import { ScrollBox } from '@/components/ui/scroll-area';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import {
@@ -89,7 +90,7 @@ export function CaptureContent({
           </motion.button>
         </header>
       )}
-      <div className="min-h-0 shrink overflow-y-auto overscroll-contain">
+      <ScrollBox className="shrink [--scrollbar-inset:0.5rem]">
         <textarea
           data-palette-input
           disabled={disabled}
@@ -111,7 +112,7 @@ export function CaptureContent({
           }}
           className="field-sizing-content block max-h-48 min-h-14 w-full resize-none bg-transparent px-5 pt-4 pb-3 font-display font-semibold text-lg leading-snug tracking-[-0.01em] outline-none placeholder:text-muted-foreground md:pt-5"
         />
-      </div>
+      </ScrollBox>
       <AnimatePresence initial={false}>
         {choosing && (
           <motion.div

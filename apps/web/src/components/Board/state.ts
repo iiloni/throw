@@ -1,4 +1,5 @@
 import { positionBetween } from '@throw/shared';
+import { useEffect } from 'react';
 import { z } from 'zod';
 import { isDesktop } from '@/lib/media';
 import { readPreference, usePersistentState, writePreference } from '@/lib/storage';
@@ -61,10 +62,10 @@ export const boardSettingsSchema = z.object({
   backlogRail: z.enum(['sticky', 'bound']).default('sticky'),
   closedRail: z.enum(['sticky', 'bound']).default('sticky'),
   /**
-   * Draw scrollbars. Off, a faded edge is all that says a list goes on; some people need the
-   * bar itself.
+   * Draw Catch's overlay scrollbars, everywhere in the app. Off, a faded edge is all that says
+   * a list goes on.
    */
-  scrollbars: z.boolean().default(false),
+  scrollbars: z.boolean().default(true),
   /** Subtasks as top-level cards in their own statuses, rather than with their parent. */
   subtasksAsCards: z.boolean().default(false),
 });
@@ -74,6 +75,18 @@ const BOARD_SETTINGS_KEY = 'throw-board-settings';
 
 export function useBoardSettings() {
   return usePersistentState(BOARD_SETTINGS_KEY, boardSettingsSchema, boardSettingsSchema.parse({}));
+}
+
+/**
+ * Applies the Scrollbars setting to the whole document, for every overlay scrollbar: boards,
+ * menus, pickers, dialogs and Settings alike.
+ */
+export function useScrollbarSetting() {
+  const [{ scrollbars }] = useBoardSettings();
+  useEffect(() => {
+    document.documentElement.toggleAttribute('data-hide-scrollbars', !scrollbars);
+    return () => document.documentElement.removeAttribute('data-hide-scrollbars');
+  }, [scrollbars]);
 }
 
 function storedBoardSettings() {

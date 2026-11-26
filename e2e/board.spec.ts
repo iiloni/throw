@@ -395,11 +395,16 @@ test('rails, galleries, board settings and the phone tray keep their distinct la
     await expect(page.getByRole('switch', { name: 'Column backgrounds' })).toHaveCount(0);
     await expect(page.getByRole('switch', { name: 'Scrollbars' })).toHaveCount(0);
   } else {
-    await page.getByRole('switch', { name: 'Scrollbars', exact: true }).click();
+    // Scrollbars are on by default, as in Catch, and the setting reaches every page.
+    const scrollbars = page.getByRole('switch', { name: 'Scrollbars', exact: true });
+    await expect(scrollbars).toHaveAttribute('aria-checked', 'true');
+    await expect(page.locator('html')).not.toHaveAttribute('data-hide-scrollbars');
+    await scrollbars.click();
+    await expect(page.locator('html')).toHaveAttribute('data-hide-scrollbars', '');
     await backlogRail.click();
   }
   await backToBoard();
-  if (!isMobile) await expect(page.locator('html')).not.toHaveAttribute('data-hide-scrollbars');
+  if (!isMobile) await expect(page.locator('html')).toHaveAttribute('data-hide-scrollbars', '');
   await page.reload();
   await openSettings();
   await expect(page.getByRole('switch', { name: 'Priority labels', exact: true })).toHaveAttribute(

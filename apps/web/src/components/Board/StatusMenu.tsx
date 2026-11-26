@@ -1,6 +1,7 @@
 import { Check } from 'lucide-react';
 import { DropdownMenu } from 'radix-ui';
 import type { ReactNode } from 'react';
+import { ScrollBox } from '@/components/ui/scroll-area';
 import { feelStatusChange } from '@/lib/haptics';
 import { StatusGlyph } from './glyphs';
 import { CATEGORIES, type Category, type Project } from './model';
@@ -32,37 +33,42 @@ export function StatusMenu({
           align="start"
           sideOffset={6}
           collisionPadding={12}
-          className="shell-menu glass-thick z-50 max-h-[min(70dvh,32rem)] w-56 overflow-y-auto rounded-3xl p-2"
+          className="shell-menu glass-thick z-50 flex w-56 flex-col overflow-hidden rounded-3xl"
         >
-          {CATEGORIES.map((category) => (
-            <DropdownMenu.Group key={category}>
-              <DropdownMenu.Label className="px-3 pt-2 pb-1 text-muted-foreground text-xs">
-                {CATEGORY_NAMES[category]}
-              </DropdownMenu.Label>
-              {project.statuses
-                .filter((status) => status.category === category)
-                .map((status) => (
-                  <DropdownMenu.Item
-                    key={status.id}
-                    onSelect={() => {
-                      onSelect(status.id);
-                      // Picking the status it already has changes nothing, and is not felt.
-                      if (status.id !== value) feelStatusChange(status.category);
-                    }}
-                    className="flex min-h-10 cursor-pointer items-center gap-2.5 rounded-xl px-3 text-sm outline-none data-[highlighted]:bg-accent"
-                  >
-                    <span
-                      data-column-color={status.color ?? undefined}
-                      className="shrink-0 text-[color:var(--column-accent,currentColor)]"
+          <ScrollBox
+            className="max-h-[min(70dvh,32rem)] [--scrollbar-inset:1rem]"
+            viewportClassName="p-2"
+          >
+            {CATEGORIES.map((category) => (
+              <DropdownMenu.Group key={category}>
+                <DropdownMenu.Label className="px-3 pt-2 pb-1 text-muted-foreground text-xs">
+                  {CATEGORY_NAMES[category]}
+                </DropdownMenu.Label>
+                {project.statuses
+                  .filter((status) => status.category === category)
+                  .map((status) => (
+                    <DropdownMenu.Item
+                      key={status.id}
+                      onSelect={() => {
+                        onSelect(status.id);
+                        // Picking the status it already has changes nothing, and is not felt.
+                        if (status.id !== value) feelStatusChange(status.category);
+                      }}
+                      className="flex min-h-10 cursor-pointer items-center gap-2.5 rounded-xl px-3 text-sm outline-none data-[highlighted]:bg-accent"
                     >
-                      <StatusGlyph category={status.category} />
-                    </span>
-                    <span className="min-w-0 flex-1 truncate">{status.name}</span>
-                    {status.id === value && <Check aria-hidden className="size-4" />}
-                  </DropdownMenu.Item>
-                ))}
-            </DropdownMenu.Group>
-          ))}
+                      <span
+                        data-column-color={status.color ?? undefined}
+                        className="shrink-0 text-[color:var(--column-accent,currentColor)]"
+                      >
+                        <StatusGlyph category={status.category} />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">{status.name}</span>
+                      {status.id === value && <Check aria-hidden className="size-4" />}
+                    </DropdownMenu.Item>
+                  ))}
+              </DropdownMenu.Group>
+            ))}
+          </ScrollBox>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>

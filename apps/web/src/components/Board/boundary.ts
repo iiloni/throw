@@ -50,10 +50,6 @@ export function useBoardBoundary(data: BoardData, actions: BoardActions, awaitin
     receiveBoard(data, actions, awaitingTasks);
   }, [data, actions, awaitingTasks]);
   useEffect(() => {
-    document.documentElement.toggleAttribute('data-hide-scrollbars', !settings.scrollbars);
-    return () => document.documentElement.removeAttribute('data-hide-scrollbars');
-  }, [settings.scrollbars]);
-  useEffect(() => {
     function close(event: KeyboardEvent) {
       if (
         event.key !== 'Escape' ||

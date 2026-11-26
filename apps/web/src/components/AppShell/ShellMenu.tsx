@@ -12,6 +12,7 @@ import { MAX_PULL, switcherPull } from '@/components/AppShell/SwitcherPull';
 import { useShell } from '@/components/AppShell/shell';
 import { Hint } from '@/components/Hint/Hint';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
+import { ScrollBox } from '@/components/ui/scroll-area';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
@@ -76,41 +77,46 @@ export function ShellMenu({
           align="start"
           sideOffset={8}
           collisionPadding={12}
-          className="shell-menu glass-thick z-40 max-h-[min(70dvh,36rem)] w-72 max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-3xl p-2"
+          className="shell-menu glass-thick z-40 flex w-72 max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-3xl"
           onCloseAutoFocus={(event) => {
             if (document.querySelector('[role="dialog"]')) event.preventDefault();
           }}
         >
-          <DropdownMenu.Label className="px-3 pt-2 pb-1 text-xs text-muted-foreground">
-            Workspaces
-          </DropdownMenu.Label>
-          {shell.workspaces.map((workspace) => (
-            <MenuItem key={workspace.id} onSelect={() => shell.selectWorkspace(workspace.id)}>
-              <Layers aria-hidden className="size-4 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
-              {shell.workspace?.id === workspace.id && <Check aria-hidden className="size-4" />}
+          <ScrollBox
+            className="max-h-[min(70dvh,36rem)] [--scrollbar-inset:1rem]"
+            viewportClassName="p-2"
+          >
+            <DropdownMenu.Label className="px-3 pt-2 pb-1 text-xs text-muted-foreground">
+              Workspaces
+            </DropdownMenu.Label>
+            {shell.workspaces.map((workspace) => (
+              <MenuItem key={workspace.id} onSelect={() => shell.selectWorkspace(workspace.id)}>
+                <Layers aria-hidden className="size-4 shrink-0" />
+                <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
+                {shell.workspace?.id === workspace.id && <Check aria-hidden className="size-4" />}
+              </MenuItem>
+            ))}
+            <MenuItem onSelect={() => shell.openForm({ kind: 'new-workspace' })}>
+              <Plus aria-hidden className="size-4" />
+              New workspace
             </MenuItem>
-          ))}
-          <MenuItem onSelect={() => shell.openForm({ kind: 'new-workspace' })}>
-            <Plus aria-hidden className="size-4" />
-            New workspace
-          </MenuItem>
-          {shell.workspace && (
-            <MenuItem
-              onSelect={() =>
-                shell.openForm({ kind: 'edit-workspace', workspace: shell.workspace! })
-              }
-            >
-              <Pencil aria-hidden className="size-4" />
-              Rename workspace
-            </MenuItem>
-          )}
-          {shell.workspace && (
-            <MenuItem onSelect={() => shell.goTrash()}>
-              <Trash2 aria-hidden className="size-4" />
-              Workspace trash
-            </MenuItem>
-          )}
+            {shell.workspace && (
+              <MenuItem
+                onSelect={() =>
+                  shell.openForm({ kind: 'edit-workspace', workspace: shell.workspace! })
+                }
+              >
+                <Pencil aria-hidden className="size-4" />
+                Rename workspace
+              </MenuItem>
+            )}
+            {shell.workspace && (
+              <MenuItem onSelect={() => shell.goTrash()}>
+                <Trash2 aria-hidden className="size-4" />
+                Workspace trash
+              </MenuItem>
+            )}
+          </ScrollBox>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
