@@ -1,15 +1,39 @@
 import type { Color } from '@throw/shared';
-import { ChevronsRightLeft } from 'lucide-react';
+import { ChevronsLeftRight, ChevronsRightLeft, Pencil, Plus } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
-import { type ReactNode, useLayoutEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
+import { ShellContext } from '@/components/AppShell/shell';
 import { Hint } from '@/components/Hint/Hint';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuGroup,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 import { entryDelay, useEntryMotion } from '@/lib/entryMotion';
 import { cn } from '@/lib/utils';
 import { useColumnSpotlightBlocker } from './blockers';
 import { drag, makingWay } from './drag';
 import { StatusGlyph } from './glyphs';
-import type { Category } from './model';
-import { board, current, useBoardSettings, visibleIds } from './state';
+import { CATEGORIES, type Category, categoryTarget, type Project, targetCategory } from './model';
+import {
+  board,
+  createTask,
+  current,
+  useBoardSettings,
+  useCollapsedColumns,
+  visibleIds,
+} from './state';
 
 /** Catch's deck: the content swapped in by folding fades in once the column has mostly resized. */
 const CONTENT_FADE = { duration: 0.25, delay: 0.15, ease: 'easeOut' } as const;
@@ -74,55 +98,171 @@ export function BoardColumn({
       ?.querySelector<HTMLElement>('[data-column-toggle]')
       ?.focus({ preventScroll: true });
   });
+  const menu = { columnId, name, collapsed, onToggle };
   return (
-    <section
-      ref={root}
-      onClickCapture={(event) => {
-        const control =
-          event.target instanceof Element && event.target.closest('[data-column-toggle]');
-        refocus.current = Boolean(control) && document.activeElement === control;
-      }}
-      // Folded, the strip is all there is of the column; open, the column names itself.
-      aria-label={collapsed ? name : undefined}
-      data-column={columnId}
-      data-column-color={color ?? undefined}
-      data-collapsed={collapsed ? '' : undefined}
-      data-surface={settings.surfaces ? '' : undefined}
-      className={cn(
-        // Folds and opens on the transition in styles.css (`.board-column[data-column]`).
-        'board-column group/column relative mt-[calc(var(--safe-top)+1.25rem)] mb-6 flex min-h-0 shrink-0 flex-col rounded-3xl',
-        collapsed ? 'min-w-16 max-w-16 grow-0 basis-16' : className,
-      )}
-    >
-      {color && (
-        <span
-          aria-hidden
-          data-column-stripe=""
-          className="pointer-events-none absolute inset-x-4 top-2 z-10 h-1 rounded-full bg-[var(--column-accent)]"
-        />
-      )}
-      <motion.div
-        key={collapsed ? 'collapsed' : 'open'}
-        className="flex min-h-0 flex-1 flex-col"
-        initial={toggled && !reduced ? { opacity: 0 } : false}
-        animate={{ opacity: 1 }}
-        transition={reduced ? { duration: 0 } : CONTENT_FADE}
-      >
-        {collapsed ? (
-          <ColumnStrip
-            columnId={columnId}
-            name={name}
-            category={category}
-            count={count}
-            index={index}
-            revealed={toggled}
-            onExpand={() => onToggle(false)}
-          />
-        ) : (
-          children(toggled)
+    <ColumnMenuContext value={menu}>
+      <section
+        ref={root}
+        onClickCapture={(event) => {
+          const control =
+            event.target instanceof Element && event.target.closest('[data-column-toggle]');
+          refocus.current = Boolean(control) && document.activeElement === control;
+        }}
+        // Folded, the strip is all there is of the column; open, the column names itself.
+        aria-label={collapsed ? name : undefined}
+        data-column={columnId}
+        data-column-color={color ?? undefined}
+        data-collapsed={collapsed ? '' : undefined}
+        data-surface={settings.surfaces ? '' : undefined}
+        className={cn(
+          // Folds and opens on the transition in styles.css (`.board-column[data-column]`).
+          'board-column group/column relative mt-[calc(var(--safe-top)+1.25rem)] mb-6 flex min-h-0 shrink-0 flex-col rounded-3xl',
+          collapsed ? 'min-w-16 max-w-16 grow-0 basis-16' : className,
         )}
-      </motion.div>
-    </section>
+      >
+        {color && (
+          <span
+            aria-hidden
+            data-column-stripe=""
+            className="pointer-events-none absolute inset-x-4 top-2 z-10 h-1 rounded-full bg-[var(--column-accent)]"
+          />
+        )}
+        <motion.div
+          key={collapsed ? 'collapsed' : 'open'}
+          className="flex min-h-0 flex-1 flex-col"
+          initial={toggled && !reduced ? { opacity: 0 } : false}
+          animate={{ opacity: 1 }}
+          transition={reduced ? { duration: 0 } : CONTENT_FADE}
+        >
+          {collapsed ? (
+            <ColumnStrip
+              columnId={columnId}
+              name={name}
+              category={category}
+              count={count}
+              index={index}
+              revealed={toggled}
+              onExpand={() => onToggle(false)}
+            />
+          ) : (
+            children(toggled)
+          )}
+        </motion.div>
+      </section>
+    </ColumnMenuContext>
+  );
+}
+
+type ColumnMenu = {
+  columnId: string;
+  name: string;
+  collapsed: boolean;
+  onToggle: (collapsed: boolean) => void;
+};
+
+/** The column a header or strip belongs to, for its right-click menu. */
+const ColumnMenuContext = createContext<ColumnMenu | null>(null);
+
+/**
+ * A right click on a desktop column's header or folded strip: add a task to it, fold it or the
+ * others, and edit its status. The workspace board's category columns span projects, so they
+ * only fold. Off while a card is held, when the header is only a header.
+ */
+function ColumnContextMenu({ children }: { children: ReactNode }) {
+  const menu = useContext(ColumnMenuContext);
+  const held = drag.use();
+  if (!menu) return children;
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild disabled={makingWay(held)}>
+        {children}
+      </ContextMenuTrigger>
+      <ContextMenuContent
+        aria-label={`${menu.name} column actions`}
+        data-column-menu={menu.columnId}
+        className="w-56"
+      >
+        <ColumnMenuItems menu={menu} />
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
+function ColumnMenuItems({ menu }: { menu: ColumnMenu }) {
+  const { columnId, name, collapsed, onToggle } = menu;
+  const state = board.use();
+  const shell = useContext(ShellContext);
+  const status = targetCategory(columnId) === null;
+  // The prototype makes mock tasks without actions; the workspace board captures elsewhere.
+  const canAdd = status && (!state.actions || state.actions.create !== undefined);
+  // Only a real project's own board has a status to edit in its settings.
+  const settingsProject = shell && !shell.crossBoard ? shell.project : undefined;
+  return (
+    <>
+      <ContextMenuLabel>{name}</ContextMenuLabel>
+      {canAdd && (
+        <ContextMenuItem onSelect={() => createTask(columnId)}>
+          <Plus aria-hidden />
+          Add task
+        </ContextMenuItem>
+      )}
+      <ContextMenuGroup>
+        <ContextMenuItem onSelect={() => onToggle(!collapsed)}>
+          {collapsed ? <ChevronsLeftRight aria-hidden /> : <ChevronsRightLeft aria-hidden />}
+          {collapsed ? 'Expand column' : 'Collapse column'}
+        </ContextMenuItem>
+        {state.boards.length > 0 && <FoldAllItems menu={menu} project={current(state).project} />}
+      </ContextMenuGroup>
+      {status && settingsProject && (
+        <>
+          <ContextMenuSeparator />
+          <ContextMenuItem onSelect={() => shell?.goProjectSettings(settingsProject, 'statuses')}>
+            <Pencil aria-hidden />
+            Edit status…
+          </ContextMenuItem>
+        </>
+      )}
+    </>
+  );
+}
+
+/** Folds the board's other columns, or opens them all, where that changes something. */
+function FoldAllItems({
+  menu: { columnId, collapsed },
+  project,
+}: {
+  menu: ColumnMenu;
+  project: Project;
+}) {
+  const { isCollapsed, setCollapsed } = useCollapsedColumns(project);
+  const columns =
+    project.members !== undefined
+      ? CATEGORIES.map(categoryTarget)
+      : project.statuses.filter((item) => item.category === 'active').map((item) => item.id);
+  const others = columns.filter((id) => id !== columnId);
+  return (
+    <>
+      {others.some((id) => !isCollapsed(id)) && (
+        <ContextMenuItem
+          onSelect={() => {
+            for (const id of others) setCollapsed(id, true);
+          }}
+        >
+          <ChevronsRightLeft aria-hidden />
+          Collapse other columns
+        </ContextMenuItem>
+      )}
+      {columns.filter((id) => isCollapsed(id)).length > (collapsed ? 1 : 0) && (
+        <ContextMenuItem
+          onSelect={() => {
+            for (const id of columns) setCollapsed(id, false);
+          }}
+        >
+          <ChevronsLeftRight aria-hidden />
+          Expand all columns
+        </ContextMenuItem>
+      )}
+    </>
   );
 }
 
@@ -163,37 +303,39 @@ function ColumnStrip({
   );
   const entry = useEntryMotion(`column:${columnId}`, true, entryDelay(index), revealed);
   return (
-    <motion.div className="flex min-h-0 flex-1 flex-col" style={entry}>
-      <Hint label={`Expand ${name} column`} side="bottom">
-        <button
-          type="button"
-          aria-label={`Expand ${name} column`}
-          aria-expanded={false}
-          data-column-toggle=""
-          data-drop-status={columnId}
-          data-status-home={columnId}
-          data-over={over ? '' : undefined}
-          data-spotlight={hasBlocker ? 'blocker' : undefined}
-          data-spotlight-instant={reduced ? '' : undefined}
-          onClick={onExpand}
-          className={cn(
-            'board-column column-strip spotlight-strip flex min-h-0 flex-1 flex-col items-center gap-3 rounded-3xl pt-[1.1875rem] pb-4 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60',
-            over && 'text-foreground',
-          )}
-        >
-          <StatusGlyph
-            category={category}
-            className="size-4 text-[color:var(--column-accent,currentColor)]"
-          />
-          <span className="min-h-0 truncate font-display font-semibold text-base text-[color:var(--column-label,var(--foreground))] tracking-[-0.01em] [writing-mode:vertical-rl]">
-            {name}
-          </span>
-          <span className="rounded-full bg-foreground/[0.07] px-1.5 py-0.5 text-xs tabular-nums">
-            {count}
-          </span>
-        </button>
-      </Hint>
-    </motion.div>
+    <ColumnContextMenu>
+      <motion.div className="flex min-h-0 flex-1 flex-col" style={entry}>
+        <Hint label={`Expand ${name} column`} side="bottom">
+          <button
+            type="button"
+            aria-label={`Expand ${name} column`}
+            aria-expanded={false}
+            data-column-toggle=""
+            data-drop-status={columnId}
+            data-status-home={columnId}
+            data-over={over ? '' : undefined}
+            data-spotlight={hasBlocker ? 'blocker' : undefined}
+            data-spotlight-instant={reduced ? '' : undefined}
+            onClick={onExpand}
+            className={cn(
+              'board-column column-strip spotlight-strip flex min-h-0 flex-1 flex-col items-center gap-3 rounded-3xl pt-[1.1875rem] pb-4 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60',
+              over && 'text-foreground',
+            )}
+          >
+            <StatusGlyph
+              category={category}
+              className="size-4 text-[color:var(--column-accent,currentColor)]"
+            />
+            <span className="min-h-0 truncate font-display font-semibold text-base text-[color:var(--column-label,var(--foreground))] tracking-[-0.01em] [writing-mode:vertical-rl]">
+              {name}
+            </span>
+            <span className="rounded-full bg-foreground/[0.07] px-1.5 py-0.5 text-xs tabular-nums">
+              {count}
+            </span>
+          </button>
+        </Hint>
+      </motion.div>
+    </ColumnContextMenu>
   );
 }
 
@@ -217,43 +359,45 @@ export function ColumnHeader({
   const held = drag.use();
   const holding = makingWay(held);
   return (
-    <div className="column-head flex h-14 shrink-0 items-center px-2.5">
-      <h2 className="min-w-0 flex-1">
-        <Hint label={`Collapse ${name} column`} side="bottom" disabled={holding}>
-          <button
-            type="button"
-            aria-label={`Collapse ${name} column`}
-            aria-expanded
-            data-column-toggle=""
-            onClick={onCollapse}
-            className={cn(
-              'group/header flex h-11 w-full items-center gap-2.5 rounded-2xl pr-2 pl-2.5 text-left outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/60',
-              !holding && 'hover:bg-foreground/[0.04]',
-            )}
-          >
-            {category && (
-              <StatusGlyph
-                category={category}
-                className="size-4 text-[color:var(--column-accent,var(--muted-foreground))]"
-              />
-            )}
-            <span className="truncate font-display font-semibold text-lg text-[color:var(--column-label,currentColor)] tracking-[-0.01em]">
-              {name}
-            </span>
-            <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-muted-foreground text-xs tabular-nums">
-              {count}
-            </span>
-            <span className="flex-1" />
-            <ChevronsRightLeft
-              aria-hidden
+    <ColumnContextMenu>
+      <div className="column-head flex h-14 shrink-0 items-center px-2.5">
+        <h2 className="min-w-0 flex-1">
+          <Hint label={`Collapse ${name} column`} side="bottom" disabled={holding}>
+            <button
+              type="button"
+              aria-label={`Collapse ${name} column`}
+              aria-expanded
+              data-column-toggle=""
+              onClick={onCollapse}
               className={cn(
-                'size-4 shrink-0 text-muted-foreground transition-opacity group-hover/header:text-foreground',
-                holding && 'opacity-0',
+                'group/header flex h-11 w-full items-center gap-2.5 rounded-2xl pr-2 pl-2.5 text-left outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/60',
+                !holding && 'hover:bg-foreground/[0.04]',
               )}
-            />
-          </button>
-        </Hint>
-      </h2>
-    </div>
+            >
+              {category && (
+                <StatusGlyph
+                  category={category}
+                  className="size-4 text-[color:var(--column-accent,var(--muted-foreground))]"
+                />
+              )}
+              <span className="truncate font-display font-semibold text-lg text-[color:var(--column-label,currentColor)] tracking-[-0.01em]">
+                {name}
+              </span>
+              <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-muted-foreground text-xs tabular-nums">
+                {count}
+              </span>
+              <span className="flex-1" />
+              <ChevronsRightLeft
+                aria-hidden
+                className={cn(
+                  'size-4 shrink-0 text-muted-foreground transition-opacity group-hover/header:text-foreground',
+                  holding && 'opacity-0',
+                )}
+              />
+            </button>
+          </Hint>
+        </h2>
+      </div>
+    </ColumnContextMenu>
   );
 }

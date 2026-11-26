@@ -646,6 +646,26 @@
 .shell-menu[data-state="closed"] {
   animation: shell-menu-out 120ms ease-in;
 }
+/* A right-click menu settles from the pointer, where Radix puts its transform origin. */
+.context-menu {
+  transform-origin: var(--radix-context-menu-content-transform-origin);
+}
+.context-menu[data-state="open"] {
+  animation: context-menu-in 200ms var(--ease-emphasized);
+}
+.context-menu[data-state="closed"] {
+  animation: shell-menu-out 120ms ease-in;
+}
+@keyframes context-menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
 /*
  * The board. A column folds and parts under a held card, and all of it is plain layout that
  * transitions: a drag changes direction many times a second, and a CSS transition picks up

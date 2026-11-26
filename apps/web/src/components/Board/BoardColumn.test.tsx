@@ -38,6 +38,23 @@ function Column({
   );
 }
 
+const heldCard: DragState = {
+  ids: ['task'],
+  width: 280,
+  height: 80,
+  grab: { x: 20, y: 20 },
+  origin: 'active',
+  priority: 3,
+  target: { kind: 'status', statusId: 'status-review' },
+  rail: null,
+  phase: 'dragging',
+  swallowed: false,
+  touch: false,
+  over: false,
+  page: 0,
+  moved: true,
+};
+
 afterEach(() => drag.set(null));
 
 describe('a board column', () => {
@@ -101,28 +118,35 @@ describe('a board column', () => {
 
   it('lights the strip under a held card, and keeps the open column’s header while one is held', () => {
     const { rerender } = render(<Column collapsed />);
-    const held: DragState = {
-      ids: ['task'],
-      width: 280,
-      height: 80,
-      grab: { x: 20, y: 20 },
-      origin: 'active',
-      priority: 3,
-      target: { kind: 'status', statusId: 'status-review' },
-      rail: null,
-      phase: 'dragging',
-      swallowed: false,
-      touch: false,
-      over: false,
-      page: 0,
-      moved: true,
-    };
-    act(() => drag.set(held));
+    act(() => drag.set(heldCard));
     expect(screen.getByRole('button', { name: 'Expand Review column' })).toHaveAttribute(
       'data-over',
       '',
     );
     rerender(<Column collapsed={false} />);
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Review3');
+  });
+
+  it('offers its actions on a right click of the header or the strip', async () => {
+    const onToggle = vi.fn();
+    const { rerender } = render(<Column collapsed={false} onToggle={onToggle} />);
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'Collapse Review column' }));
+    expect(await screen.findByRole('menu', { name: 'Review column actions' })).toBeVisible();
+    // Outside the app's shell there is no project settings to edit the status in.
+    expect(screen.queryByRole('menuitem', { name: 'Edit status…' })).toBeNull();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Collapse column' }));
+    expect(onToggle).toHaveBeenCalledWith(true);
+
+    rerender(<Column collapsed onToggle={onToggle} />);
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'Expand Review column' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Expand column' }));
+    expect(onToggle).toHaveBeenLastCalledWith(false);
+  });
+
+  it('keeps its menu shut while a card is held', () => {
+    render(<Column collapsed={false} />);
+    act(() => drag.set(heldCard));
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'Collapse Review column' }));
+    expect(screen.queryByRole('menu')).toBeNull();
   });
 });

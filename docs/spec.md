@@ -340,6 +340,10 @@ motion.
   remembered per project on the device. A card dropped on a strip is sent to its status
   without the column opening ([ADR 0008](decisions/0008-board-drag-model.md)); carrying a card
   into one from the keyboard, or opening one of its tasks, opens it.
+- A right click on a desktop column's header or strip opens its menu (2026-11-26): add a task
+  to it, fold or open it, fold the other columns, open them all, and edit its status in the
+  project's status settings. The cross-project board's category columns span projects, so
+  their menu only folds. A right click on a card still selects it.
 - A phone shows one column at a time and shares the project's folded columns: the pager skips
   them, so a column rarely visited costs no swipe. The current column folds from a control
   beside its name, and the next column takes its place. Each folded column stays on the flow
@@ -710,6 +714,13 @@ on the device and takes precedence over window width:
   appears on hover or keyboard focus and edits that project. It stays visible on touch screens.
 - The cross-project board.
 - Settings at the bottom.
+
+A right click on a project in the rail, expanded or collapsed, opens the project's menu:
+project settings, project trash, rename and open in a new tab, the same actions as its `…`
+button (2026-11-26). A right click on Settings offers the board's display toggles while a board
+is open, and each Settings page to go straight to. On a touch screen with the desktop layout,
+a long press (half a second, felt as it opens) opens each of these menus where a right click
+would, and the tap its lift would send does nothing.
 
 On a board, search is a floating glass bar at the bottom of the board area, opened from the
 rail or with Ctrl/⌘K, which focuses it when it is already open (2026-11-22). It is not modal

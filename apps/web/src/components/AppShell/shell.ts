@@ -3,6 +3,7 @@ import { createContext, useContext } from 'react';
 import { z } from 'zod';
 import type { PaletteMode } from '@/components/CommandPalette/CommandPalette';
 import type { ShellForm } from '@/components/ShellForms/ShellForms';
+import type { SettingsSection } from '@/lib/projectSettings';
 
 export const viewSchema = z.enum(['backlog', 'board', 'search']);
 export type ProjectView = z.infer<typeof viewSchema>;
@@ -45,7 +46,8 @@ export type ShellState = {
   openTask: (projectId: string, taskId: string, created?: boolean) => void;
   goBoard: () => void;
   goSettings: () => void;
-  goProjectSettings: (project: Project) => void;
+  /** A project's settings, at `section` when given. */
+  goProjectSettings: (project: Project, section?: SettingsSection) => void;
   goTrash: (project?: Project) => void;
 };
 export const ShellContext = createContext<ShellState | null>(null);
