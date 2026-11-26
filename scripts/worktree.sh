@@ -5,6 +5,8 @@ set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_root"
+# shellcheck source=scripts/worktree-processes.sh
+source "$repo_root/scripts/worktree-processes.sh"
 
 PORT_BASE=20080
 PORT_SPAN=3000
@@ -204,6 +206,12 @@ remove_worktree() {
             "$target/scripts/dev.sh" destroy
         fi
         rm -f "$target/.env.worktree"
+    fi
+    # Also when the worktree was never initialized or its own dev.sh predates this: a
+    # process left running there would outlive the checkout.
+    if ! stop_worktree_processes "$target"; then
+        echo "Refusing to remove a worktree whose processes are still running; stop them, then retry." >&2
+        exit 1
     fi
     git worktree remove --force "$target"
     echo "Removed worktree: $target"
