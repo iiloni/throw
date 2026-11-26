@@ -3,7 +3,14 @@ import { type FormEvent, useState } from 'react';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { authClient, takeExpiredUser } from '@/lib/auth';
+import {
+  accountPath,
+  activateAccount,
+  authClient,
+  getAccounts,
+  getSignedInUser,
+  takeExpiredUser,
+} from '@/lib/auth';
 import { authRedirectSearchSchema, authReturnTo } from '@/lib/authRedirect';
 import { needsServerUrl } from '@/lib/serverUrl';
 
@@ -26,6 +33,8 @@ function LoginPage() {
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // Reached to add another account, or after the session in use ended (ADR 0016).
+  const [signedIn] = useState(() => getAccounts()[0]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -49,9 +58,12 @@ function LoginPage() {
       }
       // Another account than the one whose session expired cannot use its page.
       const expired = takeExpiredUser();
-      const sameAccount = !expired || expired === result.data?.user.id;
-      // A full load, so the collections open this user's copy of their data on the device.
-      window.location.assign(sameAccount ? authReturnTo(returnTo, window.location.hash) : '/');
+      const { user } = result.data;
+      const sameAccount = !expired || expired === user.id;
+      const destination = sameAccount ? authReturnTo(returnTo, window.location.hash) : '/';
+      // A full load, so the collections open this user's copy of their data on the device,
+      // at this account's addresses once several are signed in.
+      window.location.assign(accountPath(user.id, destination));
     } catch {
       setError('Could not reach the Throw server. Check your connection and try again.');
     } finally {
@@ -94,6 +106,20 @@ function LoginPage() {
         >
           {mode === 'sign-in' ? 'Need an account? Sign up' : 'Have an account? Sign in'}
         </Button>
+        {signedIn && (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              // A full load: the collections open the data of the account in use.
+              const user = getSignedInUser();
+              if (!user) activateAccount(signedIn.user.id);
+              window.location.assign(accountPath((user ?? signedIn.user).id));
+            }}
+          >
+            Back to your tasks
+          </Button>
+        )}
       </form>
     </main>
   );

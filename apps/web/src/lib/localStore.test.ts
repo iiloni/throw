@@ -1,6 +1,6 @@
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { afterEach, expect, it, vi } from 'vitest';
-import { openLocalDatabase } from './localStore';
+import { countQueuedWrites, openLocalDatabase } from './localStore';
 
 const mocks = vi.hoisted(() => ({ open: vi.fn() }));
 vi.mock('@tanstack/browser-db-sqlite-persistence', async (importOriginal) => ({
@@ -98,5 +98,28 @@ it('resyncs an upgraded collection without resetting other collections during le
     ]);
   } finally {
     await local.destroy();
+  }
+});
+
+it('rejects an outbox count when its transactions store cannot be read', async () => {
+  const close = vi.fn();
+  const failure = new Error('Store unavailable');
+  const request = {
+    onsuccess: () => {},
+    result: {
+      close,
+      transaction: () => {
+        throw failure;
+      },
+    },
+  };
+  vi.stubGlobal('indexedDB', { open: () => request });
+  try {
+    const count = countQueuedWrites('unreadable');
+    request.onsuccess();
+    await expect(count).rejects.toBe(failure);
+    expect(close).toHaveBeenCalledOnce();
+  } finally {
+    vi.unstubAllGlobals();
   }
 });
