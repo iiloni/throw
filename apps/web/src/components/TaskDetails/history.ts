@@ -189,3 +189,25 @@ export function shortTime(at: string, now = new Date()) {
       : { dateStyle: 'medium' },
   );
 }
+
+const relative = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto', style: 'short' });
+
+/**
+ * How long ago, for the last few hours, where a clock time makes the reader do the sum; past
+ * that, or for a clock running behind the server, `shortTime`.
+ */
+export function relativeTime(at: string, now = new Date()) {
+  const seconds = (now.getTime() - new Date(at).getTime()) / 1000;
+  if (seconds < -60 || seconds >= 6 * 3600) return shortTime(at, now);
+  if (seconds < 60) return 'Just now';
+  if (seconds < 3600) return relative.format(-Math.floor(seconds / 60), 'minute');
+  return relative.format(-Math.floor(seconds / 3600), 'hour');
+}
+
+/** When `relativeTime` next reads differently, in milliseconds, or null once it no longer will. */
+export function relativeTimeChange(at: string, now = new Date()) {
+  const elapsed = now.getTime() - new Date(at).getTime();
+  if (elapsed >= 6 * 3600_000) return null;
+  const step = elapsed < 3600_000 ? 60_000 : 3600_000;
+  return step - (((elapsed % step) + step) % step);
+}

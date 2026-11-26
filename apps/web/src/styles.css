@@ -28,6 +28,10 @@
 .comment-body .bn-container.task-editor .bn-editor {
   min-height: 0;
 }
+/* BlockNote greys its placeholder for a white page; a comment's card may be tinted. */
+.comment-composer .bn-block-content:has(.ProseMirror-trailingBreak:only-child)::after {
+  color: var(--muted-foreground);
+}
 .bn-container.task-editor [data-content-type="heading"] {
   font-family: var(--font-display);
 }
