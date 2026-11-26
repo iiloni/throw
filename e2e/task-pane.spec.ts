@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { type Browser, expect, type Locator, type Page, test } from '@playwright/test';
 import { APP_LOAD_TIMEOUT, shapeRows, signUp, switcherItem, waitForCachedProject } from './helpers';
-import { newTag } from './tag-helpers';
+import { newTag, taggedTask, tagTaskUpdate } from './tag-helpers';
 
 async function fixture(page: Page, { followWorkspaceHome = false } = {}) {
   const account = await signUp(page);
@@ -112,6 +112,55 @@ async function anotherDevice(page: Page, browser: Browser) {
     );
   return browser.newContext({ storageState, viewport: page.viewportSize()! });
 }
+
+test('inline subtasks have a visible edge and keep their own tint in both themes', async ({
+  page,
+  isMobile,
+}, testInfo) => {
+  if (!isMobile) await page.setViewportSize({ width: 1024, height: 800 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const account = await fixture(page);
+  const { projectId, taskId, pane } = account;
+  const child = await taggedTask(page.request, account, projectId, {
+    title: 'Plan the rollout',
+    parentId: taskId,
+  });
+  const list = pane.locator('[data-task-card]').getByRole('region', { name: 'Subtasks' });
+  const first = list.getByRole('article', { name: /Plan the rollout$/ });
+  const violet = await newTag(page.request, account, projectId, {
+    name: 'Design',
+    color: 'violet',
+  });
+  const second = await taggedTask(page.request, account, projectId, {
+    title: 'Review the design',
+    parentId: taskId,
+    primaryTagId: violet.id,
+  });
+  const other = list.locator(`[data-card-id="${second.id}"]`);
+  await expect(other).toHaveAttribute('data-color', 'violet');
+  for (const surface of ['neutral', 'mint']) {
+    if (surface === 'mint') {
+      const tag = await newTag(page.request, account, projectId, {
+        name: 'Feature',
+        color: 'mint',
+      });
+      for (const id of [taskId, child.id]) {
+        await tagTaskUpdate(page.request, account, id, {
+          primaryTagId: { before: null, after: tag.id },
+        });
+      }
+      await expect(first).toHaveAttribute('data-color', 'mint');
+    }
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme });
+      await expect(first).toHaveClass(/border-foreground\/20/);
+      await expect(first).toHaveClass(/shadow-sm/);
+      const fill = await first.evaluate((el) => getComputedStyle(el).backgroundColor);
+      await expect(other).not.toHaveCSS('background-color', fill);
+      await list.screenshot({ path: testInfo.outputPath(`inline-${surface}-${colorScheme}.png`) });
+    }
+  }
+});
 
 test('task fields, actions, subtasks and task links work in the split pane and phone screen', async ({
   page,
@@ -1372,6 +1421,7 @@ test('a wide desktop pane keeps tags and subtasks in a column that opens and shu
   await expect(column).toBeVisible();
   await expect(subtask).toHaveCount(1);
   await expect(column.getByRole('article')).toHaveCount(1);
+  await expect(subtask).not.toHaveClass(/border-foreground\/20/);
   await expect(subtask).toBeFocused();
   expect(await width()).toBe(full - 268);
   // Opening it and coming back keeps the column as it was, without springing it again.
