@@ -122,6 +122,16 @@ export async function moveForRule(
     .from(tasks)
     .where(eq(tasks.id, task.taskId));
   if (!current || current.statusId === statusId) return null;
+  if (current.parentId !== null) {
+    // The delivery read the parent as active without locking it. Holding its key now waits
+    // for a trash in flight, and a trash that committed meanwhile shows here.
+    const [parent] = await tx
+      .select({ deletedAt: tasks.deletedAt })
+      .from(tasks)
+      .where(eq(tasks.id, current.parentId))
+      .for('key share');
+    if (!parent || parent.deletedAt !== null) return null;
+  }
   const found = await tx
     .select({ id: statuses.id, name: statuses.name, category: statuses.category })
     .from(statuses)

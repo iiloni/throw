@@ -144,7 +144,8 @@ as `link_github` and `unlink_github`, and `get_task.githubLinks` returns the pub
 
 ### Status rules
 
-Status rules (THR-125) are the first writes Throw makes to a task on its own. They are opt-in
+Status rules (THR-125) are the first automatic writes that change a task's own fields: links
+are the task's GitHub data, and a rule moves the task itself. They are opt-in
 per project and per rule, run only on a verified delivery, and are recorded as the
 integration's. A connection holds five rules, each a target status or off (null, the default):
 
@@ -191,9 +192,14 @@ each active task the delivery links or refreshes:
   lane position in its values. Outbound webhooks only notify external receivers; nothing in
   Throw sends to GitHub, so a rule cannot feed back into a delivery.
 
-Task rows a delivery reads are locked `NO KEY UPDATE`, in id order, so two deliveries for one
-task take turns. Deleting a status locks the project, which the delivery holds `SHARE` first,
-so a delete and a delivery also take turns.
+Deliveries for one connection already take turns on its row, which the receiver locks
+`NO KEY UPDATE` before handling, so rules choose lane positions one delivery at a time.
+`handleItem` locks the task rows it reads `NO KEY UPDATE` too, in id order, so a rule's move
+and a device's write to the same task take turns; push deliveries, which never move a task,
+keep `SHARE`. A rule re-reads a subtask's parent under `KEY SHARE` and leaves the subtask
+alone if the parent was trashed meanwhile. Deleting a status locks the project, which the
+delivery holds `SHARE` first, so a delete and a delivery also take turns, as do a delete and
+a rules update, which takes the project's `SHARE` before the connection.
 
 Older servers do not return `statusRules`, and the app offers no rules then. An older app
 ignores the field. The protocol stays at 1.

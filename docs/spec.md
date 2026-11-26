@@ -30,6 +30,8 @@ integrations.
 - **Changes to a task's core attributes are user-driven.** A user can initiate work in an
   external agent and authorize it to act in a workspace. Throw records which credential the
   agent used for each change. Throw itself never moves or completes a task on a schedule.
+  The one exception is a project's opt-in GitHub status rules, which the project sets up
+  and which follow verified GitHub events, recorded as GitHub's changes.
 - **Few integrations, all opt-in.** The first is [MCP](decisions/0014-mcp-server.md).
   [Webhooks](decisions/0015-webhooks.md) are its push companion: they tell an agent to look.
   A project can follow a GitHub repository ([ADR 0017](decisions/0017-github-integration.md)).
@@ -78,9 +80,9 @@ integrations.
 - An opt-in GitHub connection per project, in project settings: GitHub sends the project's
   repository events as signed webhooks. Task keys in pull requests and issues link them to
   tasks. Devices sync link metadata, review decisions and check counts for offline use.
-  A project can opt into status rules: a linked pull request opened as a draft, made ready
-  for review, merged or closed, or a linked issue closed, moves its tasks to a status the
-  project chose. Each rule is off until set, and the move is recorded as GitHub's. Releases
+  A project can opt into status rules: a linked pull request opened, reopened or converted
+  to a draft, made ready for review, merged or closed, or a linked issue closed, moves its
+  tasks to a status the project chose. Each rule is off until set, and the move is recorded as GitHub's. Releases
   build on it ([ADR 0017](decisions/0017-github-integration.md)).
 
 ### Out of scope
