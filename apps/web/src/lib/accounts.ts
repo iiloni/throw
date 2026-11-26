@@ -11,6 +11,7 @@ import {
   pageAccountGone,
   removedKey,
   SWITCHED_KEY,
+  withAccountStorage,
 } from './auth';
 import { clearCommentDrafts } from './commentDrafts';
 import { clearDescriptionDrafts } from './descriptionDrafts';
@@ -61,10 +62,15 @@ export function followAccountChanges() {
     leaving = true;
     const user = pageUser;
     // The tab that signed it out could not delete a database this one had open.
-    const cleared =
-      user && localStorage.getItem(removedKey(user.id)) === 'true'
-        ? import('./collections').then(({ clearLocalData }) => clearLocalData()).catch(() => {})
-        : Promise.resolve();
+    const cleared = user
+      ? Promise.resolve(
+          withAccountStorage(user.id, async () => {
+            if (localStorage.getItem(removedKey(user.id)) !== 'true' || !pageAccountGone()) return;
+            const { clearLocalData } = await import('./collections');
+            await clearLocalData();
+          }),
+        ).catch(() => {})
+      : Promise.resolve();
     // Not a reload: the address names this account, and maybe a task the next does not have.
     void cleared.then(() => loadPage('/'));
   };
@@ -122,13 +128,17 @@ export async function signOutAccount(account: Account) {
     body: '{}',
     signal: AbortSignal.timeout(5000),
   }).catch(() => undefined);
-  await deleteLocalDatabase(id).catch((error: unknown) => {
-    // A tab that has it open deletes it as it leaves (`followAccountChanges`).
-    console.warn("Some of a signed-out account's data is still on this device.", error);
+  await withAccountStorage(id, async () => {
+    // A fresh sign-in can finish while the old session is being revoked remotely.
+    if (localStorage.getItem(removedKey(id)) !== 'true') return;
+    await deleteLocalDatabase(id).catch((error: unknown) => {
+      // A tab that has it open deletes it as it leaves (`followAccountChanges`).
+      console.warn("Some of a signed-out account's data is still on this device.", error);
+    });
+    deleteOutbox(id);
+    forgetAccountPreferences(id);
+    forgetAccount(id);
   });
-  deleteOutbox(id);
-  forgetAccountPreferences(id);
-  forgetAccount(id);
 }
 
 /** Signs out the account in use, then carries on as another if one is signed in. */
@@ -137,10 +147,17 @@ export async function signOutCurrentAccount() {
   if (user) localStorage.setItem(removedKey(user.id), 'true');
   // Offline the server keeps the session until it expires; the device forgets it either way.
   await authClient.signOut().catch(() => undefined);
-  const { clearLocalData } = await import('./collections');
-  await clearLocalData();
-  if (user) forgetAccountPreferences(user.id);
-  clearAuthToken();
+  const clean = async () => {
+    const { clearLocalData } = await import('./collections');
+    await clearLocalData();
+    if (user) forgetAccountPreferences(user.id);
+    clearAuthToken();
+  };
+  if (user) {
+    await withAccountStorage(user.id, async () => {
+      if (localStorage.getItem(removedKey(user.id)) === 'true') await clean();
+    });
+  } else await clean();
   const next = getAccounts()[0];
   if (next) activateAccount(next.user.id);
   // A full load drops this user's synced data from memory.
