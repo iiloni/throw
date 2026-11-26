@@ -51,6 +51,7 @@ export function DescriptionEditor({
   placeholder = 'Describe the work…',
   autoFocus = false,
   scrollClearance = 0,
+  sideMenu = true,
   onControls,
 }: {
   initialContent: Description;
@@ -59,6 +60,8 @@ export function DescriptionEditor({
   autoFocus?: boolean;
   /** Keep actions beneath an editor clear of the dock while typing. */
   scrollClearance?: number;
+  /** BlockNote's drag handle beside each block, which a comment's card has no room for. */
+  sideMenu?: boolean;
   onChange?: (document: Description) => void;
   /** Hands the owner this editor's controls while it is mounted, for its undo and redo. */
   onControls?: (controls: EditorControls | null) => void;
@@ -165,6 +168,7 @@ export function DescriptionEditor({
         theme={theme}
         filePanel={false}
         formattingToolbar={!coarsePointer}
+        sideMenu={sideMenu}
         onChange={() => onChange?.(editor.document as Description)}
         onClick={openCodeLanguage}
         className="task-editor"
