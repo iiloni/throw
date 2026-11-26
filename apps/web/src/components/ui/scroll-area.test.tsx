@@ -1,6 +1,7 @@
-import { act, render } from '@testing-library/react';
+import { act, fireEvent, render } from '@testing-library/react';
+import { createRef } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ScrollArea, ScrollAreaViewport } from './scroll-area';
+import { ScrollArea, ScrollAreaViewport, ScrollBar, ScrollBox } from './scroll-area';
 
 /** Lays the viewport out as a browser would: jsdom measures nothing. */
 function measure(viewport: HTMLElement, box: { scrollWidth: number; clientWidth: number }) {
@@ -106,5 +107,57 @@ describe('ScrollArea sides', () => {
     measure(viewport, { scrollWidth: 1000, clientWidth: 400 });
     scrollTo(viewport, 0);
     expect(getByTestId('area')).not.toHaveAttribute('data-more-right');
+  });
+});
+
+describe('ScrollBar', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('keeps focus where it is when the thumb is pressed, and still calls its own handler', () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const pressed = vi.fn();
+    const { container } = render(
+      <ScrollArea type="always">
+        <ScrollAreaViewport />
+        <ScrollBar onMouseDown={pressed} />
+      </ScrollArea>,
+    );
+    const bar = container.querySelector('[data-slot="scroll-area-scrollbar"]')!;
+    // fireEvent returns false when the default was prevented: an editor keeps its caret.
+    expect(fireEvent.mouseDown(bar)).toBe(false);
+    expect(pressed).toHaveBeenCalledOnce();
+  });
+});
+
+describe('ScrollBox', () => {
+  it('passes the viewport its ref and props, and the root the rest', () => {
+    const ref = createRef<HTMLDivElement>();
+    const { getByRole, getByTestId } = render(
+      <ScrollBox
+        data-testid="box"
+        role="tabpanel"
+        aria-label="Picker"
+        className="max-h-40"
+        viewportRef={ref}
+        viewportProps={{ role: 'listbox', 'aria-label': 'Options' }}
+      >
+        <div role="option" aria-selected={false} />
+      </ScrollBox>,
+    );
+    const root = getByTestId('box');
+    expect(root).toHaveAttribute('data-slot', 'scroll-area');
+    expect(root).toHaveClass('max-h-40');
+    expect(getByRole('tabpanel', { name: 'Picker' })).toBe(root);
+    const viewport = getByRole('listbox', { name: 'Options' });
+    expect(viewport).toBe(ref.current);
+    expect(viewport).toHaveAttribute('data-slot', 'scroll-area-viewport');
+    expect(viewport).toHaveClass('max-h-[inherit]');
   });
 });

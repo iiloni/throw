@@ -1,6 +1,7 @@
 import { Check, ScanText, Search } from 'lucide-react';
 import { type ReactNode, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
+import { ScrollBox } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
 import { haptics } from '@/lib/haptics';
 import { cn } from '@/lib/utils';
@@ -230,7 +231,7 @@ function LanguageList({
           className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
         />
       </label>
-      <div ref={list} className="h-72 min-h-24 shrink overflow-y-auto overscroll-contain">
+      <ScrollBox viewportRef={list} className="h-72 min-h-24 shrink [--scrollbar-inset:0.5rem]">
         <div id={`${id}-list`} role="listbox" aria-label="Code language">
           {shown.map((option) => {
             const selected = option.value === value;
@@ -263,7 +264,7 @@ function LanguageList({
             No language matches.
           </p>
         )}
-      </div>
+      </ScrollBox>
     </>
   );
 }

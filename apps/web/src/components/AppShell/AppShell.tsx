@@ -45,6 +45,7 @@ import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { SettingsHub } from '@/components/SettingsLayout/SettingsHub';
 import { type ShellForm, ShellForms } from '@/components/ShellForms/ShellForms';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
+import { ScrollBox } from '@/components/ui/scroll-area';
 import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
 import { getSignedInUser } from '@/lib/auth';
 import { useProjects, useWorkspaces } from '@/lib/collections';
@@ -402,83 +403,82 @@ export function AppShell() {
                   </RailButton>
                 </div>
               )}
-              <nav
-                aria-label="Projects"
-                className="mt-5 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden px-3"
-              >
-                {projects.map((item) => (
-                  <div key={item.id} className="group/project relative shrink-0">
-                    <RailButton
-                      label={item.name}
-                      href={`/w/${item.workspaceId}/p/${item.id}?view=board`}
-                      expanded={expanded}
-                      active={projectBoard && project?.id === item.id}
-                      tint={item.color}
-                      className={expanded ? 'pr-11' : undefined}
-                      onClick={() => selectProject(item.workspaceId, item.id)}
-                    >
-                      <ProjectIcon name={item.icon} className="size-5 text-tint-accent" />
-                    </RailButton>
-                    {expanded && (
-                      <DropdownMenu.Root>
-                        <DropdownMenu.Trigger asChild>
-                          <button
-                            type="button"
-                            aria-label={`Project menu for ${item.name}`}
-                            className="absolute top-2 right-1 flex size-8 items-center justify-center rounded-full bg-background/80 text-muted-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
-                          >
-                            <MoreHorizontal aria-hidden className="size-4" />
-                          </button>
-                        </DropdownMenu.Trigger>
-                        <DropdownMenu.Portal>
-                          <DropdownMenu.Content
-                            align="start"
-                            side="right"
-                            sideOffset={8}
-                            collisionPadding={12}
-                            className="glass-thick z-40 min-w-48 rounded-2xl p-2"
-                          >
-                            <DropdownMenu.Item
-                              className="flex min-h-11 cursor-pointer items-center rounded-xl px-3 text-sm outline-none focus:bg-accent"
-                              onSelect={() => context.goProjectSettings(item)}
+              <ScrollBox edges className="mt-5 flex-1 [--scrollbar-inset:0.5rem]">
+                <nav aria-label="Projects" className="flex flex-col gap-1 px-3">
+                  {projects.map((item) => (
+                    <div key={item.id} className="group/project relative shrink-0">
+                      <RailButton
+                        label={item.name}
+                        href={`/w/${item.workspaceId}/p/${item.id}?view=board`}
+                        expanded={expanded}
+                        active={projectBoard && project?.id === item.id}
+                        tint={item.color}
+                        className={expanded ? 'pr-11' : undefined}
+                        onClick={() => selectProject(item.workspaceId, item.id)}
+                      >
+                        <ProjectIcon name={item.icon} className="size-5 text-tint-accent" />
+                      </RailButton>
+                      {expanded && (
+                        <DropdownMenu.Root>
+                          <DropdownMenu.Trigger asChild>
+                            <button
+                              type="button"
+                              aria-label={`Project menu for ${item.name}`}
+                              className="absolute top-2 right-1 flex size-8 items-center justify-center rounded-full bg-background/80 text-muted-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
                             >
-                              Project settings
-                            </DropdownMenu.Item>
-                            <DropdownMenu.Item
-                              className="flex min-h-11 cursor-pointer items-center rounded-xl px-3 text-sm outline-none focus:bg-accent"
-                              onSelect={() => context.goTrash(item)}
+                              <MoreHorizontal aria-hidden className="size-4" />
+                            </button>
+                          </DropdownMenu.Trigger>
+                          <DropdownMenu.Portal>
+                            <DropdownMenu.Content
+                              align="start"
+                              side="right"
+                              sideOffset={8}
+                              collisionPadding={12}
+                              className="glass-thick z-40 min-w-48 rounded-2xl p-2"
                             >
-                              Project trash
-                            </DropdownMenu.Item>
-                          </DropdownMenu.Content>
-                        </DropdownMenu.Portal>
-                      </DropdownMenu.Root>
-                    )}
-                  </div>
-                ))}
-                {workspace && (
-                  <RailButton
-                    label="New project"
-                    expanded={expanded}
-                    onClick={() => setForm({ kind: 'new-project', workspace })}
-                  >
-                    <Plus aria-hidden className="size-5" />
-                  </RailButton>
-                )}
-                {workspace && (
-                  <div className="mt-3 border-t pt-3">
+                              <DropdownMenu.Item
+                                className="flex min-h-11 cursor-pointer items-center rounded-xl px-3 text-sm outline-none focus:bg-accent"
+                                onSelect={() => context.goProjectSettings(item)}
+                              >
+                                Project settings
+                              </DropdownMenu.Item>
+                              <DropdownMenu.Item
+                                className="flex min-h-11 cursor-pointer items-center rounded-xl px-3 text-sm outline-none focus:bg-accent"
+                                onSelect={() => context.goTrash(item)}
+                              >
+                                Project trash
+                              </DropdownMenu.Item>
+                            </DropdownMenu.Content>
+                          </DropdownMenu.Portal>
+                        </DropdownMenu.Root>
+                      )}
+                    </div>
+                  ))}
+                  {workspace && (
                     <RailButton
-                      label="All projects"
-                      href={`/w/${workspace.id}/board`}
+                      label="New project"
                       expanded={expanded}
-                      active={crossBoard}
-                      onClick={goBoard}
+                      onClick={() => setForm({ kind: 'new-project', workspace })}
                     >
-                      <Columns3 aria-hidden className="size-5" />
+                      <Plus aria-hidden className="size-5" />
                     </RailButton>
-                  </div>
-                )}
-              </nav>
+                  )}
+                  {workspace && (
+                    <div className="mt-3 border-t pt-3">
+                      <RailButton
+                        label="All projects"
+                        href={`/w/${workspace.id}/board`}
+                        expanded={expanded}
+                        active={crossBoard}
+                        onClick={goBoard}
+                      >
+                        <Columns3 aria-hidden className="size-5" />
+                      </RailButton>
+                    </div>
+                  )}
+                </nav>
+              </ScrollBox>
               <div className="mt-3 flex flex-col gap-2 overflow-hidden px-3">
                 {fullBoard && (
                   <div className="px-2">

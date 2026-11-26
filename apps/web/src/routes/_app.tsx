@@ -2,7 +2,7 @@ import { createFileRoute, redirect, useRouterState } from '@tanstack/react-route
 import { useEffect } from 'react';
 import { AppShell } from '@/components/AppShell/AppShell';
 import { drag, isPrimed } from '@/components/Board/drag';
-import { board } from '@/components/Board/state';
+import { board, useScrollbarSetting } from '@/components/Board/state';
 import { GpuWarmup } from '@/components/GpuWarmup/GpuWarmup';
 import { getAuthToken } from '@/lib/auth';
 import { watchScrollBounce } from '@/lib/scrollBounce';
@@ -22,6 +22,7 @@ const cardHeld = () => drag.get() !== null || isPrimed() || board.get().carrying
 
 function App() {
   useEffect(() => watchScrollBounce({ held: cardHeld }), []);
+  useScrollbarSetting();
   // A task opened from its link has drawn everything the warmup would.
   const taskOpen = useRouterState({
     select: (state) => Boolean((state.location.search as { task?: unknown }).task),

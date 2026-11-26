@@ -8,6 +8,7 @@ import {
   useManagementDock,
   useManagementSurfaceOpen,
 } from '@/components/ManagementSurface/ManagementSurface';
+import { ScrollBox } from '@/components/ui/scroll-area';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { settingsDragY, useSettingsSwipeY } from '@/lib/settingsSwipe';
@@ -147,13 +148,18 @@ export function SettingsLayout({
         roomy ? 'grid-cols-[14rem_minmax(0,48rem)]' : 'grid-cols-[14rem_minmax(0,42rem)]',
       )}
     >
-      <nav
-        aria-label={`${title} pages`}
-        className="sticky top-8 flex max-h-[calc(100dvh-4rem)] flex-col gap-6 self-start overflow-y-auto pb-4"
-      >
-        {back && <BackLink {...back} />}
-        <PageList groups={groups} current={current} indicator="settings-nav" />
-      </nav>
+      {/* Sticky on a wrapper: the scroll area positions its own root. */}
+      <div className="sticky top-8 self-start">
+        <ScrollBox
+          className="max-h-[calc(100dvh-4rem)] [--scrollbar-inset:0.5rem]"
+          viewportClassName="pb-4"
+        >
+          <nav aria-label={`${title} pages`} className="flex flex-col gap-6">
+            {back && <BackLink {...back} />}
+            <PageList groups={groups} current={current} indicator="settings-nav" />
+          </nav>
+        </ScrollBox>
+      </div>
       {/* The part that changes between pages (the `inner` page transition, styles.css). */}
       <div data-settings-page="" className="flex min-w-0 flex-col gap-4">
         {heading}
