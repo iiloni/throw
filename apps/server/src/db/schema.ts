@@ -11,6 +11,7 @@ import type {
   Size,
   StatusCategory,
   TagIconName,
+  TaskGithubLink,
   TaskRelationKind,
   WebhookPayload,
   WorkspaceRole,
@@ -630,11 +631,60 @@ export const githubDeliveries = pgTable(
       .notNull()
       .references(() => githubConnections.id, { onDelete: 'cascade' }),
     deliveryId: text().notNull(),
+    signalKey: text(),
+    signal: jsonb(),
     event: text().notNull(),
     receivedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     primaryKey({ columns: [table.connectionId, table.deliveryId] }),
+    index().on(table.connectionId, table.signalKey).where(sql`${table.signalKey} IS NOT NULL`),
     index().on(table.receivedAt),
+  ],
+);
+
+export const taskGithubLinks = pgTable(
+  'task_github_links',
+  {
+    id: uuid().primaryKey(),
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    projectId: uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    taskId: uuid()
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    repo: text().notNull(),
+    kind: text().$type<TaskGithubLink['kind']>().notNull(),
+    number: integer().notNull(),
+    url: text().notNull(),
+    title: text().notNull(),
+    state: text().$type<TaskGithubLink['state']>().notNull(),
+    reviewDecision: text().$type<TaskGithubLink['reviewDecision']>(),
+    checksSummary: jsonb().$type<TaskGithubLink['checksSummary']>(),
+    branch: text(),
+    mergeCommitSha: text(),
+    mergedAt: timestamp({ withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    // Delivery ordering and aggregation data stay off the shape.
+    headSha: text(),
+    sourceUpdatedAt: timestamp({ withTimezone: true }),
+    runs: jsonb().$type<
+      Record<
+        string,
+        { id?: number; state: 'passing' | 'failing' | 'pending' | 'neutral'; at: string }
+      >
+    >(),
+    reviews:
+      jsonb().$type<Record<string, { state: TaskGithubLink['reviewDecision']; id: number }>>(),
+  },
+  (t) => [
+    index().on(t.workspaceId),
+    index().on(t.projectId, t.repo, t.kind, t.number),
+    index('task_github_links_head').on(t.projectId, t.repo, t.kind, t.headSha, t.branch),
+    uniqueIndex('task_github_links_item').on(t.taskId, t.repo, t.kind, t.number),
   ],
 );

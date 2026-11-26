@@ -31,11 +31,13 @@ import {
   statuses,
   tags,
   taskActivity,
+  taskGithubLinks,
   taskRelations,
   tasks,
   taskTags,
   workspaces,
 } from '../db/schema';
+import { publicLink } from '../github/linkData';
 import type { McpActor } from '../lib/mcpTokens';
 import { memberWorkspaces } from '../lib/workspaces';
 import { blocksToMarkdown } from './markdown';
@@ -422,54 +424,67 @@ export async function getTask(
     .limit(1);
   if (!task) throw new ToolError('Task not found.');
 
-  const [subtaskRows, commentRows, historyRows, assignments, linked] = await Promise.all([
-    taskPage(actor, input.subtasks, eq(tasks.parentId, task.id)),
-    db
-      .select({
-        id: comments.id,
-        userId: comments.userId,
-        viaTokenName: comments.viaTokenName,
-        createdAt: timeForCursor(comments.createdAt),
-        editedAt: comments.editedAt,
-        body: comments.body,
-      })
-      .from(comments)
-      .where(
-        and(
-          eq(comments.taskId, task.id),
-          inArray(comments.workspaceId, workspacesFor(actor)),
-          beforeCursor(comments, input.comments.cursor),
-        ),
-      )
-      .orderBy(desc(comments.createdAt), desc(comments.id))
-      .limit(input.comments.limit + 1),
-    db
-      .select({
-        id: taskActivity.id,
-        kind: sql<'created' | 'updated'>`${taskActivity.kind}`,
-        userId: taskActivity.userId,
-        viaTokenName: taskActivity.viaTokenName,
-        createdAt: timeForCursor(taskActivity.createdAt),
-        changes: taskActivity.changes,
-      })
-      .from(taskActivity)
-      .where(
-        and(
-          eq(taskActivity.taskId, task.id),
-          inArray(taskActivity.workspaceId, workspacesFor(actor)),
-          inArray(taskActivity.kind, SYNCED_ACTIVITY_KINDS),
-          beforeCursor(taskActivity, input.history.cursor),
-        ),
-      )
-      .orderBy(desc(taskActivity.createdAt), desc(taskActivity.id))
-      .limit(input.history.limit + 1),
-    db
-      .select({ tagId: taskTags.tagId })
-      .from(taskTags)
-      .where(and(eq(taskTags.taskId, task.id), inArray(taskTags.workspaceId, workspacesFor(actor))))
-      .orderBy(taskTags.tagId),
-    taskRelationsOf(actor, task.id),
-  ]);
+  const [subtaskRows, commentRows, historyRows, assignments, linked, githubRows] =
+    await Promise.all([
+      taskPage(actor, input.subtasks, eq(tasks.parentId, task.id)),
+      db
+        .select({
+          id: comments.id,
+          userId: comments.userId,
+          viaTokenName: comments.viaTokenName,
+          createdAt: timeForCursor(comments.createdAt),
+          editedAt: comments.editedAt,
+          body: comments.body,
+        })
+        .from(comments)
+        .where(
+          and(
+            eq(comments.taskId, task.id),
+            inArray(comments.workspaceId, workspacesFor(actor)),
+            beforeCursor(comments, input.comments.cursor),
+          ),
+        )
+        .orderBy(desc(comments.createdAt), desc(comments.id))
+        .limit(input.comments.limit + 1),
+      db
+        .select({
+          id: taskActivity.id,
+          kind: sql<'created' | 'updated'>`${taskActivity.kind}`,
+          userId: taskActivity.userId,
+          viaTokenName: taskActivity.viaTokenName,
+          createdAt: timeForCursor(taskActivity.createdAt),
+          changes: taskActivity.changes,
+        })
+        .from(taskActivity)
+        .where(
+          and(
+            eq(taskActivity.taskId, task.id),
+            inArray(taskActivity.workspaceId, workspacesFor(actor)),
+            inArray(taskActivity.kind, SYNCED_ACTIVITY_KINDS),
+            beforeCursor(taskActivity, input.history.cursor),
+          ),
+        )
+        .orderBy(desc(taskActivity.createdAt), desc(taskActivity.id))
+        .limit(input.history.limit + 1),
+      db
+        .select({ tagId: taskTags.tagId })
+        .from(taskTags)
+        .where(
+          and(eq(taskTags.taskId, task.id), inArray(taskTags.workspaceId, workspacesFor(actor))),
+        )
+        .orderBy(taskTags.tagId),
+      taskRelationsOf(actor, task.id),
+      db
+        .select()
+        .from(taskGithubLinks)
+        .where(
+          and(
+            eq(taskGithubLinks.taskId, task.id),
+            inArray(taskGithubLinks.workspaceId, workspacesFor(actor)),
+          ),
+        )
+        .orderBy(taskGithubLinks.id),
+    ]);
 
   const commentPage = timelinePage(commentRows, input.comments.limit);
   const historyPage = timelinePage(historyRows, input.history.limit);
@@ -482,6 +497,7 @@ export async function getTask(
       blocked: linked.blocked,
     },
     relations: linked.relations,
+    githubLinks: githubRows.map(publicLink),
     subtasks: uuidPage(subtaskRows.map(summarize), input.subtasks),
     comments: {
       ...commentPage,

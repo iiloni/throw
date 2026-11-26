@@ -4,6 +4,7 @@ import {
   type GithubConnection,
   githubConnectionResponseSchema,
   githubConnectionSecretResponseSchema,
+  linkGithubRequestSchema,
   updateGithubConnectionSchema,
 } from '@throw/shared';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
@@ -14,6 +15,7 @@ import type { AppEnv } from '../context';
 import { db } from '../db/client';
 import { githubConnections, projects } from '../db/schema';
 import { githubSecretKey, githubWebhookUrl } from '../github/config';
+import { addGithubLink, LinkError, removeGithubLink } from '../github/manualLinks';
 import { newGithubWebhookSecret, newWebhookToken } from '../github/secrets';
 import { requireUser } from '../lib/requireUser';
 import { memberWorkspaces } from '../lib/workspaces';
@@ -83,6 +85,31 @@ export const githubRoutes = new Hono<AppEnv>()
     await next();
   })
   .use(requireUser)
+  .onError((err, c) => {
+    if (err instanceof LinkError) return c.json({ error: err.message }, err.status);
+    throw err;
+  })
+  .post(
+    '/tasks/:taskId/links',
+    zValidator('param', z.object({ taskId: z.uuid() })),
+    zValidator('json', linkGithubRequestSchema),
+    async (c) => {
+      const result = await addGithubLink(
+        { userId: c.get('user')!.id },
+        c.req.valid('param').taskId,
+        c.req.valid('json'),
+      );
+      return c.json(result, result.txid === null ? 200 : 201);
+    },
+  )
+  .delete(
+    '/tasks/:taskId/links/:linkId',
+    zValidator('param', z.object({ taskId: z.uuid(), linkId: z.uuid() })),
+    async (c) => {
+      const { taskId, linkId } = c.req.valid('param');
+      return c.json(await removeGithubLink({ userId: c.get('user')!.id }, taskId, linkId));
+    },
+  )
   .get('/projects/:projectId', projectParam, async (c) => {
     const userId = c.get('user')!.id;
     const { projectId } = c.req.valid('param');

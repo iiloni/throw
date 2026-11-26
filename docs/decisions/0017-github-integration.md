@@ -111,12 +111,35 @@ redelivers on request for three days.
 
 `githubHandlers` in `apps/server/src/github/dispatch.ts` maps an event name to a handler.
 A handler gets the transaction and `{ connection, event, deliveryId, payload }`, validates
-what it reads with Zod and returns `ok` or `ignored` with a reason. THR-122 handles only
-`ping`; every other event is verified, recorded as ignored and claimed. Later parts add
-theirs here: `pull_request`, `issues`, `push` and `create` for links (THR-123), the same
-events for status changes (THR-125), and `release` (THR-126). Their writes go through the
-shared write functions in the handler's transaction, attributed to the integration rather
-than a user, so they reach the activity log, the MCP change feed and outbound webhooks.
+what it reads with Zod and returns `ok` or `ignored` with a reason. A ping records the receipt. Pull request and issue deliveries link active tasks whose
+project key and number appear in the title, body or PR head branch. Subsequent deliveries
+refresh existing links even if the text no longer mentions the task. Push commit messages
+can associate additional tasks when the branch and tip identify an already linked open PR.
+Reviews summarize the latest decision per reviewer. Check runs and suites summarize the
+current PR head, with individual runs replacing their suite count as they arrive.
+
+`task_github_links` belongs to the task and survives a disconnect or backup/restore.
+The membership-filtered `task-github-links` shape exposes card metadata, including counts.
+Bootstrap advertises the optional `githubTaskLinks` capability. Devices load cached rows
+independently and start the remote stream once the server advertises support.
+The per-reviewer and per-check records used for aggregation stay on the server. The new
+read-only collection has its own SQLite schema version 1 and requires no outbox migration.
+Link additions, removals and state changes use the existing protocol-1 relations history
+format, with the repository, number and state in its display names. A delivery that adds a link or changes its state
+records GitHub as its source and emits a task update webhook. Its actor uses the existing
+machine actor kind (`token`), the display name GitHub and an additive `integration: github`
+marker. Reviews, checks and other metadata-only refreshes update the synced link quietly.
+The receiver keeps normalized review and check signals with their seven-day delivery
+receipts. A newly linked PR or a change of head reconciles earlier signals in the same
+transaction. Raw webhook bodies never enter these receipts.
+
+`POST /api/integrations/github/tasks/:taskId/links` takes a GitHub PR or issue URL,
+plus optional title and state. Manual links reuse metadata from the same project's other
+links to that item. For the first link, the default title is owner/repo#number and the
+default state is open until a delivery arrives. Creating a link requires an enabled
+connection to its repository. `DELETE …/links/:linkId` also works after disconnect.
+Both operations return a transaction ID, null on a no-op. MCP exposes the same writes
+as `link_github` and `unlink_github`, and `get_task.githubLinks` returns the public rows.
 
 THR-125's status changes are the first writes Throw makes on its own. They stay opt-in per
 project and per rule, are triggered only by a verified event, and are recorded as the

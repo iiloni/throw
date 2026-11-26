@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { changeCursorErrorSchema, mcpTools } from '@throw/shared';
 import type { z } from 'zod';
+import { addGithubLink, LinkError, removeGithubLink } from '../github/manualLinks';
 import type { McpActor } from '../lib/mcpTokens';
 import { StarterStatusIdTaken } from '../lib/projectWrites';
 import { StatusIdTaken } from '../lib/statusWrites';
@@ -15,6 +16,7 @@ import {
   listTags,
   listTasks,
   listWorkspaces,
+  requireTask,
   ToolError,
 } from './read';
 import {
@@ -60,6 +62,7 @@ export function throwMcpServer(actor: McpActor) {
           readOnlyHint: readOnly,
           idempotentHint:
             readOnly ||
+            name.endsWith('_github') ||
             name.endsWith('_project') ||
             name.endsWith('_status') ||
             name.endsWith('_tag') ||
@@ -68,7 +71,8 @@ export function throwMcpServer(actor: McpActor) {
           destructiveHint:
             name.startsWith('update_') ||
             name === 'set_task_tags' ||
-            name === 'remove_task_relation',
+            name === 'remove_task_relation' ||
+            name === 'unlink_github',
         },
       },
       async (args: unknown): Promise<CallToolResult> => {
@@ -97,6 +101,7 @@ export function throwMcpServer(actor: McpActor) {
               ? new ToolError('Status ID is already in use.')
               : caught;
           const expected =
+            error instanceof LinkError ||
             error instanceof ToolError ||
             error instanceof MarkdownError ||
             error instanceof TagError;
@@ -261,5 +266,18 @@ export function throwMcpServer(actor: McpActor) {
     addCommentTool,
   );
 
+  register(
+    'link_github',
+    mcpTools.link_github,
+    'Link a GitHub issue or pull request from the connected repository to a task.',
+    async (actor, input) => addGithubLink(actor, (await requireTask(actor, input.task)).id, input),
+  );
+  register(
+    'unlink_github',
+    mcpTools.unlink_github,
+    'Remove a GitHub link using its ID from get_task.',
+    async (actor, input) =>
+      removeGithubLink(actor, (await requireTask(actor, input.task)).id, input.linkId),
+  );
   return server;
 }

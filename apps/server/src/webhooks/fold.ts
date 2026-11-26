@@ -60,6 +60,13 @@ export function fieldValues(items: readonly ActivityChange[]): FieldValue[] {
           from: item.previous !== null,
           to: item.requested !== null,
         };
+      if (item.field === 'relations' && !item.relation && item.relationId)
+        return {
+          key: `github:${item.relationId}`,
+          field: item.field,
+          from: item.previous,
+          to: item.requested,
+        };
       if (item.field === 'relations') {
         const other = item.previous ?? item.requested;
         return {

@@ -154,3 +154,54 @@ export const githubConnectionSecretResponseSchema = z.object({
 export type CreateGithubConnection = z.input<typeof createGithubConnectionSchema>;
 export type UpdateGithubConnection = z.input<typeof updateGithubConnectionSchema>;
 export type GithubConnectionResponse = z.infer<typeof githubConnectionResponseSchema>;
+
+const kind = z.enum(['pr', 'issue']);
+const state = z.enum(['draft', 'open', 'merged', 'closed']);
+export const githubChecksSchema = z.object({
+  state: z.enum(['passing', 'failing', 'pending', 'neutral']),
+  passed: z.int().nonnegative(),
+  failed: z.int().nonnegative(),
+  pending: z.int().nonnegative(),
+});
+export const taskGithubLinkSchema = z.object({
+  id: z.uuid(),
+  workspaceId: z.uuid(),
+  projectId: z.uuid(),
+  taskId: z.uuid(),
+  repo: z.string(),
+  kind,
+  number: z.int().positive(),
+  url: z.url(),
+  title: z.string(),
+  state,
+  reviewDecision: z.enum(['approved', 'changes_requested', 'pending']).nullable(),
+  checksSummary: githubChecksSchema.nullable(),
+  branch: z.string().nullable(),
+  mergeCommitSha: z.string().nullable(),
+  mergedAt: timestampSchema.nullable(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+});
+export type TaskGithubLink = z.infer<typeof taskGithubLinkSchema>;
+
+export function parseGithubLink(url: string) {
+  const match = /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/(pull|issues)\/([1-9]\d*)\/?$/i.exec(
+    url,
+  );
+  if (!match || !parseGithubRepository(match[1]!) || Number(match[3]) > 2147483647) return null;
+  const repo = match[1]!.toLowerCase();
+  const kind = match[2]!.toLowerCase() === 'pull' ? 'pr' : 'issue';
+  const number = Number(match[3]);
+  return { repo, kind, number, url: githubItemUrl(repo, kind, number) } as const;
+}
+export function githubItemUrl(repo: string, kind: TaskGithubLink['kind'], number: number) {
+  return `https://github.com/${repo}/${kind === 'pr' ? 'pull' : 'issues'}/${number}`;
+}
+export const linkGithubRequestSchema = z.object({
+  url: z
+    .string()
+    .max(512)
+    .refine((url) => !!parseGithubLink(url), 'Enter a GitHub pull request or issue URL'),
+  title: z.string().trim().min(1).max(1024).optional(),
+  state: state.optional(),
+});

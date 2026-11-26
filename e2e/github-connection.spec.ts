@@ -1,4 +1,7 @@
+import { execFileSync, spawn } from 'node:child_process';
 import { createHmac, randomUUID } from 'node:crypto';
+import { once } from 'node:events';
+import { createInterface } from 'node:readline';
 import { type APIRequestContext, expect, type Page, test } from '@playwright/test';
 import {
   githubConnectionResponseSchema,
@@ -146,7 +149,7 @@ test('a project connects to GitHub and receives signed, deduplicated deliveries 
   const ping = await deliver(request, made.webhookUrl, secret, { delivery });
   expect(ping.status(), await ping.text()).toBe(200);
   expect(await ping.json()).toEqual({ ok: true, status: 'ok' });
-  const intervening = await deliver(request, made.webhookUrl, secret, { event: 'push' });
+  const intervening = await deliver(request, made.webhookUrl, secret, { event: 'release' });
   expect(intervening.status()).toBe(202);
   const again = await deliver(request, made.webhookUrl, secret, { delivery });
   expect(await again.json()).toEqual({ ok: true, duplicate: true });
@@ -158,8 +161,8 @@ test('a project connects to GitHub and receives signed, deduplicated deliveries 
   });
 
   // Unhandled events are verified and ignored; refusals say why.
-  const push = await deliver(request, made.webhookUrl, secret, { event: 'push' });
-  expect(push.status()).toBe(202);
+  const release = await deliver(request, made.webhookUrl, secret, { event: 'release' });
+  expect(release.status()).toBe(202);
   expect(
     (
       await deliver(request, made.webhookUrl, secret, { signature: `sha256=${'0'.repeat(64)}` })
@@ -221,6 +224,74 @@ test('a project connects to GitHub and receives signed, deduplicated deliveries 
   expect(await connection(request, owner, project.id)).toBeNull();
   expect((await deliver(request, moved.webhookUrl, rotated.secret)).status()).toBe(404);
 });
+
+for (const action of ['disable', 'purge'] as const) {
+  test(`a GitHub delivery racing a ${action} is ignored safely @api`, async ({ request }) => {
+    const owner = await createAccount(request);
+    const project = await makeProject(request, owner);
+    const response = await request.post(managed(project.id), {
+      headers: owner.headers,
+      data: { repository: 'octo-org/website' },
+    });
+    const {
+      connection: { webhookUrl },
+      secret,
+    } = githubConnectionSecretResponseSchema.parse(await response.json());
+    const delivery = randomUUID();
+    const writer = spawn('./scripts/dev.sh', ['psql', '-XqAt', '-v', 'ON_ERROR_STOP=1']);
+    const lines = createInterface({ input: writer.stdout });
+    const exited = once(writer, 'close');
+    try {
+      const ready = once(lines, 'line');
+      const lock =
+        action === 'purge'
+          ? `SELECT pg_backend_pid() FROM projects WHERE id='${project.id}' FOR UPDATE`
+          : `UPDATE github_connections SET enabled=false WHERE project_id='${project.id}'; SELECT pg_backend_pid()`;
+      writer.stdin.write(`BEGIN; ${lock};\n`);
+      const [line] = await Promise.race([ready, exited]);
+      const pid = Number(line);
+      expect(pid).toBeGreaterThan(0);
+      const racing = deliver(request, webhookUrl, secret, { delivery });
+      await expect
+        .poll(() =>
+          execFileSync(
+            './scripts/dev.sh',
+            [
+              'psql',
+              '-XqAt',
+              '-c',
+              `SELECT EXISTS(SELECT FROM pg_stat_activity WHERE ${pid}=ANY(pg_blocking_pids(pid)))`,
+            ],
+            { encoding: 'utf8' },
+          ).trim(),
+        )
+        .toBe('t');
+      if (action === 'purge')
+        writer.stdin.write(`DELETE FROM projects WHERE id='${project.id}';\n`);
+      writer.stdin.end('COMMIT;\n');
+      expect((await racing).status()).toBe(202);
+      if (action === 'purge') {
+        expect((await deliver(request, webhookUrl, secret, { delivery })).status()).toBe(404);
+        return;
+      }
+      expect(
+        (
+          await request.patch(managed(project.id), {
+            headers: owner.headers,
+            data: { enabled: true },
+          })
+        ).status(),
+      ).toBe(200);
+      expect(await (await deliver(request, webhookUrl, secret, { delivery })).json()).toEqual({
+        ok: true,
+        status: 'ok',
+      });
+    } finally {
+      if (!writer.stdin.destroyed && !writer.stdin.writableEnded) writer.stdin.end('ROLLBACK;\n');
+      await exited;
+    }
+  });
+}
 
 async function openGithubPage(page: Page, isMobile: boolean) {
   if (isMobile) {
