@@ -310,7 +310,7 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
           {docked && <BoardSearchSidebar />}
           <div ref={row} className="relative flex min-w-0 flex-1">
             {compact ? (
-              <CompactSplitBoard handoff={handoff} />
+              <CompactSplitBoard handoff={handoff} searchDocked={docked} />
             ) : (
               <>
                 {!backlogBound && backlogRail}

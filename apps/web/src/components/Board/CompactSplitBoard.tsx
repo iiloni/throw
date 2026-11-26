@@ -1,5 +1,13 @@
-import { CheckCheck, Columns3, Inbox, Plus } from 'lucide-react';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { CheckCheck, Columns3, Inbox, type LucideIcon, Plus } from 'lucide-react';
+import {
+  AnimatePresence,
+  animate,
+  motion,
+  useIsPresent,
+  useMotionValue,
+  useReducedMotion,
+  useTransform,
+} from 'motion/react';
 import {
   type ReactNode,
   type RefObject,
@@ -9,11 +17,10 @@ import {
   useRef,
   useState,
 } from 'react';
+import { AnimatedHeight } from '@/components/AnimatedHeight/AnimatedHeight';
 import { SEARCH_SPACE } from '@/components/BoardSearch/BoardSearch';
-import { IconButton } from '@/components/IconButton/IconButton';
-import { SegmentedTabs } from '@/components/SegmentedTabs/SegmentedTabs';
 import { haptics } from '@/lib/haptics';
-import { afterPaint, curves } from '@/lib/motion';
+import { afterPaint, curves, springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { CardList } from './CardList';
 import { drag, makingWay, PAGE_HOLD_MS, pageStride } from './drag';
@@ -173,7 +180,7 @@ export function CompactFrame({ children }: { children: ReactNode }) {
     <motion.div
       data-board-layout=""
       data-compact-board=""
-      className="flex min-w-0 flex-1 flex-col pt-[calc(var(--safe-top)+1.25rem)]"
+      className="relative flex min-w-0 flex-1 flex-col pt-[calc(var(--safe-top)+1.25rem)]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={reduced ? { duration: 0 } : curves.enter}
@@ -193,6 +200,7 @@ export function CompactPager({
   start = null,
   shown = true,
   origin,
+  onPage,
   page: renderPage,
 }: {
   columns: Status[];
@@ -202,6 +210,8 @@ export function CompactPager({
   /** Off screen behind another view, its pager does not turn under a held card. */
   shown?: boolean;
   origin: (column: Status) => string;
+  /** Hears the column on screen as it changes. */
+  onPage?: (column: string) => void;
   page: (column: Status) => ReactNode;
 }) {
   const state = board.use();
@@ -214,8 +224,10 @@ export function CompactPager({
   );
   const id = pages[page]?.id ?? null;
   useEffect(() => {
-    if (id !== null) handoff.column = id;
-  }, [id, handoff]);
+    if (id === null) return;
+    handoff.column = id;
+    onPage?.(id);
+  }, [id, handoff, onPage]);
   // Hidden behind another view the pager loses its scroll; shown again, it is on its page.
   // Firefox snaps it back to the start once it is laid out again, so it is placed once more
   // after the frame is drawn.
@@ -254,20 +266,100 @@ export function CompactPager({
   );
 }
 
+/** How far the dock floats off the board's foot, as the search bar does. */
+const DOCK_LIFT = 'max(1.25rem, calc(var(--safe-bottom) + 0.75rem))';
+/** The room a list leaves at its end, so its last card scrolls clear of the dock. */
+const DOCK_END = `max(${SEARCH_SPACE}, calc(var(--dock-height) + ${DOCK_LIFT} + 0.75rem))`;
+/** How far a list scrolls one way before the dock slides away or back, as Catch's does. */
+const DOCK_TRAVEL = 48;
+
+/**
+ * Whether the dock has slid away under a list scrolled down, as Catch's dock does under its
+ * page: once any list under `root` has travelled `DOCK_TRAVEL` down it goes, and as far back
+ * up, or near a list's top, it returns. A column turned or a view chosen (`reset`) starts with
+ * it in view, as does focus entering it.
+ */
+export function useDockScroll(
+  root: RefObject<HTMLElement | null>,
+  dock: RefObject<HTMLElement | null>,
+  enabled: boolean,
+  reset: string,
+) {
+  const [hidden, setHidden] = useState(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new view or column starts with the dock in view
+  useLayoutEffect(() => {
+    setHidden(false);
+    const element = root.current;
+    if (!enabled || !element) return;
+    const last = new WeakMap<HTMLElement, number>();
+    const at = (list: HTMLElement) =>
+      Math.max(0, Math.min(list.scrollTop, list.scrollHeight - list.clientHeight));
+    let travel = 0;
+    // A view shown again restores its lists after layout: where they are then is where they start.
+    let ready = false;
+    const frame = requestAnimationFrame(() => {
+      ready = true;
+      for (const list of element.querySelectorAll<HTMLElement>('[data-autoscroll]'))
+        last.set(list, at(list));
+    });
+    const reveal = () => {
+      travel = 0;
+      setHidden(false);
+    };
+    const onScroll = (event: Event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (target.dataset.pager !== undefined) return reveal();
+      if (target.dataset.autoscroll === undefined) return;
+      const y = at(target);
+      const before = last.get(target);
+      last.set(target, y);
+      if (!ready || before === undefined) return;
+      // Keyboard focus never lands in a dock that is away.
+      if (y < DOCK_TRAVEL || dock.current?.querySelector(':focus-visible')) return reveal();
+      const delta = y - before;
+      if (!delta) return;
+      travel = Math.sign(delta) === Math.sign(travel) ? travel + delta : delta;
+      if (Math.abs(travel) < DOCK_TRAVEL) return;
+      setHidden(travel > 0);
+      travel = 0;
+    };
+    const face = dock.current;
+    // Scroll does not bubble; the board hears its lists' on the way down.
+    element.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    face?.addEventListener('focusin', reveal);
+    return () => {
+      cancelAnimationFrame(frame);
+      element.removeEventListener('scroll', onScroll, { capture: true });
+      face?.removeEventListener('focusin', reveal);
+    };
+  }, [enabled, reset]);
+  return enabled && hidden;
+}
+
 /**
  * The project board beside an open task when there is too little room for its row: a phone's
  * board in the desktop's half. The backlog, the columns and the closed tasks are three views
- * of the same width under one switch, so cards keep the whole half rather than sharing it with
- * two rails' strips. The columns page one at a time. While a card is held, the switch turns
- * into the statuses of the other views, and holding it on the board's own target opens the
- * columns to place it in.
+ * of the same width under one switch in a dock along the foot, as Catch's tabs are, so cards
+ * keep the whole half rather than sharing it with two rails' strips. The columns page one at a
+ * time. The dock slides away as a list scrolls down and back as it scrolls up, and gives its
+ * place to the search and selection bars. While a card is held it holds the statuses of the
+ * other views, and holding the card on the board's own target opens the columns to place it in.
  */
-export function CompactSplitBoard({ handoff }: { handoff: BoardHandoff }) {
+export function CompactSplitBoard({
+  handoff,
+  searchDocked = false,
+}: {
+  handoff: BoardHandoff;
+  /** Search is a sidebar beside the board rather than a bar over its foot. */
+  searchDocked?: boolean;
+}) {
   const state = board.use();
   const held = drag.use();
   const { project } = current(state);
   const ids = useId();
   const body = useRef<HTMLDivElement>(null);
+  const dock = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [view, setViewState] = useState<CompactView>(
     () =>
@@ -278,6 +370,7 @@ export function CompactSplitBoard({ handoff }: { handoff: BoardHandoff }) {
     handoff.view = next;
     setViewState(next);
   };
+  const [column, setColumn] = useState(handoff.column);
   const active = project.statuses.filter((status) => status.category === 'active');
   const dragging = makingWay(held);
   const count = (zone: Zone) =>
@@ -314,30 +407,26 @@ export function CompactSplitBoard({ handoff }: { handoff: BoardHandoff }) {
     return () => clearTimeout(timer);
   }, [toBoard]);
 
+  // The search and selection bars float where the dock does, and take its place.
+  const away = !dragging && ((state.searching && !searchDocked) || state.selection.length > 0);
+  const scrolledAway = useDockScroll(body, dock, !dragging && !away, `${view} ${column}`);
+
   const tab = (value: CompactView) => ({ id: `${ids}-${value}-tab`, controls: `${ids}-${value}` });
-  const badge = (zone: Zone) => (
-    <span className="pl-1 text-muted-foreground text-xs tabular-nums">{count(zone)}</span>
-  );
-  const options = [
+  const tabs: DockTab[] = [
     {
-      value: 'backlog' as const,
+      value: 'backlog',
       ...tab('backlog'),
       label: ZONES.backlog.title,
-      icon: <Inbox aria-hidden className="size-4" />,
-      badge: badge('backlog'),
+      icon: Inbox,
+      count: count('backlog'),
     },
+    { value: 'board', ...tab('board'), label: 'Board', icon: Columns3 },
     {
-      value: 'board' as const,
-      ...tab('board'),
-      label: 'Board',
-      icon: <Columns3 aria-hidden className="size-4" />,
-    },
-    {
-      value: 'closed' as const,
+      value: 'closed',
       ...tab('closed'),
       label: ZONES.closed.title,
-      icon: <CheckCheck aria-hidden className="size-4" />,
-      badge: badge('closed'),
+      icon: CheckCheck,
+      count: count('closed'),
     },
   ];
   // Where a held card can go that is not in front of it.
@@ -345,6 +434,10 @@ export function CompactSplitBoard({ handoff }: { handoff: BoardHandoff }) {
     view === 'board'
       ? [...zoneStatuses('backlog', project.statuses), ...zoneStatuses('closed', project.statuses)]
       : zoneStatuses(view === 'backlog' ? 'closed' : 'backlog', project.statuses);
+  // A new task goes into the column on screen, as the phone's create button does, or else
+  // into the backlog.
+  const into =
+    view === 'board' ? (active.find((status) => status.id === column) ?? active[0]) : undefined;
 
   const layer = (value: CompactView, content: ReactNode) => (
     <div
@@ -363,49 +456,6 @@ export function CompactSplitBoard({ handoff }: { handoff: BoardHandoff }) {
 
   return (
     <CompactFrame>
-      <div className="relative mb-2 h-12 shrink-0 px-5">
-        <div
-          className={cn('flex h-full items-center gap-1', dragging && 'opacity-0')}
-          inert={dragging}
-        >
-          <div className="min-w-0 flex-1">
-            <SegmentedTabs
-              label="Board view"
-              value={view}
-              onValueChange={(next) => next && setView(next)}
-              options={options}
-            />
-          </div>
-          {view === 'backlog' && state.actions && (
-            <IconButton label="New task in the backlog" onClick={() => createTask()}>
-              <Plus />
-            </IconButton>
-          )}
-        </div>
-        {/* Wraps into rows over the flow track below, which takes no card. */}
-        <AnimatePresence>
-          {dragging && (
-            <motion.div
-              key="targets"
-              className="absolute top-0 right-5 left-5 z-10 grid auto-rows-[2.75rem] grid-cols-[repeat(auto-fit,minmax(5rem,1fr))] gap-2 rounded-b-2xl bg-background pb-2"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.16 }}
-            >
-              <BoardTarget expands={view !== 'board'} over={toBoard} />
-              {targets.map((status) => (
-                <StatusTile
-                  key={status.id}
-                  status={status}
-                  shape="row"
-                  className="h-full min-w-0"
-                />
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
       <div ref={body} className="relative min-h-0 flex-1">
         {layer(
           'board',
@@ -414,10 +464,11 @@ export function CompactSplitBoard({ handoff }: { handoff: BoardHandoff }) {
             handoff={handoff}
             shown={view === 'board'}
             origin={() => 'active'}
+            onPage={setColumn}
             page={(status) => (
               <CardList
                 listId={`status:${status.id}`}
-                endSpace={SEARCH_SPACE}
+                endSpace={DOCK_END}
                 tight
                 className="flex-1"
               />
@@ -434,13 +485,229 @@ export function CompactSplitBoard({ handoff }: { handoff: BoardHandoff }) {
                   zone={zone}
                   width={Math.max(0, width - GALLERY_INSET * 2)}
                   anchor="start"
+                  endSpace={DOCK_END}
                 />
               </div>
             </div>,
           ),
         )}
       </div>
+      <CompactDock dockRef={dock} away={!dragging && (away || scrolledAway)} inert={away}>
+        {dragging ? (
+          <DockFace key="targets">
+            {/* Wraps into rows, growing the dock upward. */}
+            <div className="grid auto-rows-[3rem] grid-cols-[repeat(auto-fit,minmax(6rem,1fr))] gap-1.5 p-1.5">
+              <BoardTarget expands={view !== 'board'} over={toBoard} />
+              {targets.map((status) => (
+                <StatusTile
+                  key={status.id}
+                  status={status}
+                  shape="row"
+                  className="h-full min-w-0"
+                />
+              ))}
+            </div>
+          </DockFace>
+        ) : (
+          <DockFace key="views">
+            <div className="flex items-center gap-1 p-1">
+              <DockTabs
+                label="Board view"
+                value={view}
+                tabs={tabs}
+                onChange={(next) => {
+                  haptics.selection();
+                  setView(next);
+                }}
+              />
+              {state.actions && (
+                <motion.button
+                  type="button"
+                  aria-label={into ? `New task in ${into.name}` : 'New task in the backlog'}
+                  onClick={() => {
+                    haptics.toggle();
+                    createTask(into?.id);
+                  }}
+                  whileTap={{ scale: 0.88 }}
+                  transition={springs.snappy}
+                  className="flex size-[calc(var(--dock-height)-0.5rem)] shrink-0 items-center justify-center rounded-[calc(var(--dock-radius)-0.25rem)] bg-brand text-brand-foreground shadow-[0_2px_6px_-2px_color-mix(in_oklab,var(--brand)_45%,transparent),inset_0_1px_0_rgb(255_255_255/0.35)] outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                >
+                  <Plus className="size-7" strokeWidth={2.25} aria-hidden />
+                </motion.button>
+              )}
+            </div>
+          </DockFace>
+        )}
+      </CompactDock>
     </CompactFrame>
+  );
+}
+
+/**
+ * The compact board's dock: a glass bar floating at the half's foot, as Catch's dock floats at
+ * the window's. Away (scrolled off, or under the search or selection bar), it slides down out
+ * of the half; its faces trade places as an open task's dock and the board's do.
+ */
+function CompactDock({
+  dockRef,
+  away,
+  inert,
+  children,
+}: {
+  dockRef: RefObject<HTMLDivElement | null>;
+  away: boolean;
+  /** Its place is taken: keyboard focus passes it by. */
+  inert: boolean;
+  children: ReactNode;
+}) {
+  const reduced = useReducedMotion();
+  const progress = useMotionValue(away ? 1 : 0);
+  useLayoutEffect(() => {
+    const to = away ? 1 : 0;
+    if (reduced) {
+      progress.jump(to);
+      return;
+    }
+    const animation = animate(progress, to, { ...springs.smooth, bounce: 0 });
+    return () => animation.stop();
+  }, [away, reduced, progress]);
+  const y = useTransform(() => {
+    const share = progress.get();
+    return share === 0 ? '0px' : `calc(${share} * (100% + ${DOCK_LIFT}))`;
+  });
+  return (
+    // Clipped at the half's foot, so a dock slid away is gone rather than hanging below it.
+    <div
+      className="pointer-events-none absolute inset-x-0 bottom-0 z-40 flex justify-center overflow-hidden px-5 pt-6"
+      style={{ paddingBottom: DOCK_LIFT }}
+    >
+      <motion.div
+        ref={dockRef}
+        data-compact-dock=""
+        data-drop-block=""
+        data-away={away ? '' : undefined}
+        inert={inert}
+        className="glass-thick pointer-events-auto w-full max-w-md overflow-hidden rounded-[var(--dock-radius)]"
+        style={{ y }}
+      >
+        <AnimatedHeight>
+          <AnimatePresence initial={false}>{children}</AnimatePresence>
+        </AnimatedHeight>
+      </motion.div>
+    </div>
+  );
+}
+
+/** One face of the dock, trading places with the other. Leaving, it gives up its room. */
+function DockFace({ children }: { children: ReactNode }) {
+  const present = useIsPresent();
+  const reduced = useReducedMotion();
+  return (
+    <motion.div
+      aria-hidden={!present || undefined}
+      inert={!present}
+      className={cn(!present && 'absolute inset-x-0 bottom-0')}
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.96, transition: { duration: reduced ? 0 : 0.16 } }}
+      transition={reduced ? { duration: 0 } : springs.smooth}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+type DockTab = {
+  value: CompactView;
+  id: string;
+  controls: string;
+  label: string;
+  icon: LucideIcon;
+  count?: number;
+};
+
+/**
+ * The dock's switch, as Catch's tabs: equal segments on the glass, one indicator sliding
+ * between them. Each shows its icon and count, and its name where the dock is wide enough.
+ */
+function DockTabs({
+  label,
+  value,
+  tabs,
+  onChange,
+}: {
+  label: string;
+  value: CompactView;
+  tabs: DockTab[];
+  onChange: (value: CompactView) => void;
+}) {
+  const reduced = useReducedMotion();
+  const index = Math.max(
+    0,
+    tabs.findIndex((item) => item.value === value),
+  );
+  return (
+    <div
+      role="tablist"
+      aria-label={label}
+      className="@container relative grid h-[calc(var(--dock-height)-0.5rem)] min-w-0 flex-1 auto-cols-fr grid-flow-col"
+      onKeyDown={(event) => {
+        const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+        const next =
+          event.key === 'Home'
+            ? tabs[0]
+            : event.key === 'End'
+              ? tabs[tabs.length - 1]
+              : step
+                ? tabs[(index + step + tabs.length) % tabs.length]
+                : null;
+        if (!next) return;
+        event.preventDefault();
+        onChange(next.value);
+        document.getElementById(next.id)?.focus();
+      }}
+    >
+      <motion.span
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 left-0 rounded-[calc(var(--dock-radius)-0.25rem)] bg-foreground/[0.08] shadow-[inset_0_1px_0_var(--glass-highlight)]"
+        style={{ width: `${100 / tabs.length}%` }}
+        initial={false}
+        animate={{ x: `${index * 100}%` }}
+        transition={reduced ? { duration: 0 } : springs.snappy}
+      />
+      {tabs.map((item) => {
+        const selected = item.value === value;
+        const Icon = item.icon;
+        return (
+          <button
+            key={item.value}
+            id={item.id}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            aria-controls={item.controls}
+            aria-label={item.count === undefined ? item.label : `${item.label}, ${item.count}`}
+            tabIndex={selected ? 0 : -1}
+            onClick={() => !selected && onChange(item.value)}
+            className={cn(
+              'relative flex min-w-0 items-center justify-center gap-1.5 rounded-[calc(var(--dock-radius)-0.25rem)] px-2 font-medium text-sm outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
+              selected ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <Icon aria-hidden className="size-5 shrink-0" />
+            {/* Named only where each tab has room for its name, as Catch's tabs are icons. */}
+            <span aria-hidden className="hidden truncate @min-[21rem]:inline">
+              {item.label}
+            </span>
+            {item.count !== undefined && (
+              <span aria-hidden className="text-muted-foreground text-xs tabular-nums">
+                {item.count}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

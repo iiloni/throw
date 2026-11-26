@@ -9,6 +9,7 @@ const views = (page: Page) => page.getByRole('tablist', { name: 'Board view' });
 const rail = (page: Page, name: 'Backlog' | 'Closed') =>
   page.getByRole('complementary', { name, exact: true });
 const flow = (page: Page) => page.getByRole('navigation', { name: 'Columns' });
+const dock = (page: Page) => page.locator('[data-compact-dock]');
 
 test.describe('the board beside a task on a narrow desktop', () => {
   test.skip(({ isMobile }) => isMobile, 'A phone has no split view');
@@ -31,6 +32,10 @@ test.describe('the board beside a task on a narrow desktop', () => {
       'aria-selected',
       'true',
     );
+    // The switch is a dock along the half's foot.
+    const frame = (await compactBoard(page).boundingBox())!;
+    const bar = (await dock(page).boundingBox())!;
+    expect(bar.y + bar.height).toBeGreaterThan(frame.y + frame.height - 48);
     // One column across the whole half, the next a page away.
     const build = compactBoard(page).getByRole('region', { name: 'Build', exact: true });
     await expect(build).toBeInViewport();
@@ -124,10 +129,9 @@ test.describe('the board beside a task on a narrow desktop', () => {
       [{ x: 300, y: 400 }, compactBoard(page).locator('[data-drop-expand]')],
       { drop: false, pause: 700 },
     );
-    await expect(views(page).getByRole('tab', { name: /Board/ })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    // The dock holds the targets while the card is held; the columns are behind it.
+    await expect(compactBoard(page).locator('[data-view="board"]')).toBeVisible();
+    await expect(compactBoard(page).locator('[data-view="backlog"]')).toBeHidden();
     const later = await settled(card(page, 'Later position'));
     const box = (await later.boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 10, { steps: 12 });
@@ -140,6 +144,40 @@ test.describe('the board beside a task on a narrow desktop', () => {
       .toBe(board.status('Build'));
     // The task stays open.
     await expect(page.getByRole('region', { name: 'Task', exact: true })).toBeVisible();
+  });
+
+  test('its dock slides away as a list scrolls down, and back as it scrolls up', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ ...FOLDABLE, height: 560 });
+    const board = await fixture(page);
+    for (let index = 0; index < 8; index++)
+      await board.add(`More work ${index + 1}`, 'Build', 3, `b${index}`);
+    await card(page, 'Review this').click();
+    await expect(compactBoard(page)).toBeVisible();
+    await expect(card(page, 'More work 8')).toBeAttached();
+    await expect(dock(page)).toBeInViewport();
+
+    const build = compactBoard(page).getByRole('region', { name: 'Build', exact: true });
+    const box = (await build.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(0, 400);
+    await expect(dock(page)).toHaveAttribute('data-away', '');
+    await expect(dock(page)).not.toBeInViewport();
+    await page.mouse.wheel(0, 4000);
+    await page.mouse.wheel(0, -60);
+    await expect(dock(page)).not.toHaveAttribute('data-away');
+    await expect(dock(page)).toBeInViewport();
+    // Near the list's end, its last card stays clear of the dock.
+    const last = (await (await settled(card(page, 'More work 8'))).boundingBox())!;
+    const shown = (await (await settled(dock(page))).boundingBox())!;
+    expect(last.y + last.height).toBeLessThan(shown.y);
+
+    // Turning to another column brings the dock back too.
+    await page.mouse.wheel(0, 400);
+    await expect(dock(page)).toHaveAttribute('data-away', '');
+    await flow(page).getByRole('button', { name: 'Review', exact: true }).click();
+    await expect(dock(page)).not.toHaveAttribute('data-away');
   });
 
   test('the cross-project board pages through its categories beside a task', async ({ page }) => {

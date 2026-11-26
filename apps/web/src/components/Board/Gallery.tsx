@@ -86,12 +86,15 @@ export const ZoneGallery = memo(function ZoneGallery({
   zone,
   width,
   anchor,
+  endSpace,
 }: {
   zone: 'backlog' | 'closed';
   /** The width the cards share, without the grid's padding. */
   width: number;
   /** The rail's edge the grid is pinned to as it widens: the window's side of the rail. */
   anchor: 'start' | 'end';
+  /** Room after the last card, for a dock floating over the grid's end. */
+  endSpace?: string;
 }) {
   const state = board.use();
   const held = drag.use();
@@ -456,7 +459,10 @@ export const ZoneGallery = memo(function ZoneGallery({
     >
       <ScrollArea edges className="card-scroller flex-1 [--scrollbar-inset:0.5rem]">
         <ScrollAreaViewport data-autoscroll="">
-          <div className="pt-1 pb-4" style={{ paddingInline: GALLERY_INSET - SURFACE_MARGIN }}>
+          <div
+            className="pt-1 pb-4"
+            style={{ paddingInline: GALLERY_INSET - SURFACE_MARGIN, paddingBottom: endSpace }}
+          >
             {empty && (
               <p className="px-1 py-10 text-center text-muted-foreground text-sm">
                 {state.awaitingTasks

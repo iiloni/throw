@@ -9,7 +9,7 @@ import {
 } from './CompactSplitBoard';
 import { drag } from './drag';
 import { mockBoards } from './mockData';
-import { board, current, initialBoard } from './state';
+import { board, current, initialBoard, update } from './state';
 
 describe('compactFor', () => {
   it('turns compact below the threshold and back only once there is clear room again', () => {
@@ -131,5 +131,45 @@ describe('CompactSplitBoard', () => {
     expect(targets).toEqual([...backlog, ...closed].map((status) => status.id));
     // On the columns, the board's own target is where the card already is.
     expect(header.querySelector('[data-drop-expand]')).toBeNull();
+  });
+
+  it('slides its dock away as a list scrolls down, and back as it scrolls up', async () => {
+    render(<CompactSplitBoard handoff={handoff()} />);
+    const dock = document.querySelector('[data-compact-dock]')!;
+    const list = document.querySelector<HTMLElement>('[data-view="board"] [data-autoscroll]')!;
+    Object.defineProperty(list, 'scrollHeight', { value: 2000, configurable: true });
+    Object.defineProperty(list, 'clientHeight', { value: 500, configurable: true });
+    // The scrolls a view makes as it is shown are where it starts.
+    await act(() => new Promise(requestAnimationFrame));
+    const scrollTo = (top: number) =>
+      act(() => {
+        list.scrollTop = top;
+        fireEvent.scroll(list);
+      });
+    scrollTo(30);
+    scrollTo(60);
+    expect(dock).not.toHaveAttribute('data-away');
+    scrollTo(160);
+    expect(dock).toHaveAttribute('data-away');
+    scrollTo(130);
+    expect(dock).toHaveAttribute('data-away');
+    scrollTo(80);
+    expect(dock).not.toHaveAttribute('data-away');
+    scrollTo(300);
+    expect(dock).toHaveAttribute('data-away');
+    // Near the top it is always there.
+    scrollTo(20);
+    expect(dock).not.toHaveAttribute('data-away');
+  });
+
+  it('gives the dock’s place to the selection bar', () => {
+    const { tasks } = current();
+    render(<CompactSplitBoard handoff={handoff()} />);
+    const dock = document.querySelector('[data-compact-dock]')!;
+    act(() => update({ selection: [tasks[0]!.id] }));
+    expect(dock).toHaveAttribute('data-away');
+    expect(dock).toHaveAttribute('inert');
+    act(() => update({ selection: [] }));
+    expect(dock).not.toHaveAttribute('data-away');
   });
 });
