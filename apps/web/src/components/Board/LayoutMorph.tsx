@@ -132,9 +132,19 @@ function intersect(a: Box, b: Box): Box {
   };
 }
 
+/**
+ * The half the board lays itself out in. A layout taking its resting width as the task pane
+ * slides shut runs past the half's edge until the pane has gone, and what stands there is on
+ * screen by the time a card reaches it.
+ */
+function areaOf(root: HTMLElement): Box {
+  const box = boxOf(root);
+  return { ...box, width: Math.max(box.width, root.scrollWidth) };
+}
+
 /** Whether an element is drawn on screen: inside every scroller and clip between it and `root`. */
 function shown(element: HTMLElement, root: HTMLElement) {
-  let visible = intersect(boxOf(element), boxOf(root));
+  let visible = intersect(boxOf(element), areaOf(root));
   for (
     let node = element.parentElement;
     node && node !== root && visible.width >= 8 && visible.height >= 8;
@@ -220,8 +230,11 @@ function before(root: HTMLElement): Before {
   return { root: box, chrome: { copy: frame, scrolls }, cards, slides };
 }
 
-/** Draws `still` in `layer` over `box`, as `origin` places the layer. */
-function place(layer: HTMLElement, still: Still, box: Box, origin: Box) {
+/**
+ * Draws `still` in `layer` over `box`, as `origin` places the layer. A copy that `fills` its
+ * box takes its height too: the board's layouts stand absolutely in the half and size to it.
+ */
+function place(layer: HTMLElement, still: Still, box: Box, origin: Box, fills = false) {
   const holder = document.createElement('div');
   holder.style.position = 'absolute';
   holder.style.left = '0';
@@ -229,6 +242,9 @@ function place(layer: HTMLElement, still: Still, box: Box, origin: Box) {
   holder.style.width = `${box.width}px`;
   holder.style.height = `${box.height}px`;
   holder.style.transform = `translate(${box.x - origin.x}px, ${box.y - origin.y}px)`;
+  // Its own layer, laid out apart from the others as it moves and resizes.
+  holder.style.contain = 'layout style';
+  holder.style.willChange = 'transform';
   const { copy } = still;
   // The copy stands where its holder does, rather than where its own list placed it.
   copy.style.position = 'relative';
@@ -236,6 +252,7 @@ function place(layer: HTMLElement, still: Still, box: Box, origin: Box) {
   copy.style.transform = 'none';
   copy.style.translate = 'none';
   copy.style.width = '100%';
+  if (fills) copy.style.height = '100%';
   copy.style.removeProperty('visibility');
   copy.style.removeProperty('opacity');
   copy.removeAttribute('hidden');
@@ -276,23 +293,43 @@ function run(motion: Spring | Curve, step: (t: number) => void, done: () => void
   return end;
 }
 
+/**
+ * Takes over an element's inline opacity and translate for the morph. Its own transitions
+ * (a card slot fades as it dims) are held off meanwhile, or each step, and its hiding, would
+ * ease in behind the morph: a card hidden under its copy would fade out beside it, and fade
+ * back in after it landed.
+ */
+function seize(element: HTMLElement) {
+  element.style.transition = 'none';
+}
+
+/** Hands an element's styles back, without the change easing in through its transitions. */
+function release(element: HTMLElement, ...properties: string[]) {
+  for (const property of properties) element.style.removeProperty(property);
+  // The change is drawn before the element's transitions return.
+  void getComputedStyle(element).opacity;
+  element.style.removeProperty('transition');
+}
+
 function fadeIn(element: HTMLElement, curve: Curve) {
+  seize(element);
   return run(
     curve,
     (t) => {
       element.style.opacity = String(t);
     },
-    () => element.style.removeProperty('opacity'),
+    () => release(element, 'opacity'),
   );
 }
 
 /** Hidden by opacity rather than a clip, so it can still be picked up while its copy flies. */
 function hide(element: HTMLElement) {
+  seize(element);
   element.style.opacity = '0';
 }
 
 function reveal(element: HTMLElement) {
-  element.style.removeProperty('opacity');
+  release(element, 'opacity');
 }
 
 function morph(root: HTMLElement, was: Before, compact: boolean) {
@@ -313,7 +350,7 @@ function morph(root: HTMLElement, was: Before, compact: boolean) {
   };
 
   // Behind the cards: the column surfaces and headers going, fading under their movement.
-  const chrome = place(layer, was.chrome, was.root, origin);
+  const chrome = place(layer, was.chrome, was.root, origin, true);
   ends.push(
     run(
       curves.fade,
@@ -326,7 +363,7 @@ function morph(root: HTMLElement, was: Before, compact: boolean) {
 
   // The rails and dock going slide off the edge they stand at.
   for (const slide of was.slides) {
-    const holder = place(layer, slide.still, slide.box, origin);
+    const holder = place(layer, slide.still, slide.box, origin, true);
     ends.push(
       run(
         springs.pane,
@@ -350,6 +387,7 @@ function morph(root: HTMLElement, was: Before, compact: boolean) {
         ? area.x + area.width - at.x
         : area.x - (at.x + at.width);
     const dy = dock ? area.y + area.height - at.y : 0;
+    seize(element);
     element.style.translate = `${dx}px ${dy}px`;
     ends.push(
       run(
@@ -357,13 +395,14 @@ function morph(root: HTMLElement, was: Before, compact: boolean) {
         (t) => {
           element.style.translate = `${dx * (1 - t)}px ${dy * (1 - t)}px`;
         },
-        () => element.style.removeProperty('translate'),
+        () => release(element, 'translate'),
       ),
     );
   }
 
   // What names the compact board's page and view settles in where the column header stood.
-  for (const element of root.querySelectorAll<HTMLElement>('[data-morph-enter]'))
+  for (const element of root.querySelectorAll<HTMLElement>('[data-morph-enter]')) {
+    seize(element);
     ends.push(
       run(
         curves.enter,
@@ -371,12 +410,10 @@ function morph(root: HTMLElement, was: Before, compact: boolean) {
           element.style.opacity = String(t);
           element.style.translate = `0 ${(1 - t) * -12}px`;
         },
-        () => {
-          element.style.removeProperty('opacity');
-          element.style.removeProperty('translate');
-        },
+        () => release(element, 'opacity', 'translate'),
       ),
     );
+  }
   // The full layout's column surfaces fade in as the compact board's plain half fades out.
   if (!compact)
     for (const column of root.querySelectorAll<HTMLElement>('[data-column]'))
@@ -395,37 +432,49 @@ function morph(root: HTMLElement, was: Before, compact: boolean) {
   // they go by the next frame, before it is drawn.
   const frame = requestAnimationFrame(() => {
     const now = cardsIn(root);
-    for (const element of hidden) if (![...now.values()].includes(element)) reveal(element);
+    const placed = new Set(now.values());
+    for (const element of hidden) if (!placed.has(element)) reveal(element);
+    const flights: { copy: HTMLElement; element: HTMLElement; from: Box }[] = [];
     for (const [key, element] of now) {
       const copy = copies.get(key);
       const on = shown(element, root);
       if (copy && on) {
         copies.delete(key);
         hide(element);
-        const from = was.cards.get(key)!.box;
-        ends.push(
-          run(
-            springs.smooth,
-            (t) => {
-              // Its place may still be settling (a page turning to it), so the copy heads for
-              // where it is now rather than where it was when it set off.
-              const to = boxOf(element);
-              const base = boxOf(layer);
-              copy.style.transform = `translate(${from.x + (to.x - from.x) * t - base.x}px, ${from.y + (to.y - from.y) * t - base.y}px)`;
-              copy.style.width = `${from.width + (to.width - from.width) * t}px`;
-              copy.style.height = 'auto';
-            },
-            () => {
-              gone(copy);
-              reveal(element);
-            },
-          ),
-        );
+        copy.style.height = 'auto';
+        flights.push({ copy, element, from: was.cards.get(key)!.box });
         continue;
       }
       reveal(element);
       if (on) ends.push(fadeIn(element, curves.enter));
     }
+    // The cards travelling pass over the ones fading where they were.
+    for (const { copy } of flights) layer.append(copy);
+    // One spring carries every card, so each frame reads where they all go before it moves
+    // any: reading a place after moving a copy would lay the page out again for every card.
+    if (flights.length)
+      ends.push(
+        run(
+          springs.smooth,
+          (t) => {
+            // A place may still be settling (a page turning to it), so each copy heads for
+            // where its card is now rather than where it was when it set off.
+            const base = boxOf(layer);
+            const targets = flights.map(({ element }) => boxOf(element));
+            flights.forEach(({ copy, from }, index) => {
+              const to = targets[index]!;
+              copy.style.transform = `translate(${from.x + (to.x - from.x) * t - base.x}px, ${from.y + (to.y - from.y) * t - base.y}px)`;
+              copy.style.width = `${from.width + (to.width - from.width) * t}px`;
+            });
+          },
+          () => {
+            for (const { copy, element } of flights) {
+              gone(copy);
+              reveal(element);
+            }
+          },
+        ),
+      );
     // A card with no place on screen in the new layout fades where it was.
     for (const copy of copies.values()) {
       copy.style.height = 'auto';

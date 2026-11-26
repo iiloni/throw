@@ -1,10 +1,14 @@
 import { ListTree, X } from 'lucide-react';
 import {
   AnimatePresence,
+  animate,
   motion,
   frame as motionFrame,
+  PresenceContext,
   useIsPresent,
+  useMotionValue,
   useMotionValueEvent,
+  usePresence,
   useReducedMotion,
   useTransform,
 } from 'motion/react';
@@ -31,13 +35,18 @@ import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { springs } from '@/lib/motion';
+import { animateSteadySpring, springs, stopSteady } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { BoardColumn, ColumnHeader } from './BoardColumn';
 import { BoardSettingsPanel } from './BoardSettingsPanel';
 import { useSpotlightCleanup } from './blockers';
 import { CardList } from './CardList';
-import { CompactSplitBoard, useBoardHandoff, useCompactBoard } from './CompactSplitBoard';
+import {
+  CompactSplitBoard,
+  useBoardHandoff,
+  useCompactBoard,
+  useWidening,
+} from './CompactSplitBoard';
 import { drag, makingWay } from './drag';
 import { LayoutMorph } from './LayoutMorph';
 import type { Status, Task } from './model';
@@ -189,6 +198,7 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
   // Beside a task on a narrow window or an unfolded foldable, the board takes a phone's layout.
   const compact = useCompactBoard(restWidth, state.openTaskId !== null && paneSpace === 0);
   const handoff = useBoardHandoff(row, compact, project.id);
+  const widening = useWidening(compact, restWidth, row);
   const reduced = useReducedMotion() ?? false;
   const rails = railGeometry({
     rowWidth,
@@ -304,14 +314,21 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
           {docked && <BoardSearchSidebar />}
           <div
             ref={row}
-            className={cn('relative flex min-w-0 flex-1', compact && 'overflow-hidden')}
+            className={cn(
+              'relative flex min-w-0 flex-1',
+              (compact || widening !== null) && 'overflow-hidden',
+            )}
           >
             {compact ? (
               <CompactSplitBoard handoff={handoff} restWidth={restWidth} searchDocked={docked} />
             ) : (
               <>
                 {!backlogBound && backlogRail}
-                <div data-board-layout="" className="absolute inset-0 flex">
+                <div
+                  data-board-layout=""
+                  className="absolute inset-0 flex"
+                  style={widening === null ? undefined : { width: widening, right: 'auto' }}
+                >
                   {/* The columns carry the top and bottom margin, so a rail in here runs full height. */}
                   <ScrollArea sides data-seam={seamOf(state)} className="flex-1">
                     <ScrollAreaViewport
@@ -531,17 +548,57 @@ function OpenTaskPaneFrame({
   onResize: (width: number, keyboard: boolean) => void;
   onActive: (active: boolean) => void;
 }) {
-  const present = useIsPresent();
+  const [present, safeToRemove] = usePresence();
+  // Renders through the slide (the row's width follows it) hand over a new callback each time.
+  const remove = useRef(safeToRemove);
+  remove.current = safeToRemove;
   const totalWidth = paneWidth + HANDLE_WIDTH + PANE_MARGIN;
+  // Already open as the board arrives: no slide in.
+  const arrived = useContext(PresenceContext)?.initial === false;
+  // How far open, apart from how wide: opening or closing the task swaps the board beside it
+  // for another layout, whose mounting takes the first frames, so the slide steps by painted
+  // frames and has all of its way still to go once they are drawn.
+  const open = useMotionValue(arrived || reduced ? 1 : 0);
+  const target = useMotionValue(totalWidth);
+  const width = useTransform(() => open.get() * target.get());
+  useEffect(() => {
+    if (resizing || reduced) {
+      target.jump(totalWidth);
+      return;
+    }
+    const resized = animate(target, totalWidth, springs.pane);
+    return () => resized.stop();
+  }, [target, totalWidth, resizing, reduced]);
+  useEffect(() => {
+    if (reduced) {
+      open.jump(present ? 1 : 0);
+      if (!present) remove.current?.();
+      return;
+    }
+    let live = true;
+    const leave = () => {
+      if (!live || present) return;
+      live = false;
+      remove.current?.();
+    };
+    // Gone once it is shut, rather than once the spring's tail has come to rest: each step is
+    // a painted frame, and a busy page paints few.
+    const unsubscribe = present
+      ? undefined
+      : open.on('change', (value) => value < 0.002 && leave());
+    void animateSteadySpring(open, present ? 1 : 0, springs.pane).then(leave);
+    return () => {
+      live = false;
+      unsubscribe?.();
+      stopSteady(open);
+    };
+  }, [open, present, reduced]);
   return (
     <motion.div
       inert={!present}
       data-task-pane-frame=""
       className="h-full shrink-0 overflow-hidden"
-      initial={{ width: 0, opacity: 0 }}
-      animate={{ width: totalWidth, opacity: 1 }}
-      exit={{ width: 0, opacity: 0 }}
-      transition={resizing || reduced ? { duration: 0 } : springs.pane}
+      style={{ width, opacity: open }}
     >
       <div
         className="flex h-full w-full pt-[calc(var(--safe-top)+1.25rem)] pr-6 pb-[max(1.5rem,calc(var(--safe-bottom)+0.75rem))]"

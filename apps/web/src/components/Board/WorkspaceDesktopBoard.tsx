@@ -10,7 +10,13 @@ import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scrol
 import { cn } from '@/lib/utils';
 import { BoardColumn, ColumnHeader } from './BoardColumn';
 import { useSpotlightCleanup } from './blockers';
-import { CompactFrame, CompactPager, useBoardHandoff, useCompactBoard } from './CompactSplitBoard';
+import {
+  CompactFrame,
+  CompactPager,
+  useBoardHandoff,
+  useCompactBoard,
+  useWidening,
+} from './CompactSplitBoard';
 import {
   boardRestWidth,
   OpenTaskPane,
@@ -79,12 +85,19 @@ export function WorkspaceDesktopBoard() {
   const compact = useCompactBoard(restWidth, state.openTaskId !== null && paneSpace === 0);
   const row = useRef<HTMLDivElement>(null);
   const handoff = useBoardHandoff(row, compact, project.id);
+  const widening = useWidening(compact, restWidth, row);
   const reduced = useReducedMotion() ?? false;
   return (
     <div className="flex h-full overflow-hidden">
       <div ref={frame} className="flex min-w-0 flex-1">
         {docked && <BoardSearchSidebar />}
-        <div ref={row} className={cn('relative flex min-w-0 flex-1', compact && 'overflow-hidden')}>
+        <div
+          ref={row}
+          className={cn(
+            'relative flex min-w-0 flex-1',
+            (compact || widening !== null) && 'overflow-hidden',
+          )}
+        >
           {compact ? (
             <CompactFrame width={restWidth}>
               <CompactPager
@@ -101,6 +114,7 @@ export function WorkspaceDesktopBoard() {
               data-seam={seamOf(state)}
               data-board-layout=""
               className="min-w-0 flex-1"
+              style={widening === null ? undefined : { width: widening, flex: 'none' }}
             >
               <ScrollAreaViewport
                 data-autoscroll-x=""

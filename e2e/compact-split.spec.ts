@@ -225,63 +225,116 @@ test.describe('the board beside a task on a narrow desktop', () => {
   }) => {
     await page.setViewportSize(FOLDABLE);
     await fixture(page);
-    type Frame = { width: number | null; morphing: boolean; card: { x: number; y: number } | null };
-    await page.evaluate(() => {
-      const frames: Frame[] = [];
-      (window as unknown as { frames_: Frame[] }).frames_ = frames;
-      // Where the tapped card is drawn: its copy while one carries it, or the card itself.
-      const drawn = () => {
-        const layer = document.querySelector('[data-layout-morph]');
-        const copies = [...(layer?.children ?? [])]
-          .filter((holder) => holder.textContent?.includes('Review this'))
-          .map((holder) => holder.getBoundingClientRect())
-          .sort((a, b) => a.width * a.height - b.width * b.height);
-        const card = [...document.querySelectorAll<HTMLElement>('[data-card-id]')].find(
-          (element) =>
-            element.textContent?.includes('Review this') && !element.closest('[data-layout-morph]'),
-        );
-        const box =
-          copies[0] ??
-          (card && card.closest<HTMLElement>('[data-rearrange-card]')?.style.opacity !== '0'
-            ? card.getBoundingClientRect()
-            : null);
-        return box ? { x: box.x, y: box.y } : null;
-      };
-      const sample = () => {
-        const board = document.querySelector('[data-compact-board]');
-        frames.push({
-          width: board ? board.getBoundingClientRect().width : null,
-          morphing: document.querySelector('[data-layout-morph]') !== null,
-          card: drawn(),
-        });
-        if (frames.length < 90) requestAnimationFrame(sample);
-      };
-      requestAnimationFrame(sample);
-    });
+    type Frame = {
+      width: number | null;
+      layout: number | null;
+      morphing: boolean;
+      card: { x: number; y: number } | null;
+      ghost: number;
+      surface: number | null;
+    };
+    const sampleFrames = () =>
+      page.evaluate(() => {
+        const frames: Frame[] = [];
+        (window as unknown as { frames_: Frame[] }).frames_ = frames;
+        // Where the tapped card is drawn: its copy while one carries it, or the card itself.
+        const drawn = () => {
+          const layer = document.querySelector('[data-layout-morph]');
+          const copies = [...(layer?.children ?? [])]
+            .filter((holder) => holder.textContent?.includes('Review this'))
+            .map((holder) => holder.getBoundingClientRect())
+            .sort((a, b) => a.width * a.height - b.width * b.height);
+          const card = [...document.querySelectorAll<HTMLElement>('[data-card-id]')].find(
+            (element) =>
+              element.textContent?.includes('Review this') &&
+              !element.closest('[data-layout-morph]'),
+          );
+          const box =
+            copies[0] ??
+            (card && card.closest<HTMLElement>('[data-rearrange-card]')?.style.opacity !== '0'
+              ? card.getBoundingClientRect()
+              : null);
+          return box ? { x: box.x, y: box.y } : null;
+        };
+        // How much of the card itself shows while its copy carries it: none, or the two draw
+        // over each other.
+        const ghost = () => {
+          const layer = document.querySelector('[data-layout-morph]');
+          if (
+            ![...(layer?.children ?? [])].some((holder) =>
+              holder.textContent?.includes('Review this'),
+            )
+          )
+            return 0;
+          const card = [...document.querySelectorAll<HTMLElement>('[data-card-id]')].find(
+            (element) =>
+              element.textContent?.includes('Review this') &&
+              !element.closest('[data-layout-morph]'),
+          );
+          let opacity = 1;
+          for (let node: HTMLElement | null = card ?? null; node; node = node.parentElement)
+            opacity *= Number(getComputedStyle(node).opacity);
+          return card ? opacity : 0;
+        };
+        // The tallest column surface left behind in the layer: the columns stand there as they
+        // fade, rather than collapsing.
+        const surface = () => {
+          const sections = document.querySelectorAll('[data-layout-morph] section');
+          return sections.length
+            ? Math.max(...[...sections].map((section) => section.getBoundingClientRect().height))
+            : null;
+        };
+        const sample = () => {
+          const board = document.querySelector('[data-compact-board]');
+          const layout = board ? null : document.querySelector('[data-board-layout]');
+          frames.push({
+            width: board ? board.getBoundingClientRect().width : null,
+            layout: layout ? layout.getBoundingClientRect().width : null,
+            morphing: document.querySelector('[data-layout-morph]') !== null,
+            card: drawn(),
+            ghost: ghost(),
+            surface: surface(),
+          });
+          if (frames.length < 90) requestAnimationFrame(sample);
+        };
+        requestAnimationFrame(sample);
+      });
+    // The card is carried the whole way: drawn in every frame, never jumping most of the way.
+    const travels = (frames: Frame[]) => {
+      const path = frames.map((frame) => frame.card);
+      expect(path.every((point) => point !== null)).toBe(true);
+      const steps = path
+        .slice(1)
+        .map((point, index) => Math.hypot(point!.x - path[index]!.x, point!.y - path[index]!.y));
+      const start = path[0]!;
+      const end = path[path.length - 1]!;
+      const distance = Math.hypot(end.x - start.x, end.y - start.y);
+      expect(distance).toBeGreaterThan(100);
+      // A frame held up by laying the new board out still leaves most of the way to travel.
+      expect(Math.max(...steps)).toBeLessThan(distance * 0.4);
+      expect(steps.filter((step) => step > 2).length).toBeGreaterThanOrEqual(4);
+      // Only its copy is drawn while it flies.
+      expect(Math.max(...frames.map((frame) => frame.ghost))).toBeLessThan(0.01);
+    };
+    const collected = async () => {
+      await page.waitForFunction(
+        () => (window as unknown as { frames_: unknown[] }).frames_.length >= 90,
+      );
+      return page.evaluate(() => (window as unknown as { frames_: Frame[] }).frames_);
+    };
+
+    await sampleFrames();
     await card(page, 'Review this').click();
     await expect(compactBoard(page)).toBeVisible();
-    await page.waitForFunction(
-      () => (window as unknown as { frames_: unknown[] }).frames_.length >= 90,
-    );
-    const frames = await page.evaluate(() => (window as unknown as { frames_: Frame[] }).frames_);
+    const frames = await collected();
     const compact = frames.filter((frame) => frame.width !== null);
     expect(compact.length).toBeGreaterThan(0);
     // The cards are carried across from the first frame the new layout is drawn in.
     expect(compact[0]!.morphing).toBe(true);
+    // The columns left behind keep their height as they fade.
+    expect(compact[0]!.surface).toBeGreaterThan(200);
     await expect(page.locator('[data-layout-morph]')).toHaveCount(0);
-    // The tapped card is drawn in every frame, and travels to its new place rather than jumping.
-    const path = frames.map((frame) => frame.card);
-    expect(path.every((point) => point !== null)).toBe(true);
-    const steps = path
-      .slice(1)
-      .map((point, index) => Math.hypot(point!.x - path[index]!.x, point!.y - path[index]!.y));
-    const start = path[0]!;
-    const end = path[path.length - 1]!;
-    const distance = Math.hypot(end.x - start.x, end.y - start.y);
-    expect(distance).toBeGreaterThan(100);
-    // A frame held up by laying the new board out still leaves most of the way to travel.
-    expect(Math.max(...steps)).toBeLessThan(distance * 0.4);
-    expect(steps.filter((step) => step > 2).length).toBeGreaterThanOrEqual(4);
+    travels(frames);
     // Laid out once, at the width it rests at, while the pane slides in beside it.
     const widths = compact.map((frame) => frame.width!);
     expect(Math.max(...widths) - Math.min(...widths)).toBeLessThan(1);
@@ -294,9 +347,20 @@ test.describe('the board beside a task on a narrow desktop', () => {
     // It opens on the tapped card's column.
     await expect(card(page, 'Review this')).toBeInViewport();
 
-    // A backlog card opens it on the backlog.
+    // Closing carries it back into its column, laid out once at the width it rests at as the
+    // pane slides shut.
+    await sampleFrames();
     await page.getByRole('button', { name: 'Back to the board', exact: true }).click();
     await expect(compactBoard(page)).toHaveCount(0);
+    const back = await collected();
+    const full = back.filter((frame) => frame.layout !== null);
+    expect(full[0]!.morphing).toBe(true);
+    travels(back);
+    const layouts = full.map((frame) => frame.layout!);
+    expect(Math.max(...layouts) - Math.min(...layouts)).toBeLessThan(1);
+    await expect(page.locator('[data-layout-morph]')).toHaveCount(0);
+
+    // A backlog card opens it on the backlog.
     await page.getByRole('button', { name: /^Open backlog,/ }).click();
     await card(page, 'Idea for later').click();
     await expect(views(page).getByRole('tab', { name: /Backlog/ })).toHaveAttribute(

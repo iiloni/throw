@@ -55,8 +55,10 @@ scrolls down and back as it scrolls up (`useDockScroll`), and a held card's stat
 its face. `useBoardHandoff`
 carries the column in view and list scrolls between the two layouts, and `LayoutMorph` morphs
 from one to the other: copies of the cards on screen fly to their new places, rails and the dock
-slide off or in at their edges, and only the surfaces behind the cards fade. The compact layout
-takes its resting width at once and opens on the open task's own view and column.
+slide off or in at their edges, and only the surfaces behind the cards fade. Each layout takes its
+resting width at once, clipped by the half while the pane slides (`useWidening` for the full one),
+and the pane's slide steps by painted frames, so mounting a layout costs no motion. The compact
+layout opens on the open task's own view and column.
 Columns that run on under an open desktop pane fade out at the seam (`[data-seam]` in
 `styles.css`, from `ScrollArea`'s `sides` marks and `seamOf`), and columns scrolled out to the
 left fade at the board's start; each fade stands at a sticky rail's edge where one lies over

@@ -68,6 +68,38 @@ export function useCompactBoard(restWidth: number, arriving = false) {
   return next;
 }
 
+/**
+ * The width the full layout lays itself out at while it takes over from the compact one: its
+ * resting width at once, clipped by the half (`overflow-hidden`) as the task pane slides shut,
+ * as the compact layout takes its own as the pane opens. Its columns are then laid out once,
+ * where the cards carried back to them land, rather than on every frame of the slide. Null
+ * once the half has reached it, and at any other time.
+ */
+export function useWidening(
+  compact: boolean,
+  restWidth: number,
+  row: RefObject<HTMLElement | null>,
+) {
+  const [was, setWas] = useState(compact);
+  const [widening, setWidening] = useState(false);
+  let now = widening;
+  if (was !== compact) {
+    setWas(compact);
+    setWidening(!compact);
+    now = !compact;
+  }
+  useEffect(() => {
+    const element = row.current;
+    if (!now || !element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry && entry.contentRect.width >= restWidth - 0.5) setWidening(false);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [now, restWidth, row]);
+  return now && restWidth > 0 ? restWidth : null;
+}
+
 export type CompactView = 'backlog' | 'board' | 'closed';
 
 /**
