@@ -168,6 +168,15 @@ export function railGeometry({
   return { fullWidth: now.fullWidth, backlog: geometry('backlog'), closed: geometry('closed') };
 }
 
+/**
+ * Whether a rail has an edge to drag: a panel does, and so does one whose edge is held, until
+ * it is let go. A strip opens from its button and a gallery goes back from its header, so
+ * neither has one, and a rail standing in as dropzones for a held card keeps still.
+ */
+export function showsRailEdge(view: ZoneState, tracking: boolean, tiles: boolean) {
+  return !tiles && (view === 'panel' || tracking);
+}
+
 /** Where a rail's edge let go of at `width` settles: a strip, a panel that wide, or full. */
 export function settleRail(width: number, max: number): { view: ZoneState; width: number } {
   if (width <= PANEL_WIDTH - RAIL_SNAP) return { view: 'strip', width: PANEL_WIDTH };
@@ -218,7 +227,8 @@ export function zoneStatuses(zone: Zone, statuses: Status[]) {
  *
  * These are not columns and do not look like them: they are rails that run the height of
  * the window, over the ends of the columns' scroller, and never take a column's surface. An
- * open rail's inner edge drags it to any width between a column and the whole board.
+ * open panel's inner edge drags it to any width between a column and the whole board;
+ * a gallery goes back to a column from its header.
  */
 export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometry }) {
   const state = board.use();
@@ -258,6 +268,7 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
     update((before) => ({ [zone]: next, [other]: next === 'full' ? 'strip' : before[other] }));
   // The snap the held edge would make if let go now, to mark crossing into another.
   const snap = useRef<ZoneState>(view);
+  const galleryToggle = useRef<HTMLButtonElement>(null);
 
   function commit(next: { view: ZoneState; width: number }) {
     if (next.view === 'panel') setRailWidth(zone, next.width);
@@ -266,15 +277,12 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
 
   function resize(next: number, keyboard: boolean) {
     if (keyboard) {
-      // The keys walk a panel's width and step on to the gallery at the end; from the
-      // gallery they step back to the widest panel. Closing is the close button's.
-      commit(
-        view === 'full'
-          ? next < geometry.zone
-            ? { view: 'panel', width: Math.min(next, geometry.max - RAIL_SNAP) }
-            : { view: 'full', width: next }
-          : settleRail(Math.max(PANEL_WIDTH, next), geometry.max),
-      );
+      // The keys walk a panel's width and step on to the gallery at the end. Closing is the
+      // close button's.
+      const settled = settleRail(Math.max(PANEL_WIDTH, next), geometry.max);
+      commit(settled);
+      // A gallery has no edge, so the focus moves to the toggle that takes it back.
+      if (settled.view === 'full') galleryToggle.current?.focus();
       return;
     }
     railResize.set({ zone, width: next });
@@ -383,6 +391,7 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
                   </IconButton>
                 )}
                 <IconButton
+                  ref={galleryToggle}
                   label={view === 'full' ? 'Back to a column' : 'Open as a gallery'}
                   onClick={() => setView(view === 'full' ? 'panel' : 'full')}
                 >
@@ -416,7 +425,7 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
           )}
         </AnimatePresence>
       </div>
-      {!tiles && (view !== 'strip' || geometry.tracking) && (
+      {showsRailEdge(view, geometry.tracking, tiles) && (
         <SplitHandle
           width={geometry.zone}
           min={STRIP_WIDTH}

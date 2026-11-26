@@ -166,6 +166,9 @@ test.describe('desktop rails', () => {
     await page.keyboard.press('End');
     await expect(backlog.getByRole('button', { name: 'Back to a column' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Build', exact: true })).toHaveCount(0);
+    // A gallery has no edge: the focus moves to the toggle that takes it back.
+    await expect(handle).toHaveCount(0);
+    await expect(backlog.getByRole('button', { name: 'Back to a column' })).toBeFocused();
     // The toggle still restores the remembered panel.
     await backlog.getByRole('button', { name: 'Back to a column' }).click();
     await expect.poll(() => widthOf(backlog)).toBe(start + 300 - 32);
@@ -178,6 +181,45 @@ test.describe('desktop rails', () => {
     await page.mouse.up();
     await expect(page.getByRole('button', { name: /^Open backlog,/ })).toBeVisible();
     await expect.poll(() => widthOf(backlog)).toBe(64);
+  });
+
+  test('an edge dragged out snaps to the gallery, which has no edge of its own', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await fixture(page, true);
+    for (const [name, opener, outward] of [
+      ['Backlog', /^Open backlog,/, 1],
+      ['Closed', /^Open closed,/, -1],
+    ] as const) {
+      const open = page.getByRole('button', { name: opener });
+      if (await open.count()) await open.click();
+      const zone = rail(page, name);
+      const handle = zone.getByRole('separator', { name: `Resize ${name.toLowerCase()}` });
+      // Settled open, so the grip is where the pointer goes down.
+      await expect.poll(() => widthOf(zone)).toBe(304);
+      const grip = (await handle.boundingBox())!;
+      const y = grip.y + grip.height / 2;
+      const x = grip.x + grip.width / 2;
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      // Out to the window's far side, past the gallery's snap but still inside the window.
+      await page.mouse.move(outward > 0 ? 1430 : 10, y, { steps: 10 });
+      // Still a panel following the pointer, and still holding its edge, until let go.
+      await expect(handle).toBeVisible();
+      await page.mouse.up();
+      await expect(zone.getByRole('button', { name: 'Back to a column' })).toBeVisible();
+      await expect(handle).toHaveCount(0);
+      const full = await widthOf(zone);
+      // Let go, the gallery no longer follows the pointer.
+      await page.mouse.move(x, y, { steps: 4 });
+      await expect.poll(() => widthOf(zone)).toBe(full);
+      // The header takes it back to a column, whose edge returns.
+      await zone.getByRole('button', { name: 'Back to a column' }).click();
+      await expect(handle).toBeVisible();
+      await zone.getByRole('button', { name: `Close ${name.toLowerCase()}` }).click();
+      await expect(handle).toHaveCount(0);
+    }
   });
 
   test('a task opened over a gallery narrows it without springing back and forth', async ({
