@@ -366,6 +366,12 @@ export function clearAuthToken() {
 /** Blocks new writes until a fresh sign-in and marks local data for cleanup in other tabs. */
 export const removedKey = (userId: string) => sessionKey(`throw-account-removed:${userId}`);
 
+// Signing in can reuse the same files a sign-out is deleting. Serialize publication of
+// the new session with cleanup, including cleanup by a tab that held the database open.
+export function withAccountStorage<T>(userId: string, operation: () => Promise<T> | T) {
+  return navigator.locks ? navigator.locks.request(removedKey(userId), operation) : operation();
+}
+
 const EXPIRED_KEY = 'throw-expired-user';
 
 /**
@@ -418,11 +424,13 @@ export const authClient = createAuthClient({
         // outbox are still that account's, and must not send with the new one's token.
         const user = userOf(context.data);
         if (user) {
-          localStorage.removeItem(removedKey(user.id));
-          saveAccount({ user, token }, true);
-          // The load that follows is this tab's, as the account that just signed in.
-          sessionStorage.setItem(sessionKey(TAB_KEY), user.id);
-          pageUserId ??= user.id;
+          return withAccountStorage(user.id, () => {
+            localStorage.removeItem(removedKey(user.id));
+            saveAccount({ user, token }, true);
+            // The load that follows is this tab's, as the account that just signed in.
+            sessionStorage.setItem(sessionKey(TAB_KEY), user.id);
+            pageUserId ??= user.id;
+          });
         } else {
           // Kept in the list first, since the keys below are about to name someone else.
           writeAccounts(getAccounts());

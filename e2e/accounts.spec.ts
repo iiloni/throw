@@ -158,7 +158,7 @@ test('tabs show different accounts side by side, and signing one out leaves the 
   await expect(page.getByRole('heading', { name: 'First renamed' })).toBeVisible();
 
   expect(await storedFor(page, second)).toEqual({ database: true, outbox: true });
-  // Hold the server response so a write in the other tab lands during sign-out.
+  // Hold the server response to verify the other tab refuses writes during sign-out.
   let finishSignOut = () => {};
   const waitForRelease = new Promise<void>((resolve) => {
     finishSignOut = resolve;
@@ -175,16 +175,21 @@ test('tabs show different accounts side by side, and signing one out leaves the 
   const leaving = signOutAccount(page, second);
   try {
     await request;
+    // Firefox can deliver the storage change after the initiating tab starts its fetch.
+    await tab.waitForFunction(
+      (id) => localStorage.getItem(`throw-account-removed:${id}`) === 'true',
+      second.user.id,
+    );
     const blocked = await tab.evaluate(async () => {
       const { write } = await import(/* @vite-ignore */ '/src/lib/collections.ts');
       try {
         write(() => {});
-        return false;
+        return 'write accepted';
       } catch (error) {
-        return error instanceof Error && error.message.includes('signing out');
+        return String(error);
       }
     });
-    expect(blocked).toBe(true);
+    expect(blocked).toContain('signing out');
   } finally {
     finishSignOut();
     await leaving;

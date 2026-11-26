@@ -117,6 +117,27 @@ describe('signing out', () => {
     expect(auth.getSignedInUser()).toEqual(second);
   });
 
+  it('keeps a new session and its data when it replaces one still signing out', async () => {
+    await signInBoth();
+    const account = auth.getAccounts()[0];
+    if (!account) throw new Error('Missing account');
+    let finish = () => {};
+    const response = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => response),
+    );
+    const leaving = accounts.signOutAccount(account);
+    signIn('fresh-token', first);
+    finish();
+    await leaving;
+    expect(auth.getAccounts()).toContainEqual({ user: first, token: 'fresh-token' });
+    expect(mocks.deleteLocalDatabase).not.toHaveBeenCalled();
+    expect(mocks.deleteOutbox).not.toHaveBeenCalled();
+  });
+
   it('carries on as the account left after signing out the one in use', async () => {
     await signInBoth();
     for (const key of [...keysOf(first.id), ...keysOf(second.id)]) localStorage.setItem(key, '1');
