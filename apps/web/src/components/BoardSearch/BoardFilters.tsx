@@ -55,6 +55,7 @@ import { SegmentedTabs } from '@/components/SegmentedTabs/SegmentedTabs';
 import { TagBadge } from '@/components/TagBadge/TagBadge';
 import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { TagTree } from '@/components/TagTree/TagTree';
+import { useCollapsedTags } from '@/components/TagTree/useCollapsedTags';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
@@ -1009,7 +1010,7 @@ function InlineTagsSection({
   filter: BoardFilter;
   counts: FacetCounts;
 }) {
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  const [collapsed, toggleCollapsed] = useCollapsedTags();
   const [search, setSearch] = useState('');
   const reduced = useReducedMotion();
   const query = search.trim().toLowerCase();
@@ -1107,14 +1108,7 @@ function InlineTagsSection({
                         aria-label={`${expanded ? 'Collapse' : 'Expand'} ${tag.name}`}
                         aria-expanded={expanded}
                         disabled={!!query}
-                        onClick={() =>
-                          setCollapsed((current) => {
-                            const next = new Set(current);
-                            if (next.has(tag.id)) next.delete(tag.id);
-                            else next.add(tag.id);
-                            return next;
-                          })
-                        }
+                        onClick={() => toggleCollapsed(tag.id)}
                         className="flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-foreground/[0.06] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
                       >
                         <motion.span

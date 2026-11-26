@@ -6,6 +6,7 @@ import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scrol
 import { springs } from '@/lib/motion';
 import { indexTagTree } from '@/lib/tagTreeIndex';
 import { cn } from '@/lib/utils';
+import { useCollapsedTags } from './useCollapsedTags';
 
 export function TagTree({
   tags,
@@ -22,7 +23,7 @@ export function TagTree({
   searchAccessory?: (focused: boolean) => ReactNode;
   estimatedRowHeight?: number;
 }) {
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  const [collapsed, toggleCollapsed] = useCollapsedTags();
   const [search, setSearch] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const reducedMotion = useReducedMotion();
@@ -90,14 +91,7 @@ export function TagTree({
                         aria-label={`${expanded ? 'Collapse' : 'Expand'} ${tag.name}`}
                         aria-expanded={expanded}
                         disabled={!!query}
-                        onClick={() =>
-                          setCollapsed((current) => {
-                            const next = new Set(current);
-                            if (next.has(tag.id)) next.delete(tag.id);
-                            else next.add(tag.id);
-                            return next;
-                          })
-                        }
+                        onClick={() => toggleCollapsed(tag.id)}
                         className="flex h-11 w-9 shrink-0 items-center justify-center rounded-lg outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <motion.span

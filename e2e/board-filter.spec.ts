@@ -391,6 +391,14 @@ test.describe('desktop', () => {
     // Root and nested tags work inline, with Any/All matching once multiple tags are chosen.
     const garden = tagsSection.getByRole('button', { name: /^Home \/ Garden,/ });
     const work = tagsSection.getByRole('button', { name: /^Work,/ });
+    await tagsSection.getByRole('button', { name: 'Collapse Home' }).click();
+    await page.reload();
+    await expect(page.getByRole('region', { name: 'Build', exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
+    await openBar(page);
+    await expect(garden).toHaveCount(0);
+    await tagsSection.getByRole('button', { name: 'Expand Home' }).click();
     await garden.click();
     await expect(garden).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Earlier position']]);
