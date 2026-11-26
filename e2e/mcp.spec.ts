@@ -1517,6 +1517,20 @@ test('GitHub deliveries reach the offline collection and MCP, with scoped manual
         return c.get(id);
       }, link.id);
     await expect.poll(synced, { timeout: 30000 }).toMatchObject(link);
+    // Electric publishes the in-memory row before the asynchronous SQLite commit completes.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(async (id) => {
+            const { taskGithubLinksCollection: c } = await import(
+              /* @vite-ignore */ '/src/lib/collections.ts'
+            );
+            const rows = await c.config.persistence.adapter.loadSubset(c.id, {});
+            return rows.find((row: { key: string }) => row.key === id)?.value;
+          }, link.id),
+        { timeout: 30000 },
+      )
+      .toMatchObject(link);
     await page.route('**/api/shapes/**', (route) => route.abort());
     await page.reload();
     await expect.poll(synced, { timeout: 30000 }).toMatchObject(link);
