@@ -728,3 +728,152 @@ test('hiding panels is instant with reduced motion', async ({ page }) => {
   const to = switching.at(-1)!.height;
   expect(switching.every((s) => s.height === full || s.height === to)).toBe(true);
 });
+
+/** The task's scroller, and where its tabs and the open panel sit in its view. */
+async function revealState(history: Locator) {
+  return history.evaluate((element) => {
+    const scroller = element.closest<HTMLElement>('[data-slot="scroll-area-viewport"]')!;
+    const view = scroller.getBoundingClientRect();
+    const style = getComputedStyle(scroller);
+    const tabs = element.querySelector('[role="tablist"]')!.getBoundingClientRect();
+    const panel = element.querySelector('[role="tabpanel"]:not([hidden])')?.getBoundingClientRect();
+    return {
+      scrollTop: scroller.scrollTop,
+      end: scroller.scrollHeight - scroller.clientHeight,
+      tabsTop: tabs.top - view.top,
+      tabsBottom: tabs.bottom - view.top,
+      panelBottom: panel ? panel.bottom - view.top : null,
+      height: scroller.clientHeight,
+      above: Math.max(Number.parseFloat(style.scrollPaddingTop) || 0, 16),
+      below: Number.parseFloat(style.scrollPaddingBottom) || 0,
+    };
+  });
+}
+
+/** Waits for the pane's scroll to come to rest. */
+async function scrollSettled(history: Locator) {
+  let last = -1;
+  await expect
+    .poll(async () => {
+      const { scrollTop } = await revealState(history);
+      const still = Math.abs(scrollTop - last) < 0.5;
+      last = scrollTop;
+      return still;
+    })
+    .toBe(true);
+  return revealState(history);
+}
+
+async function longDescription(f: Awaited<ReturnType<typeof fixture>>) {
+  const document = Array.from({ length: 40 }, (_, index) => ({
+    type: 'paragraph',
+    content: [{ type: 'text', text: `Background paragraph ${index + 1} for the release.` }],
+  }));
+  await f.update({ description: { before: null, after: { version: randomUUID(), document } } });
+  await expect(f.pane).toContainText('Background paragraph 40', { timeout: APP_LOAD_TIMEOUT });
+}
+
+/** Hides the panels and scrolls the pane to its end, so the tabs sit at its foot. */
+async function tabsAtFoot(f: Awaited<ReturnType<typeof fixture>>) {
+  const timeline = f.history.locator('[data-collapse]');
+  // Pressing the selected tab hides the panels.
+  await f.history.getByRole('tab', { selected: true }).click();
+  await expect(timeline).toHaveAttribute('data-collapse', 'closed');
+  await f.history.evaluate((element) => {
+    const scroller = element.closest<HTMLElement>('[data-slot="scroll-area-viewport"]')!;
+    scroller.scrollTop = scroller.scrollHeight;
+  });
+  const before = await scrollSettled(f.history);
+  expect(before.scrollTop).toBeGreaterThan(100);
+  return before;
+}
+
+test('opening a short panel scrolls the pane to its end', async ({ page }) => {
+  const f = await fixture(page);
+  await longDescription(f);
+  const before = await tabsAtFoot(f);
+  await f.history.getByRole('tab', { name: 'History' }).click();
+  await expect(f.history.getByRole('tabpanel', { name: 'History' })).toBeVisible();
+  await expect(f.history.locator('[data-collapse]')).toHaveAttribute('data-collapse', 'open');
+  await expect
+    .poll(async () => (await revealState(f.history)).scrollTop)
+    .toBeGreaterThan(before.scrollTop + 20);
+  const after = await scrollSettled(f.history);
+  expect(Math.abs(after.scrollTop - after.end)).toBeLessThan(2);
+  // The tabs stay in view, clear of anything floating over the top.
+  expect(after.tabsTop).toBeGreaterThanOrEqual(after.above - 1);
+  expect(after.panelBottom!).toBeLessThanOrEqual(after.height - after.below + 1);
+
+  // The Links tab, where links are tabbed, reveals its panel the same way.
+  const linksTab = f.history.getByRole('tab', { name: /^Links/ });
+  if (await linksTab.isVisible()) {
+    await tabsAtFoot(f);
+    await linksTab.click();
+    await expect(f.history.getByRole('tabpanel', { name: /^Links/ })).toBeVisible();
+    await expect
+      .poll(async () => {
+        const state = await revealState(f.history);
+        return Math.abs(state.scrollTop - state.end) < 2;
+      })
+      .toBe(true);
+  }
+});
+
+test('opening a tall panel scrolls until its tabs reach the top of the pane', async ({ page }) => {
+  const f = await fixture(page);
+  for (let index = 1; index <= 24; index++) await f.comment(`Comment number ${index}`);
+  await expect(f.history).toContainText('Comment number 24');
+  await longDescription(f);
+  await tabsAtFoot(f);
+  await f.history.getByRole('tab', { name: /^Comments/ }).click();
+  await expect(f.history.getByRole('tabpanel', { name: /^Comments/ })).toBeVisible();
+  await expect
+    .poll(async () => {
+      const state = await revealState(f.history);
+      return Math.abs(state.tabsTop - state.above) < 2;
+    })
+    .toBe(true);
+  const after = await scrollSettled(f.history);
+  expect(Math.abs(after.tabsTop - after.above)).toBeLessThan(2);
+  expect(after.scrollTop).toBeLessThan(after.end - 50);
+  // On a phone the tabs sit below the floating Back and trash toolbars, and can be pressed.
+  await f.history.getByRole('tab', { name: 'History' }).click({ trial: true });
+});
+
+test('a panel already in view does not scroll the pane', async ({ page }) => {
+  const f = await fixture(page);
+  await expect(f.history.getByRole('tabpanel', { name: /^Comments/ })).toBeVisible();
+  const start = await revealState(f.history);
+  test.skip(
+    start.panelBottom! + 120 > start.height - start.below,
+    'The pane is too short to show both panels whole.',
+  );
+  await f.history.getByRole('tab', { name: 'History' }).click();
+  await expect(f.history.getByRole('tabpanel', { name: 'History' })).toBeVisible();
+  await expect(f.history.locator('[data-collapse]')).toHaveAttribute('data-collapse', 'open');
+  const after = await scrollSettled(f.history);
+  expect(after.scrollTop).toBe(start.scrollTop);
+});
+
+test('with reduced motion a panel is revealed without scrolling through', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const f = await fixture(page);
+  await longDescription(f);
+  await tabsAtFoot(f);
+  const jumping = await sampleFrames(page, async () => {
+    await f.history.getByRole('tab', { name: /^Comments/ }).click();
+    await expect
+      .poll(async () => {
+        const state = await revealState(f.history);
+        return Math.abs(state.scrollTop - state.end) < 2;
+      })
+      .toBe(true);
+  });
+  // The pane goes straight to its new place, with no frames between.
+  const from = jumping[0]!.scrollTop;
+  const to = jumping.at(-1)!.scrollTop;
+  expect(to).toBeGreaterThan(from + 20);
+  expect(
+    jumping.every((s) => Math.abs(s.scrollTop - from) < 1 || Math.abs(s.scrollTop - to) < 1),
+  ).toBe(true);
+});

@@ -1,7 +1,17 @@
 import { type ActivityEntry, descriptionSchema, type Project, type Task } from '@throw/shared';
 import { History, Link2, MessageCircle } from 'lucide-react';
-import { motion } from 'motion/react';
-import { memo, type ReactNode, useDeferredValue, useEffect, useId, useMemo, useState } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
+import {
+  memo,
+  type ReactNode,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { z } from 'zod';
 import { Collapse } from '@/components/Collapse/Collapse';
 import { Hint } from '@/components/Hint/Hint';
@@ -107,6 +117,59 @@ const HistoryRow = memo(function HistoryRow({
   );
 });
 
+/** Room left above the tabs on a desktop pane, which has no toolbar floating over it. */
+const REVEAL_MARGIN = 16;
+/** Longest a reveal waits for the panel to open before giving up. */
+const REVEAL_WITHIN = 1500;
+
+/**
+ * Scrolls the task's scroller down to show a panel just turned to, once it has opened to its
+ * own height: to the end when the whole panel fits below the tabs, or else until the tabs
+ * reach the top of the view, below the toolbars floating over it on a phone. It only moves
+ * down, and leaves a panel already in view alone. A scroll of the user's own while the panel
+ * opens cancels it.
+ */
+function revealPanel(section: HTMLElement, panelId: string, instant: boolean) {
+  const scroller = section.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
+  if (!scroller) return () => {};
+  const started = performance.now();
+  let frame = 0;
+  const stop = () => {
+    cancelAnimationFrame(frame);
+    scroller.removeEventListener('wheel', stop);
+    scroller.removeEventListener('touchstart', stop);
+  };
+  const step = () => {
+    const panel = document.getElementById(panelId);
+    const collapse = section.querySelector('[data-collapse]');
+    const settled =
+      panel !== null && !panel.hidden && collapse?.getAttribute('data-collapse') === 'open';
+    if (!settled) {
+      if (performance.now() - started < REVEAL_WITHIN) frame = requestAnimationFrame(step);
+      else stop();
+      return;
+    }
+    stop();
+    const tabs = section.querySelector<HTMLElement>('[role="tablist"]') ?? section;
+    const style = getComputedStyle(scroller);
+    // A phone's scroll padding keeps focus clear of its floating toolbars and dock.
+    const above = Math.max(Number.parseFloat(style.scrollPaddingTop) || 0, REVEAL_MARGIN);
+    const below = Number.parseFloat(style.scrollPaddingBottom) || 0;
+    const view = scroller.getBoundingClientRect();
+    const { scrollTop } = scroller;
+    if (panel.getBoundingClientRect().bottom <= view.bottom - below) return;
+    const tabsAt = tabs.getBoundingClientRect().top - view.top + scrollTop;
+    const end = scroller.scrollHeight - scroller.clientHeight;
+    const target = Math.min(tabsAt - above, end);
+    if (target <= scrollTop + 1) return;
+    scroller.scrollTo({ top: target, behavior: instant ? 'instant' : 'smooth' });
+  };
+  frame = requestAnimationFrame(step);
+  scroller.addEventListener('wheel', stop, { passive: true });
+  scroller.addEventListener('touchstart', stop, { passive: true });
+  return stop;
+}
+
 export function TaskRefusalNotice({ taskId }: { taskId: string }) {
   const { timeline } = useTaskTimeline(taskId);
   const storageKey = `throw-refusals:${getServerUrl()}:${signedInUserId}:${taskId}`;
@@ -196,6 +259,22 @@ export function TaskTimeline({
   );
   if ((stored === 'comments' || stored === 'history') && stored !== lastBase) setLastBase(stored);
   const showLinks = links?.inTabs ?? false;
+  const reducedMotion = useReducedMotion();
+  const ids = useId();
+  const section = useRef<HTMLElement | null>(null);
+  const stopReveal = useRef<(() => void) | null>(null);
+  useEffect(() => () => stopReveal.current?.(), []);
+  // A tab turned to by hand (or a link just made) brings its panel into view.
+  const turnTo = useCallback(
+    (next: (typeof allPanels)[number] | null) => {
+      setTab(next ?? 'none');
+      stopReveal.current?.();
+      stopReveal.current = null;
+      if (next === null || !section.current) return;
+      stopReveal.current = revealPanel(section.current, `${ids}-${next}`, reducedMotion === true);
+    },
+    [setTab, ids, reducedMotion],
+  );
   const tab = stored === 'none' ? null : !showLinks && stored === 'links' ? lastBase : stored;
   // The panel showing, or the one on its way out (and back in) while all are hidden.
   const [panel, setPanel] = useState(tab ?? 'comments');
@@ -211,10 +290,17 @@ export function TaskTimeline({
     value: tab,
     shown: tab === null ? null : shown,
     values: showLinks ? allPanels : basePanels,
-    onValueChange: setTab,
+    onValueChange: turnTo,
   });
+  const swipeRef = swipe.ref;
+  const sectionRef = useCallback(
+    (element: HTMLElement | null) => {
+      section.current = element;
+      swipeRef(element);
+    },
+    [swipeRef],
+  );
   const [focusing, setFocusing] = useState<string | null>(null);
-  const ids = useId();
   useEffect(() => {
     const onFocus = (event: Event) => {
       if (!(event instanceof CustomEvent) || typeof event.detail !== 'string') return;
@@ -226,10 +312,10 @@ export function TaskTimeline({
   }, [setTab]);
   useEffect(() => {
     if (!showLinks) return;
-    const onFocusLinks = () => setTab('links');
+    const onFocusLinks = () => turnTo('links');
     window.addEventListener(FOCUS_LINKS_EVENT, onFocusLinks);
     return () => window.removeEventListener(FOCUS_LINKS_EVENT, onFocusLinks);
-  }, [showLinks, setTab]);
+  }, [showLinks, turnTo]);
   useEffect(() => {
     if (!focusing || shown !== 'history' || !laidOut) return;
     const element = document.getElementById(`history-${focusing}`);
@@ -291,13 +377,13 @@ export function TaskTimeline({
       aria-label="Task history"
       data-task-timeline=""
       className="mt-8 touch-pan-y"
-      ref={swipe.ref}
+      ref={sectionRef}
       {...swipe.handlers}
     >
       <SegmentedTabs
         label={showLinks ? 'Comments, history and links' : 'Comments and history'}
         value={tab}
-        onValueChange={(next) => setTab(next ?? 'none')}
+        onValueChange={turnTo}
         collapsible
         drag={swipe.drag}
         options={tabOptions}
