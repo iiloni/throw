@@ -8,7 +8,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion } from 'motion/react';
-import { useLayoutEffect, useRef } from 'react';
+import { Fragment, useLayoutEffect, useRef } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
@@ -45,6 +45,7 @@ export const STRIP_WIDTH = 64;
  * across without it lying over a column, which is a drop target too.
  */
 const HELD_STRIP_WIDTH = 80;
+
 /** A rail open as a single column. Its edge drags it wider, up to the whole board. */
 export const PANEL_WIDTH = 304;
 /** A rail's edge let go of this close to a strip or to the whole board snaps to it. */
@@ -55,12 +56,16 @@ export const RAIL_SNAP = 72;
  */
 export const ZONE_GAP = 20;
 /**
+ * A strip beside a gallery under a held card takes the gallery's gap (both zone gaps, as no
+ * columns lie between them) and stops at the gallery's edge, so the active statuses' names
+ * read across it beside its own without the gallery giving up any width.
+ */
+const GALLERY_STRIP_WIDTH = STRIP_WIDTH + ZONE_GAP * 2;
+/**
  * How far the rail's resize grip (24 px wide) reaches past its edge, to sit centred between
  * the rail's cards, inset by the gallery's padding, and the column a zone gap beyond.
  */
 const EDGE_GRIP_OUTSET = 12 + (ZONE_GAP - GALLERY_INSET) / 2;
-/** The active statuses' dropzones, which take this much of a gallery while a card is held. */
-export const TILES_WIDTH = 176;
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(min, max), Math.max(min, value));
@@ -105,15 +110,18 @@ export function railGeometry({
   views: Record<Zone, ZoneState>;
   widths: RailWidths;
   resize: { zone: Zone; width: number } | null;
-  /** A card is held and the board makes way for it. */
+  /**
+   * A card is held and the board makes way for it. A gallery keeps its width: the active
+   * statuses it covers become dropzones in the strip beside it, so its cards do not narrow
+   * and re-wrap under the card (and back again at the drop).
+   */
   holding: boolean;
   /** The zone the held card came from. */
   origin: string | null;
 }) {
-  const holdingWidth = holding ? TILES_WIDTH : 0;
   // Each rail's width in a row this wide, and the widest its edge could take it.
   const widthsIn = (row: number) => {
-    const fullWidth = Math.max(0, row - STRIP_WIDTH - ZONE_GAP * 2 - holdingWidth);
+    const fullWidth = Math.max(0, row - STRIP_WIDTH - ZONE_GAP * 2);
     const room = (other: number) => row - ZONE_GAP * 2 - other;
     const panel = (zone: Zone, max: number) =>
       clamp(widths[zone] ?? PANEL_WIDTH, PANEL_WIDTH, max - RAIL_SNAP);
@@ -140,9 +148,15 @@ export function railGeometry({
     const view = views[zone];
     const { width, max, live } = now[zone];
     const tiles = holding && origin !== zone;
+    const besideGallery = views[zone === 'backlog' ? 'closed' : 'backlog'] === 'full';
     return {
       zone: width,
-      drawn: tiles && view === 'strip' && live === null ? HELD_STRIP_WIDTH : width,
+      drawn:
+        tiles && view === 'strip' && live === null
+          ? besideGallery
+            ? GALLERY_STRIP_WIDTH
+            : HELD_STRIP_WIDTH
+          : width,
       // A held edge lays the cards out as it goes; otherwise they are laid out once, for
       // where the row is going.
       content: Math.max(PANEL_WIDTH, live ?? rest[zone].width),
@@ -217,6 +231,20 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
   const count = statuses.reduce((sum, status) => sum + countIn(state, status.id), 0);
   // A card held from this zone keeps the zone as it is, so it can still be placed here.
   const tiles = makingWay(held) && held.origin !== zone;
+  const other = zone === 'backlog' ? 'closed' : 'backlog';
+  // A gallery covers the active columns, so their statuses join the dropzones: in the strip
+  // beside it, or in the gallery itself when the card came from that strip's zone. The
+  // gallery keeps its width either way, so its cards stay where the card is aimed at them.
+  const active =
+    tiles && (view === 'strip' ? state[other] === 'full' : view === 'full' && held.origin === other)
+      ? project.statuses.filter((status) => status.category === 'active')
+      : [];
+  const groups = [
+    { title, statuses },
+    ...(active.length > 0 ? [{ title: 'Active', statuses: active }] : []),
+  ];
+  // In the order of the board: backlog, active, closed.
+  if (zone === 'closed') groups.reverse();
   const hasBlocker = useBacklogSpotlightBlocker(
     project,
     state.subtasksAsCards,
@@ -224,7 +252,6 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
     zone === 'backlog' && view === 'strip' && !geometry.tracking && !tiles,
   );
   const { width } = useRailSpring(geometry.drawn, geometry.mode, geometry.tracking);
-  const other = zone === 'backlog' ? 'closed' : 'backlog';
   const start = zone === 'backlog';
   // A gallery takes the board, so the opposite zone steps back to its strip.
   const setView = (next: ZoneState) =>
@@ -293,17 +320,26 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
               exit={{ opacity: 0 }}
               transition={{ duration: 0.16 }}
             >
-              {view !== 'strip' && (
-                <p className="px-1.5 pt-1.5 pb-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]">
-                  {title}
-                </p>
-              )}
-              {statuses.map((status) => (
-                <StatusTile
-                  key={status.id}
-                  status={status}
-                  shape={view === 'strip' ? 'narrow' : 'block'}
-                />
+              {groups.map((group) => (
+                <Fragment key={group.title}>
+                  {(view !== 'strip' || groups.length > 1) && (
+                    <p
+                      className={cn(
+                        'truncate pt-1.5 pb-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]',
+                        view === 'strip' ? 'px-1 text-center' : 'px-1.5',
+                      )}
+                    >
+                      {group.title}
+                    </p>
+                  )}
+                  {group.statuses.map((status) => (
+                    <StatusTile
+                      key={status.id}
+                      status={status}
+                      shape={view === 'strip' ? 'narrow' : 'block'}
+                    />
+                  ))}
+                </Fragment>
               ))}
             </motion.div>
           ) : view === 'strip' && !geometry.tracking ? (
@@ -402,7 +438,8 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
 
 /**
  * The zone's statuses as filters. While one of the zone's own cards is held they are also
- * where it is dropped to change status, so they grow into targets.
+ * where it is dropped to change status, so they grow into targets, over the row's margins so
+ * the cards below keep their places.
  */
 export function StatusFilter({
   zone,
@@ -425,7 +462,7 @@ export function StatusFilter({
   const chip =
     // A filter is a pill; as a drop target it grows to a tile with the status tiles' corners,
     // which at a filter's height is the same radius.
-    'flex shrink-0 items-center rounded-2xl px-3.5 text-sm outline-none transition-[height,background-color,color,border-color,box-shadow] duration-200 focus-visible:ring-[3px] focus-visible:ring-ring/60';
+    'flex shrink-0 items-center rounded-2xl px-3.5 text-sm outline-none transition-[height,margin,background-color,color,border-color,box-shadow] duration-200 focus-visible:ring-[3px] focus-visible:ring-ring/60';
   return (
     <div className={cn('flex shrink-0 flex-wrap items-center gap-2 px-4 pb-4', className)}>
       {!targets && (
@@ -505,7 +542,9 @@ function StatusFilterChip({
       className={cn(
         chip,
         'border',
-        targets ? 'h-11 flex-1 justify-center' : 'h-8',
+        // A target grows over the space around the row, not into it, so the cards below it
+        // stay where they are while a card is held.
+        targets ? '-my-1.5 h-11 flex-1 justify-center' : 'h-8',
         over
           ? 'border-brand bg-accent text-foreground shadow-md'
           : filter === status.id && !targets
