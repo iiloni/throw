@@ -1248,6 +1248,23 @@ html:active-view-transition [data-drawer]:not([data-sunk]) {
   display: none;
   animation: none;
 }
+/*
+ * Named, the drawer is drawn on its own, so its glass has nothing behind it to blur and shows
+ * the bare tint, through which the moving pages read sharply. Its group lies over the page
+ * images, so the group blurs them as the glass does at rest, under the drawer's rounded top,
+ * while the tint and border stay in the live image. (Chromium blurs nothing from the image
+ * itself.) The group stays while a dock that exists on one side only fades with the page, so
+ * it blurs only when both pages keep the dock (`docked` in lib/pageTransition.ts).
+ */
+/* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
+html:active-view-transition-type(docked)::view-transition-group(dock) {
+  border-radius: 1.75rem 1.75rem 0 0;
+  backdrop-filter: blur(32px) saturate(180%);
+
+  @media (prefers-reduced-transparency: reduce) {
+    backdrop-filter: none;
+  }
+}
 /* A page without a dock at rest (trash) lets the dock go, or arrive, with the page. */
 /* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
 ::view-transition-old(dock):only-child {
