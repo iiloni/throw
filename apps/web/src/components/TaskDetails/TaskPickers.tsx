@@ -30,6 +30,7 @@ import {
 import { NewTagButton, openNewTag } from '@/components/NewTag/NewTag';
 import { SegmentedTabs } from '@/components/SegmentedTabs/SegmentedTabs';
 import { TagPicker } from '@/components/TagPicker/TagPicker';
+import { ScrollBox } from '@/components/ui/scroll-area';
 import { useTags, useTaskTags } from '@/lib/collections';
 import { feelStatusChange, haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
@@ -378,11 +379,11 @@ export function TagOptions({
               onShown={() => setSwapping(false)}
             >
               {activeTab === 'primary' ? (
-                <div
+                <ScrollBox
                   role="tabpanel"
                   id={`${ids}-primary`}
                   aria-labelledby={`${ids}-primary-tab`}
-                  className="max-h-[calc(var(--tags-max,min(26rem,55dvh))-4.5rem-1px)] overflow-y-auto overscroll-contain [scrollbar-width:thin]"
+                  className="max-h-[calc(var(--tags-max,min(26rem,55dvh))-4.5rem-1px)] [--scrollbar-inset:0.25rem]"
                 >
                   {loadingPrimary ? (
                     <div className="px-3 pt-1 pb-1">{loadingTags}</div>
@@ -396,7 +397,7 @@ export function TagOptions({
                       className="w-full pt-1 pb-1"
                     />
                   )}
-                </div>
+                </ScrollBox>
               ) : (
                 <div
                   role="tabpanel"

@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { toast } from 'sonner';
 import { AppShell } from '@/components/AppShell/AppShell';
 import { drag, isPrimed } from '@/components/Board/drag';
-import { board } from '@/components/Board/state';
+import { board, useScrollbarSetting } from '@/components/Board/state';
 import { GpuWarmup } from '@/components/GpuWarmup/GpuWarmup';
 import { arrivedBySwitching, followAccountChanges } from '@/lib/accounts';
 import { getAuthToken, getSignedInUser } from '@/lib/auth';
@@ -24,6 +24,7 @@ const cardHeld = () => drag.get() !== null || isPrimed() || board.get().carrying
 
 function App() {
   useEffect(() => watchScrollBounce({ held: cardHeld }), []);
+  useScrollbarSetting();
   // A tab whose account signs out elsewhere moves on to another (ADR 0016).
   useEffect(followAccountChanges, []);
   useEffect(() => {
