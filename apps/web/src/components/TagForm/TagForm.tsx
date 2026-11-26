@@ -3,6 +3,7 @@ import { Slash, X } from 'lucide-react';
 import { type FormEvent, type RefObject, useId, useMemo, useState } from 'react';
 import { colorName } from '@/components/ColorPicker/ColorPicker';
 import { Hint } from '@/components/Hint/Hint';
+import { SearchSelect, type SelectOption } from '@/components/SearchSelect/SearchSelect';
 import { Swatch } from '@/components/Swatch/Swatch';
 import { TAG_ICON_LABELS, TagIcon } from '@/components/TagIcon/TagIcon';
 import { Button } from '@/components/ui/button';
@@ -34,6 +35,7 @@ export function TagEditor({
   nameRef,
 }: TagEditorProps & { nameRef?: RefObject<HTMLInputElement | null> }) {
   const nameId = useId();
+  const parentLabelId = useId();
   const [name, setName] = useState(initial.tag?.name ?? '');
   const [parentId, setParentId] = useState(initial.parentId);
   const [color, setColor] = useState<Tag['color']>(
@@ -42,14 +44,41 @@ export function TagEditor({
   const [icon, setIcon] = useState<Tag['icon']>(initial.tag?.icon ?? null);
   const [iconSearch, setIconSearch] = useState('');
   const [error, setError] = useState('');
+  // A tag cannot go under itself or its own branch.
   const parents = useMemo(() => {
     const excluded = initial.tag ? tagSubtreeIds(tags, initial.tag.id) : new Set<string>();
-    return tagTree(tags).filter(({ tag }) => !excluded.has(tag.id));
+    const options: SelectOption[] = [{ value: '', label: 'Top level' }];
+    for (const { tag, depth } of tagTree(tags)) {
+      if (excluded.has(tag.id)) continue;
+      const path = tagPath(tags, tag.id);
+      const root = path[0] ?? tag;
+      options.push({
+        value: tag.id,
+        label: tag.name,
+        detail:
+          path
+            .slice(0, -1)
+            .map((ancestor) => ancestor.name)
+            .join(' / ') || undefined,
+        keywords: [path.map((ancestor) => ancestor.name).join(' / ')],
+        depth,
+        icon: (
+          <span
+            data-color={root.color ?? undefined}
+            className={root.color ? 'text-tint-accent' : 'text-muted-foreground'}
+          >
+            <TagIcon name={root.icon} className="size-4 shrink-0" />
+          </span>
+        ),
+      });
+    }
+    return options;
   }, [tags, initial.tag]);
-  const usedColors = new Set(
-    tags
-      .filter((tag) => tag.id !== initial.tag?.id)
-      .flatMap((tag) => (tag.color ? [tag.color] : [])),
+  // Only roots hold a color, so each taken color has one owner, shown on its swatch.
+  const colorOwners = new Map(
+    tags.flatMap((tag) =>
+      tag.id !== initial.tag?.id && tag.color ? [[tag.color, tag] as const] : [],
+    ),
   );
   function save(event: FormEvent) {
     event.preventDefault();
@@ -90,24 +119,18 @@ export function TagEditor({
           className="h-11 rounded-xl"
         />
       </label>
-      <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium">
-        Parent tag
-        <select
-          aria-label="Parent tag"
+      <div className="flex min-w-0 flex-col gap-1.5 text-sm font-medium">
+        <span id={parentLabelId}>Parent tag</span>
+        <SearchSelect
+          labelId={parentLabelId}
+          title="Parent tag"
+          searchLabel="Search tags"
+          emptyText="No tag matches."
+          options={parents}
           value={parentId ?? ''}
-          onChange={(event) => setParentId(event.target.value || null)}
-          className="h-11 min-w-0 w-full rounded-xl border border-border bg-background px-3 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <option value="">Top level</option>
-          {parents.map(({ tag }) => (
-            <option key={tag.id} value={tag.id}>
-              {tagPath(tags, tag.id)
-                .map((item) => item.name)
-                .join(' / ')}
-            </option>
-          ))}
-        </select>
-      </label>
+          onChange={(value) => setParentId(value || null)}
+        />
+      </div>
       {!parentId && (
         <>
           <fieldset>
@@ -117,19 +140,23 @@ export function TagEditor({
                 <Slash className="size-4" aria-hidden />
               </Swatch>
               {COLORS.map((value) => {
-                const used = usedColors.has(value);
+                const owner = colorOwners.get(value);
                 return (
                   <Swatch
                     key={value}
                     color={value}
                     label={colorName(value)}
                     hint={
-                      used ? `${colorName(value)}: already used by another root` : colorName(value)
+                      owner
+                        ? `${colorName(value)}: already used by ${owner.name}`
+                        : colorName(value)
                     }
                     pressed={color === value}
-                    unavailable={used}
+                    unavailable={!!owner}
                     onClick={() => setColor(value)}
-                  />
+                  >
+                    {owner && <TagIcon name={owner.icon} className="size-5 text-foreground" />}
+                  </Swatch>
                 );
               })}
             </div>

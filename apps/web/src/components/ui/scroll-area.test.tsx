@@ -148,7 +148,7 @@ describe('ScrollBox', () => {
         viewportRef={ref}
         viewportProps={{ role: 'listbox', 'aria-label': 'Options' }}
       >
-        <div role="option" aria-selected={false} />
+        <div role="option" aria-selected={false} tabIndex={-1} />
       </ScrollBox>,
     );
     const root = getByTestId('box');

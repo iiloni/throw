@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Tag } from '@throw/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TagTree } from './TagTree';
@@ -122,5 +122,37 @@ describe('collapsed tag branches', () => {
     expect(screen.getByRole('button', { name: 'Collapse Home' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Collapse Home' }));
     expect(stored()).toEqual(['home']);
+  });
+});
+
+describe('the tag search', () => {
+  const clearButton = () => screen.queryByRole('button', { name: 'Clear tag search' });
+
+  it('offers to clear itself only while there is a search', async () => {
+    render(tree());
+    const find = screen.getByRole('textbox', { name: 'Find tags' });
+    expect(clearButton()).toBeNull();
+    fireEvent.change(find, { target: { value: 'Wor' } });
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Home' })).toBeNull());
+    fireEvent.click(clearButton()!);
+    expect(find).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument();
+    expect(clearButton()).toBeNull();
+  });
+
+  it('keeps focus in the search when cleared by pointer or keyboard', () => {
+    render(tree());
+    const find = screen.getByRole('textbox', { name: 'Find tags' });
+    act(() => find.focus());
+    fireEvent.change(find, { target: { value: 'Ho' } });
+    // fireEvent answers false when the press's default, moving focus, was prevented.
+    expect(fireEvent.pointerDown(clearButton()!)).toBe(false);
+    fireEvent.click(clearButton()!);
+    expect(find).toHaveFocus();
+
+    fireEvent.change(find, { target: { value: 'Ho' } });
+    act(() => clearButton()!.focus());
+    fireEvent.click(clearButton()!);
+    expect(find).toHaveFocus();
   });
 });

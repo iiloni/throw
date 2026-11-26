@@ -13,6 +13,8 @@ import { motion, useReducedMotion } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
 import { type ReactElement, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
+import { AccountSwitcher } from '@/components/AccountSwitcher/AccountSwitcher';
+import { SignOutAccountHost } from '@/components/AccountSwitcher/SignOutAccountHost';
 import { ProjectSwitcher } from '@/components/AppShell/ProjectSwitcher';
 import { ShellMenu } from '@/components/AppShell/ShellMenu';
 import { useSwitcherPull } from '@/components/AppShell/SwitcherPull';
@@ -47,7 +49,7 @@ import { type ShellForm, ShellForms } from '@/components/ShellForms/ShellForms';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { ScrollBox } from '@/components/ui/scroll-area';
 import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
-import { getSignedInUser } from '@/lib/auth';
+import { getSignedInUser, pagePath } from '@/lib/auth';
 import { useProjects, useWorkspaces } from '@/lib/collections';
 import { useDesktop, useMedia } from '@/lib/media';
 import { springs } from '@/lib/motion';
@@ -486,6 +488,7 @@ export function AppShell() {
                   </div>
                 )}
 
+                <AccountSwitcher expanded={expanded} />
                 <RailButton
                   label="Settings"
                   href="/settings"
@@ -552,6 +555,7 @@ export function AppShell() {
         <ShellForms form={form} onClose={() => setForm(null)} />
         {!desktop && <ProjectSwitcher open={switcherOpen} onClose={closeSwitcher} />}
         <NewTagHost />
+        <SignOutAccountHost />
       </ManagementSurfaceProvider>
     </ShellContext.Provider>
   );
@@ -638,7 +642,8 @@ function RailButton({
     return hint(
       <a
         {...props}
-        href={href}
+        // Opened in a new tab, the link stays with this tab's account (ADR 0016).
+        href={pagePath(href)}
         onClick={(event) => {
           if (
             event.button !== 0 ||
