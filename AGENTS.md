@@ -123,7 +123,8 @@ does not unmount while a shape reloads.
 Several accounts can be signed in on one device (ADR 0016): `lib/auth.ts` keeps the list,
 the tab's account (`sessionStorage`) and the `/u/<n>` address prefix the router strips and
 adds (`routerRewrite`); `lib/accounts.ts` switches (a full load) and signs one account out.
-The account switcher UI is not built yet.
+The desktop rail, phone project switcher and Account settings share the account list in
+`components/AccountSwitcher`. Swiping the rail or phone avatar cycles through accounts.
 
 ## Layout
 

@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
+import { finger, settled } from './board-helpers';
 import { APP_LOAD_TIMEOUT, createAccount, shapeRows, signUp } from './helpers';
 
 type Account = Awaited<ReturnType<typeof createAccount>>;
@@ -38,10 +39,33 @@ async function nameWorkspace(page: Page, name: string) {
     .toBe(0);
 }
 
-/** Signs another account in from the sign-in page, beside the one in use (ADR 0016). */
+const phone = (page: Page) => (page.viewportSize()?.width ?? 0) < 768;
+
+/**
+ * The list of the device's accounts (ADR 0016): beside the desktop rail's avatar, or in the
+ * phone's project switcher.
+ */
+async function openAccounts(page: Page) {
+  if (phone(page)) {
+    await page.getByRole('button', { name: 'Switch project or workspace', exact: true }).click();
+    await page
+      .getByRole('dialog', { name: 'Projects' })
+      .getByRole('button', { name: /^Account: / })
+      .click();
+  } else {
+    await page.getByRole('button', { name: /^Account: / }).click();
+  }
+  // The popover or the drawer's page, not Settings' own list of them.
+  const list = page.getByRole('dialog').getByRole('list', { name: 'Accounts' });
+  await expect(list).toBeVisible();
+  return list;
+}
+
+/** Signs another account in from the list's "Add account", beside the one in use. */
 async function addAccount(page: Page) {
   const account = await createAccount(page.request);
-  await page.goto('/login');
+  await openAccounts(page);
+  await page.getByRole('link', { name: 'Add account' }).click();
   await expect(page.getByRole('button', { name: 'Back to your tasks' })).toBeVisible({
     timeout: APP_LOAD_TIMEOUT,
   });
@@ -55,20 +79,51 @@ async function addAccount(page: Page) {
 }
 
 async function switchAccount(page: Page, account: Account) {
-  await page.evaluate(async (userId) => {
-    const { switchAccount } = await import(/* @vite-ignore */ '/src/lib/accounts.ts');
-    switchAccount(userId);
-  }, account.user.id);
+  const list = await openAccounts(page);
+  await list.getByRole('button', { name: account.email, exact: true }).click();
 }
 
 async function signOutAccount(page: Page, account: Account) {
-  await page.evaluate(async (userId) => {
-    const { getAccounts } = await import(/* @vite-ignore */ '/src/lib/auth.ts');
-    const { signOutAccount } = await import(/* @vite-ignore */ '/src/lib/accounts.ts');
-    const listed = getAccounts().find(({ user }) => user.id === userId);
-    if (!listed) throw new Error('That account is not signed in here');
-    await signOutAccount(listed);
-  }, account.user.id);
+  const list = await openAccounts(page);
+  await list.getByRole('button', { name: `Sign out ${account.email}`, exact: true }).click();
+  const confirm = page.getByRole('dialog', { name: `Sign out ${account.email}?` });
+  await confirm.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(confirm).toBeHidden({ timeout: APP_LOAD_TIMEOUT });
+}
+
+/**
+ * A swipe across the account's avatar: sideways with a mouse on desktop, and on a phone upwards
+ * with a real finger, inside the drawer that has a pull of its own.
+ */
+async function swipeAvatar(page: Page) {
+  if (!phone(page)) {
+    const avatar = await settled(
+      page.getByRole('button', { name: /^Account: / }).locator('[data-account-avatar]'),
+    );
+    const box = await avatar.boundingBox();
+    if (!box) throw new Error('No avatar to swipe');
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x - 12, y, { steps: 3 });
+    await page.mouse.move(x - 28, y, { steps: 3 });
+    await page.mouse.up();
+    return;
+  }
+  await page.getByRole('button', { name: 'Switch project or workspace', exact: true }).click();
+  const avatar = await settled(
+    page
+      .getByRole('dialog', { name: 'Projects' })
+      .getByRole('button', { name: /^Account: / })
+      .locator('[data-account-avatar]'),
+  );
+  const box = await avatar.boundingBox();
+  if (!box) throw new Error('No avatar to swipe');
+  const touch = await finger(page);
+  await touch.press(avatar, 30);
+  await touch.move({ x: box.x + box.width / 2, y: box.y + box.height / 2 - 30 }, 160);
+  await touch.lift();
 }
 
 /** What the device keeps for an account: its SQLite files and its outbox. */
@@ -101,7 +156,8 @@ test('accounts signed in together keep their own data, at their own addresses', 
   await expect(page.getByRole('heading', { name: 'First space' })).toBeHidden();
   await nameWorkspace(page, 'Second space');
 
-  await switchAccount(page, first);
+  // A swipe across the avatar goes to the other account.
+  await swipeAvatar(page);
   await expect(page.getByText(`Switched to ${first.email}`)).toBeVisible({
     timeout: APP_LOAD_TIMEOUT,
   });
@@ -110,6 +166,21 @@ test('accounts signed in together keep their own data, at their own addresses', 
     timeout: APP_LOAD_TIMEOUT,
   });
   await expect(page.getByRole('heading', { name: 'Second space' })).toBeHidden();
+  // The list marks the account in use, and a tap on another switches to it.
+  const list = await openAccounts(page);
+  await expect(list.getByRole('button', { name: first.email, exact: true })).toHaveAttribute(
+    'aria-current',
+    'true',
+  );
+  await list.getByRole('button', { name: second.email, exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Second space' })).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
+  await expect(page).toHaveURL(/\/u\/2\/w\//);
+  await switchAccount(page, first);
+  await expect(page.getByRole('heading', { name: 'First space' })).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
 
   // The browser's cookie is the second account's; the bearer token says whose write it is.
   await nameWorkspace(page, 'First renamed');
@@ -262,4 +333,50 @@ test('an address names its account, as a bookmark of it does', async ({ page, is
   await page.goto('/u/9/');
   await expect(page).toHaveURL(/\/login$/, { timeout: APP_LOAD_TIMEOUT });
   await expect(page.getByRole('button', { name: 'Back to your tasks' })).toBeVisible();
+});
+
+test('putting the accounts in order renumbers their addresses, in every open tab', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Addresses do not depend on the layout.');
+  await signUp(page);
+  await nameWorkspace(page, 'First space');
+  const second = await addAccount(page);
+  await nameWorkspace(page, 'Second space');
+  await expect(page).toHaveURL(/\/u\/2\/w\//);
+  const tab = await page.context().newPage();
+  await tab.goto('/u/1/');
+  await expect(tab.getByRole('heading', { name: 'First space' })).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
+
+  const list = await openAccounts(page);
+  await page.getByRole('button', { name: `Move ${second.email}` }).press('ArrowUp');
+  await expect(list.getByRole('listitem').first()).toContainText(second.email);
+
+  // Both tabs keep their accounts and take their new numbers, without loading again.
+  await expect(page).toHaveURL(/\/u\/1\/w\//);
+  await expect(tab).toHaveURL(/\/u\/2\/w\//);
+  await expect(tab.getByRole('heading', { name: 'First space' })).toBeVisible();
+  await expect(tab.getByRole('link', { name: 'Settings' })).toHaveAttribute(
+    'href',
+    '/u/2/settings',
+  );
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('link', { name: 'Settings' })).toHaveAttribute(
+    'href',
+    '/u/1/settings',
+  );
+  // The new numbers hold across loads.
+  await page.goto('/u/1/');
+  await expect(page.getByRole('heading', { name: 'Second space' })).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
+  await tab.reload();
+  await expect(tab).toHaveURL(/\/u\/2\/w\//, { timeout: APP_LOAD_TIMEOUT });
+  await expect(tab.getByRole('heading', { name: 'First space' })).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
+  await tab.close();
 });

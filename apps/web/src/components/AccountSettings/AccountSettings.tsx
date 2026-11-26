@@ -1,7 +1,10 @@
 import { Capacitor } from '@capacitor/core';
 import { KeyRound, LogOut, Server, UserRound } from 'lucide-react';
-import { type CSSProperties, type FormEvent, useEffect, useId, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { AccountAvatar } from '@/components/AccountAvatar/AccountAvatar';
+import { AccountList } from '@/components/AccountSwitcher/AccountList';
+import { refreshAccounts } from '@/components/AccountSwitcher/deviceAccounts';
 import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
 import { SettingsRow, SettingsSection } from '@/components/SettingsSection/SettingsSection';
 import { Button } from '@/components/ui/button';
@@ -18,49 +21,45 @@ import { cn } from '@/lib/utils';
 const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 128;
 
-/** The account page: who is signed in, their name and password, and signing out. */
+/**
+ * The account page: who is signed in, their name and password, the other accounts on this
+ * device (ADR 0016), and signing out.
+ */
 export function AccountSettings() {
   const [user, setUser] = useState(getSignedInUser);
   return (
     <div className="flex flex-col gap-6">
       <SettingsSection title="Signed in as">
         {user && <AccountSummary user={user} />}
-        {user && <ChangeName name={user.name} onChanged={() => setUser(getSignedInUser())} />}
+        {user && (
+          <ChangeName
+            name={user.name}
+            onChanged={() => {
+              setUser(getSignedInUser());
+              refreshAccounts();
+            }}
+          />
+        )}
         {Capacitor.isNativePlatform() && (
           <SettingsRow icon={Server} label="Server" description={getServerUrl()} />
         )}
       </SettingsSection>
       <ChangePassword />
+      <SettingsSection
+        title="Accounts on this device"
+        description="Each tab shows one account. Switching opens the app as it."
+      >
+        <AccountList className="p-2" />
+      </SettingsSection>
       <SignOut />
     </div>
   );
 }
 
-function initials(name: string, email: string) {
-  return (name.trim() || email)
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join('');
-}
-
-/** A hue that stays with an account, as Catch's avatars have. */
-function accountHue(id: string) {
-  let hash = 0;
-  for (let index = 0; index < id.length; index++) hash = (hash * 31 + id.charCodeAt(index)) >>> 0;
-  return hash % 360;
-}
-
 function AccountSummary({ user }: { user: SignedInUser }) {
   return (
     <div className="flex items-center gap-3 p-4">
-      <span
-        aria-hidden
-        style={{ '--avatar-hue': accountHue(user.id) } as CSSProperties}
-        className="flex size-12 shrink-0 items-center justify-center rounded-full bg-[light-dark(oklch(0.86_0.11_var(--avatar-hue)),oklch(0.4_0.09_var(--avatar-hue)))] font-semibold text-[light-dark(oklch(0.32_0.08_var(--avatar-hue)),oklch(0.92_0.05_var(--avatar-hue)))] text-lg"
-      >
-        {initials(user.name, user.email)}
-      </span>
+      <AccountAvatar {...user} className="size-12 text-lg" />
       <div className="min-w-0">
         <p className="truncate font-medium">{user.name || user.email}</p>
         {user.name && <p className="truncate text-muted-foreground text-sm">{user.email}</p>}
