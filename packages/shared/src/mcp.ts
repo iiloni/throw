@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { activityChangeSchema } from './activity';
+import { linkGithubRequestSchema, taskGithubLinkSchema } from './github';
 import { positionSchema } from './position';
 import { prioritySchema } from './priorities';
 import { projectKeySchema, projectSchema, storedProjectKeySchema } from './projects';
@@ -360,6 +361,14 @@ export const mcpTools = {
     }),
     output: uuidPage(task),
   },
+  link_github: {
+    input: z.strictObject({ task: taskRef, ...linkGithubRequestSchema.shape }),
+    output: z.object({ link: taskGithubLinkSchema, txid: z.number().nullable() }),
+  },
+  unlink_github: {
+    input: z.strictObject({ task: taskRef, linkId: uuid }),
+    output: z.object({ txid: z.number().nullable() }),
+  },
   get_task: {
     input: z.strictObject({
       task: taskRef,
@@ -377,6 +386,7 @@ export const mcpTools = {
           .describe('A blocking task is still open and out of the trash. Informational only.'),
       }),
       relations: z.array(relation),
+      githubLinks: z.array(taskGithubLinkSchema).default([]),
       subtasks: uuidPage(task),
       comments: timelinePage(comment),
       history: timelinePage(activity),

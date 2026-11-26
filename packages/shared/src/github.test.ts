@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createGithubConnectionSchema,
+  parseGithubLink,
   parseGithubRepository,
   sameGithubRepository,
   updateGithubConnectionSchema,
@@ -83,4 +84,21 @@ describe('connection bodies', () => {
     );
     expect(updateGithubConnectionSchema.parse({ enabled: false })).toEqual({ enabled: false });
   });
+});
+
+it('canonicalizes GitHub item URLs and rejects lookalikes and invalid numbers', () => {
+  expect(parseGithubLink('https://github.com/Org/Repo/pull/15/')).toEqual({
+    repo: 'org/repo',
+    kind: 'pr',
+    number: 15,
+    url: 'https://github.com/org/repo/pull/15',
+  });
+  for (const url of [
+    'https://github.com.evil/org/repo/issues/1',
+    'https://example.org/org/repo/pull/1',
+    'https://github.com/org/repo/pull/0',
+    'https://github.com/org/repo/pull/2147483648',
+    'https://github.com/org/repo/commit/15',
+  ])
+    expect(parseGithubLink(url)).toBeNull();
 });

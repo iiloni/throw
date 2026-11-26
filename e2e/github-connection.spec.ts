@@ -146,7 +146,7 @@ test('a project connects to GitHub and receives signed, deduplicated deliveries 
   const ping = await deliver(request, made.webhookUrl, secret, { delivery });
   expect(ping.status(), await ping.text()).toBe(200);
   expect(await ping.json()).toEqual({ ok: true, status: 'ok' });
-  const intervening = await deliver(request, made.webhookUrl, secret, { event: 'push' });
+  const intervening = await deliver(request, made.webhookUrl, secret, { event: 'release' });
   expect(intervening.status()).toBe(202);
   const again = await deliver(request, made.webhookUrl, secret, { delivery });
   expect(await again.json()).toEqual({ ok: true, duplicate: true });
@@ -158,8 +158,8 @@ test('a project connects to GitHub and receives signed, deduplicated deliveries 
   });
 
   // Unhandled events are verified and ignored; refusals say why.
-  const push = await deliver(request, made.webhookUrl, secret, { event: 'push' });
-  expect(push.status()).toBe(202);
+  const release = await deliver(request, made.webhookUrl, secret, { event: 'release' });
+  expect(release.status()).toBe(202);
   expect(
     (
       await deliver(request, made.webhookUrl, secret, { signature: `sha256=${'0'.repeat(64)}` })

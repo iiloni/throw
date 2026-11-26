@@ -76,8 +76,9 @@ integrations.
   sends a small signed notice and the agent reads the change from the MCP feed. A user
   creates them in Settings; they run no rules and change nothing in Throw.
 - An opt-in GitHub connection per project, in project settings: GitHub sends the project's
-  repository events as signed webhooks, which Throw verifies and records. Linking pull
-  requests and issues, status changes on their events and releases build on it
+  repository events as signed webhooks. Task keys in pull requests and issues link them to
+  tasks. Devices sync link metadata, review decisions and check counts for offline use.
+  Status changes on those events and releases build on it
   ([ADR 0017](decisions/0017-github-integration.md)).
 
 ### Out of scope

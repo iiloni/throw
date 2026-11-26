@@ -34,9 +34,11 @@ import {
   type Tag,
   type TagWriteResponse,
   type Task,
+  type TaskGithubLink,
   type TaskRelation,
   type TaskTag,
   tagSchema,
+  taskGithubLinkSchema,
   taskRelationSchema,
   taskSchema,
   taskTagKey,
@@ -265,6 +267,25 @@ export const taskTagsCollection = createCollection(
     1,
   ),
 );
+
+export const taskGithubLinksCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      id: 'task-github-links',
+      schema: taskGithubLinkSchema,
+      getKey: (link) => link.id,
+      shapeOptions: shapeOptions('task-github-links'),
+    }),
+    1,
+  ),
+);
+const emptyGithubLinks: TaskGithubLink[] = [];
+export function useTaskGithubLinks() {
+  const { data = emptyGithubLinks, isLoading } = useLiveQuery((q) =>
+    q.from({ link: taskGithubLinksCollection }),
+  );
+  return { links: useSteadyRows(data), isLoading };
+}
 
 /** Links between tasks, across the projects of a workspace. Always synced for board cards. */
 export const taskRelationsCollection = createCollection(

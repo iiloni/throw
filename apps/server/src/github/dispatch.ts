@@ -1,4 +1,5 @@
 import type { Transaction } from '../db/client';
+import { connected, handleItem, handlePush, handleSignal } from './linkEvents';
 
 /** A verified delivery for a connection's repository, as handlers receive it. */
 export type GithubEvent = {
@@ -27,6 +28,12 @@ export type GithubHandlers = Readonly<Partial<Record<string, GithubEventHandler>
  * here: pull requests and branches, issues, releases.
  */
 export const githubHandlers: GithubHandlers = {
+  push: connected(handlePush),
+  pull_request: connected(handleItem),
+  issues: connected(handleItem),
+  pull_request_review: connected(handleSignal),
+  check_run: connected(handleSignal),
+  check_suite: connected(handleSignal),
   // GitHub's test when a webhook is made or pinged from its settings. Recording it is enough.
   ping: async () => ({ status: 'ok' }),
 };
