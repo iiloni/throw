@@ -792,13 +792,24 @@ test('opening a short panel scrolls the pane to its end', async ({ page }) => {
   const f = await fixture(page);
   await longDescription(f);
   const before = await tabsAtFoot(f);
-  await f.history.getByRole('tab', { name: 'History' }).click();
-  await expect(f.history.getByRole('tabpanel', { name: 'History' })).toBeVisible();
-  await expect(f.history.locator('[data-collapse]')).toHaveAttribute('data-collapse', 'open');
-  await expect
-    .poll(async () => (await revealState(f.history)).scrollTop)
-    .toBeGreaterThan(before.scrollTop + 20);
+  const opening = await sampleFrames(page, async () => {
+    await f.history.getByRole('tab', { name: 'History' }).click();
+    await expect(f.history.getByRole('tabpanel', { name: 'History' })).toBeVisible();
+    await expect(f.history.locator('[data-collapse]')).toHaveAttribute('data-collapse', 'open');
+  });
   const after = await scrollSettled(f.history);
+  expect(after.scrollTop).toBeGreaterThan(before.scrollTop + 20);
+  // The scroll keeps step with the panel opening rather than waiting for it, and never
+  // turns back on the way.
+  const full = opening.at(-1)!.height;
+  const midway = opening.filter((s) => s.height > full * 0.3 && s.height < full * 0.7);
+  expect(midway.length).toBeGreaterThan(0);
+  for (const sample of midway) {
+    const share = (sample.scrollTop - before.scrollTop) / (after.scrollTop - before.scrollTop);
+    expect(Math.abs(share - sample.height / full)).toBeLessThan(0.25);
+  }
+  for (let i = 1; i < opening.length; i++)
+    expect(opening[i]!.scrollTop).toBeGreaterThanOrEqual(opening[i - 1]!.scrollTop - 0.5);
   expect(Math.abs(after.scrollTop - after.end)).toBeLessThan(2);
   // The tabs stay in view, clear of anything floating over the top.
   expect(after.tabsTop).toBeGreaterThanOrEqual(after.above - 1);
