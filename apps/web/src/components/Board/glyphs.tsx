@@ -52,6 +52,15 @@ export function StatusGlyph({
 
 const PRIORITY_ICONS = [ChevronsUp, ChevronUp, null, ChevronDown, ChevronsDown] as const;
 
+/** Each rank's color, warm for urgent and cool for quiet. The default rank has no chevron. */
+const PRIORITY_TONES = [
+  'text-priority-critical',
+  'text-priority-high',
+  null,
+  'text-priority-low',
+  'text-priority-lowest',
+] as const;
+
 /** Whether a rank draws a chevron; the default rank does not. */
 export function hasPriorityIcon(priority: Priority) {
   return PRIORITY_ICONS[priority - 1] !== null;
@@ -67,7 +76,7 @@ export function PriorityIcon({ priority, className }: { priority: Priority; clas
   return (
     <Icon
       aria-hidden
-      className={cn('size-4 shrink-0', priority === 1 && 'text-destructive', className)}
+      className={cn('size-4 shrink-0', PRIORITY_TONES[priority - 1], className)}
       strokeWidth={priority === 1 ? 2.75 : 2.25}
     />
   );
@@ -86,11 +95,7 @@ export function PriorityGlyph({
   if (!hasPriorityIcon(priority)) return null;
   return (
     <Hint label={`Priority: ${name}`}>
-      <span
-        role="img"
-        aria-label={`Priority: ${name}`}
-        className={cn('shrink-0', priority === 1 && 'text-destructive', className)}
-      >
+      <span role="img" aria-label={`Priority: ${name}`} className={cn('shrink-0', className)}>
         <PriorityIcon priority={priority} />
       </span>
     </Hint>
