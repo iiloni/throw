@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { type Browser, expect, type Locator, type Page, test } from '@playwright/test';
 import { APP_LOAD_TIMEOUT, shapeRows, signUp, switcherItem, waitForCachedProject } from './helpers';
-import { newTag } from './tag-helpers';
+import { newTag, taggedTask, tagTaskUpdate } from './tag-helpers';
 
 async function fixture(page: Page, { followWorkspaceHome = false } = {}) {
   const account = await signUp(page);
@@ -112,6 +112,60 @@ async function anotherDevice(page: Page, browser: Browser) {
     );
   return browser.newContext({ storageState, viewport: page.viewportSize()! });
 }
+
+test('inline subtasks have a visible edge and keep their own tint in both themes', async ({
+  page,
+  isMobile,
+}, testInfo) => {
+  if (!isMobile) await page.setViewportSize({ width: 1024, height: 800 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const account = await fixture(page);
+  const { projectId, taskId, pane } = account;
+  const child = await taggedTask(page.request, account, projectId, {
+    title: 'Plan the rollout',
+    parentId: taskId,
+  });
+  const list = pane.locator('[data-task-card]').getByRole('region', { name: 'Subtasks' });
+  const first = list.getByRole('article', { name: /Plan the rollout$/ });
+  const violet = await newTag(page.request, account, projectId, {
+    name: 'Design',
+    color: 'violet',
+  });
+  const second = await taggedTask(page.request, account, projectId, {
+    title: 'Review the design',
+    parentId: taskId,
+    primaryTagId: violet.id,
+  });
+  const other = list.locator(`[data-card-id="${second.id}"]`);
+  await expect(other).toHaveAttribute('data-color', 'violet');
+  for (const surface of ['neutral', 'mint']) {
+    if (surface === 'mint') {
+      const tag = await newTag(page.request, account, projectId, {
+        name: 'Feature',
+        color: 'mint',
+      });
+      for (const id of [taskId, child.id]) {
+        await tagTaskUpdate(page.request, account, id, {
+          primaryTagId: { before: null, after: tag.id },
+        });
+      }
+      await expect(first).toHaveAttribute('data-color', 'mint');
+    }
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme });
+      await expect(first).toHaveClass(/border-foreground\/20/);
+      await expect(first).toHaveClass(/shadow-sm/);
+      // Dark shadows vanish on dark surfaces, so there the card is lifted by a lighter wash.
+      const raise = await first.evaluate((el) => getComputedStyle(el).backgroundImage);
+      expect(raise).toMatch(/gradient/);
+      if (colorScheme === 'dark') expect(raise).not.toMatch(/rgba\(0, 0, 0, 0\)/);
+      else expect(raise).toMatch(/rgba\(0, 0, 0, 0\)/);
+      const fill = await first.evaluate((el) => getComputedStyle(el).backgroundColor);
+      await expect(other).not.toHaveCSS('background-color', fill);
+      await list.screenshot({ path: testInfo.outputPath(`inline-${surface}-${colorScheme}.png`) });
+    }
+  }
+});
 
 test('task fields, actions, subtasks and task links work in the split pane and phone screen', async ({
   page,
@@ -1166,17 +1220,35 @@ test("a subtask lands in its card in the parent with the card's face and edge", 
   // The last frame of the surface, before the card is shown again in its place.
   const last = page.evaluate(
     () =>
-      new Promise<{ status: DOMRect; edge: number } | null>((resolve) => {
-        let seen: { status: DOMRect; edge: number } | null = null;
+      new Promise<{
+        status: DOMRect;
+        edge: number;
+        border: string;
+        shadow: string;
+        shadowOpacity: number;
+      } | null>((resolve) => {
+        let seen: {
+          status: DOMRect;
+          edge: number;
+          border: string;
+          shadow: string;
+          shadowOpacity: number;
+        } | null = null;
         const start = performance.now();
         const frame = () => {
           const surface = document.querySelector('[aria-label="Closing task"] [data-task-surface]');
           if (!surface && seen) return resolve(seen);
           if (surface) {
             const edge = surface.querySelector('[data-task-edge]');
+            const shadow = getComputedStyle(
+              document.querySelector('[aria-label="Closing task"] [data-task-shadow]')!,
+            );
             seen = {
               status: surface.querySelector('[data-task-face] .truncate')!.getBoundingClientRect(),
               edge: edge ? Number(getComputedStyle(edge).opacity) : 0,
+              border: edge ? getComputedStyle(edge).borderTopColor : '',
+              shadow: shadow.boxShadow,
+              shadowOpacity: Number(shadow.opacity),
             };
           }
           if (performance.now() - start > 5000) return resolve(null);
@@ -1191,6 +1263,14 @@ test("a subtask lands in its card in the parent with the card's face and edge", 
   expect(Math.abs(landed.status.x - status.x)).toBeLessThan(1);
   expect(Math.abs(landed.status.y - status.y)).toBeLessThan(1);
   expect(landed.edge).toBeGreaterThan(0.95);
+  // It wears the inline card's raised edge, so the border and shadow do not pop in on landing.
+  const resting = await card.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { border: style.borderTopColor, shadow: style.boxShadow };
+  });
+  expect(landed.border).toBe(resting.border);
+  expect(landed.shadow).toBe(resting.shadow);
+  expect(landed.shadowOpacity).toBeGreaterThan(0.95);
 });
 
 test('the open task lives in the URL: reload keeps it, Back closes it, a stale link says so', async ({
@@ -1372,6 +1452,7 @@ test('a wide desktop pane keeps tags and subtasks in a column that opens and shu
   await expect(column).toBeVisible();
   await expect(subtask).toHaveCount(1);
   await expect(column.getByRole('article')).toHaveCount(1);
+  await expect(subtask).not.toHaveClass(/border-foreground\/20/);
   await expect(subtask).toBeFocused();
   expect(await width()).toBe(full - 268);
   // Opening it and coming back keeps the column as it was, without springing it again.

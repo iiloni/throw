@@ -37,6 +37,8 @@ const CARD_BORDER = 1;
  * out in mid-air.
  */
 const ROW_DISSOLVE_DELAY = 0.35;
+/** The board card's resting shadow, worn over a relation row, which has no edge of its own. */
+const ROW_SHADOW = '0 1px 2px oklch(0 0 0 / 0.06)';
 
 /**
  * Catch's card ⇄ note container transform: resize the clipping box, never its text. A subtask
@@ -126,10 +128,23 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
   );
   // The card's own edge, which it is hidden with while the task is out of it. Without it, a
   // card landing in the backlog's glass drawer would read as part of the drawer until shown,
-  // and an untinted task closing into a relation row would blend into the card beneath.
-  const boxShadow = useTransform(
-    () => `0 1px 2px oklch(0 0 0 / ${(0.06 * edgeOpacity.get()).toFixed(3)})`,
-  );
+  // and an untinted task closing into a relation row would blend into the card beneath. A
+  // card's edge is read from it, so one drawn stronger than the board's, as a subtask's in its
+  // parent is, does not appear only once the card is shown; a row has none of its own to wear.
+  const edgeBorder = useTransform(() => {
+    const rect = card.get();
+    if (rect && !rect.row) return rect.edge.border;
+    return color ? 'transparent' : 'var(--border)';
+  });
+  const edgeShadow = useTransform(() => {
+    const rect = card.get();
+    return rect && !rect.row ? rect.edge.shadow : ROW_SHADOW;
+  });
+  const shadowOpacity = useTransform(() => edgeOpacity.get() * opacity.get());
+  const edgeRaise = useTransform(() => {
+    const rect = card.get();
+    return rect && !rect.row ? rect.edge.raise : 'none';
+  });
 
   useEffect(() => {
     const resize = () => viewport.set({ width: innerWidth, height: innerHeight });
@@ -277,7 +292,24 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
           }
         }}
       >
-        {/* Near the card it wears the card's edge, border and shadow, so landing changes nothing. */}
+        {/* Near the card it wears the card's edge, border and shadow, so landing changes nothing.
+            The shadow is a layer of its own behind the surface so it fades whatever its form. */}
+        <motion.div
+          aria-hidden
+          data-task-shadow=""
+          className="pointer-events-none absolute top-0 left-0"
+          style={{
+            x,
+            y,
+            width,
+            height,
+            borderRadius,
+            scale,
+            opacity: shadowOpacity,
+            boxShadow: edgeShadow,
+            transformOrigin: 'center',
+          }}
+        />
         <motion.div
           data-task-surface=""
           data-color={color ?? undefined}
@@ -290,7 +322,6 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
             borderRadius,
             scale,
             opacity,
-            boxShadow,
             transformOrigin: 'center',
           }}
         >
@@ -306,6 +337,12 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
           </motion.div>
           <motion.div
             aria-hidden
+            data-task-raise=""
+            className="pointer-events-none absolute inset-0"
+            style={{ opacity: edgeOpacity, backgroundImage: edgeRaise }}
+          />
+          <motion.div
+            aria-hidden
             data-task-face=""
             className="pointer-events-none absolute top-px left-px"
             style={{ width: faceWidth, opacity: faceOpacity }}
@@ -317,15 +354,12 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
               statusAsControl={face.statusControl}
             />
           </motion.div>
-          {/* A tinted card's border is transparent. */}
-          {!color && (
-            <motion.div
-              aria-hidden
-              data-task-edge=""
-              className="pointer-events-none absolute inset-0 rounded-[inherit] border border-border"
-              style={{ opacity: edgeOpacity }}
-            />
-          )}
+          <motion.div
+            aria-hidden
+            data-task-edge=""
+            className="pointer-events-none absolute inset-0 rounded-[inherit] border"
+            style={{ opacity: edgeOpacity, borderColor: edgeBorder }}
+          />
         </motion.div>
       </section>
     </>

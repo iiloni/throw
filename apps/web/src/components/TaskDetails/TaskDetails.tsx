@@ -190,8 +190,14 @@ export function TaskDetails({
     </button>
   );
   /** The subtasks with their slot to add one, inline below the description or in the column. */
-  const subtasks = (className?: string, wrapList: (list: ReactNode) => ReactNode = (l) => l) => (
-    <section aria-label="Subtasks" className={cn('flex flex-col gap-2', className)}>
+  const subtasks = (
+    placement: 'inline' | 'column',
+    wrapList: (list: ReactNode) => ReactNode = (l) => l,
+  ) => (
+    <section
+      aria-label="Subtasks"
+      className={cn('flex flex-col gap-2', placement === 'inline' && 'mt-8')}
+    >
       <h2 className="px-1 font-medium text-muted-foreground text-xs tabular-nums">
         {children.length ? `Subtasks · ${done}/${children.length}` : 'Subtasks'}
       </h2>
@@ -202,6 +208,12 @@ export function TaskDetails({
             return (
               <TaskCard
                 key={child.id}
+                className={
+                  placement === 'inline'
+                    ? // Over its own tint, so a subtask keeps its colour, lifted off its parent's.
+                      'border-foreground/20 bg-[image:linear-gradient(var(--raise),var(--raise))] shadow-sm'
+                    : undefined
+                }
                 task={{
                   ...boardTask(child, tags),
                   secondaryTagIds: boardTasks.get(child.id)?.secondaryTagIds ?? [],
@@ -311,7 +323,7 @@ export function TaskDetails({
           {task.parentId === null && (
             <Fold data-fold="subtasks" amount={column.closed} hidden={column.open}>
               {/* Flush with the task, as Catch lists a note's links below it. */}
-              {subtasks('mt-8', (list) => (
+              {subtasks('inline', (list) => (
                 <Fold amount={column.inline} hidden={column.fits}>
                   {column.inlineMounted && list}
                 </Fold>
@@ -465,7 +477,7 @@ export function TaskDetails({
       ) : (
         <TaskColumnFrame layout={column} card={card}>
           {tagRow}
-          {task.parentId === null && subtasks()}
+          {task.parentId === null && subtasks('column')}
           <div className="flex flex-col gap-2">
             {relationGroups.length > 0 ? (
               relations()
