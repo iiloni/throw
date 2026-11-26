@@ -606,6 +606,13 @@ export const githubConnections = pgTable(
     lastDeliveryEvent: text(),
     lastDeliveryStatus: text().$type<GithubDeliveryStatus>(),
     lastDeliveryDetail: text(),
+    // Status rules (ADR 0017): the status each event moves linked tasks to, or null when off.
+    // Routes check a status is the project's own; deleting one turns its rules off.
+    prDraftOpenedStatusId: uuid().references(() => statuses.id, { onDelete: 'set null' }),
+    prReadyForReviewStatusId: uuid().references(() => statuses.id, { onDelete: 'set null' }),
+    prMergedStatusId: uuid().references(() => statuses.id, { onDelete: 'set null' }),
+    prClosedStatusId: uuid().references(() => statuses.id, { onDelete: 'set null' }),
+    issueClosedStatusId: uuid().references(() => statuses.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

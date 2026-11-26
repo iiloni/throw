@@ -59,6 +59,11 @@ describe('connectionMetadata', () => {
       lastDeliveryEvent: 'ping',
       lastDeliveryStatus: 'ok',
       lastDeliveryDetail: null,
+      prDraftOpenedStatusId: null,
+      prReadyForReviewStatusId: null,
+      prMergedStatusId: '019a0000-0000-7000-8000-000000000004',
+      prClosedStatusId: null,
+      issueClosedStatusId: null,
       createdAt: new Date('2026-11-25T10:00:00.000Z'),
       updatedAt: new Date('2026-11-26T10:00:00.000Z'),
     };
@@ -69,6 +74,13 @@ describe('connectionMetadata', () => {
       webhookUrl:
         'http://localhost:3000/api/integrations/github/webhooks/abcdefghijklmnopqrstuvwxyz012345',
       lastDelivery: { id: 'd-1', event: 'ping', status: 'ok', detail: null },
+      statusRules: {
+        prDraftOpened: null,
+        prReadyForReview: null,
+        prMerged: '019a0000-0000-7000-8000-000000000004',
+        prClosed: null,
+        issueClosed: null,
+      },
     });
     const text = JSON.stringify(metadata);
     expect(text).not.toContain('ciphertext');

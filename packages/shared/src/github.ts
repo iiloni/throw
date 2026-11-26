@@ -91,6 +91,47 @@ export const createGithubConnectionSchema = z
   });
 
 /**
+ * The events a project can move tasks on (ADR 0017), each to one of its own statuses. Every
+ * rule is off until a status is chosen for it.
+ *
+ * - `prDraftOpened`: a linked pull request opens, reopens or is converted to a draft.
+ * - `prReadyForReview`: a linked pull request opens or reopens ready for review, or leaves
+ *   draft (`ready_for_review`).
+ * - `prMerged` / `prClosed`: the task's last open pull request closes; merged when any of the
+ *   task's pull requests merged.
+ * - `issueClosed`: the task's last open linked issue closes.
+ */
+export const GITHUB_STATUS_TRIGGERS = [
+  'prDraftOpened',
+  'prReadyForReview',
+  'prMerged',
+  'prClosed',
+  'issueClosed',
+] as const;
+export type GithubStatusTrigger = (typeof GITHUB_STATUS_TRIGGERS)[number];
+
+/** Each trigger's target status, or null when the rule is off. */
+export const githubStatusRulesSchema = z.object({
+  prDraftOpened: z.uuid().nullable(),
+  prReadyForReview: z.uuid().nullable(),
+  prMerged: z.uuid().nullable(),
+  prClosed: z.uuid().nullable(),
+  issueClosed: z.uuid().nullable(),
+});
+export type GithubStatusRules = z.infer<typeof githubStatusRulesSchema>;
+
+export const NO_GITHUB_STATUS_RULES: GithubStatusRules = {
+  prDraftOpened: null,
+  prReadyForReview: null,
+  prMerged: null,
+  prClosed: null,
+  issueClosed: null,
+};
+
+/** The rules a request changes. A rule it leaves out keeps its status. */
+export const githubStatusRulesUpdateSchema = githubStatusRulesSchema.partial().strict();
+
+/**
  * `token` replaces the stored token. Switching to `webhook` forgets it; switching to `token`
  * needs one unless the connection already holds it.
  */
@@ -100,6 +141,7 @@ export const updateGithubConnectionSchema = z
     authMode: githubAuthModeSchema,
     token: githubTokenSchema,
     enabled: z.boolean(),
+    statusRules: githubStatusRulesUpdateSchema,
   })
   .partial()
   .refine((body) => Object.keys(body).length > 0, 'Change at least one field')
@@ -138,6 +180,8 @@ export const githubConnectionSchema = z.object({
   webhookUrl: z.string(),
   createdAt: timestampSchema,
   lastDelivery: githubDeliverySchema.nullable(),
+  /** Absent from servers older than the status rules, which cannot store them. */
+  statusRules: githubStatusRulesSchema.optional(),
 });
 export type GithubConnection = z.infer<typeof githubConnectionSchema>;
 
