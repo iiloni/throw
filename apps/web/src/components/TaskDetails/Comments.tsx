@@ -2,13 +2,10 @@ import type { Comment } from '@throw/shared';
 import { Bot, CloudUpload, Pencil, PenLine, Trash2, UserRound } from 'lucide-react';
 import {
   AnimatePresence,
-  type AnimationPlaybackControls,
-  animate,
   motion,
   useIsPresent,
   useMotionValue,
   useReducedMotion,
-  useTransform,
 } from 'motion/react';
 import {
   memo,
@@ -26,7 +23,7 @@ import { Button } from '@/components/ui/button';
 import { signedInUserId } from '@/lib/collections';
 import { deleteComment, editComment } from '@/lib/comments';
 import { haptics } from '@/lib/haptics';
-import { curves, springs } from '@/lib/motion';
+import { animateSteadySpring, curves, springs, stopSteady } from '@/lib/motion';
 import type { TimelineItem } from '@/lib/timeline';
 import { cn } from '@/lib/utils';
 import { CommentComposer } from './CommentComposer';
@@ -56,33 +53,79 @@ function RelativeTime({ at }: { at: string }) {
   );
 }
 
+/** How long a swap keeps the pane scrolled to it: its spring, and a keyboard rising after it. */
+const REVEAL_MS = 900;
+const leaveEasing = `cubic-bezier(${curves.enter.ease.join(',')})`;
+
 /**
- * Shows one of several contents, named by `swapKey`. A swap springs the room from the old
- * content's height to the new one's, following content that lays out late (the editor loading
- * in), and fades the new content in; what shows first stays still. Typing hands the height
- * straight back to the content, so text written while the spring runs is never clipped or
- * held out of a scroll's reach.
+ * Scrolls the pane just enough that `element`'s foot clears whatever covers the pane's foot
+ * (a phone's dock declares itself as the pane's bottom scroll padding; the keyboard shortens
+ * the pane), without taking its head above the pane's top.
  */
-function Swap({ swapKey, children }: { swapKey: string; children: ReactNode }) {
+function revealInPane(element: HTMLElement) {
+  const area = element.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
+  if (!area) return;
+  const style = getComputedStyle(area);
+  const pane = area.getBoundingClientRect();
+  const top = pane.top + (Number.parseFloat(style.scrollPaddingTop) || 0) + 12;
+  const bottom = pane.bottom - (Number.parseFloat(style.scrollPaddingBottom) || 0) - 12;
+  const box = element.getBoundingClientRect();
+  const by = Math.min(box.bottom - bottom, box.top - top);
+  if (by > 0.5) area.scrollTop += by;
+}
+
+/**
+ * Shows one of several contents, named by `swapKey`, on one surface (`className`) that
+ * springs from the old content's height to the new one's: the new content fades in as a
+ * snapshot of the old fades out over it, so the surface itself is seen to grow or shrink.
+ * What shows first stays still. A swap to `reveal`ing content keeps it scrolled into view as
+ * it grows and while a keyboard comes up under it. Typing hands the height straight back to
+ * the content, so text written while the spring runs is never clipped.
+ */
+function Swap({
+  swapKey,
+  reveal = false,
+  className,
+  children,
+}: {
+  swapKey: string;
+  reveal?: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
   const reducedMotion = useReducedMotion();
+  const box = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
-  const height = useMotionValue<number | 'auto'>('auto');
-  const overflow = useTransform(height, (value) => (value === 'auto' ? 'visible' : 'clip'));
+  // The room's height while a swap springs it, written straight to the box so the frame
+  // that swaps the content already holds the old height. Otherwise the content's own.
+  const room = useMotionValue(0);
   const measured = useRef<number>(undefined);
-  const spring = useRef<AnimationPlaybackControls | null>(null);
+  const springing = useRef(false);
   const [first] = useState(swapKey);
   const shown = useRef(swapKey);
+  // The old content as it was painted, taken before React replaces it, to fade out on top.
+  const ghost = useRef<HTMLElement | null>(null);
+  const stopRevealing = useRef<() => void>(undefined);
+  if (shown.current !== swapKey && !ghost.current && content.current && !reducedMotion)
+    ghost.current = content.current.cloneNode(true) as HTMLElement;
   const settle = useCallback(() => {
-    spring.current?.stop();
-    spring.current = null;
-    height.jump('auto');
-  }, [height]);
+    stopSteady(room);
+    springing.current = false;
+    box.current?.style.removeProperty('height');
+    box.current?.style.removeProperty('overflow');
+  }, [room]);
+  // By painted frames: the editor swapped in takes a frame or two to mount, which would
+  // otherwise come out of the start of the spring.
   const springTo = useCallback(
     (to: number) => {
-      spring.current?.stop();
-      spring.current = animate(height, to, { ...springs.pane, onComplete: settle });
+      springing.current = true;
+      if (box.current) {
+        box.current.style.overflow = 'clip';
+        box.current.style.height = `${room.get()}px`;
+      }
+      animateSteadySpring(room, to, springs.pane).then(settle);
     },
-    [height, settle],
+    [room, settle],
   );
   useLayoutEffect(() => {
     const element = content.current;
@@ -90,27 +133,94 @@ function Swap({ swapKey, children }: { swapKey: string; children: ReactNode }) {
     // would lay out the pane before `Collapse` holds its height, and clamp the pane's scroll.
     if (!element || shown.current === swapKey) return;
     shown.current = swapKey;
+    const old = ghost.current;
+    ghost.current = null;
     const from = measured.current;
     const to = element.offsetHeight;
     measured.current = to;
-    if (reducedMotion || from === undefined || Math.abs(from - to) < 1) return settle();
-    // Picks up from where a spring still running has got to.
-    if (height.get() === 'auto') height.jump(from);
-    springTo(to);
+    if (reducedMotion || from === undefined || Math.abs(from - to) < 1) settle();
+    else {
+      // Picks up from where a spring still running has got to.
+      if (!springing.current) room.jump(from);
+      springTo(to);
+    }
+    if (old && box.current && typeof old.animate === 'function') {
+      for (const node of [old, ...old.querySelectorAll('[id], [contenteditable]')]) {
+        node.removeAttribute('id');
+        node.removeAttribute('contenteditable');
+      }
+      old.inert = true;
+      old.setAttribute('aria-hidden', 'true');
+      old.dataset.swapGhost = '';
+      Object.assign(old.style, { position: 'absolute', inset: '0 0 auto', pointerEvents: 'none' });
+      box.current.append(old);
+      const fading = old.animate([{ opacity: 1 }, { opacity: 0 }], {
+        duration: leave.duration * 1000,
+        easing: leaveEasing,
+        fill: 'forwards',
+      });
+      fading.finished.then(
+        () => old.remove(),
+        () => old.remove(),
+      );
+    }
+    stopRevealing.current?.();
+    stopRevealing.current = undefined;
+    if (!reveal || !box.current) return;
+    const target = box.current;
+    const started = performance.now();
+    let frame = requestAnimationFrame(function follow(now) {
+      // A panel closing around it is on its way out, not to be scrolled to.
+      if (target.closest('[inert]')) return;
+      revealInPane(target);
+      if (now - started < REVEAL_MS || springing.current) frame = requestAnimationFrame(follow);
+    });
+    // The reader's own scroll ends it.
+    const stop = () => cancelAnimationFrame(frame);
+    const area = target.closest('[data-slot="scroll-area-viewport"]');
+    area?.addEventListener('wheel', stop, { once: true, passive: true });
+    area?.addEventListener('touchstart', stop, { once: true, passive: true });
+    stopRevealing.current = () => {
+      stop();
+      area?.removeEventListener('wheel', stop);
+      area?.removeEventListener('touchstart', stop);
+    };
   });
+  useEffect(
+    () =>
+      room.on('change', (value) => {
+        if (springing.current && box.current) box.current.style.height = `${value}px`;
+      }),
+    [room],
+  );
   useLayoutEffect(() => {
     const element = content.current;
     if (!element || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(() => {
       measured.current = element.offsetHeight;
-      if (spring.current) springTo(measured.current);
+      if (springing.current) springTo(measured.current);
     });
     observer.observe(element);
     return () => observer.disconnect();
   }, [springTo]);
-  useLayoutEffect(() => settle, [settle]);
+  useLayoutEffect(
+    () => () => {
+      settle();
+      stopRevealing.current?.();
+      for (const old of box.current?.querySelectorAll('[data-swap-ghost]') ?? []) old.remove();
+    },
+    [settle],
+  );
   return (
-    <motion.div style={{ height, overflow }} onInputCapture={settle}>
+    <div
+      ref={box}
+      // Once typing starts, the editor keeps its caret in view itself.
+      onInputCapture={() => {
+        settle();
+        stopRevealing.current?.();
+      }}
+      className={cn('relative', className)}
+    >
       <div ref={content} className="flow-root">
         <motion.div
           key={swapKey}
@@ -121,7 +231,7 @@ function Swap({ swapKey, children }: { swapKey: string; children: ReactNode }) {
           {children}
         </motion.div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -217,7 +327,7 @@ const CommentCard = memo(function CommentCard({
           </span>
         )}
       </div>
-      <Swap swapKey={editing ? 'edit' : 'view'}>
+      <Swap swapKey={editing ? 'edit' : 'view'} reveal={editing}>
         <div className="pt-1.5">
           {editing ? (
             <CommentComposer
@@ -241,7 +351,7 @@ const CommentCard = memo(function CommentCard({
         </div>
       </Swap>
       {own && (
-        <Swap swapKey={deleting ? 'confirm' : 'none'}>
+        <Swap swapKey={deleting ? 'confirm' : 'none'} reveal={deleting}>
           {deleting && (
             <div className="mt-2.5 flex flex-wrap items-center justify-end gap-1 border-foreground/[0.08] border-t pt-2">
               <p className="min-h-8 basis-full content-center text-muted-foreground text-xs">
@@ -367,24 +477,30 @@ export function CommentPrompt({
   composing: boolean;
   hasDraft: boolean;
   onCompose: () => void;
+  /** A `bare` composer: the prompt's surface is its surface, so the one card grows into it. */
   composer: ReactNode;
 }) {
   return (
-    <Swap swapKey={composing ? 'compose' : 'prompt'}>
+    <Swap
+      swapKey={composing ? 'compose' : 'prompt'}
+      reveal={composing}
+      className={cn(
+        commentSurface,
+        'transition-shadow duration-200',
+        composing && 'focus-within:ring-ring/45',
+      )}
+    >
       {composing ? (
-        composer
+        <div className="px-3.5 pt-3 pb-2 sm:px-4">{composer}</div>
       ) : (
         <button
           type="button"
-          className={cn(
-            commentSurface,
-            'flex min-h-12 w-full items-center gap-2.5 px-3.5 text-left text-muted-foreground text-sm outline-none transition-colors hover:bg-foreground/[0.065] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60 sm:px-4',
-          )}
+          className="flex min-h-12 w-full items-center gap-2.5 rounded-2xl px-3.5 text-left text-foreground/70 text-sm outline-none transition-colors hover:bg-foreground/[0.035] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60 focus-visible:ring-inset sm:px-4"
           onClick={onCompose}
         >
           <span
             aria-hidden
-            className="relative flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground/[0.06] [&_svg]:size-3.5"
+            className="relative flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground/[0.07] [&_svg]:size-3.5"
           >
             <PenLine />
             {hasDraft && (

@@ -469,6 +469,12 @@ test('comments and history hide together, ease in and out, and stay hidden on th
   // A comment being written survives hiding both panels.
   await f.history.getByRole('button', { name: 'Write a comment…' }).click();
   await editor(page).fill('Still writing');
+  // Opening the composer scrolls it clear of the pane's foot. From the top, folding the panels
+  // cannot clamp the pane's scroll, so any movement would be the timeline's own.
+  await f.history.evaluate((element) => {
+    const area = element.closest('[data-slot="scroll-area-viewport"]');
+    if (area) area.scrollTop = 0;
+  });
 
   const closing = await sampleFrames(page, async () => {
     await commentsTab.click();

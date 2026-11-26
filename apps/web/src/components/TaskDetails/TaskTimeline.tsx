@@ -321,6 +321,7 @@ export function TaskTimeline({
               composer={
                 <CommentComposer
                   key={task.id}
+                  bare
                   draftFor={task.id}
                   onSave={(body) => {
                     addComment(task.id, body);
