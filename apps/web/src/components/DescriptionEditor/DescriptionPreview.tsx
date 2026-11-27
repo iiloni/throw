@@ -1,21 +1,49 @@
 import type { Description } from '@throw/shared';
 import { Copy, Download } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { useTaskReferences } from '@/components/TaskReferences/TaskReferences';
+import { splitTaskReferences } from '@/lib/taskReferences';
 import { cn } from '@/lib/utils';
 import { codeLanguageIconProps, codeLanguageName } from './codeLanguages';
 
 type Json = Record<string, unknown>;
 const object = (value: unknown): value is Json => value !== null && typeof value === 'object';
 
-// Catch's NotePreview, narrowed to description text. Links stay inert during the morph.
-function inline(content: unknown, key = 0): ReactNode {
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content)) return content.map((item, index) => inline(item, index));
+/** The category of the task a reference names, or undefined where it names none. */
+type Resolve = (identifier: string) => string | undefined;
+
+/** Plain text with its task references drawn as the editor draws them (taskReferencePlugin). */
+function referenced(text: string, resolve: Resolve | null): ReactNode {
+  if (!resolve) return text;
+  const segments = splitTaskReferences(text, (identifier) => resolve(identifier) !== undefined);
+  if (segments.length === 1 && segments[0]!.kind === 'text') return text;
+  return segments.map((segment, index) =>
+    segment.kind === 'text' ? (
+      segment.text
+    ) : (
+      <span
+        // biome-ignore lint/suspicious/noArrayIndexKey: the segments of one fixed string
+        key={index}
+        className="task-ref"
+        data-task-ref={segment.identifier}
+        data-category={resolve(segment.identifier)}
+      >
+        {segment.text}
+      </span>
+    ),
+  );
+}
+
+// Catch's NotePreview, narrowed to description text. Links stay inert during the morph, and
+// so do task references.
+function inline(content: unknown, resolve: Resolve | null, key = 0): ReactNode {
+  if (typeof content === 'string') return referenced(content, resolve);
+  if (Array.isArray(content)) return content.map((item, index) => inline(item, resolve, index));
   if (!object(content)) return null;
   if (content.type === 'link')
     return (
       <span key={key} className="underline">
-        {inline(content.content)}
+        {inline(content.content, null)}
       </span>
     );
   if (typeof content.text !== 'string') return null;
@@ -32,14 +60,15 @@ function inline(content: unknown, key = 0): ReactNode {
           'rounded-[0.375em] bg-foreground/10 px-[0.4em] pt-[0.12em] pb-[0.05em] font-mono text-[0.9em]',
       )}
     >
-      {content.text}
+      {styles.code ? content.text : referenced(content.text, resolve)}
     </span>
   );
 }
 
-function block(row: Json, index: number): ReactNode {
+function block(row: Json, index: number, resolve: Resolve | null): ReactNode {
   const props = object(row.props) ? row.props : {};
-  const text = inline(row.content) ?? <br />;
+  // Code is about its characters: a reference written in it stays text, as in the editor.
+  const text = inline(row.content, row.type === 'codeBlock' ? null : resolve) ?? <br />;
   let body: ReactNode;
   switch (row.type) {
     case 'heading':
@@ -125,7 +154,7 @@ function block(row: Json, index: number): ReactNode {
               {Array.isArray(row.cells)
                 ? row.cells.map((cell, index) => (
                     <span key={String(index)}>
-                      {inline(object(cell) && 'content' in cell ? cell.content : cell)}
+                      {inline(object(cell) && 'content' in cell ? cell.content : cell, resolve)}
                     </span>
                   ))
                 : null}
@@ -145,7 +174,9 @@ function block(row: Json, index: number): ReactNode {
     <div key={String(row.id ?? index)} className="description-preview-block">
       {body}
       {Array.isArray(row.children) && (
-        <div className="pl-5">{row.children.filter(object).map(block)}</div>
+        <div className="pl-5">
+          {row.children.filter(object).map((child, index) => block(child, index, resolve))}
+        </div>
       )}
     </div>
   );
@@ -153,9 +184,16 @@ function block(row: Json, index: number): ReactNode {
 
 /** Match the editor's first painted text while its heavy module waits for the morph. */
 export function DescriptionPreview({ document }: { document: Description }) {
+  const references = useTaskReferences();
+  const resolve: Resolve | null =
+    references &&
+    ((identifier) => {
+      const found = references.index.resolve(references.workspaceId, identifier);
+      return found && (found.status?.category ?? 'backlog');
+    });
   return (
     <div className="min-h-12 whitespace-pre-wrap text-[0.9375rem] leading-[1.65]">
-      {document?.slice(0, 200).map(block)}
+      {document?.slice(0, 200).map((row, index) => block(row, index, resolve))}
     </div>
   );
 }

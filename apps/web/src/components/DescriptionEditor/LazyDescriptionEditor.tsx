@@ -1,5 +1,6 @@
 import { type ComponentProps, lazy, memo, Suspense, useContext } from 'react';
 import { TaskEditorReadyContext } from '@/components/Board/taskMotionContext';
+import { TaskReferenceScope } from '@/components/TaskReferences/TaskReferences';
 import { DescriptionPreview } from './DescriptionPreview';
 
 const Editor = memo(
@@ -8,13 +9,25 @@ const Editor = memo(
   ),
 );
 
-export function LazyDescriptionEditor(props: ComponentProps<typeof Editor>) {
+export function LazyDescriptionEditor({
+  referencesFor,
+  ...props
+}: ComponentProps<typeof Editor> & {
+  /** The task this text belongs to: its `#KEY-N` references resolve in that task's workspace. */
+  referencesFor?: string;
+}) {
   const ready = useContext(TaskEditorReadyContext);
   const preview = <DescriptionPreview document={props.initialContent} />;
-  if (!ready) return preview;
-  return (
+  const editor = !ready ? (
+    preview
+  ) : (
     <Suspense fallback={preview}>
       <Editor {...props} />
     </Suspense>
+  );
+  return referencesFor ? (
+    <TaskReferenceScope taskId={referencesFor}>{editor}</TaskReferenceScope>
+  ) : (
+    editor
   );
 }

@@ -40,7 +40,8 @@ const chooseMenuSide: Middleware = {
   },
 };
 
-const slashMenuFloatingOptions: FloatingUIOptions = {
+/** Where the editor's suggestion menus (`/`, `#`) open. */
+export const suggestionMenuFloatingOptions: FloatingUIOptions = {
   useFloatingOptions: {
     placement: 'bottom-start',
     middleware: [
@@ -74,7 +75,7 @@ export function DescriptionSlashMenu() {
     <SuggestionMenuController
       triggerCharacter="/"
       shouldOpen={(state) => !state.selection.$from.parent.type.isInGroup('tableContent')}
-      floatingUIOptions={slashMenuFloatingOptions}
+      floatingUIOptions={suggestionMenuFloatingOptions}
     />
   );
 }
