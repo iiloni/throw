@@ -8,11 +8,16 @@ import {
   useManagementDock,
   useManagementSurfaceOpen,
 } from '@/components/ManagementSurface/ManagementSurface';
+import { UpdateDot } from '@/components/UpdateDot/UpdateDot';
 import { ScrollBox } from '@/components/ui/scroll-area';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { settingsDragY, useSettingsSwipeY } from '@/lib/settingsSwipe';
+import { UPDATE_READY_DESCRIPTION, useUpdateReady } from '@/lib/updateReady';
 import { cn } from '@/lib/utils';
+
+/** The page that installs updates, marked with `UpdateDot` while one is waiting. */
+const UPDATE_PAGE = '/settings/update';
 
 /** A page and where it is: route options, so a renamed route fails the typecheck. */
 export type SettingsPage = { key: string; label: string; icon: LucideIcon; link: LinkOptions };
@@ -195,6 +200,7 @@ function PageLink({
   onNavigate?: () => void;
   children: ReactNode;
   'aria-current'?: 'page';
+  'aria-description'?: string;
 }) {
   return (
     <Link
@@ -251,6 +257,7 @@ function PageList({
   indicator: string;
   onNavigate?: () => void;
 }) {
+  const updateReady = useUpdateReady();
   return groups.map((group) => (
     <section
       key={group.key ?? group.label}
@@ -264,11 +271,13 @@ function PageList({
       {group.pages.map((page) => {
         const Icon = page.icon;
         const selected = current?.key === page.key;
+        const updates = page.key === UPDATE_PAGE;
         return (
           <PageLink
             key={page.key}
             link={page.link}
             aria-current={selected ? 'page' : undefined}
+            aria-description={updates && updateReady ? UPDATE_READY_DESCRIPTION : undefined}
             onNavigate={() => {
               if (!selected) haptics.selection();
               onNavigate?.();
@@ -290,6 +299,7 @@ function PageList({
             )}
             <Icon className="size-5" aria-hidden />
             {page.label}
+            {updates && <UpdateDot className="mr-1 ml-auto" />}
           </PageLink>
         );
       })}
@@ -318,12 +328,14 @@ function SettingsDock({
 }) {
   const Icon = current?.icon ?? Settings;
   const label = current?.label ?? title;
+  const updateReady = useUpdateReady();
   const dock = useMemo(
     () => (
       <motion.button
         type="button"
         aria-haspopup="dialog"
         aria-label={`${title} page: ${label}`}
+        aria-description={updateReady ? UPDATE_READY_DESCRIPTION : undefined}
         onClick={() => onPickingChange(true)}
         whileTap={{ scale: 0.97 }}
         transition={springs.snappy}
@@ -331,10 +343,11 @@ function SettingsDock({
       >
         <Icon aria-hidden className="size-5 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1 truncate">{label}</span>
+        <UpdateDot />
         <ChevronUp aria-hidden className="size-5 shrink-0 text-muted-foreground" />
       </motion.button>
     ),
-    [Icon, label, onPickingChange, title],
+    [Icon, label, onPickingChange, title, updateReady],
   );
   useManagementDock(dock);
   return (

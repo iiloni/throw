@@ -64,6 +64,12 @@ vi.mock('@/lib/accounts', () => ({
   unsyncedChanges: vi.fn(async () => 0),
 }));
 
+const updates = vi.hoisted(() => ({ ready: false }));
+vi.mock('@/lib/updateReady', async (actual) => ({
+  ...(await actual<typeof import('@/lib/updateReady')>()),
+  useUpdateReady: () => updates.ready,
+}));
+
 import { ProjectSwitcher } from './ProjectSwitcher';
 
 function setup(overrides: Record<string, unknown> = {}) {
@@ -101,9 +107,26 @@ const button = (name: string) => screen.getByRole('button', { name });
 beforeEach(() => {
   surface.dismiss = undefined;
   router.pathname = '/w/w1/p/p1';
+  updates.ready = false;
 });
 
 describe('project switcher', () => {
+  it('marks Settings while an update is waiting', () => {
+    updates.ready = true;
+    setup();
+    const settings = button('Settings');
+    expect(settings.querySelector('[data-update-dot]')).not.toBeNull();
+    expect(settings).toHaveAttribute('aria-description', 'Update available');
+    expect(button('Workspace trash').querySelector('[data-update-dot]')).toBeNull();
+  });
+
+  it('leaves Settings unmarked with no update waiting', () => {
+    setup();
+    const settings = button('Settings');
+    expect(settings.querySelector('[data-update-dot]')).toBeNull();
+    expect(settings).not.toHaveAttribute('aria-description');
+  });
+
   it('shows the projects as tiles, the open one marked', () => {
     setup();
     expect(screen.getByRole('dialog', { name: 'Projects' })).toBeInTheDocument();

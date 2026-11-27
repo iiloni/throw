@@ -23,7 +23,9 @@ import { AnimatedHeight } from '@/components/AnimatedHeight/AnimatedHeight';
 import { useShell } from '@/components/AppShell/shell';
 import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
+import { UpdateDot } from '@/components/UpdateDot/UpdateDot';
 import { springs } from '@/lib/motion';
+import { UPDATE_READY_DESCRIPTION, useUpdateReady } from '@/lib/updateReady';
 import { cn } from '@/lib/utils';
 
 type View = 'projects' | 'workspaces' | 'accounts';
@@ -40,6 +42,7 @@ const STAGGERED = 8;
  */
 export function ProjectSwitcher({ open, onClose }: { open: boolean; onClose: () => void }) {
   const shell = useShell();
+  const updateReady = useUpdateReady();
   const reduced = useReducedMotion() ?? false;
   const [view, setView] = useState<View>('projects');
   // Every opening starts on the projects.
@@ -204,6 +207,8 @@ export function ProjectSwitcher({ open, onClose }: { open: boolean; onClose: () 
                     <FooterAction
                       icon={Settings}
                       label="Settings"
+                      description={updateReady ? UPDATE_READY_DESCRIPTION : undefined}
+                      badge={<UpdateDot className="absolute -top-0.5 -right-0.5" />}
                       onSelect={then(shell.goSettings)}
                     />
                   </div>
@@ -376,22 +381,32 @@ function FooterAction({
   icon: Icon,
   label,
   short,
+  description,
+  badge,
   onSelect,
 }: {
   icon: LucideIcon;
   label: string;
   /** What the button shows where the footer is narrow; the full label still names it. */
   short?: string;
+  /** Status the badge shows, for assistive technology. */
+  description?: string;
+  /** A mark over the icon's corner, such as `UpdateDot`. */
+  badge?: ReactNode;
   onSelect: () => void;
 }) {
   return (
     <button
       type="button"
       aria-label={short ? label : undefined}
+      aria-description={description}
       onClick={onSelect}
       className="flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-muted-foreground text-xs outline-none transition-colors active:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <Icon aria-hidden className="size-5" />
+      <span className="relative flex">
+        <Icon aria-hidden className="size-5" />
+        {badge}
+      </span>
       {/* Large text wraps to a second line rather than cutting the label off. */}
       <span className="line-clamp-2 max-w-full text-balance text-center leading-tight">
         {short ?? label}

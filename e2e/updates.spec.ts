@@ -6,6 +6,7 @@ const newer = '00000000-0000-4000-8000-000000000002';
 
 test('web update prompt only appears for a different deployed build and stays available after Later', async ({
   page,
+  isMobile,
 }) => {
   let deployed: unknown = { id: current };
   // Vite normally disables production update checks. Enable the unchanged production logic
@@ -31,6 +32,10 @@ test('web update prompt only appears for a different deployed build and stays av
   }
   await check();
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  if (!isMobile)
+    await expect(page.getByRole('link', { name: 'Settings', exact: true })).not.toHaveAttribute(
+      'aria-description',
+    );
   deployed = { invalid: true };
   await check();
   await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -42,6 +47,21 @@ test('web update prompt only appears for a different deployed build and stays av
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.goto('/settings/update');
   await expect(page.getByRole('button', { name: 'Reload to update' })).toBeVisible();
+  // The ways into Settings, and its Update page, mark the waiting build. The reload asks again.
+  await page.getByRole('button', { name: 'Later', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const marked = isMobile
+    ? [page.getByRole('button', { name: 'Settings page: Update' })]
+    : [
+        page.getByRole('link', { name: 'Settings', exact: true }),
+        page
+          .getByRole('navigation', { name: 'Settings pages' })
+          .getByRole('link', { name: 'Update', exact: true }),
+      ];
+  for (const control of marked) {
+    await expect(control).toHaveAttribute('aria-description', 'Update available');
+    await expect(control.locator('[data-update-dot]')).toBeVisible();
+  }
 });
 
 test('protocol rejection prompts a client update even without build metadata and keeps offline work', async ({
