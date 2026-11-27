@@ -82,6 +82,12 @@ change share one history entry and one webhook (`recordGithubChange` in `github/
 The app reads and saves them through `statusRules` on the connection (`saveGithubStatusRules`).
 GitHub releases and task bindings sync as read-only collections (ADR 0017). Webhook binding
 lives in `github/releaseEvents.ts`, with manual REST and MCP actions in `github/releases.ts`.
+Descriptions and comments draw `#KEY-N` task references as links over their plain stored
+text, so Markdown and MCP keep `#KEY-N` (`lib/taskReferences.ts`; the server's
+`mcp/markdown.ts` leaves `#` unescaped before one). The app route's `TaskReferencesProvider` indexes
+the synced tasks (`TaskReferences/referenceIndex.ts`) and `LazyDescriptionEditor`'s `referencesFor` names
+the task whose text it is; the editor decorates with `DescriptionEditor/taskReferencePlugin.ts`, offers
+tasks after `#` (`DescriptionTaskMenu.tsx`) and shows `TaskReferenceCard` on desktop.
 The activity log syncs to devices and comments are built (`lib/comments.ts`), with a
 timeline query in `collections.ts` and a task history view in `TaskDetails/TaskTimeline.tsx`; its comment cards, list motion and
 composer prompt are `TaskDetails/Comments.tsx`.

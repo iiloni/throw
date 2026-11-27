@@ -1,7 +1,7 @@
 import type { CommentBody, Description } from '@throw/shared';
 import type { Definition, List, ListItem, PhrasingContent, RootContent } from 'mdast';
 import { fromMarkdown } from 'mdast-util-from-markdown';
-import { toMarkdown } from 'mdast-util-to-markdown';
+import { defaultHandlers, toMarkdown } from 'mdast-util-to-markdown';
 import { z } from 'zod';
 
 type Block = CommentBody[number];
@@ -137,6 +137,13 @@ const headingDepth = z.union([
 ]);
 const asRecord = (value: unknown) => record.safeParse(value).data ?? {};
 const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+
+// A line may start with `#` only if it is not a heading, so the serializer escapes every `#`
+// at a line start. A heading needs a space, tab or line end after its hashes: a task reference
+// (`#THR-93`, which the app draws as a link) never is one, and stays as written.
+const escapedReference = /\\#(?=[A-Za-z][A-Za-z0-9]{0,5}-[1-9]\d*(?![\p{L}\p{N}_]))/gu;
+const referenceText: typeof defaultHandlers.text = (node, parent, state, info) =>
+  defaultHandlers.text(node, parent, state, info).replace(escapedReference, '#');
 
 /** Project legacy editor content to readable Markdown and flag anything altered or omitted. */
 export function blocksToMarkdown(document: Description) {
@@ -343,7 +350,7 @@ export function blocksToMarkdown(document: Description) {
 
   const markdown = toMarkdown(
     { type: 'root', children: blocks(document, 0) },
-    { fences: true },
+    { fences: true, handlers: { text: referenceText } },
   ).trimEnd();
   return { markdown, lossy };
 }

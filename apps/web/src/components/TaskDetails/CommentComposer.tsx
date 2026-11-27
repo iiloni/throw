@@ -23,6 +23,7 @@ export function CommentComposer({
   onSave,
   onCancel,
   bare = false,
+  taskId = draftFor,
   className,
 }: {
   className?: string;
@@ -31,6 +32,8 @@ export function CommentComposer({
   onSave: (body: CommentBody) => void;
   onCancel: () => void;
   bare?: boolean;
+  /** The task commented on, where `draftFor` does not name it: for its task references. */
+  taskId?: string;
 }) {
   const [start] = useState(() => (draftFor ? readCommentDraft(draftFor) : null) ?? initialContent);
   const [body, setBody] = useState(start);
@@ -80,6 +83,7 @@ export function CommentComposer({
     >
       <LazyDescriptionEditor
         initialContent={start}
+        referencesFor={taskId}
         editable
         sideMenu={false}
         // The footer under the caret: Cancel and Send stay in view as lines are added.

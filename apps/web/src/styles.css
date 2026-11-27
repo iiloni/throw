@@ -212,6 +212,35 @@
   color: var(--brand-link);
 }
 /*
+ * A task reference (`#THR-93`), drawn over its own text in the editor (taskReferencePlugin)
+ * and in the preview it opens from, so the two match through the swap. Closed work reads
+ * struck through, as related tasks do.
+ */
+.task-ref {
+  border-radius: 0.375em;
+  padding: 0.05em 0.3em;
+  background: color-mix(in oklab, var(--brand-link) 12%, transparent);
+  color: var(--brand-link);
+  font-weight: 500;
+  cursor: pointer;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  transition: background-color 150ms var(--ease-emphasized);
+}
+.task-ref:hover {
+  background: color-mix(in oklab, var(--brand-link) 20%, transparent);
+}
+.task-ref:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+.task-ref:is([data-category="done"], [data-category="cancelled"]) {
+  background: color-mix(in oklab, var(--foreground) 7%, transparent);
+  color: var(--muted-foreground);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in oklab, var(--foreground) 35%, transparent);
+}
+/*
  * The block handle sits in the card's padding beside the text (DescriptionSideMenu), so it
  * is narrower than BlockNote's: its grip, not its box, should take the gutter's middle.
  */

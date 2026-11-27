@@ -681,6 +681,21 @@ view), comments and activity.
   keyboard focus or tap and offers language selection, copy and download. Pasting code
   removes its common indentation. The editor tries to detect the language locally for
   unlabelled pasted blocks and when pasting into an empty, unlabelled block.
+- Descriptions and comments reference other tasks of the workspace by identifier, as
+  `#THR-93` in any case (2026-11-26). The reference is stored and exported as that plain text,
+  so Markdown, MCP and older clients read and write it unchanged; the app draws it as a calm
+  link while the device holds a task by that identifier that is not in the trash. Code,
+  link labels and unknown identifiers stay text. A click or tap opens the task as a related
+  one opens: over this one when it is on the board, or on its own project's board. In an
+  editable description a plain press opens it rather than placing the caret; a modified
+  click (Alt, Shift, Ctrl/Cmd) or the keyboard edits its text. On desktop, resting the
+  pointer on a reference, focusing one in a posted comment or moving the caret into one
+  shows a glass card with its status, identifier, project, title, priority, blocked state and
+  tags, read from the synced data. Touch never shows the card. Typing `#` where a reference can start (not
+  inside a word, code or a link) offers the workspace's tasks, the current project's
+  latest open ones first, filtered by identifier or title; picking one writes its
+  `#KEY-N`. A space straight after `#` keeps the heading shortcut, and a query nothing
+  matches, or a finished identifier followed by more text, closes the menu.
 - Unfinished comments and comment edits can be resumed on the same device after closing the
   task or reloading. Cancel discards the draft, and Ctrl/Cmd+Enter posts or saves it.
 - The top toolbars follow Catch: back and the parent/task identifier breadcrumb on the

@@ -34,6 +34,31 @@ describe('MCP Markdown', () => {
     expect(markdownToBlocks(restored.markdown!)).toEqual(blocks);
   });
 
+  test('keeps task references as the plain text the app draws as links', () => {
+    const markdown = '#THR-93 blocks #cat-4, not `#THR-1`.';
+    const blocks = markdownToBlocks(markdown);
+    expect(blocks).toEqual([
+      {
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: '#THR-93 blocks #cat-4, not ', styles: {} },
+          { type: 'text', text: '#THR-1', styles: { code: true } },
+          { type: 'text', text: '.', styles: {} },
+        ],
+      },
+    ]);
+    const restored = blocksToMarkdown(blocks);
+    expect(restored).toEqual({ markdown, lossy: false });
+    expect(markdownToBlocks(restored.markdown!)).toEqual(blocks);
+  });
+
+  test('still escapes a leading # that would make a heading', () => {
+    const blocks = [{ type: 'paragraph', content: [{ type: 'text', text: '# Not a heading' }] }];
+    const { markdown } = blocksToMarkdown(blocks);
+    expect(markdown).toBe('\\# Not a heading');
+    expect(markdownToBlocks(markdown!)[0]).toMatchObject({ type: 'paragraph' });
+  });
+
   test('keeps consecutive hard breaks in the same paragraph', () => {
     const document = [
       {

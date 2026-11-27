@@ -152,6 +152,7 @@ export function TaskDescription({
               <LazyDescriptionEditor
                 key={`latest:${task.descriptionVersion}`}
                 initialContent={task.description}
+                referencesFor={task.id}
               />
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button variant="secondary" onClick={useLatest}>
@@ -193,6 +194,7 @@ export function TaskDescription({
       <LazyDescriptionEditor
         key={session.key}
         initialContent={session.document}
+        referencesFor={task.id}
         editable
         onControls={onControls}
         onChange={(document) => {
