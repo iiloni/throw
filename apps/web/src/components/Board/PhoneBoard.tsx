@@ -286,24 +286,7 @@ export function FlowTrack({
               <span className="truncate font-bold font-display text-xl text-[color:var(--column-label,currentColor)] tracking-[-0.01em]">
                 {status.name}
               </span>
-              <span className="text-muted-foreground text-sm tabular-nums">
-                {countIn(state, status.id)}
-              </span>
             </h2>
-            {folding && statuses.length > 1 && !holding && (
-              <IconButton
-                label={`Collapse ${status.name} column`}
-                aria-expanded
-                tooltip={false}
-                className="size-9 shrink-0 text-muted-foreground"
-                onClick={() => {
-                  setFocusing(status.id);
-                  folding.onCollapse(status.id);
-                }}
-              >
-                <ChevronsRightLeft />
-              </IconButton>
-            )}
           </motion.div>
         </AnimatePresence>
         <span className="flex-1" />
@@ -318,61 +301,132 @@ export function FlowTrack({
           </button>
         )}
       </div>
-      <nav ref={navRef} aria-label="Columns" className="flex gap-1">
-        {track.map((item, order) => {
-          const index = statuses.findIndex(({ id }) => id === item.id);
-          const folded = index === -1;
-          return (
-            <motion.button
-              key={item.id}
-              type="button"
-              aria-label={folded ? `Expand ${item.name} column` : item.name}
-              aria-expanded={folding ? !folded : undefined}
-              data-column-id={item.id}
-              data-folded={folded ? '' : undefined}
-              data-column-color={item.color ?? undefined}
-              aria-current={index === page ? 'page' : undefined}
-              onClick={() => (folded ? folding?.onExpand(item.id) : onTurn(index))}
-              // A folded column is a short handle, kept mounted so it grows back into its segment.
-              initial={false}
-              animate={{
-                flexGrow: folded ? 0 : 1,
-                marginLeft: folded ? 4 : 0,
-                marginRight: folded ? 4 : 0,
-              }}
-              transition={reduced ? { duration: 0 } : folded ? curves.fold : springs.smooth}
-              className={cn(
-                'relative flex h-6 min-w-8 basis-8 items-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60',
-                // The handle takes a finger's width around it.
-                folded && 'z-10 before:absolute before:-inset-x-1.5 before:-inset-y-2',
-              )}
-            >
-              <span
+      <div className="flex items-center gap-2">
+        <nav ref={navRef} aria-label="Columns" className="flex min-w-0 flex-1 gap-1">
+          {track.map((item, order) => {
+            const index = statuses.findIndex(({ id }) => id === item.id);
+            const folded = index === -1;
+            const count = countIn(state, item.id);
+            const tasks = `${count} ${count === 1 ? 'task' : 'tasks'}`;
+            return (
+              <motion.button
+                key={item.id}
+                type="button"
+                aria-label={
+                  folded ? `Expand ${item.name} column, ${tasks}` : `${item.name}, ${tasks}`
+                }
+                aria-expanded={folding ? !folded : undefined}
+                data-column-id={item.id}
+                data-folded={folded ? '' : undefined}
+                data-column-color={item.color ?? undefined}
+                aria-current={index === page ? 'page' : undefined}
+                onClick={() => (folded ? folding?.onExpand(item.id) : onTurn(index))}
+                // A folded column is a short handle, kept mounted so it grows back into its segment.
+                initial={false}
+                animate={{
+                  flexGrow: folded ? 0 : 1,
+                  marginLeft: folded ? 4 : 0,
+                  marginRight: folded ? 4 : 0,
+                }}
+                transition={reduced ? { duration: 0 } : folded ? curves.fold : springs.smooth}
                 className={cn(
-                  'relative h-1.5 w-full overflow-hidden rounded-full transition-colors duration-300',
-                  folded ? 'bg-foreground/25' : 'bg-foreground/10',
+                  'relative flex h-6 min-w-8 basis-8 items-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60',
+                  // The handle takes a finger's width around it.
+                  folded && 'z-10 before:absolute before:-inset-x-1.5 before:-inset-y-2',
                 )}
               >
                 <span
                   className={cn(
-                    'absolute inset-0 rounded-full bg-[color:var(--column-accent,color-mix(in_oklab,var(--foreground)_25%,transparent))] transition-opacity duration-300',
-                    order < at ? 'opacity-100' : 'opacity-0',
+                    'relative h-1.5 w-full overflow-hidden rounded-full transition-colors duration-300',
+                    folded ? 'bg-foreground/25' : 'bg-foreground/10',
                   )}
-                />
-                {index === page && (
-                  <motion.span
-                    layoutId="phone-flow"
-                    data-column-stripe={item.color ? '' : undefined}
-                    className="absolute inset-0 rounded-full bg-[color:var(--column-accent,var(--foreground))]"
-                    transition={springs.snappy}
+                >
+                  <span
+                    className={cn(
+                      'absolute inset-0 rounded-full bg-[color:var(--column-accent,color-mix(in_oklab,var(--foreground)_25%,transparent))] transition-opacity duration-300',
+                      order < at ? 'opacity-100' : 'opacity-0',
+                    )}
                   />
-                )}
-              </span>
-            </motion.button>
-          );
-        })}
-      </nav>
+                  {index === page && (
+                    <motion.span
+                      layoutId="phone-flow"
+                      data-column-stripe={item.color ? '' : undefined}
+                      className="absolute inset-0 rounded-full bg-[color:var(--column-accent,var(--foreground))]"
+                      transition={springs.snappy}
+                    />
+                  )}
+                </span>
+                <FlowCount count={count} current={index === page} />
+              </motion.button>
+            );
+          })}
+        </nav>
+        {folding && (
+          // The fold sits at the track's end, where the columns it folds go to wait as handles.
+          <span className="flex size-7 shrink-0 items-center justify-center">
+            <AnimatePresence initial={false}>
+              {statuses.length > 1 && !holding && (
+                <motion.span
+                  key="fold"
+                  className="flex"
+                  initial={{ opacity: 0, scale: 0.6 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.6 }}
+                  transition={reduced ? { duration: 0 } : springs.snappy}
+                >
+                  <IconButton
+                    label={`Collapse ${status.name} column`}
+                    aria-expanded
+                    tooltip={false}
+                    className="relative size-7 rounded-full bg-foreground/[0.06] text-muted-foreground before:absolute before:-inset-2 [&_svg]:size-3.5"
+                    onClick={() => {
+                      setFocusing(status.id);
+                      folding.onCollapse(status.id);
+                    }}
+                  >
+                    <ChevronsRightLeft />
+                  </IconButton>
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </span>
+        )}
+      </div>
     </div>
+  );
+}
+
+/**
+ * A column's count, a bead on its segment of the track: filled in the column's colour on the
+ * current one. It bumps when the count changes, as the done count does, but not as it mounts.
+ */
+function FlowCount({ count, current }: { count: number; current: boolean }) {
+  const reduced = useReducedMotion();
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+  }, []);
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute inset-0 flex items-center justify-center"
+    >
+      <motion.span
+        key={count}
+        initial={mounted.current && !reduced ? { scale: 1.35 } : false}
+        animate={{ scale: 1 }}
+        transition={springs.snappy}
+        className={cn(
+          'flex h-4 min-w-4 items-center justify-center rounded-full px-1 font-semibold text-[0.6875rem] tabular-nums leading-none shadow-[0_0_0_2px_var(--background)] transition-colors duration-300',
+          current
+            ? 'bg-[color:var(--column-accent,var(--foreground))] text-background'
+            : 'bg-background text-muted-foreground ring-1 ring-foreground/15 ring-inset',
+          count === 0 && !current && 'text-muted-foreground/60',
+        )}
+      >
+        {count > 99 ? '99+' : count}
+      </motion.span>
+    </span>
   );
 }
 

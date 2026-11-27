@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockBoards } from './mockData';
 import type { Status } from './model';
 import { FlowTrack, type Folding, PhoneBoard, phoneColumns } from './PhoneBoard';
-import { board, current, initialBoard } from './state';
+import { board, countIn, current, initialBoard, setFilter } from './state';
 
 const statuses = (...names: string[]) =>
   names.map(
@@ -66,9 +66,9 @@ describe('FlowTrack', () => {
     const { nav, onExpand, onTurn } = track();
     const buttons = within(nav).getAllByRole('button');
     expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual([
-      'Next',
-      'Expand Implementation column',
-      'Review',
+      'Next, 0 tasks',
+      'Expand Implementation column, 0 tasks',
+      'Review, 0 tasks',
     ]);
     expect(buttons[1]).toHaveAttribute('aria-expanded', 'false');
     expect(buttons[1]).toHaveAttribute('data-folded');
@@ -88,7 +88,7 @@ describe('FlowTrack', () => {
     expect(onTurn).toHaveBeenCalledWith(1);
   });
 
-  it('folds the current column from beside its name, and focuses the handle it became', () => {
+  it('folds the current column from the end of the track, and focuses the handle it became', () => {
     const { onCollapse } = track({}, all, 1);
     const fold = screen.getByRole('button', { name: 'Collapse Implementation column' });
     expect(fold).toHaveAttribute('aria-expanded', 'true');
@@ -111,9 +111,44 @@ describe('FlowTrack', () => {
       within(nav)
         .getAllByRole('button')
         .map((button) => button.ariaLabel),
-    ).toEqual(['Next', 'Implementation', 'Review']);
+    ).toEqual(['Next, 0 tasks', 'Implementation, 0 tasks', 'Review, 0 tasks']);
     expect(within(nav).getAllByRole('button')[0]).not.toHaveAttribute('aria-expanded');
     expect(screen.queryByRole('button', { name: /^Collapse/ })).not.toBeInTheDocument();
+  });
+
+  it('counts each column on its segment, folded ones too, as the filter leaves them', () => {
+    const { project } = current();
+    const active = project.statuses.filter((status) => status.category === 'active');
+    const [first, second] = active;
+    const count = (id: string) => countIn(board.get(), id);
+    const tasksIn = (id: string) => {
+      const n = count(id);
+      return `${n} ${n === 1 ? 'task' : 'tasks'}`;
+    };
+    const onTurn = vi.fn();
+    const folding = { statuses: active, onCollapse: vi.fn(), onExpand: vi.fn() };
+    render(
+      <FlowTrack
+        statuses={active.filter(({ id }) => id !== second!.id)}
+        page={0}
+        onTurn={onTurn}
+        folding={folding}
+      />,
+    );
+    const nav = screen.getByRole('navigation', { name: 'Columns' });
+    const segment = within(nav).getByRole('button', { current: 'page' });
+    expect(segment).toHaveAccessibleName(`${first!.name}, ${tasksIn(first!.id)}`);
+    expect(segment).toHaveTextContent(String(count(first!.id)));
+    const handle = within(nav).getByRole('button', { expanded: false });
+    expect(handle).toHaveAccessibleName(`Expand ${second!.name} column, ${tasksIn(second!.id)}`);
+    expect(handle).toHaveTextContent(String(count(second!.id)));
+
+    // A search that matches nothing leaves every segment at none.
+    act(() => setFilter({ query: 'zzzz-none' }));
+    for (const button of within(nav).getAllByRole('button')) {
+      expect(button).toHaveTextContent('0');
+      expect(button.getAttribute('aria-label')).toMatch(/0 tasks$/);
+    }
   });
 });
 
@@ -158,10 +193,12 @@ describe('PhoneBoard', () => {
       within(screen.getByRole('navigation', { name: 'Columns' })).getByRole('button', {
         current: 'page',
       }),
-    ).toHaveAccessibleName(active[1]!.name);
+    ).toHaveAccessibleName(new RegExp(`^${active[1]!.name}, \\d+ tasks?$`));
 
     act(() => {
-      fireEvent.click(screen.getByRole('button', { name: `Expand ${active[0]!.name} column` }));
+      fireEvent.click(
+        screen.getByRole('button', { name: new RegExp(`^Expand ${active[0]!.name} column, `) }),
+      );
     });
     expect(pageCount()).toBe(active.length);
     expect(localStorage.getItem(`throw-board-collapsed:${project.id}`)).toBe('[]');
