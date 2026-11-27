@@ -16,24 +16,48 @@ async function flingToTop(viewport: Locator) {
     const column = document.querySelector<HTMLElement>('[data-page-column]');
     const scroller = element === document.scrollingElement ? null : element;
     const scrollTarget = scroller ?? document;
+    const samples: { top: number; time: number }[] = [];
     const step = (top: number) => {
       const scrolled = new Promise<number>((resolve) => {
-        scrollTarget.addEventListener('scroll', (event) => resolve(event.timeStamp), {
-          once: true,
-        });
+        scrollTarget.addEventListener(
+          'scroll',
+          (event) => {
+            samples.push({ top: element.scrollTop, time: event.timeStamp });
+            resolve(event.timeStamp);
+          },
+          { once: true },
+        );
       });
       element.scrollTo({ top, behavior: 'instant' });
       return scrolled;
     };
     const after = (time: number) =>
       new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, time - performance.now())));
-    // Separate the positioning jump from the fling. Pace the latter by delivered scroll events:
-    // one step per frame can put the entire velocity sample below the watcher's 20 ms minimum.
-    await after((await step(start)) + 100);
-    for (let y = start - 40; y >= 0; y -= 40) {
-      const scrolledAt = await step(y);
-      if (y > 0) await after(scrolledAt + 25);
+    let deliveredFling = false;
+    for (let attempt = 0; attempt < 5 && !deliveredFling; attempt++) {
+      samples.length = 0;
+      // Leave the positioning jump out of the fling and pace the rest by delivered events.
+      await after((await step(start)) + 100);
+      for (let y = start - 40; y >= 0; y -= 40) {
+        const scrolledAt = await step(y);
+        if (y > 0) await after(scrolledAt + 25);
+      }
+      const [approach, beforeEdge, edge] = samples.slice(-3);
+      if (approach && beforeEdge && edge) {
+        const runUp = beforeEdge.time - approach.time;
+        // Slow frames can leave fewer than two pre-edge samples in the 100 ms history,
+        // and an 80 ms gap starts a new scroll. Repeat only if the input missed that window.
+        deliveredFling =
+          beforeEdge.top > 0 &&
+          edge.top === 0 &&
+          runUp >= 20 &&
+          runUp < 80 &&
+          edge.time - beforeEdge.time < 80 &&
+          edge.time - approach.time <= 100;
+      }
     }
+    if (!deliveredFling)
+      throw new Error(`No fling reached the edge in time: ${JSON.stringify(samples)}`);
     // A fixed element whose containing block is the viewport has no offset parent; under a
     // transformed or filtered ancestor it would have one, and ride along with the bounce. The
     // drawer's own place moves with the page's scroll (it sinks and rises), so it is not compared.
@@ -57,7 +81,7 @@ async function flingToTop(viewport: Locator) {
       if (carried()) dockMoved = true;
       await frame();
     }
-    return { furthest, dockMoved };
+    return { furthest, dockMoved, samples };
   }, start);
 }
 
@@ -82,8 +106,8 @@ test('a fling into the top of a scrolled page bounces it by top, leaving fixed c
   await page.setViewportSize({ width: page.viewportSize()?.width ?? 400, height: 360 });
   await page.goto('/settings/general');
   await expect(page.locator('[data-page-header]')).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
-  const { furthest, dockMoved } = await flingToTop(page.locator('html'));
-  expect(furthest).toBeGreaterThan(4);
+  const { furthest, dockMoved, samples } = await flingToTop(page.locator('html'));
+  expect(furthest, `Scroll samples: ${JSON.stringify(samples)}`).toBeGreaterThan(4);
   expect(furthest).toBeLessThanOrEqual(36);
   await expect.poll(() => settled(page)).toBe(true);
   expect(dockMoved).toBe(false);
@@ -102,8 +126,8 @@ test('a fling into the top of a board column bounces its cards', async ({ page }
   const build = page.getByRole('region', { name: 'Build', exact: true });
   await expect(build.getByRole('article')).toHaveCount(28);
   const viewport = build.locator('[data-slot="scroll-area-viewport"]');
-  const { furthest } = await flingToTop(viewport);
-  expect(furthest).toBe(1);
+  const { furthest, samples } = await flingToTop(viewport);
+  expect(furthest, `Scroll samples: ${JSON.stringify(samples)}`).toBe(1);
   await expect.poll(() => settled(page)).toBe(true);
   // Android's own overscroll stretch would play on top of the bounce.
   expect(await viewport.evaluate((element) => getComputedStyle(element).overscrollBehaviorY)).toBe(
