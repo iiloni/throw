@@ -148,6 +148,9 @@ case "$command" in
     generate)
         "${compose[@]}" exec -T app pnpm db:generate "$@"
         ;;
+    github-sim)
+        "${compose[@]}" exec -T app pnpm --filter @throw/server exec tsx src/dev/githubSim.ts "$@"
+        ;;
     seed)
         "${compose[@]}" exec -T -e "THROW_SEED_PROFILE=${1:-demo}" app pnpm db:seed
         ;;
@@ -278,6 +281,14 @@ Usage: ./scripts/dev.sh <command>
   install             Reinstall dependencies after lockfile changes
   migrate             Apply committed migrations
   generate            Generate a migration from the Drizzle schema
+  github-sim EVENT [TASK] [options]  Send a signed webhook to this worktree's demo Throw project
+    ping | release | tag                     --tag defaults to v0.2.0
+    pr-draft | pr-ready | pr-close | pr-merge | checks-pending | checks-fail | checks-pass
+    review-changes | review-approve | issue-open | issue-close
+    Example: ./scripts/dev.sh github-sim pr-ready THR-1
+    PR/issue number defaults to the task number. Use --pr N or --issue N to select another.
+    For manual connections: --repo OWNER/REPO --token URL_TOKEN --secret SIGNING_SECRET
+    --url BASE_URL overrides the app URL (as reachable from the worktree's app container).
   seed [demo|basic]   Re-run idempotent seeding
   check               Lint, typecheck, unit tests and build (in the container)
                       check, test, build and e2e take turns across worktrees
