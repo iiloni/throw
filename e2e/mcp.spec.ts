@@ -1622,9 +1622,18 @@ test('GitHub deliveries reach the offline collection and MCP, with scoped manual
       release: { ...release, draft: true, published_at: null },
     });
     expect((await unreleased()).items.map((t) => t.id)).toContain(task.id);
+    const newer = {
+      ...tagPush,
+      before: tagPush.after,
+      after: 'c'.repeat(40),
+      repository: { ...tagPush.repository, pushed_at: tagPush.repository.pushed_at + 1 },
+    };
+    await send('push', newer);
+    await send('push', tagPush);
+    await send('push', { ...newer, before: '0'.repeat(40), after: tagPush.after });
     await send('release', { action: 'deleted', release });
-    for (const sha of [tagPush.after, 'b'.repeat(40)]) {
-      if (sha !== tagPush.after) await send('push', { ...tagPush, after: sha });
+    for (const sha of [newer.after, 'b'.repeat(40)]) {
+      if (sha !== newer.after) await send('push', { ...newer, before: newer.after, after: sha });
       const tags = await call(client, 'list_github_releases', { projectId: project.id });
       expect(tags.releases.find((r) => r.id === shipped!.id)).toMatchObject({
         source: 'tag',
@@ -1633,7 +1642,8 @@ test('GitHub deliveries reach the offline collection and MCP, with scoped manual
       });
       expect((await unreleased()).items.map((t) => t.id)).toContain(task.id);
     }
-    await send('push', { ...tagPush, deleted: true });
+    await send('push', { ...newer, before: 'b'.repeat(40), deleted: true });
+    await send('push', tagPush);
     expect(
       (await call(client, 'list_github_releases', { projectId: project.id })).releases.map(
         (r) => r.id,

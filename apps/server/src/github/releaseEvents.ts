@@ -5,6 +5,7 @@ import type { Transaction } from '../db/client';
 import {
   taskGithubReleases as bindings,
   githubConnections,
+  githubTagPushes,
   taskGithubLinks as links,
   projects,
   githubReleases as releases,
@@ -38,6 +39,7 @@ const releaseEvent = z.object({
 });
 const tagEvent = z.object({
   ref: z.string().startsWith('refs/tags/').min(11),
+  before: z.string().optional(),
   after: z.string(),
   deleted: z.boolean(),
   repository: z.object({ pushed_at: z.number().int().positive().optional() }),
@@ -123,6 +125,40 @@ export const handleRelease: GithubEventHandler = async (tx, { connection, event,
     eq(releases.tagName, tagName),
   );
   const [existing] = await tx.select().from(releases).where(scope).for('update');
+  const tagSha =
+    existing?.observedTagSha ?? (existing?.source === 'tag' ? existing.targetCommitish : null);
+  if (tag) {
+    // The receiver holds the connection lock until this transaction commits.
+    const [prior] = await tx
+      .select()
+      .from(githubTagPushes)
+      .where(
+        and(
+          eq(githubTagPushes.projectId, projectId),
+          eq(githubTagPushes.repo, repo),
+          eq(githubTagPushes.tagName, tagName),
+        ),
+      );
+    const pushedAt = tag.repository.pushed_at ? new Date(tag.repository.pushed_at * 1000) : null;
+    const previous = prior?.pushedAt;
+    if (previous && pushedAt && pushedAt < previous) return { status: 'ok' };
+    // GitHub reports whole seconds. At a tie (or without a source time), only
+    // advance from the target GitHub actually replaced.
+    if (
+      (prior || tagSha) &&
+      (!pushedAt || (previous && +pushedAt === +previous)) &&
+      tag.before !== (tagSha ?? '0'.repeat(40))
+    )
+      return { status: 'ok' };
+    const watermark = pushedAt ?? previous ?? null;
+    await tx
+      .insert(githubTagPushes)
+      .values({ projectId, repo, tagName, pushedAt: watermark })
+      .onConflictDoUpdate({
+        target: [githubTagPushes.projectId, githubTagPushes.repo, githubTagPushes.tagName],
+        set: { pushedAt: watermark },
+      });
+  }
   if (tag && existing && existing.source !== 'tag') {
     await tx
       .update(releases)
@@ -130,8 +166,6 @@ export const handleRelease: GithubEventHandler = async (tx, { connection, event,
       .where(scope);
     return { status: 'ok' };
   }
-  const tagSha =
-    existing?.observedTagSha ?? (existing?.source === 'tag' ? existing.targetCommitish : null);
   if (release?.action === 'deleted' && existing && tagSha) {
     if (existing.source === 'tag' && existing.publishedAt === null) return { status: 'ok' };
     await tx.delete(bindings).where(eq(bindings.releaseId, existing.id));

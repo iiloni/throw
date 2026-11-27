@@ -744,3 +744,17 @@ export const taskGithubReleases = pgTable(
     uniqueIndex().on(t.taskId, t.releaseId),
   ],
 );
+
+// Keep the ordering watermark after a tag (and its public release row) disappears.
+export const githubTagPushes = pgTable(
+  'github_tag_pushes',
+  {
+    projectId: uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    repo: text().notNull(),
+    tagName: text().notNull(),
+    pushedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.repo, t.tagName] })],
+);

@@ -229,7 +229,9 @@ asks.
 
 A release belongs to a project, keyed by repository and case-sensitive tag name.
 A lightweight tag push records a published tag at the repository push time (receipt time
-if absent). A release for the same tag takes over that row and keeps its ID. Deleting the
+if absent). The server remembers the last source push time per project, repository and tag,
+including deleted tags. Older pushes are ignored. For tied or missing times, a subsequent
+push advances the tag only if its before SHA matches the observed target. A release for the same tag takes over that row and keeps its ID. Deleting the
 release removes its bindings. If a tag push was observed and that tag still exists, the row
 reverts to a tag at its last observed commit with a null publication date. It remains visible
 but no longer counts as shipped, including after subsequent tag updates. Unpublishing retains the bindings but stops counting them as
