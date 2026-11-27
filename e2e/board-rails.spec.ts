@@ -476,4 +476,135 @@ test.describe('desktop rails', () => {
     );
     expect(Math.round(settledBoxes[0]!.y)).toBe(Math.round(settledBoxes[1]!.y));
   });
+
+  test('pressing Escape in full gallery returns Backlog and Closed to their previous state', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await fixture(page, true);
+    const backlog = rail(page, 'Backlog');
+    const closed = rail(page, 'Closed');
+    const strip = (name: 'backlog' | 'closed') =>
+      page.getByRole('button', { name: new RegExp(`^Open ${name},`) });
+
+    async function longPressStrip(name: 'backlog' | 'closed') {
+      const box = (await (await settled(strip(name))).boundingBox())!;
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 3);
+      await page.mouse.down();
+      await page.waitForTimeout(700);
+      await page.mouse.up();
+    }
+
+    for (const [name, zone] of [
+      ['backlog', backlog],
+      ['closed', closed],
+    ] as const) {
+      // Ensure the rail starts in its panel state.
+      if (await strip(name).count()) await strip(name).click();
+      await expect(zone.getByRole('button', { name: 'Open as a gallery' })).toBeVisible();
+
+      // panel -> full (button) -> Escape -> panel
+      await zone.getByRole('button', { name: 'Open as a gallery' }).click();
+      await expect(zone.getByRole('button', { name: 'Back to a column' })).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Build', exact: true })).toHaveCount(0);
+      await page.keyboard.press('Escape');
+      await expect(zone.getByRole('button', { name: 'Open as a gallery' })).toBeVisible();
+      await expect(zone.getByRole('button', { name: 'Open as a gallery' })).toBeFocused();
+      await expect(page.getByRole('region', { name: 'Build', exact: true })).toBeVisible();
+
+      // panel -> full (keyboard edge walk End) -> Escape -> panel
+      const handle = zone.getByRole('separator', { name: `Resize ${name}` });
+      await expect(handle).toBeVisible();
+      await handle.focus();
+      await page.keyboard.press('End');
+      await expect(zone.getByRole('button', { name: 'Back to a column' })).toBeVisible();
+      await expect(zone.getByRole('button', { name: 'Back to a column' })).toBeFocused();
+      // Keyboard focus on the toggle opens its tooltip, which consumes the first Escape before
+      // the next Escape collapses the gallery back to its panel.
+      await expect(page.getByRole('tooltip', { name: 'Back to a column' })).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('tooltip', { name: 'Back to a column' })).toHaveCount(0);
+      await expect(zone.getByRole('button', { name: 'Back to a column' })).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(zone.getByRole('button', { name: 'Open as a gallery' })).toBeVisible();
+      await expect(zone.getByRole('button', { name: 'Open as a gallery' })).toBeFocused();
+
+      // strip -> long-press full -> Escape -> strip
+      await zone.getByRole('button', { name: `Close ${name}` }).click();
+      await expect(strip(name)).toBeVisible();
+      await longPressStrip(name);
+      await expect(zone.getByRole('button', { name: 'Back to a column' })).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(strip(name)).toBeVisible();
+      await expect(strip(name)).toBeFocused();
+      await expect(page.getByRole('region', { name: 'Build', exact: true })).toBeVisible();
+
+      // Header button from a strip-opened gallery still goes back to a column, and re-entering
+      // gallery from that column remembers 'panel' for Escape.
+      await longPressStrip(name);
+      await expect(zone.getByRole('button', { name: 'Back to a column' })).toBeVisible();
+      await zone.getByRole('button', { name: 'Back to a column' }).click();
+      await expect(zone.getByRole('button', { name: 'Open as a gallery' })).toBeVisible();
+      await zone.getByRole('button', { name: 'Open as a gallery' }).click();
+      await expect(zone.getByRole('button', { name: 'Back to a column' })).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(zone.getByRole('button', { name: 'Open as a gallery' })).toBeVisible();
+
+      // Leave this rail closed before testing the other one.
+      await zone.getByRole('button', { name: `Close ${name}` }).click();
+      await expect(strip(name)).toBeVisible();
+    }
+  });
+
+  test('Escape in full gallery dismisses task pane, selection and search before collapsing', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const board = await fixture(page, true);
+    await board.add('Gallery task', 'Ideas', 3, 'a1');
+    await openBacklog(page);
+    const backlog = rail(page, 'Backlog');
+
+    // Open a task from inside the full gallery: first Escape closes the task, second collapses.
+    await backlog.getByRole('button', { name: 'Open as a gallery' }).click();
+    await expect(backlog.getByRole('button', { name: 'Back to a column' })).toBeVisible();
+    await (await settled(card(page, 'Gallery task'))).click();
+    await expect(page.getByRole('region', { name: 'Task', exact: true })).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('region', { name: 'Task', exact: true })).toHaveCount(0);
+    await expect(backlog.getByRole('button', { name: 'Back to a column' })).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(backlog.getByRole('button', { name: 'Open as a gallery' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Build', exact: true })).toBeVisible();
+
+    // Select a card inside the full gallery: first Escape clears selection, second collapses.
+    await backlog.getByRole('button', { name: 'Open as a gallery' }).click();
+    await expect(backlog.getByRole('button', { name: 'Back to a column' })).toBeVisible();
+    await (await settled(card(page, 'Gallery task'))).click({ button: 'right' });
+    await expect(page.getByText('1 selected')).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByText('1 selected')).toHaveCount(0);
+    await expect(backlog.getByRole('button', { name: 'Back to a column' })).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(backlog.getByRole('button', { name: 'Open as a gallery' })).toBeVisible();
+
+    // Open board search inside the full gallery: first Escape closes search, second collapses.
+    await backlog.getByRole('button', { name: 'Open as a gallery' }).click();
+    await expect(backlog.getByRole('button', { name: 'Back to a column' })).toBeVisible();
+    await page.keyboard.press('ControlOrMeta+k');
+    await expect(page.getByRole('search', { name: 'Search the board', exact: true })).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('search', { name: 'Search the board', exact: true })).toHaveCount(
+      0,
+    );
+    await expect(backlog.getByRole('button', { name: 'Back to a column' })).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(backlog.getByRole('button', { name: 'Open as a gallery' })).toBeVisible();
+  });
 });
