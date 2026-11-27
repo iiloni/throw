@@ -108,6 +108,16 @@ async function assertSides(
 
   // Nor does the fade stand in the handle's way. It narrows the task: widened, it would leave
   // the board too little room for its rails, and the board would take its compact layout.
+  // Grab it where the pane came to rest, not where it was while sliding open.
+  let last = Number.NaN;
+  await expect
+    .poll(async () => {
+      const x = (await handle.boundingBox())?.x ?? Number.NaN;
+      const still = x === last;
+      last = x;
+      return still;
+    })
+    .toBe(true);
   const grip = (await handle.boundingBox())!;
   const before = Number(await handle.getAttribute('aria-valuenow'));
   await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
