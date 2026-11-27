@@ -287,6 +287,21 @@ export function useTaskGithubLinks() {
   );
   return { links: useSteadyRows(data), isLoading };
 }
+/** One task's pull request and issue links, for its pane. */
+export function useTaskGithubLinksOf(taskId: string) {
+  const { data = emptyGithubLinks, isLoading } = useLiveQuery(
+    (q) => q.from({ link: taskGithubLinksCollection }).where(({ link }) => eq(link.taskId, taskId)),
+    [taskId],
+  );
+  return { links: useSteadyRows(data), isLoading };
+}
+/**
+ * Waits for a link write the server made to stream back. GitHub links are written straight
+ * through the API rather than the outbox, so the pane shows the change once it is synced.
+ */
+export function awaitGithubLinksTxid(txid: number) {
+  return taskGithubLinksCollection.utils.awaitTxId(txid, SYNC_WAIT_MS).catch(() => false);
+}
 
 /** Links between tasks, across the projects of a workspace. Always synced for board cards. */
 export const taskRelationsCollection = createCollection(

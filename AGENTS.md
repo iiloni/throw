@@ -60,6 +60,10 @@ A project can connect to one GitHub repository (ADR 0017), from project settings
 (`components/GithubConnection`). `apps/server/src/github` verifies GitHub's signed webhooks at
 `/api/integrations/github/webhooks/<token>`, deduplicates them by `X-GitHub-Delivery` and hands
 them to `githubHandlers` in `github/dispatch.ts`, where the integration's later parts add theirs.
+A task's linked pull requests and issues show in its Links tab or side column
+(`components/TaskGithubLinks`), and the relation picker links a pasted address while the
+project is connected (`lib/githubLinks.ts`, online only). Board cards show a pull request mark
+from `TaskPullRequestsContext` (`Board/githubLinks.ts`), previewed on hover with a mouse.
 The activity log syncs to devices and comments are built (`lib/comments.ts`), with a
 timeline query in `collections.ts` and a task history view in `TaskDetails/TaskTimeline.tsx`; its comment cards, list motion and
 composer prompt are `TaskDetails/Comments.tsx`.

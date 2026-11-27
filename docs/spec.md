@@ -78,7 +78,9 @@ integrations.
 - An opt-in GitHub connection per project, in project settings: GitHub sends the project's
   repository events as signed webhooks. Task keys in pull requests and issues link them to
   tasks. Devices sync link metadata, review decisions and check counts for offline use.
-  Status changes on those events and releases build on it
+  The task view lists linked pull requests and issues with their state, review and checks,
+  and takes a pasted address to link one by hand; a card shows a quiet pull request mark,
+  previewed on hover with a mouse. Status changes on those events and releases build on it
   ([ADR 0017](decisions/0017-github-integration.md)).
 
 ### Out of scope
