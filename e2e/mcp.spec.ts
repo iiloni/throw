@@ -63,6 +63,15 @@ async function connect(token: string) {
   await client.connect(
     new StreamableHTTPClientTransport(endpoint(), {
       requestInit: { headers: { Authorization: `Bearer ${token}` } },
+      // All test accounts share the runner's IP. The server rejects a 429 before dispatch.
+      fetch: async (input, init) => {
+        const response = await fetch(input, init);
+        const seconds = Number(response.headers.get('Retry-After'));
+        if (response.status !== 429 || !(seconds > 0 && seconds <= 60)) return response;
+        await response.body?.cancel();
+        await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+        return fetch(input, init);
+      },
     }),
   );
   return client;
