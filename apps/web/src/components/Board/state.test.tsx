@@ -4,6 +4,7 @@ import { mockBoards } from './mockData';
 import {
   board,
   clampTaskPaneWidth,
+  collapseZoneGallery,
   current,
   DEFAULT_TASK_PANE_WIDTH,
   foldingColumnOf,
@@ -11,6 +12,7 @@ import {
   openSubtask,
   setSubtasksAsCards,
   setTaskPaneWidth,
+  setZoneView,
   update,
   useCollapsedColumns,
   useTaskPaneWidth,
@@ -184,5 +186,49 @@ describe('task split-pane width', () => {
     // Sub-minimum stored values still render at least PANE_MIN.
     expect(clampTaskPaneWidth(200, 0, 340)).toBe(340);
     expect(clampTaskPaneWidth(200, 1440, 340)).toBe(340);
+  });
+});
+
+describe('side rail gallery state', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    board.set(initialBoard(mockBoards()));
+  });
+
+  it('remembers whether a rail entered full gallery from a panel or a strip and restores it', () => {
+    setZoneView('backlog', 'panel');
+    setZoneView('closed', 'panel');
+
+    // Entering full gallery from a panel remembers 'panel' and steps the opposite rail to strip.
+    setZoneView('backlog', 'full');
+    expect(board.get().backlog).toBe('full');
+    expect(board.get().closed).toBe('strip');
+    expect(board.get().railBeforeFull.backlog).toBe('panel');
+    expect(collapseZoneGallery('backlog')).toBe('panel');
+    expect(board.get().backlog).toBe('panel');
+
+    // Entering full gallery straight from a strip remembers 'strip'.
+    setZoneView('closed', 'strip');
+    setZoneView('closed', 'full');
+    expect(board.get().closed).toBe('full');
+    expect(board.get().backlog).toBe('strip');
+    expect(board.get().railBeforeFull.closed).toBe('strip');
+    expect(collapseZoneGallery('closed')).toBe('strip');
+    expect(board.get().closed).toBe('strip');
+  });
+
+  it('keeps the remembered pre-gallery state across idempotent full transitions and updates on re-entry', () => {
+    setZoneView('backlog', 'strip');
+    setZoneView('backlog', 'full');
+    setZoneView('backlog', 'full');
+    expect(board.get().railBeforeFull.backlog).toBe('strip');
+
+    // Returning to a column via the header toggle and opening full again now remembers 'panel'.
+    setZoneView('backlog', 'panel');
+    expect(collapseZoneGallery('backlog')).toBeNull();
+    setZoneView('backlog', 'full');
+    expect(board.get().railBeforeFull.backlog).toBe('panel');
+    expect(collapseZoneGallery('backlog')).toBe('panel');
+    expect(board.get().backlog).toBe('panel');
   });
 });
