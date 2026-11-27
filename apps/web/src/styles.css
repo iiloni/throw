@@ -1075,14 +1075,14 @@ body:has(section.board-column[data-column-color]) .column-strip {
   --edge-bottom: 0px;
 }
 /*
- * The board's sides (DesktopBoard, WorkspaceDesktopBoard): columns scrolled out to the left
- * fade where they go, at the board's start or under a sticky backlog rail; and while a task
- * is open beside the board, columns that run on under it fade out before the split view's
- * seam (or before a sticky closed rail there) rather than being cut down a straight line
- * beside the grip. As at a column's ends, a fade and no shadow, so it reads the same on light
- * and dark. The mask stays and only its widths change, so the seam's fade eases in and out
- * with the pane instead of popping. Not inherited: the board's cards are not restyled on every
- * frame of it. A mask leaves hit testing alone, so the faded cards still take clicks and drags.
+ * The board's sides (DesktopBoard, WorkspaceDesktopBoard): columns that run on past either end
+ * fade where they go rather than being cut down a straight line. On the left that is the
+ * board's start or a sticky backlog rail; on the right, a sticky closed rail, the split view's
+ * seam beside an open task, or the window's edge. As at a column's ends, a fade and no shadow,
+ * so it reads the same on light and dark. The mask stays and only its widths change, so a fade
+ * eases in and out as columns come to run on (as the pane opens) instead of popping. Not
+ * inherited: the board's cards are not restyled on every frame of it. A mask leaves hit
+ * testing alone, so the faded cards still take clicks and drags.
  */
 @property --edge-left {
   syntax: "<length>";
@@ -1121,7 +1121,7 @@ body:has(section.board-column[data-column-color]) .column-strip {
 [data-slot="scroll-area"][data-seam][data-more-left] > [data-slot="scroll-area-viewport"] {
   --edge-left: var(--side-fade);
 }
-[data-slot="scroll-area"][data-seam="open"][data-more-right] > [data-slot="scroll-area-viewport"] {
+[data-slot="scroll-area"][data-seam][data-more-right] > [data-slot="scroll-area-viewport"] {
   --edge-right: var(--side-fade);
 }
 :root[data-hide-scrollbars] [data-slot="scroll-area-scrollbar"] {

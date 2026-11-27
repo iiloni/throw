@@ -344,7 +344,7 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
                   style={widening === null ? undefined : { width: widening, right: 'auto' }}
                 >
                   {/* The columns carry the top and bottom margin, so a rail in here runs full height. */}
-                  <ScrollArea sides data-seam={seamOf(state)} className="flex-1">
+                  <ScrollArea sides data-seam="" className="flex-1">
                     <ScrollAreaViewport
                       data-origin="active"
                       data-autoscroll-x=""
@@ -434,15 +434,6 @@ function StatusColumn({ status, index }: { status: Status; index: number }) {
 function openTaskOf(state: BoardState) {
   const data = current(state);
   return [...data.tasks, ...(data.hiddenTasks ?? [])].find((task) => task.id === state.openTaskId);
-}
-
-/**
- * Whether a board's columns run up to the open task's seam, for `[data-seam]` in styles.css to
- * fade them out before it (their left side fades whether or not a task is open). It turns with the pane's own presence, so the fade leaves as the
- * pane starts to close rather than vanishing once it has gone.
- */
-export function seamOf(state: BoardState): 'open' | 'shut' {
-  return openTaskOf(state) ? 'open' : 'shut';
 }
 
 /** The effective task pane width: live drag width if held, otherwise stored, clamped to the frame. */
