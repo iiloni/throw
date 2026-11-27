@@ -11,15 +11,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
-import {
-  type ReactNode,
-  useCallback,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react';
+import { type ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { NarrowedBar } from '@/components/BoardSearch/BoardFilters';
 import { type PhoneCapture, usePhonePalette } from '@/components/CommandPalette/PhonePalette';
 import { type Detent, Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
@@ -29,11 +21,11 @@ import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
 import { haptics } from '@/lib/haptics';
-import { afterPaint, curves, springs } from '@/lib/motion';
+import { curves, springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { BoardSettingsContent } from './BoardSettingsPanel';
 import { CardList } from './CardList';
-import { drag, holding, makingWay, pageStride } from './drag';
+import { drag, holding, makingWay } from './drag';
 import { StatusGlyph } from './glyphs';
 import { isClosed, type Status, type Task } from './model';
 import {
@@ -62,13 +54,11 @@ import {
 import { TaskCard } from './TaskCard';
 import { SelectionContentContext, TaskContentContext } from './taskContent';
 import { useTaskSurfaceShown } from './taskTransition';
-import { usePagerPage } from './usePagerPage';
+import { type Folding, phoneColumns, useColumnPager } from './useColumnPager';
 
 /** Clear space at the end of a column, for the collapsed drawer resting over it. */
 export const DOCK_SPACE = 'calc(var(--dock-height) + var(--safe-bottom) + 3rem)';
 const DAY = 86_400_000;
-/** How long a turn the board makes itself keeps trying while a fling's snap settles. */
-const SETTLE_MS = 1500;
 
 /**
  * The board on a phone. The columns are the board, one page at a time; the backlog lives in
@@ -101,12 +91,11 @@ export function PhoneBoard({
   const done =
     project.statuses.find((status) => status.category === 'done' && status.isDefault) ??
     project.statuses.find((status) => status.category === 'done');
-  const reduced = useReducedMotion();
-  const pagerRef = useRef<HTMLDivElement>(null);
-  const [scrolled, pager, quietPager, placePager] = usePagerPage();
   const { isCollapsed, setCollapsed } = useCollapsedColumns(project);
-  const pages = phoneColumns(active, isCollapsed);
-  const page = Math.min(scrolled, Math.max(0, pages.length - 1));
+  const { pagerRef, pages, page, pager, turnTo, folding } = useColumnPager(active, {
+    isCollapsed,
+    setCollapsed,
+  });
   const [drawerPage, setDrawerPage] = useState<BoardPage | null>(null);
   const closePage = useCallback(() => setDrawerPage(null), []);
   const phonePalette = usePhonePalette({
@@ -119,80 +108,6 @@ export function PhoneBoard({
   const covered = drawerPage !== null || capture.card !== null || state.openTaskId !== null;
   // Back lets go of selected cards before it closes anything else.
   useBackHandler(state.selection.length > 0, () => update({ selection: [] }));
-
-  function turnTo(index: number, behavior: ScrollBehavior = 'smooth') {
-    quietPager();
-    const element = pagerRef.current;
-    element?.scrollTo({
-      left: index * pageStride(element),
-      behavior: reduced ? 'instant' : behavior,
-    });
-  }
-
-  // The column on screen, and the one a tap on a folded column asked to turn to.
-  const shown = useRef<string | undefined>(undefined);
-  const turning = useRef<string | null>(null);
-  const pageKey = pages.map(({ id }) => id).join(' ');
-  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the pages themselves change
-  useLayoutEffect(() => {
-    const element = pagerRef.current;
-    const anchor = pages.findIndex(({ id }) => id === shown.current);
-    const target = pages.findIndex(({ id }) => id === turning.current);
-    turning.current = null;
-    // A column folded or opened beside this one leaves the board on the column it was on; a
-    // folded current column gives its place to the next.
-    const anchored = element !== null && anchor !== -1 && anchor !== page;
-    if (anchored) {
-      element.scrollTo({ left: anchor * pageStride(element), behavior: 'instant' });
-      placePager(anchor);
-    }
-    shown.current = pages[target !== -1 ? target : anchor !== -1 ? anchor : page]?.id;
-    if (target === -1) return;
-    if (!anchored || !element) return turnTo(target);
-    return turnSettled(element, target);
-  }, [pageKey]);
-
-  /**
-   * Turns to a page once the pager has taken a new page before the current one. Chrome snaps
-   * back to the column it was on after the layout, and a fling's snap still settling does the
-   * same, either of which stops a turn begun meanwhile: the turn is made again when the pager
-   * comes to rest elsewhere, unless a finger takes it first.
-   */
-  function turnSettled(element: HTMLElement, target: number) {
-    const until = performance.now() + SETTLE_MS;
-    const ended = () => {
-      const off = Math.abs(element.scrollLeft - target * pageStride(element)) > 1;
-      if (off && performance.now() < until) turnTo(target);
-      else stop();
-    };
-    const cancel = afterPaint(() => turnTo(target));
-    function stop() {
-      cancel();
-      element.removeEventListener('scrollend', ended);
-      element.removeEventListener('touchstart', stop);
-    }
-    element.addEventListener('scrollend', ended);
-    element.addEventListener('touchstart', stop, { passive: true });
-    return stop;
-  }
-  // biome-ignore lint/correctness/useExhaustiveDependencies: follows the turns; the effect above follows the pages
-  useLayoutEffect(() => {
-    shown.current = pages[page]?.id;
-  }, [page]);
-
-  const folding: Folding = {
-    statuses: active,
-    onCollapse: (id) => {
-      // The last column on screen stays: the pager is never empty.
-      if (pages.length > 1) setCollapsed(id, true);
-    },
-    onExpand: (id) => {
-      // Every column folded on a desktop shows only the first here; it stays as another opens.
-      for (const status of pages) setCollapsed(status.id, false);
-      setCollapsed(id, false);
-      turning.current = id;
-    },
-  };
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -297,23 +212,9 @@ export function PhoneBoard({
   );
 }
 
+export { type Folding, phoneColumns };
+
 export const pageClass = 'flex w-full shrink-0 snap-center flex-col px-[var(--page-inset)]';
-
-/**
- * The columns a phone pages through: the active statuses not folded. One always stays, so
- * a board whose every column was folded on a desktop shows its first here.
- */
-export function phoneColumns(statuses: Status[], isCollapsed: (id: string) => boolean) {
-  const open = statuses.filter((status) => !isCollapsed(status.id));
-  return open.length > 0 || statuses.length === 0 ? open : statuses.slice(0, 1);
-}
-
-/** A board whose columns fold: all of them, in order, and how one folds or opens. */
-export type Folding = {
-  statuses: Status[];
-  onCollapse: (statusId: string) => void;
-  onExpand: (statusId: string) => void;
-};
 
 /**
  * The current column by name, and the active columns as one track in the order work moves

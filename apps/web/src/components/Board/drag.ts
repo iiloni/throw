@@ -715,13 +715,19 @@ function autoScroll() {
   }
 }
 
-/** The side of a phone's pager a held card is waiting at, if there is a page beyond it. */
+/**
+ * The side of a pager a held card is waiting at, if there is a page beyond it. A phone's pager
+ * spans the screen; the compact board beside a task (CompactSplitBoard) is half of it, and a
+ * card carried over the task is not at its edge.
+ */
 function pageSide(hit: Element | null): -1 | 0 | 1 {
   const pager = document.querySelector<HTMLElement>('[data-pager]');
   if (!pager || hit?.closest('[data-drop-block]')) return 0;
-  if (pointer.x < PAGE_EDGE) return pager.scrollLeft > 1 ? -1 : 0;
+  const { left, right } = pager.getBoundingClientRect();
+  if (pointer.x < left || pointer.x > right) return 0;
+  if (pointer.x < left + PAGE_EDGE) return pager.scrollLeft > 1 ? -1 : 0;
   const end = pager.scrollWidth - pager.clientWidth - 1;
-  if (pointer.x > window.innerWidth - PAGE_EDGE) return pager.scrollLeft < end ? 1 : 0;
+  if (pointer.x > right - PAGE_EDGE) return pager.scrollLeft < end ? 1 : 0;
   return 0;
 }
 
