@@ -843,6 +843,10 @@ test('reparenting a manually ordered tag offline clears its position immediately
     await client.close();
   }
 
+  await page.goto(`/w/${project.workspaceId}/p/${project.id}?view=board`);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(project.name, {
+    timeout: APP_LOAD_TIMEOUT,
+  });
   const localTag = () =>
     page.evaluate(async (id) => {
       const { tagsCollection } = await import(/* @vite-ignore */ '/src/lib/collections.ts');
@@ -853,13 +857,13 @@ test('reparenting a manually ordered tag offline clears its position immediately
     parentId: null,
     position: originalPosition,
   });
-  // Load Vite's modules before taking the browser offline. The request fixture can still
-  // inspect the server while the browser's outbox waits for connectivity.
-  await page.evaluate(async () => {
-    await import(/* @vite-ignore */ '/src/lib/tags.ts');
-  });
-  await page.context().setOffline(true);
-  await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
+  // Let Vite keep serving modules. Keep the tag route installed through reconnect so a
+  // retry always goes through the same handler, even as connectivity changes.
+  const tagPath = `/api/tags/${tagId}`;
+  let offline = true;
+  await page.route(`**${tagPath}`, (route) =>
+    offline ? route.abort('connectionfailed') : route.continue(),
+  );
   await page.evaluate(
     async ({ tagId, parentId }) => {
       const { updateTag } = await import(/* @vite-ignore */ '/src/lib/tags.ts');
@@ -868,6 +872,9 @@ test('reparenting a manually ordered tag offline clears its position immediately
     { tagId, parentId },
   );
   await expect.poll(localTag).toEqual({ parentId, position: null });
+  await expect(page.getByRole('status').filter({ hasText: 'Offline · 1 unsaved' })).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
 
   await page.evaluate(async () => {
     const { waitForPendingWritesStored } = await import(
@@ -880,11 +887,11 @@ test('reparenting a manually ordered tag offline clears its position immediately
   expect(await serverTag()).toMatchObject({ parent_id: null, position: originalPosition });
 
   const replay = page.waitForResponse(
-    (response) =>
-      response.request().method() === 'PATCH' && response.url().endsWith(`/api/tags/${tagId}`),
+    (response) => response.request().method() === 'PATCH' && response.url().endsWith(tagPath),
     { timeout: APP_LOAD_TIMEOUT },
   );
-  await page.context().setOffline(false);
+  offline = false;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
   expect((await replay).ok()).toBe(true);
   await expect
     .poll(serverTag, { timeout: APP_LOAD_TIMEOUT })
