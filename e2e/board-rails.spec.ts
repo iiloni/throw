@@ -595,14 +595,18 @@ test.describe('desktop rails', () => {
     // Open board search inside the full gallery: first Escape closes search, second collapses.
     await backlog.getByRole('button', { name: 'Open as a gallery' }).click();
     await expect(backlog.getByRole('button', { name: 'Back to a column' })).toBeVisible();
+    // Search restores focus to its opener. Start from the board so the toggle's tooltip
+    // cannot take Escape after search closes.
+    const boardContent = page.locator('#main-content');
+    await boardContent.focus();
     await page.keyboard.press('ControlOrMeta+k');
-    await expect(page.getByRole('search', { name: 'Search the board', exact: true })).toBeVisible();
+    const search = page.getByRole('search', { name: 'Search the board', exact: true });
+    await expect(search.getByRole('searchbox', { name: 'Search tasks' })).toBeFocused();
 
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('search', { name: 'Search the board', exact: true })).toHaveCount(
-      0,
-    );
+    await expect(search).toHaveCount(0);
     await expect(backlog.getByRole('button', { name: 'Back to a column' })).toBeVisible();
+    await expect(boardContent).toBeFocused();
 
     await page.keyboard.press('Escape');
     await expect(backlog.getByRole('button', { name: 'Open as a gallery' })).toBeVisible();
