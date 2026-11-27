@@ -810,6 +810,13 @@ test('opening a short panel scrolls the pane to its end', async ({ page }) => {
   }
   for (let i = 1; i < opening.length; i++)
     expect(opening[i]!.scrollTop).toBeGreaterThanOrEqual(opening[i - 1]!.scrollTop - 0.5);
+  // It lands with the panel: as both slow down at the end, no step catches up with a jump.
+  for (let i = 2; i < opening.length; i++) {
+    if (opening[i]!.height < full * 0.8) continue;
+    const step = opening[i]!.scrollTop - opening[i - 1]!.scrollTop;
+    const previous = opening[i - 1]!.scrollTop - opening[i - 2]!.scrollTop;
+    expect(step).toBeLessThanOrEqual(Math.max(previous, 0) + 1);
+  }
   expect(Math.abs(after.scrollTop - after.end)).toBeLessThan(2);
   // The tabs stay in view, clear of anything floating over the top.
   expect(after.tabsTop).toBeGreaterThanOrEqual(after.above - 1);

@@ -133,7 +133,7 @@ const noop = () => {};
  * Called before the panel changes, so it knows the height the panel opens from. Each frame,
  * after motion has drawn the panel's height, the scroll covers as much of its way as the
  * height has of its own, so the two arrive together and the scroll is never cut short by an
- * end that has not opened yet.
+ * end that has not opened yet. Following that end does not bounce off it (`scrollBounce`).
  */
 function revealPanel(section: HTMLElement, panelId: string, instant: boolean) {
   const scroller = section.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
@@ -192,9 +192,7 @@ function revealPanel(section: HTMLElement, panelId: string, instant: boolean) {
       return;
     }
     const progress = Math.min(Math.max((height - fromHeight) / (full - fromHeight), 0), 1);
-    // Short of the end that has opened so far: arriving there at speed would bounce.
-    const opened = scroller.scrollHeight - scroller.clientHeight - 2;
-    scroller.scrollTop = Math.max(Math.min(from + (goal - from) * progress, opened), scrollTop);
+    scroller.scrollTop = Math.max(from + (goal - from) * progress, scrollTop);
   }
   frame.postRender(step, true);
   scroller.addEventListener('wheel', stop, { passive: true });
