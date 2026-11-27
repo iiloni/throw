@@ -1,7 +1,7 @@
 # 0017 — GitHub integration
 
 Status: accepted (2026-11-26) for the connection and inbound webhooks (THR-122), links
-(THR-123) and status rules (THR-125). Later parts of the integration amend this record as
+(THR-123) status rules (THR-125) and release bindings (THR-126). Later parts of the integration amend this record as
 they land.
 
 ## Context
@@ -26,7 +26,7 @@ without a public GitHub App registered for each server.
 
 **A project opts in by connecting one repository. GitHub pushes signed webhooks to Throw;
 Throw verifies each one before anything reads it.** A connection is the only way GitHub
-data enters Throw, and a project without one is unchanged.
+webhooks enter Throw. Members can also record releases and correct bindings manually in a disconnected project.
 
 ### The connection
 
@@ -224,3 +224,31 @@ asks.
 - Each project needs its own webhook on GitHub. A GitHub App mode would remove that step.
 - A restore disconnects every project. Reconnecting means a new URL and secret on GitHub.
 - A changed `BETTER_AUTH_SECRET` breaks every connection until its secret is rotated.
+
+### Releases and tags (THR-126)
+
+A release belongs to a project, keyed by repository and case-sensitive tag name.
+A lightweight tag push records a published tag at the repository push time (receipt time
+if absent). The server remembers the last source push time per project, repository and tag,
+including deleted tags. Older pushes are ignored. For tied or missing times, a subsequent
+push advances the tag only if its before SHA matches the observed target. A release for the same tag takes over that row and keeps its ID. Deleting the
+release removes its bindings. If a tag push was observed and that tag still exists, the row
+reverts to a tag at its last observed commit with a null publication date. It remains visible
+but no longer counts as shipped, including after subsequent tag updates. Unpublishing retains the bindings but stops counting them as
+shipped. Published prereleases count as shipped. Disconnect and restore preserve both tables.
+
+On publication Throw binds active tasks whose linked PRs merged in this repo after the
+previous publication and through the new publication time. Tasks already bound to a published
+release in this repo are skipped. In token mode Throw checks candidate merge SHAs against
+the tag using GitHub compare. An unavailable comparison falls back to the time window.
+This is a snapshot of known merges at delivery time. Members can correct historical or
+out-of-order imports manually. Release metadata and bindings sync quietly without task
+history entries or outbound notifications.
+
+Protocol 1 advertises `githubReleases`. The read-only `github-releases` and
+`task-github-releases` shapes use workspace membership and independent persisted collections.
+Under `/api/integrations/github/projects/:projectId/releases`, GET lists releases and POST
+records a manual release. PUT or DELETE at `/:releaseId/tasks/:taskId` binds or unbinds a task
+of that project. Manual records work without a connection. MCP exposes `list_github_releases`,
+`bind_task_release`, `unbind_task_release` and `get_task.githubReleases`. Use `list_tasks`
+with `release` (tag name or UUID) or `unreleased: true` for merged tasks awaiting publication.

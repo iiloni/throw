@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { timestampSchema } from './sync';
+import { timestampSchema, txidResponseSchema } from './sync';
 
 /** A project's connection to one GitHub repository (ADR 0017). Server-only, never synced. */
 
@@ -249,3 +249,44 @@ export const linkGithubRequestSchema = z.object({
   title: z.string().trim().min(1).max(1024).optional(),
   state: state.optional(),
 });
+
+export const createGithubReleaseSchema = z.strictObject({
+  repo: githubRepositorySchema,
+  tagName: z.string().trim().min(1).max(1024),
+  name: z.string().max(2048).nullable().optional(),
+  targetCommitish: z.string().max(1024).nullable().optional(),
+  isDraft: z.boolean().optional(),
+  isPrerelease: z.boolean().optional(),
+  publishedAt: timestampSchema.nullable().optional(),
+});
+export type CreateGithubRelease = z.input<typeof createGithubReleaseSchema>;
+export const githubReleaseSchema = z.object({
+  id: z.uuid(),
+  workspaceId: z.uuid(),
+  projectId: z.uuid(),
+  repo: z.string(),
+  tagName: z.string(),
+  name: z.string().nullable(),
+  url: z.url(),
+  targetCommitish: z.string().nullable(),
+  source: z.enum(['release', 'tag', 'manual']),
+  isDraft: z.boolean(),
+  isPrerelease: z.boolean(),
+  publishedAt: timestampSchema.nullable(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+});
+export const githubReleaseWriteSchema = githubReleaseSchema.extend(txidResponseSchema.shape);
+export const releaseBindingResponseSchema = txidResponseSchema.extend({ bound: z.boolean() });
+export type GithubRelease = z.infer<typeof githubReleaseSchema>;
+export const githubReleasesResponseSchema = z.object({ releases: z.array(githubReleaseSchema) });
+export const taskGithubReleaseSchema = z.object({
+  id: z.uuid(),
+  workspaceId: z.uuid(),
+  projectId: z.uuid(),
+  taskId: z.uuid(),
+  releaseId: z.uuid(),
+  matchedBy: z.enum(['manual', 'window', 'ancestry']),
+  createdAt: timestampSchema,
+});
+export type TaskGithubRelease = z.infer<typeof taskGithubReleaseSchema>;

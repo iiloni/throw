@@ -63,6 +63,7 @@ describe('protocol gate', () => {
       taskSize: true,
       statusColor: true,
       githubTaskLinks: true,
+      githubReleases: true,
     });
   });
 

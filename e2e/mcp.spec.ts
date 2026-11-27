@@ -63,6 +63,15 @@ async function connect(token: string) {
   await client.connect(
     new StreamableHTTPClientTransport(endpoint(), {
       requestInit: { headers: { Authorization: `Bearer ${token}` } },
+      // All test accounts share the runner's IP. The server rejects a 429 before dispatch.
+      fetch: async (input, init) => {
+        const response = await fetch(input, init);
+        const seconds = Number(response.headers.get('Retry-After'));
+        if (response.status !== 429 || !(seconds > 0 && seconds <= 60)) return response;
+        await response.body?.cancel();
+        await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+        return fetch(input, init);
+      },
     }),
   );
   return client;
@@ -1532,6 +1541,73 @@ test('GitHub deliveries reach the offline collection and MCP, with scoped manual
       checksSummary: { state: 'failing', passed: 1, failed: 1, pending: 0 },
     });
     expect(result.history.items.filter((i) => i.viaTokenName === 'GitHub')).toHaveLength(3);
+    const release = {
+      tag_name: 'v1',
+      name: 'First release',
+      draft: false,
+      prerelease: true,
+      published_at: '2026-11-26T08:00:00Z',
+    };
+    const unreleased = () =>
+      call(client, 'list_tasks', { projectId: project.id, unreleased: true });
+    expect((await unreleased()).items.map((t) => t.id)).toContain(task.id);
+    await send('release', {
+      action: 'published',
+      release: { ...release, tag_name: 'v0', published_at: '2026-11-26T06:59:59Z' },
+    });
+    expect((await unreleased()).items.map((t) => t.id)).toContain(task.id);
+    const tagPush = {
+      ref: 'refs/tags/v1',
+      after: 'a'.repeat(40),
+      deleted: false,
+      repository: { full_name: 'Org/Repo', pushed_at: Date.parse(release.published_at) / 1000 },
+    };
+    await send('push', tagPush);
+    await send('release', { action: 'published', release });
+    const first = await call(client, 'list_github_releases', { projectId: project.id, limit: 1 });
+    const [shipped] = first.releases;
+    expect(first.nextCursor?.id).toBe(shipped?.id);
+    const next = await call(client, 'list_github_releases', {
+      projectId: project.id,
+      limit: 1,
+      cursor: first.nextCursor,
+    });
+    expect(next.releases.map((row) => row.tagName)).toEqual(['v0']);
+    expect(next.nextCursor).toBeNull();
+    expect(shipped).toMatchObject({ tagName: 'v1', isPrerelease: true });
+    expect((await unreleased()).items).toHaveLength(0);
+    expect((await call(client, 'get_task', { task: task.key })).githubReleases).toEqual([shipped]);
+    for (const filter of [shipped!.id, 'v1'])
+      expect(
+        (await call(client, 'list_tasks', { release: filter })).items.map((t) => t.id),
+      ).toContain(task.id);
+    for (const shape of ['github-releases', 'task-github-releases'])
+      expect(await shapeRows(request, shape, stranger.headers)).toEqual([]);
+    const bindingPath = `/api/integrations/github/projects/${project.id}/releases/${shipped!.id}/tasks/${task.id}`;
+    expect((await request.delete(bindingPath, { headers: stranger.headers })).status()).toBe(404);
+    expect((await request.put(bindingPath, { headers: stranger.headers })).status()).toBe(404);
+    await send('release', {
+      action: 'published',
+      release: { ...release, tag_name: 'v2', published_at: '2026-11-27T00:00:00Z' },
+    });
+    expect((await call(client, 'get_task', { task: task.key })).githubReleases).toEqual([shipped]);
+    async function cachedRelease() {
+      return page.evaluate(
+        async ({ releaseId, taskId }) => {
+          const { githubReleasesCollection: r, taskGithubReleasesCollection: b } = await import(
+            /* @vite-ignore */ '/src/lib/collections.ts'
+          );
+          const persisted = await b.config.persistence.adapter.loadSubset(b.id, {});
+          return [
+            r.get(releaseId)?.tagName,
+            [...b.state.values()].some((binding) => binding.taskId === taskId),
+            persisted.some((entry: { value: { taskId: string } }) => entry.value.taskId === taskId),
+          ];
+        },
+        { releaseId: shipped!.id, taskId: task.id },
+      );
+    }
+    await expect.poll(cachedRelease, { timeout: 30000 }).toEqual(['v1', true, true]);
     const synced = () =>
       page.evaluate(async (id) => {
         const { taskGithubLinksCollection: c } = await import(
@@ -1557,6 +1633,46 @@ test('GitHub deliveries reach the offline collection and MCP, with scoped manual
     await page.route('**/api/shapes/**', (route) => route.abort());
     await page.reload();
     await expect.poll(synced, { timeout: 30000 }).toMatchObject(link);
+    await expect.poll(cachedRelease, { timeout: 30000 }).toEqual(['v1', true, true]);
+    await call(client, 'unbind_task_release', { task: task.key, releaseId: shipped!.id });
+    expect((await unreleased()).items.map((t) => t.id)).toContain(task.id);
+    await call(client, 'bind_task_release', { task: task.key, releaseId: shipped!.id });
+    expect(
+      await call(client, 'bind_task_release', { task: task.key, releaseId: shipped!.id }),
+    ).toEqual({ bound: true, txid: null });
+    await send('release', {
+      action: 'unpublished',
+      release: { ...release, draft: true, published_at: null },
+    });
+    expect((await unreleased()).items.map((t) => t.id)).toContain(task.id);
+    const newer = {
+      ...tagPush,
+      before: tagPush.after,
+      after: 'c'.repeat(40),
+      repository: { ...tagPush.repository, pushed_at: tagPush.repository.pushed_at + 1 },
+    };
+    await send('push', newer);
+    await send('push', tagPush);
+    await send('push', { ...newer, before: '0'.repeat(40), after: tagPush.after });
+    await send('release', { action: 'deleted', release });
+    for (const sha of [newer.after, 'b'.repeat(40)]) {
+      if (sha !== newer.after) await send('push', { ...newer, before: newer.after, after: sha });
+      const tags = await call(client, 'list_github_releases', { projectId: project.id });
+      expect(tags.releases.find((r) => r.id === shipped!.id)).toMatchObject({
+        source: 'tag',
+        publishedAt: null,
+        targetCommitish: sha,
+      });
+      expect((await unreleased()).items.map((t) => t.id)).toContain(task.id);
+    }
+    await send('push', { ...newer, before: 'b'.repeat(40), deleted: true });
+    await send('push', tagPush);
+    expect(
+      (await call(client, 'list_github_releases', { projectId: project.id })).releases.map(
+        (r) => r.id,
+      ),
+    ).not.toContain(shipped!.id);
+    expect((await call(client, 'get_task', { task: task.id })).githubReleases).toEqual([]);
     expect(await shapeRows(request, 'task-github-links', stranger.headers)).toEqual([]);
     const rows = await shapeRows(request, 'task-github-links', owner.headers);
     expect(rows[0]).not.toHaveProperty('runs');

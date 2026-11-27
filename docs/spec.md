@@ -83,7 +83,8 @@ integrations.
   A project can opt into status rules: a linked pull request opened, reopened or converted
   to a draft, made ready for review, merged or closed, or a linked issue closed, moves its
   tasks to a status the project chose. Each rule is off until set, and the move is recorded as GitHub's. Releases
-  build on it ([ADR 0017](decisions/0017-github-integration.md)).
+  and tag pushes bind merged tasks to shipped versions. MCP can list tasks by release or find
+  merged work awaiting a release ([ADR 0017](decisions/0017-github-integration.md)).
 
 ### Out of scope
 

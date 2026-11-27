@@ -1,6 +1,7 @@
 import type {
   CreateComment,
   CreateGithubConnection,
+  CreateGithubRelease,
   CreateMcpToken,
   CreateProject,
   CreateStatus,
@@ -27,14 +28,22 @@ import {
   createMcpTokenResponseSchema,
   githubConnectionResponseSchema,
   githubConnectionSecretResponseSchema,
+  githubReleasesResponseSchema,
+  githubReleaseWriteSchema,
   mcpTokensResponseSchema,
+  releaseBindingResponseSchema,
   webhookResponseSchema,
   webhookSecretResponseSchema,
   webhooksResponseSchema,
   webhookTestResponseSchema,
 } from '@throw/shared';
 import { getAuthToken } from './auth';
-import { compatibleFetch, ensureStatusColorSupport, ensureTaskSizeSupport } from './compatibility';
+import {
+  compatibleFetch,
+  ensureGithubReleasesSupport,
+  ensureStatusColorSupport,
+  ensureTaskSizeSupport,
+} from './compatibility';
 import { getServerUrl } from './serverUrl';
 
 export class ApiError extends Error {
@@ -172,6 +181,32 @@ export const api = {
       method: 'POST',
       signal: AbortSignal.timeout(20_000),
     }).then(githubConnectionResponseSchema.parse),
+  githubReleases: async (projectId: string) => {
+    await ensureGithubReleasesSupport();
+    return request<unknown>(`/integrations/github/projects/${projectId}/releases`, {}).then(
+      githubReleasesResponseSchema.parse,
+    );
+  },
+  createGithubRelease: async (projectId: string, body: CreateGithubRelease) => {
+    await ensureGithubReleasesSupport();
+    return request<unknown>(`/integrations/github/projects/${projectId}/releases`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20000),
+    }).then(githubReleaseWriteSchema.parse);
+  },
+  setGithubReleaseBinding: async (
+    projectId: string,
+    releaseId: string,
+    taskId: string,
+    bound: boolean,
+  ) => {
+    await ensureGithubReleasesSupport();
+    return request<unknown>(
+      `/integrations/github/projects/${projectId}/releases/${releaseId}/tasks/${taskId}`,
+      { method: bound ? 'PUT' : 'DELETE', signal: AbortSignal.timeout(20000) },
+    ).then(releaseBindingResponseSchema.parse);
+  },
   versionInfo: () => bootstrap<VersionInfo>('/updates'),
   releases: () => bootstrap<ReleasesResponse>('/updates/releases'),
   createWorkspace: (body: CreateWorkspace) =>
