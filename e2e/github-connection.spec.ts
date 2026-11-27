@@ -353,3 +353,47 @@ test('connect a repository in project settings and see GitHub’s ping', async (
   await expect(page.getByRole('button', { name: 'Connect repository' })).toBeVisible();
   expect((await deliver(page.request, url, secret)).status()).toBe(404);
 });
+
+test('choose, clear and keep a status rule in project settings', async ({ page, isMobile }) => {
+  const account = await signUp(page);
+  const project = await makeProject(page.request, account);
+  const done = project.statuses.find((status) => status.category === 'done')!;
+  expect(
+    (
+      await page.request.post(managed(project.id), {
+        headers: account.headers,
+        data: { repository: 'octo-org/website' },
+      })
+    ).status(),
+  ).toBe(201);
+  await page.goto(`/w/${project.workspaceId}/p/${project.id}/settings`);
+  await expect(page.getByLabel('Project name', { exact: true })).toHaveValue('Linked', {
+    timeout: APP_LOAD_TIMEOUT,
+  });
+  await openGithubPage(page, isMobile);
+
+  const merged = page.getByRole('button', { name: /^Pull request merged/ });
+  await expect(merged).toHaveAccessibleName('Pull request merged Off');
+  async function pick(name: string) {
+    await merged.click();
+    if (isMobile) {
+      const drawer = page.getByRole('dialog', { name: 'Pull request merged' });
+      await drawer.getByRole('radio', { name }).click();
+      await expect(drawer).toBeHidden();
+    } else await page.getByRole('menuitemradio', { name }).click();
+  }
+  const saved = async () => (await connection(page.request, account, project.id))?.statusRules;
+
+  await pick(done.name);
+  await expect(merged).toHaveAccessibleName(`Pull request merged ${done.name}`);
+  await expect.poll(saved).toMatchObject({ prMerged: done.id, prClosed: null });
+
+  await page.reload();
+  await expect(merged).toHaveAccessibleName(`Pull request merged ${done.name}`, {
+    timeout: APP_LOAD_TIMEOUT,
+  });
+
+  await pick('Off');
+  await expect(merged).toHaveAccessibleName('Pull request merged Off');
+  await expect.poll(saved).toMatchObject({ prMerged: null });
+});

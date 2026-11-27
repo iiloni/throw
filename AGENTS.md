@@ -63,7 +63,9 @@ them to `githubHandlers` in `github/dispatch.ts`, where the integration's later 
 Its opt-in status rules (`github/statusRules.ts`) move linked tasks when a pull request or issue
 changes state, in the delivery's transaction and as a board move would; the link and status
 change share one history entry and one webhook (`recordGithubChange` in `github/linkData.ts`).
-The app reads and saves them through `statusRules` on the connection (`saveGithubStatusRules`).
+The app reads and saves them through `statusRules` on the connection (`saveGithubStatusRules`),
+from the GitHub page's Status rules (`GithubConnection/StatusRules.tsx`): a status menu on
+desktop and the drawer's status grid (`StatusOptions`) on a phone.
 The activity log syncs to devices and comments are built (`lib/comments.ts`), with a
 timeline query in `collections.ts` and a task history view in `TaskDetails/TaskTimeline.tsx`; its comment cards, list motion and
 composer prompt are `TaskDetails/Comments.tsx`.
