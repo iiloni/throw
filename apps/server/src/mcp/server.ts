@@ -298,7 +298,7 @@ export function throwMcpServer(actor: McpActor) {
         const task = await requireTask(actor, input.task);
         return setReleaseBinding(
           actor,
-          task.projectId,
+          undefined,
           input.releaseId,
           task.id,
           name === 'bind_task_release',

@@ -80,19 +80,27 @@ export function createRelease(actor: WriteActor, projectId: string, input: Creat
 
 export function setReleaseBinding(
   actor: WriteActor,
-  projectId: string,
+  expectedProjectId: string | undefined,
   releaseId: string,
   taskId: string,
   bind: boolean,
 ) {
   return db.transaction(async (tx) => {
-    const { workspaceId } = await memberProject(tx, actor, projectId);
     const [release] = await tx
-      .select({ id: releases.id })
+      .select({ projectId: projects.id, workspaceId: projects.workspaceId })
       .from(releases)
-      .where(and(eq(releases.id, releaseId), eq(releases.projectId, projectId)))
+      .innerJoin(projects, eq(projects.id, releases.projectId))
+      .where(
+        and(
+          eq(releases.id, releaseId),
+          expectedProjectId ? eq(projects.id, expectedProjectId) : undefined,
+          isNull(projects.deletedAt),
+          inArray(projects.workspaceId, memberWorkspaces(tx, actor.userId, actor.workspaceId)),
+        ),
+      )
       .for('share');
     if (!release) throw new LinkError('Release not found', 404);
+    const { projectId, workspaceId } = release;
     const [task] = await tx
       .select({ id: tasks.id })
       .from(tasks)

@@ -242,7 +242,7 @@ function taskFilter(reference: string) {
 
 export async function findTask(actor: McpActor, reference: string) {
   const [task] = await db
-    .select({ id: tasks.id, projectId: tasks.projectId, key })
+    .select({ id: tasks.id, key })
     .from(tasks)
     .innerJoin(projects, eq(tasks.projectId, projects.id))
     .where(and(inArray(tasks.workspaceId, workspacesFor(actor)), taskFilter(reference)))
