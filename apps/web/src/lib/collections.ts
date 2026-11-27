@@ -26,6 +26,7 @@ import {
   commentSchema,
   createStatusSchema,
   createWorkspaceSchema,
+  githubReleaseSchema,
   type Project,
   parseTimestamptz,
   projectSchema,
@@ -39,6 +40,7 @@ import {
   type TaskTag,
   tagSchema,
   taskGithubLinkSchema,
+  taskGithubReleaseSchema,
   taskRelationSchema,
   taskSchema,
   taskTagKey,
@@ -65,7 +67,7 @@ import {
 import { orderQueuedWrites } from './orderQueuedWrites';
 import { reportRefusedChanges } from './refusedChanges';
 import { getServerUrl } from './serverUrl';
-import { githubLinksShapeFetch, shapeFetch } from './shapeFetch';
+import { githubLinksShapeFetch, githubReleasesShapeFetch, shapeFetch } from './shapeFetch';
 import { noteLocalWrite, useSteadyRows } from './steadyRows';
 import {
   addPendingWrite,
@@ -276,6 +278,33 @@ export const taskGithubLinksCollection = createCollection(
       schema: taskGithubLinkSchema,
       getKey: (link) => link.id,
       shapeOptions: { ...shapeOptions('task-github-links'), fetchClient: githubLinksShapeFetch },
+    }),
+    1,
+  ),
+);
+export const githubReleasesCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      ...alwaysSynced,
+      id: 'github-releases',
+      schema: githubReleaseSchema,
+      getKey: (link) => link.id,
+      shapeOptions: { ...shapeOptions('github-releases'), fetchClient: githubReleasesShapeFetch },
+    }),
+    1,
+  ),
+);
+export const taskGithubReleasesCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      ...alwaysSynced,
+      id: 'task-github-releases',
+      schema: taskGithubReleaseSchema,
+      getKey: (link) => link.id,
+      shapeOptions: {
+        ...shapeOptions('task-github-releases'),
+        fetchClient: githubReleasesShapeFetch,
+      },
     }),
     1,
   ),

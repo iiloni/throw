@@ -695,3 +695,66 @@ export const taskGithubLinks = pgTable(
     uniqueIndex('task_github_links_item').on(t.taskId, t.repo, t.kind, t.number),
   ],
 );
+
+const releaseScope = () => ({
+  id: uuid().primaryKey(),
+  workspaceId: uuid()
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  projectId: uuid()
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+});
+export const githubReleases = pgTable(
+  'github_releases',
+  {
+    ...releaseScope(),
+    repo: text().notNull(),
+    tagName: text().notNull(),
+    // Preserve the actual tag target independently of a release targeting a branch.
+    observedTagSha: text(),
+    name: text(),
+    url: text().notNull(),
+    targetCommitish: text(),
+    source: text().$type<'release' | 'tag' | 'manual'>().notNull(),
+    isDraft: boolean().notNull(),
+    isPrerelease: boolean().notNull(),
+    publishedAt: timestamp({ withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index().on(t.workspaceId), uniqueIndex().on(t.projectId, t.repo, t.tagName)],
+);
+export const taskGithubReleases = pgTable(
+  'task_github_releases',
+  {
+    ...releaseScope(),
+    taskId: uuid()
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    releaseId: uuid()
+      .notNull()
+      .references(() => githubReleases.id, { onDelete: 'cascade' }),
+    matchedBy: text().$type<'manual' | 'window' | 'ancestry'>().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index().on(t.workspaceId),
+    index().on(t.releaseId),
+    uniqueIndex().on(t.taskId, t.releaseId),
+  ],
+);
+
+// Keep the ordering watermark after a tag (and its public release row) disappears.
+export const githubTagPushes = pgTable(
+  'github_tag_pushes',
+  {
+    projectId: uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    repo: text().notNull(),
+    tagName: text().notNull(),
+    pushedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.repo, t.tagName] })],
+);

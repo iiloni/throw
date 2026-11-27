@@ -103,6 +103,7 @@ export function createApp() {
       taskSize: true,
       statusColor: true,
       githubTaskLinks: true,
+      githubReleases: true,
     });
   });
 

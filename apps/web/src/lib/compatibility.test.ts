@@ -22,6 +22,18 @@ afterEach(() => {
 });
 
 describe('client compatibility transport', () => {
+  it('keeps release management requests off older servers', async () => {
+    fetcher.mockResolvedValueOnce(json(compatible));
+    const { api } = await import('./api');
+    await expect(api.githubReleases('project')).rejects.toThrow('server update');
+    await expect(
+      api.createGithubRelease('project', { repo: 'a/b', tagName: 'v1' }),
+    ).rejects.toThrow('server update');
+    await expect(api.setGithubReleaseBinding('project', 'release', 'task', true)).rejects.toThrow(
+      'server update',
+    );
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
   it('keeps the GitHub stream idle on older protocol-1 servers and starts it after an upgrade', async () => {
     const url = 'https://throw.example/api/shapes/task-github-links';
     fetcher.mockResolvedValueOnce(json(compatible));
@@ -34,6 +46,24 @@ describe('client compatibility transport', () => {
     ]);
     fetcher
       .mockResolvedValueOnce(json({ ...compatible, githubTaskLinks: true }))
+      .mockResolvedValueOnce(json([]));
+    await checkCompatibility(true);
+    await expect(pending.then((r) => r.status)).resolves.toBe(200);
+    expect(fetcher.mock.lastCall?.[0]).toBe(url);
+  });
+
+  it('keeps the release stream idle on older protocol-1 servers and starts it after an upgrade', async () => {
+    const url = 'https://throw.example/api/shapes/github-releases';
+    fetcher.mockResolvedValueOnce(json(compatible));
+    const { githubReleasesShapeFetch } = await import('./shapeFetch');
+    const { checkCompatibility } = await import('./compatibility');
+    const pending = githubReleasesShapeFetch(url);
+    await checkCompatibility();
+    expect(fetcher.mock.calls.map(([input]) => input)).toEqual([
+      'https://throw.example/api/compatibility',
+    ]);
+    fetcher
+      .mockResolvedValueOnce(json({ ...compatible, githubReleases: true }))
       .mockResolvedValueOnce(json([]));
     await checkCompatibility(true);
     await expect(pending.then((r) => r.status)).resolves.toBe(200);

@@ -570,6 +570,20 @@ const LISTED_REFS: Record<string, string> = {
   'Prepare the next release': RELEASE,
 };
 
+// The publication splits the older shipped merges from the one still awaiting release.
+export const THROW_GITHUB_EVENTS = [
+  { ref: 'synced', daysAgo: 12, events: ['pr-merge'] },
+  { ref: 'shell', daysAgo: 4, events: ['pr-merge'] },
+  { daysAgo: 3, events: ['release'] },
+  { ref: KEYS, daysAgo: 1, events: ['pr-merge'] },
+  { ref: OFFLINE, daysAgo: 1, events: ['pr-draft', 'checks-pending'] },
+  { ref: UNSENT, daysAgo: 1, events: ['issue-open'] },
+  { ref: TRAY_COPY, daysAgo: 1, events: ['issue-close'] },
+  { ref: TRAY_REVIEW, daysAgo: 1, events: ['pr-ready', 'checks-fail', 'review-changes'] },
+  { ref: TRAY_REVIEW, pr: 201, daysAgo: 1, events: ['pr-ready', 'checks-pass', 'review-approve'] },
+  { ref: LONG, daysAgo: 1, events: ['pr-ready', 'checks-pass', 'review-approve'] },
+] as const;
+
 export const THROW_TASKS: TaskSpec[] = [
   {
     ref: OFFLINE,
@@ -698,6 +712,7 @@ export const THROW_TASKS: TaskSpec[] = [
     closedDaysAgo: 1,
   },
   {
+    ref: 'shell',
     title: 'Ship the responsive shell',
     status: 'Released',
     size: 5,
@@ -706,6 +721,7 @@ export const THROW_TASKS: TaskSpec[] = [
     closedDaysAgo: 4,
   },
   {
+    ref: 'synced',
     title: 'Start with synced tasks',
     status: 'Done',
     size: 4,

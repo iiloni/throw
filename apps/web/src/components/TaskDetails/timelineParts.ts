@@ -4,8 +4,7 @@ import { signedInUserId } from '@/lib/collections';
 export const author = (id: string | null) =>
   id !== null && id === signedInUserId ? 'You' : id ? 'Another member' : 'Deleted member';
 
-export const fullTime = (at: string) =>
-  new Date(at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+export { fullTime } from './history';
 
 /** The surface a comment sits on: a quiet step off the task's own color, in either theme. */
 export const commentSurface =

@@ -5,6 +5,7 @@ import { AppShell } from '@/components/AppShell/AppShell';
 import { drag, isPrimed } from '@/components/Board/drag';
 import { board, useScrollbarSetting } from '@/components/Board/state';
 import { GpuWarmup } from '@/components/GpuWarmup/GpuWarmup';
+import { TaskReferencesProvider } from '@/components/TaskReferences/TaskReferences';
 import { arrivedBySwitching, followAccountChanges } from '@/lib/accounts';
 import { getAuthToken, getSignedInUser } from '@/lib/auth';
 import { watchScrollBounce } from '@/lib/scrollBounce';
@@ -38,7 +39,10 @@ function App() {
   });
   return (
     <>
-      <AppShell />
+      {/* Task references (`#KEY-N`) resolve against the signed-in user's synced tasks. */}
+      <TaskReferencesProvider>
+        <AppShell />
+      </TaskReferencesProvider>
       <GpuWarmup skip={taskOpen} />
     </>
   );

@@ -27,13 +27,17 @@ import { StatusGlyph } from './glyphs';
 import type { Category, Project, Status } from './model';
 import { StatusTile } from './StatusTile';
 import {
+  type BoardState,
   board,
+  type CollapsedZoneState,
+  collapseZoneGallery,
   countIn,
   createTask,
   current,
   type RailWidths,
   railResize,
   setRailWidth,
+  setZoneView,
   update,
   visibleIds,
   type ZoneState,
@@ -288,6 +292,70 @@ export function zoneStatuses(zone: Zone, statuses: Status[]) {
   return statuses.filter((status) => ZONES[zone].categories.includes(status.category));
 }
 
+const OVERLAY_SELECTOR = '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]';
+
+function hasBlockingOverlay() {
+  if (document.querySelector(OVERLAY_SELECTOR)) return true;
+  for (const popper of document.querySelectorAll('[data-radix-popper-content-wrapper]')) {
+    if (!popper.querySelector('[data-slot="tooltip-content"], [role="tooltip"]')) return true;
+  }
+  return false;
+}
+
+function isEditableElement(element: Element | null) {
+  if (!(element instanceof HTMLElement)) return false;
+  if (element.isContentEditable) return true;
+  const tag = element.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  return element.closest('[contenteditable="true"], [contenteditable=""]') !== null;
+}
+
+function isSearchFocused(element: Element | null) {
+  return Boolean(element?.closest('search, [role="search"]'));
+}
+
+/**
+ * Whether an Escape keydown should collapse `zone`'s full gallery: only when it is full and no
+ * higher-priority overlay, mode, search field or editable control owns the key.
+ */
+export function canCollapseGalleryOnEscape(
+  zone: Zone,
+  event: Pick<
+    KeyboardEvent,
+    'key' | 'defaultPrevented' | 'isComposing' | 'altKey' | 'ctrlKey' | 'metaKey' | 'target'
+  >,
+  state: Pick<BoardState, 'backlog' | 'closed' | 'openTaskId' | 'carrying' | 'selection'>,
+) {
+  if (
+    event.key !== 'Escape' ||
+    event.defaultPrevented ||
+    event.isComposing ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey
+  )
+    return false;
+  if (
+    state[zone] !== 'full' ||
+    state.openTaskId !== null ||
+    state.carrying !== null ||
+    state.selection.length > 0 ||
+    drag.get() !== null
+  )
+    return false;
+  if (hasBlockingOverlay()) return false;
+  const active = document.activeElement;
+  const target = event.target instanceof Element ? event.target : null;
+  if (
+    isEditableElement(active) ||
+    isEditableElement(target) ||
+    isSearchFocused(active) ||
+    isSearchFocused(target)
+  )
+    return false;
+  return true;
+}
+
 /**
  * The backlog or the closed zone: a strip, a column, or a gallery across the board. While a
  * card from elsewhere is held, it is a column of dropzones, one per status, whatever state
@@ -296,7 +364,8 @@ export function zoneStatuses(zone: Zone, statuses: Status[]) {
  * These are not columns and do not look like them: they are rails that run the height of
  * the window, over the ends of the columns' scroller, and never take a column's surface. An
  * open panel's inner edge drags it to any width between a column and the whole board;
- * a gallery goes back to a column from its header.
+ * a gallery goes back to a column from its header, and Escape returns it to the state it
+ * came from (panel or strip).
  */
 export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometry }) {
   const state = board.use();
@@ -331,16 +400,57 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
   );
   const { width } = useRailSpring(geometry.drawn, geometry.mode, geometry.tracking);
   const start = zone === 'backlog';
-  // A gallery takes the board, so the opposite zone steps back to its strip.
-  const setView = (next: ZoneState) =>
-    update((before) => ({ [zone]: next, [other]: next === 'full' ? 'strip' : before[other] }));
+  // A gallery takes the board, remembering where it came from so Escape can return it there.
+  const setView = (next: ZoneState) => setZoneView(zone, next);
   // The snap the held edge would make if let go now, to mark crossing into another.
   const snap = useRef<ZoneState>(view);
+  const railRef = useRef<HTMLElement>(null);
+  const stripButton = useRef<HTMLButtonElement>(null);
   const galleryToggle = useRef<HTMLButtonElement>(null);
+  const restoreFocusTo = useRef<CollapsedZoneState | null>(null);
   const stripPress = useStripPress({
     onPress: () => setView('panel'),
     onHold: () => setView('full'),
   });
+
+  // Only listen once no board-level Escape mode (task pane, carry, selection) is active, so
+  // `useBoardBoundary`'s listener can dismiss those first without racing on the same keydown.
+  const canEscape =
+    view === 'full' &&
+    state.openTaskId === null &&
+    state.carrying === null &&
+    state.selection.length === 0;
+
+  useEffect(() => {
+    if (!canEscape) return;
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if (!canCollapseGalleryOnEscape(zone, event, board.get())) return;
+      const active = document.activeElement;
+      const shouldRestoreFocus =
+        !active ||
+        active === document.body ||
+        active === document.documentElement ||
+        active.id === 'main-content' ||
+        Boolean(railRef.current?.contains(active));
+      const target = collapseZoneGallery(zone);
+      if (!target) return;
+      event.preventDefault();
+      if (shouldRestoreFocus) restoreFocusTo.current = target;
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [canEscape, zone]);
+
+  useLayoutEffect(() => {
+    if (restoreFocusTo.current === null) return;
+    if (restoreFocusTo.current !== view) {
+      if (view !== 'full') restoreFocusTo.current = null;
+      return;
+    }
+    restoreFocusTo.current = null;
+    if (view === 'strip') stripButton.current?.focus({ preventScroll: true });
+    else if (view === 'panel') galleryToggle.current?.focus({ preventScroll: true });
+  }, [view]);
 
   function commit(next: { view: ZoneState; width: number }) {
     if (next.view === 'panel') setRailWidth(zone, next.width);
@@ -376,6 +486,7 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
 
   return (
     <motion.aside
+      ref={railRef}
       aria-label={title}
       data-origin={zone}
       data-status-home={statuses.map((status) => status.id).join(' ')}
@@ -425,6 +536,7 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
           ) : view === 'strip' && !geometry.tracking ? (
             <motion.button
               key="strip"
+              ref={stripButton}
               type="button"
               aria-label={`Open ${title.toLowerCase()}, ${count} tasks`}
               data-spotlight={hasBlocker ? 'blocker' : undefined}

@@ -1,6 +1,7 @@
 import { zValidator } from '@hono/zod-validator';
 import {
   createGithubConnectionSchema,
+  createGithubReleaseSchema,
   type GithubConnection,
   githubConnectionResponseSchema,
   githubConnectionSecretResponseSchema,
@@ -16,6 +17,7 @@ import { db } from '../db/client';
 import { githubConnections, projects, statuses } from '../db/schema';
 import { githubSecretKey, githubWebhookUrl } from '../github/config';
 import { addGithubLink, LinkError, removeGithubLink } from '../github/manualLinks';
+import { createRelease, listReleases, setReleaseBinding } from '../github/releases';
 import { newGithubWebhookSecret, newWebhookToken } from '../github/secrets';
 import { statusRuleSet, statusRulesOf } from '../github/statusRules';
 import { requireUser } from '../lib/requireUser';
@@ -110,6 +112,39 @@ export const githubRoutes = new Hono<AppEnv>()
     async (c) => {
       const { taskId, linkId } = c.req.valid('param');
       return c.json(await removeGithubLink({ userId: c.get('user')!.id }, taskId, linkId));
+    },
+  )
+  .get('/projects/:projectId/releases', projectParam, async (c) =>
+    c.json(await listReleases({ userId: c.get('user')!.id }, c.req.valid('param').projectId)),
+  )
+  .post(
+    '/projects/:projectId/releases',
+    projectParam,
+    zValidator('json', createGithubReleaseSchema),
+    async (c) => {
+      const result = await createRelease(
+        { userId: c.get('user')!.id },
+        c.req.valid('param').projectId,
+        c.req.valid('json'),
+      );
+      return c.json(result, result.txid === null ? 200 : 201);
+    },
+  )
+  .on(
+    ['PUT', 'DELETE'],
+    '/projects/:projectId/releases/:releaseId/tasks/:taskId',
+    zValidator('param', z.object({ projectId: z.uuid(), releaseId: z.uuid(), taskId: z.uuid() })),
+    async (c) => {
+      const { projectId, releaseId, taskId } = c.req.valid('param');
+      return c.json(
+        await setReleaseBinding(
+          { userId: c.get('user')!.id },
+          projectId,
+          releaseId,
+          taskId,
+          c.req.method === 'PUT',
+        ),
+      );
     },
   )
   .get('/projects/:projectId', projectParam, async (c) => {

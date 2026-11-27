@@ -151,6 +151,22 @@ try {
   assert.equal(sql('SELECT count(*) FROM mcp_tokens;'), '1');
   const id = randomUUID();
   sql(`INSERT INTO workspaces (id, name, position) VALUES ('${id}', 'before backup', 'a1');`);
+  const projectId = randomUUID();
+  const statusId = randomUUID();
+  const taskId = randomUUID();
+  const releaseId = randomUUID();
+  sql(`
+    INSERT INTO projects (id, workspace_id, name, key, color, position)
+      VALUES ('${projectId}', '${id}', 'Smoke', 'SMK', 'teal', 'a0');
+    INSERT INTO statuses (id, workspace_id, project_id, name, category, position, is_default)
+      VALUES ('${statusId}', '${id}', '${projectId}', 'Done', 'done', 'a0', true);
+    INSERT INTO tasks (id, workspace_id, project_id, status_id, number, title, position, priority)
+      VALUES ('${taskId}', '${id}', '${projectId}', '${statusId}', 1, 'Ship', 'a0', 1);
+    INSERT INTO github_releases (id, workspace_id, project_id, repo, tag_name, url, source, is_draft, is_prerelease, published_at)
+      VALUES ('${releaseId}', '${id}', '${projectId}', 'example/app', 'v1', 'https://github.com/example/app/releases/tag/v1', 'release', false, false, now());
+    INSERT INTO task_github_releases (id, workspace_id, project_id, task_id, release_id, matched_by)
+      VALUES (gen_random_uuid(), '${id}', '${projectId}', '${taskId}', '${releaseId}', 'window');
+  `);
   const entityId = randomUUID();
   sql(`
     INSERT INTO structure_activity
@@ -174,11 +190,18 @@ try {
   assert.match(name, /^throw-backup-.*-manual.zip$/);
   dc(['exec', '-T', 'throw', 'node', 'dist/backups/cli.mjs', 'inspect', name]);
   sql(`UPDATE workspaces SET name = 'after backup' WHERE id = '${id}';`);
+  sql(`DELETE FROM github_releases WHERE id = '${releaseId}';`);
   // Restore into the same live tables; observe their identity as Electric does.
   const oid = sql("SELECT 'public.workspaces'::regclass::oid;");
   dc(['stop', 'throw']);
   dc(['run', '--rm', '-T', 'throw', 'node', 'dist/backups/cli.mjs', 'restore', name, '--yes']);
   assert.equal(sql(`SELECT name FROM workspaces WHERE id = '${id}';`), 'before backup');
+  assert.equal(
+    sql(
+      `SELECT tag_name FROM github_releases JOIN task_github_releases ON github_releases.id = release_id WHERE task_id = '${taskId}';`,
+    ),
+    'v1',
+  );
   assert.notEqual(sql('SELECT generation FROM change_feed_generation;'), cursorGeneration);
   assert.equal(
     sql(

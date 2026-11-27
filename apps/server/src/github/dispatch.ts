@@ -1,6 +1,7 @@
 import type { Transaction } from '../db/client';
 import { handleItem, handlePush } from './linkEvents';
 import { handleSignal } from './linkSignals';
+import { handleRelease } from './releaseEvents';
 
 /** A verified delivery for a connection's repository, as handlers receive it. */
 export type GithubEvent = {
@@ -29,7 +30,11 @@ export type GithubHandlers = Readonly<Partial<Record<string, GithubEventHandler>
  * here: pull requests and branches, issues, releases.
  */
 export const githubHandlers: GithubHandlers = {
-  push: handlePush,
+  release: handleRelease,
+  push: (tx, event) =>
+    typeof event.payload.ref === 'string' && event.payload.ref.startsWith('refs/tags/')
+      ? handleRelease(tx, event)
+      : handlePush(tx, event),
   pull_request: handleItem,
   issues: handleItem,
   pull_request_review: handleSignal,

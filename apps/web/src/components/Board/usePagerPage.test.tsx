@@ -4,11 +4,13 @@ import { usePagerPage } from './usePagerPage';
 
 const held = vi.hoisted(() => ({ current: null as object | null }));
 const tick = vi.hoisted(() => vi.fn());
-vi.mock('./drag', () => ({ drag: { get: () => held.current }, pageStride: () => 100 }));
+const stride = vi.hoisted(() => ({ current: 100 }));
+vi.mock('./drag', () => ({ drag: { get: () => held.current }, pageStride: () => stride.current }));
 vi.mock('@/lib/haptics', () => ({ haptics: { selection: tick } }));
 
 beforeEach(() => {
   held.current = null;
+  stride.current = 100;
   tick.mockClear();
 });
 
@@ -68,4 +70,12 @@ it('shows a page placed from code at once, and does not tick when the scroll cat
   expect(screen.getByRole('status')).toHaveTextContent('3');
   scrollTo(300);
   expect(tick).not.toHaveBeenCalled();
+});
+
+it('keeps its page while hidden, when there are no pages to measure', () => {
+  render(<Pager />);
+  scrollTo(100);
+  stride.current = 0;
+  scrollTo(0);
+  expect(screen.getByRole('status')).toHaveTextContent('1');
 });

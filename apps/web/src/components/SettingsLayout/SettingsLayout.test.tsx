@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { Settings, UserRound } from 'lucide-react';
+import { Download, Settings, UserRound } from 'lucide-react';
 import type { MouseEvent, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { haptics } from '@/lib/haptics';
@@ -10,6 +10,12 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   surfaceOpen: false,
   reducedMotion: false,
+  updateReady: false,
+}));
+
+vi.mock('@/lib/updateReady', async (actual) => ({
+  ...(await actual<typeof import('@/lib/updateReady')>()),
+  useUpdateReady: () => mocks.updateReady,
 }));
 
 vi.mock('@tanstack/react-router', () => ({
@@ -76,6 +82,14 @@ const pages: SettingsPage[] = [
   { key: 'account', label: 'Account', icon: UserRound, link: { to: '/settings/account' } },
 ];
 const groups = [{ label: 'User', pages }];
+const update: SettingsPage = {
+  key: '/settings/update',
+  label: 'Update',
+  icon: Download,
+  link: { to: '/settings/update' },
+};
+const withUpdate = [{ label: 'User', pages: [...pages, update] }];
+const dots = (element: HTMLElement) => element.querySelectorAll('[data-update-dot]');
 const back = { label: 'Back to board', link: { to: '/' as const } };
 
 function pull(element: HTMLElement, delta: number, cancel = false) {
@@ -91,6 +105,7 @@ beforeEach(() => {
   mocks.dock = null;
   mocks.surfaceOpen = false;
   mocks.reducedMotion = false;
+  mocks.updateReady = false;
 });
 
 afterEach(() => {
@@ -139,6 +154,52 @@ describe('SettingsLayout', () => {
     expect(screen.getByRole('dialog', { name: 'Project settings' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('link', { name: 'Account' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('marks the Update page beside the open one while an update is waiting', () => {
+    mocks.updateReady = true;
+    render(
+      <SettingsLayout title="Settings" groups={withUpdate} current={pages[0]!} wide>
+        <p>General content</p>
+      </SettingsLayout>,
+    );
+    const link = screen.getByRole('link', { name: 'Update' });
+    expect(dots(link)).toHaveLength(1);
+    expect(link).toHaveAttribute('aria-description', 'Update available');
+    const general = screen.getByRole('link', { name: 'General' });
+    expect(dots(general)).toHaveLength(0);
+    expect(general).not.toHaveAttribute('aria-description');
+  });
+
+  it('leaves the Update page unmarked with no update waiting', () => {
+    render(
+      <SettingsLayout title="Settings" groups={withUpdate} current={pages[0]!} wide>
+        <p>General content</p>
+      </SettingsLayout>,
+    );
+    const link = screen.getByRole('link', { name: 'Update' });
+    expect(dots(link)).toHaveLength(0);
+    expect(link).not.toHaveAttribute('aria-description');
+  });
+
+  it.each([
+    [true, 1],
+    [false, 0],
+  ])('marks the phone dock and its Update page when an update is waiting (%s)', (ready, count) => {
+    mocks.updateReady = ready;
+    render(
+      <SettingsLayout title="Settings" groups={withUpdate} current={pages[0]!} wide={false}>
+        <p>General content</p>
+      </SettingsLayout>,
+    );
+    render(mocks.dock);
+    const picker = screen.getByRole('button', { name: 'Settings page: General' });
+    expect(dots(picker)).toHaveLength(count);
+    if (ready) expect(picker).toHaveAttribute('aria-description', 'Update available');
+    else expect(picker).not.toHaveAttribute('aria-description');
+    fireEvent.click(picker);
+    const link = screen.getByRole('link', { name: 'Update' });
+    expect(dots(link)).toHaveLength(count);
   });
 
   it.each([

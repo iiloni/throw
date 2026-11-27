@@ -227,15 +227,15 @@ describe('githubReceiver', () => {
       ref: 'refs/heads/main',
       repository: { full_name: 'iiloni/throw' },
     });
-    const response = await deliver(body, { event: 'release', delivery: 'p-1' });
+    const response = await deliver(body, { event: 'fork', delivery: 'p-1' });
     expect(response.status).toBe(202);
     expect(await response.json()).toEqual({
       ok: true,
       status: 'ignored',
-      reason: 'Throw does not use release events',
+      reason: 'Throw does not use fork events',
     });
     expect(claimed.has('p-1')).toBe(true);
-    expect(last.at(-1)).toMatchObject({ status: 'ignored', event: 'release' });
+    expect(last.at(-1)).toMatchObject({ status: 'ignored', event: 'fork' });
   });
 
   it('records but does not handle or claim deliveries while off or trashed', async () => {
