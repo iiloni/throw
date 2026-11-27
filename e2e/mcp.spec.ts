@@ -1524,6 +1524,13 @@ test('GitHub deliveries reach the offline collection and MCP, with scoped manual
       release: { ...release, tag_name: 'v0', published_at: '2026-11-26T06:59:59Z' },
     });
     expect((await unreleased()).items.map((t) => t.id)).toContain(task.id);
+    const tagPush = {
+      ref: 'refs/tags/v1',
+      after: 'a'.repeat(40),
+      deleted: false,
+      repository: { full_name: 'Org/Repo', pushed_at: Date.parse(release.published_at) / 1000 },
+    };
+    await send('push', tagPush);
     await send('release', { action: 'published', release });
     const first = await call(client, 'list_github_releases', { projectId: project.id, limit: 1 });
     const [shipped] = first.releases;
@@ -1607,6 +1614,22 @@ test('GitHub deliveries reach the offline collection and MCP, with scoped manual
     });
     expect((await unreleased()).items.map((t) => t.id)).toContain(task.id);
     await send('release', { action: 'deleted', release });
+    for (const sha of [tagPush.after, 'b'.repeat(40)]) {
+      if (sha !== tagPush.after) await send('push', { ...tagPush, after: sha });
+      const tags = await call(client, 'list_github_releases', { projectId: project.id });
+      expect(tags.releases.find((r) => r.id === shipped!.id)).toMatchObject({
+        source: 'tag',
+        publishedAt: null,
+        targetCommitish: sha,
+      });
+      expect((await unreleased()).items.map((t) => t.id)).toContain(task.id);
+    }
+    await send('push', { ...tagPush, deleted: true });
+    expect(
+      (await call(client, 'list_github_releases', { projectId: project.id })).releases.map(
+        (r) => r.id,
+      ),
+    ).not.toContain(shipped!.id);
     expect((await call(client, 'get_task', { task: task.id })).githubReleases).toEqual([]);
     expect(await shapeRows(request, 'task-github-links', stranger.headers)).toEqual([]);
     const rows = await shapeRows(request, 'task-github-links', owner.headers);

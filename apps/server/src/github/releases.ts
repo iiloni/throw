@@ -15,7 +15,7 @@ import { activeTask } from './linkData';
 import { LinkError } from './manualLinks';
 
 export type ReleaseRow = typeof releases.$inferSelect;
-export function publicRelease(row: ReleaseRow): GithubRelease {
+export function publicRelease({ observedTagSha: _tag, ...row }: ReleaseRow): GithubRelease {
   return {
     ...row,
     createdAt: row.createdAt.toISOString(),

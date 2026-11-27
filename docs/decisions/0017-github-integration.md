@@ -230,7 +230,9 @@ asks.
 A release belongs to a project, keyed by repository and case-sensitive tag name.
 A lightweight tag push records a published tag at the repository push time (receipt time
 if absent). A release for the same tag takes over that row and keeps its ID. Deleting the
-release removes its bindings. Unpublishing retains the bindings but stops counting them as
+release removes its bindings. If a tag push was observed and that tag still exists, the row
+reverts to a tag at its last observed commit with a null publication date. It remains visible
+but no longer counts as shipped, including after subsequent tag updates. Unpublishing retains the bindings but stops counting them as
 shipped. Published prereleases count as shipped. Disconnect and restore preserve both tables.
 
 On publication Throw binds active tasks whose linked PRs merged in this repo after the

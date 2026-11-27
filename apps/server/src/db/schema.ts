@@ -711,6 +711,8 @@ export const githubReleases = pgTable(
     ...releaseScope(),
     repo: text().notNull(),
     tagName: text().notNull(),
+    // Preserve the actual tag target independently of a release targeting a branch.
+    observedTagSha: text(),
     name: text(),
     url: text().notNull(),
     targetCommitish: text(),

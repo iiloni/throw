@@ -123,7 +123,32 @@ export const handleRelease: GithubEventHandler = async (tx, { connection, event,
     eq(releases.tagName, tagName),
   );
   const [existing] = await tx.select().from(releases).where(scope).for('update');
-  if (tag && existing && existing.source !== 'tag') return { status: 'ok' };
+  if (tag && existing && existing.source !== 'tag') {
+    await tx
+      .update(releases)
+      .set({ observedTagSha: tag.deleted ? null : tag.after })
+      .where(scope);
+    return { status: 'ok' };
+  }
+  const tagSha =
+    existing?.observedTagSha ?? (existing?.source === 'tag' ? existing.targetCommitish : null);
+  if (release?.action === 'deleted' && existing && tagSha) {
+    if (existing.source === 'tag' && existing.publishedAt === null) return { status: 'ok' };
+    await tx.delete(bindings).where(eq(bindings.releaseId, existing.id));
+    await tx
+      .update(releases)
+      .set({
+        source: 'tag',
+        targetCommitish: tagSha,
+        observedTagSha: tagSha,
+        name: null,
+        isDraft: false,
+        isPrerelease: false,
+        publishedAt: null,
+      })
+      .where(scope);
+    return { status: 'ok' };
+  }
   if (tag?.deleted || release?.action === 'deleted') {
     await tx.delete(releases).where(scope);
     return { status: 'ok' };
@@ -135,9 +160,11 @@ export const handleRelease: GithubEventHandler = async (tx, { connection, event,
       ? release.release.published_at
         ? new Date(release.release.published_at)
         : null
-      : (existing?.publishedAt ??
-        new Date(tag?.repository.pushed_at ? tag.repository.pushed_at * 1000 : Date.now()));
+      : existing
+        ? existing.publishedAt
+        : new Date(tag?.repository.pushed_at ? tag.repository.pushed_at * 1000 : Date.now());
   const fields = {
+    observedTagSha: tag?.after ?? tagSha,
     source: tag ? ('tag' as const) : ('release' as const),
     name: release?.release.name ?? null,
     targetCommitish: tag?.after ?? release?.release.target_commitish ?? null,

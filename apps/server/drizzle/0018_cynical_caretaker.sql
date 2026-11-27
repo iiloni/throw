@@ -1,0 +1,1 @@
+ALTER TABLE "github_releases" ADD COLUMN "observed_tag_sha" text;

@@ -127,6 +127,13 @@
       "when": 1795745980947,
       "tag": "0017_foamy_doctor_spectrum",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795747421917,
+      "tag": "0018_cynical_caretaker",
+      "breakpoints": true
     }
   ]
 }
