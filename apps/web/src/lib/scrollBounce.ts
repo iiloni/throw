@@ -32,7 +32,7 @@ const RATE = 20;
 const SETTLED_AFTER = 9 / RATE;
 const KEYFRAMES = 24;
 
-type Sample = { y: number; time: number };
+type Sample = { y: number; time: number; end: number };
 
 /**
  * Bounces whatever scrolls up and down when it reaches its top or bottom at speed: the page,
@@ -67,11 +67,15 @@ export function watchScrollBounce({
     const first = samples.find((sample) => time - sample.time <= SPEED_OVER);
     const span = first && last ? last.time - first.time : 0;
     const velocity = first && last && span >= SPEED_OVER_AT_LEAST ? (last.y - first.y) / span : 0;
+    const end = box.scrollHeight;
     const atTop = y <= 0;
-    const atBottom = y >= box.scrollHeight - box.clientHeight - 1;
+    const atBottom = y >= end - box.clientHeight - 1;
+    // An end that moved was not arrived at: the scroll is keeping pace with content opening
+    // below it (a task's panel turned to), not flung into it.
     const arrived =
       last !== undefined &&
-      ((atTop && y < last.y && velocity < 0) || (atBottom && y > last.y && velocity > 0));
+      ((atTop && y < last.y && velocity < 0) ||
+        (atBottom && y > last.y && velocity > 0 && end === last.end));
     if (
       arrived &&
       Math.abs(velocity) >= MIN_SPEED &&
@@ -102,7 +106,7 @@ export function watchScrollBounce({
       }
     }
     samples = samples.filter((sample) => time - sample.time <= SPEED_OVER);
-    samples.push({ y, time });
+    samples.push({ y, time, end });
     scrolls.set(box, samples);
   }
 

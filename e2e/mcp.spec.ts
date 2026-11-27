@@ -852,6 +852,10 @@ test('reparenting a manually ordered tag offline clears its position immediately
     await client.close();
   }
 
+  await page.goto(`/w/${project.workspaceId}/p/${project.id}?view=board`);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(project.name, {
+    timeout: APP_LOAD_TIMEOUT,
+  });
   const localTag = () =>
     page.evaluate(async (id) => {
       const { tagsCollection } = await import(/* @vite-ignore */ '/src/lib/collections.ts');
@@ -862,8 +866,13 @@ test('reparenting a manually ordered tag offline clears its position immediately
     parentId: null,
     position: originalPosition,
   });
-  const offline = (route: Route) => route.abort('connectionfailed');
-  await page.route('**/api/**', offline);
+  // Let Vite keep serving modules. Keep the tag route installed through reconnect so a
+  // retry always goes through the same handler, even as connectivity changes.
+  const tagPath = `/api/tags/${tagId}`;
+  let offline = true;
+  await page.route(`**${tagPath}`, (route) =>
+    offline ? route.abort('connectionfailed') : route.continue(),
+  );
   await page.evaluate(
     async ({ tagId, parentId }) => {
       const { updateTag } = await import(/* @vite-ignore */ '/src/lib/tags.ts');
@@ -872,15 +881,29 @@ test('reparenting a manually ordered tag offline clears its position immediately
     { tagId, parentId },
   );
   await expect.poll(localTag).toEqual({ parentId, position: null });
+  await expect(page.getByRole('status').filter({ hasText: 'Offline · 1 unsaved' })).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
 
-  await page.unroute('**/api/**', offline);
+  await page.evaluate(async () => {
+    const { waitForPendingWritesStored } = await import(
+      /* @vite-ignore */ '/src/lib/collections.ts'
+    );
+    await waitForPendingWritesStored();
+  });
+  const serverTag = async () =>
+    (await shapeRows(page.request, 'tags', account.headers)).find(({ id }) => id === tagId);
+  expect(await serverTag()).toMatchObject({ parent_id: null, position: originalPosition });
+
+  const replay = page.waitForResponse(
+    (response) => response.request().method() === 'PATCH' && response.url().endsWith(tagPath),
+    { timeout: APP_LOAD_TIMEOUT },
+  );
+  offline = false;
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  expect((await replay).ok()).toBe(true);
   await expect
-    .poll(
-      async () =>
-        (await shapeRows(page.request, 'tags', account.headers)).find(({ id }) => id === tagId),
-      { timeout: APP_LOAD_TIMEOUT },
-    )
+    .poll(serverTag, { timeout: APP_LOAD_TIMEOUT })
     .toMatchObject({ parent_id: parentId, position: null });
 });
 
