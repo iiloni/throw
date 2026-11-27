@@ -339,8 +339,12 @@ function morph(root: HTMLElement, was: Before, compact: boolean) {
   layer.setAttribute(LAYER, '');
   layer.setAttribute('aria-hidden', 'true');
   layer.inert = true;
-  // Clipped to the half as it narrows, so the task pane slides in over what is going.
-  layer.className = 'pointer-events-none absolute inset-0 z-50 overflow-hidden';
+  // Clipped to the half as it narrows, so the task pane slides in over what is going. Above
+  // the cards and columns (z-10) but under what floats over them once they rest: the rails
+  // (z-20), the selection and search bars (z-30) and the compact dock (z-40). The cards come
+  // to rest under the dock, so they travel under it as it rises, rather than hiding it until
+  // they land.
+  layer.className = 'pointer-events-none absolute inset-0 z-[15] overflow-hidden';
   root.append(layer);
   ends.push(() => layer.remove());
   // Once everything drawn in it has gone, so does the layer.

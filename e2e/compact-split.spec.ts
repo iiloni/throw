@@ -232,6 +232,7 @@ test.describe('the board beside a task on a narrow desktop', () => {
       card: { x: number; y: number } | null;
       ghost: number;
       surface: number | null;
+      dockCovered: boolean;
     };
     const sampleFrames = () =>
       page.evaluate(() => {
@@ -284,6 +285,14 @@ test.describe('the board beside a task on a narrow desktop', () => {
             ? Math.max(...[...sections].map((section) => section.getBoundingClientRect().height))
             : null;
         };
+        // Whether the copies' layer is stacked over the dock rising beside them. The cards come
+        // to rest under the dock, so they travel under it too.
+        const dockCovered = () => {
+          const layer = document.querySelector('[data-layout-morph]');
+          const dock = document.querySelector('[data-compact-dock]')?.parentElement;
+          if (!layer || !dock) return false;
+          return Number(getComputedStyle(layer).zIndex) >= Number(getComputedStyle(dock).zIndex);
+        };
         const sample = () => {
           const board = document.querySelector('[data-compact-board]');
           const layout = board ? null : document.querySelector('[data-board-layout]');
@@ -294,6 +303,7 @@ test.describe('the board beside a task on a narrow desktop', () => {
             card: drawn(),
             ghost: ghost(),
             surface: surface(),
+            dockCovered: dockCovered(),
           });
           if (frames.length < 90) requestAnimationFrame(sample);
         };
@@ -333,6 +343,8 @@ test.describe('the board beside a task on a narrow desktop', () => {
     expect(compact[0]!.morphing).toBe(true);
     // The columns left behind keep their height as they fade.
     expect(compact[0]!.surface).toBeGreaterThan(200);
+    // The dock rises over the cards on their way, rather than appearing once they land.
+    expect(compact.some((frame) => frame.dockCovered)).toBe(false);
     await expect(page.locator('[data-layout-morph]')).toHaveCount(0);
     travels(frames);
     // Laid out once, at the width it rests at, while the pane slides in beside it.
