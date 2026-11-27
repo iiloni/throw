@@ -6,6 +6,7 @@ import type { Transaction } from '../db/client';
 import { projects, taskActivity, type taskGithubLinks, tasks } from '../db/schema';
 import type { WriteActor } from '../lib/writeActor';
 import { enqueueWebhooks } from '../webhooks/enqueue';
+import type { StatusMove } from './statusRules';
 
 export type LinkRow = typeof taskGithubLinks.$inferSelect;
 export type LinkTask = {
@@ -52,17 +53,14 @@ export function publicLink(row: LinkRow): TaskGithubLink {
     mergedAt: mergedAt?.toISOString() ?? null,
   };
 }
-export async function recordLink(
-  tx: Transaction,
-  task: LinkTask,
+export function linkChange(
   link: LinkRow,
   previous: LinkRow['state'] | null,
   next: LinkRow['state'] | null,
-  actor?: WriteActor,
-) {
+): ActivityChange {
   const name = (state: LinkRow['state'] | null) =>
     state && `${link.repo}#${link.number} (${state})`;
-  const item: ActivityChange = {
+  return {
     field: 'relations',
     relationId: link.id,
     previous,
@@ -71,6 +69,32 @@ export async function recordLink(
     requestedName: name(next),
     applied: true,
   };
+}
+
+export async function recordLink(
+  tx: Transaction,
+  task: LinkTask,
+  link: LinkRow,
+  previous: LinkRow['state'] | null,
+  next: LinkRow['state'] | null,
+  actor?: WriteActor,
+) {
+  await recordGithubChange(tx, task, { link: linkChange(link, previous, next) }, actor);
+}
+
+/**
+ * Records what one delivery did to a task as one history entry and one task update webhook:
+ * a link that was added or changed state, and the status a rule moved the task to.
+ * Without an actor the change is GitHub's (ADR 0017).
+ */
+export async function recordGithubChange(
+  tx: Transaction,
+  task: LinkTask,
+  { link, move }: { link?: ActivityChange; move?: StatusMove | null },
+  actor?: WriteActor,
+) {
+  const changes = [link, move?.item].filter((item) => item !== undefined);
+  if (!changes.length) return;
   await tx.insert(taskActivity).values({
     id: uuidv7(),
     workspaceId: task.workspaceId,
@@ -80,9 +104,12 @@ export async function recordLink(
     viaTokenName: actor ? actor.viaTokenName : 'GitHub',
     viaTokenId: actor?.tokenId,
     kind: 'updated',
-    changes: [item],
+    changes,
+    // The lane position a move took, for the change feed, without a reorder line in history.
+    feedPosition: move?.position ?? undefined,
     createdAt: sql`clock_timestamp()`,
   });
+  const values = move?.position ? [...changes, move.position] : changes;
   await enqueueWebhooks(tx, actor ?? { integration: 'github' }, {
     event: 'task.updated',
     entityType: 'task',
@@ -92,7 +119,8 @@ export async function recordLink(
     projectKey: task.key,
     taskId: task.taskId,
     taskNumber: task.number,
-    changedFields: ['relations'],
-    values: [item],
+    changedFields: values.map((item) => item.field),
+    ...(move ? { statusTo: move.statusTo } : {}),
+    values,
   });
 }

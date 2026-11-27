@@ -13,10 +13,11 @@ import { uuidv7 } from 'uuidv7';
 import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { db } from '../db/client';
-import { githubConnections, projects } from '../db/schema';
+import { githubConnections, projects, statuses } from '../db/schema';
 import { githubSecretKey, githubWebhookUrl } from '../github/config';
 import { addGithubLink, LinkError, removeGithubLink } from '../github/manualLinks';
 import { newGithubWebhookSecret, newWebhookToken } from '../github/secrets';
+import { statusRuleSet, statusRulesOf } from '../github/statusRules';
 import { requireUser } from '../lib/requireUser';
 import { memberWorkspaces } from '../lib/workspaces';
 import { encryptSecret } from '../webhooks/signing';
@@ -34,6 +35,7 @@ export function connectionMetadata(row: Row, url = githubWebhookUrl): GithubConn
     hasToken: row.encryptedToken !== null,
     webhookUrl: url(row.webhookToken),
     createdAt: row.createdAt.toISOString(),
+    statusRules: statusRulesOf(row),
     lastDelivery: row.lastDeliveryAt
       ? {
           at: row.lastDeliveryAt.toISOString(),
@@ -180,6 +182,18 @@ export const githubRoutes = new Hono<AppEnv>()
       const { projectId } = c.req.valid('param');
       const body = c.req.valid('json');
       const result = await db.transaction(async (tx) => {
+        // The project first, as a delivery takes it: deleting a status locks the project before
+        // its rules are cleared, so the two take turns rather than deadlock.
+        await tx
+          .select({ id: projects.id })
+          .from(projects)
+          .where(
+            and(
+              eq(projects.id, projectId),
+              inArray(projects.workspaceId, memberWorkspaces(tx, userId)),
+            ),
+          )
+          .for('share');
         const [current] = await tx
           .select()
           .from(githubConnections)
@@ -200,11 +214,33 @@ export const githubRoutes = new Hono<AppEnv>()
               ? current.encryptedToken
               : encrypt(body.token);
         if (authMode === 'token' && encryptedToken === null) return 'token' as const;
+        const targets = [
+          ...new Set(
+            Object.values(body.statusRules ?? {}).filter((id): id is string => id !== null),
+          ),
+        ];
+        if (targets.length) {
+          // Held until commit, so a status cannot be deleted between this check and the write.
+          const found = await tx
+            .select({ id: statuses.id })
+            .from(statuses)
+            .innerJoin(projects, eq(projects.id, statuses.projectId))
+            .where(
+              and(
+                inArray(statuses.id, targets),
+                eq(statuses.projectId, current.projectId),
+                isNull(projects.deletedAt),
+              ),
+            )
+            .for('key share', { of: statuses });
+          if (found.length !== targets.length) return 'status' as const;
+        }
         const [updated] = await tx
           .update(githubConnections)
           .set({
             ...(body.repository === undefined ? {} : { repository: body.repository }),
             ...(body.enabled === undefined ? {} : { enabled: body.enabled }),
+            ...statusRuleSet(body.statusRules ?? {}),
             authMode,
             encryptedToken,
           })
@@ -214,6 +250,8 @@ export const githubRoutes = new Hono<AppEnv>()
       });
       if (result === 'missing') return c.json(notConnected, 404);
       if (result === 'token') return c.json({ error: 'Paste a token to use token mode' }, 400);
+      if (result === 'status')
+        return c.json({ error: 'Status rules must use statuses of this project' }, 400);
       return c.json(
         githubConnectionResponseSchema.parse({ connection: connectionMetadata(result) }),
       );

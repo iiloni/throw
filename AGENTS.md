@@ -60,6 +60,10 @@ A project can connect to one GitHub repository (ADR 0017), from project settings
 (`components/GithubConnection`). `apps/server/src/github` verifies GitHub's signed webhooks at
 `/api/integrations/github/webhooks/<token>`, deduplicates them by `X-GitHub-Delivery` and hands
 them to `githubHandlers` in `github/dispatch.ts`, where the integration's later parts add theirs.
+Its opt-in status rules (`github/statusRules.ts`) move linked tasks when a pull request or issue
+changes state, in the delivery's transaction and as a board move would; the link and status
+change share one history entry and one webhook (`recordGithubChange` in `github/linkData.ts`).
+The app reads and saves them through `statusRules` on the connection (`saveGithubStatusRules`).
 The activity log syncs to devices and comments are built (`lib/comments.ts`), with a
 timeline query in `collections.ts` and a task history view in `TaskDetails/TaskTimeline.tsx`; its comment cards, list motion and
 composer prompt are `TaskDetails/Comments.tsx`.
