@@ -1,5 +1,5 @@
 import { getConnInfo } from '@hono/node-server/conninfo';
-import { API_PROTOCOL_HEADER, SUPPORTED_API_PROTOCOLS } from '@throw/shared';
+import { API_PROTOCOL_HEADER, GITHUB_WEBHOOK_PATH, SUPPORTED_API_PROTOCOLS } from '@throw/shared';
 import { type Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
@@ -7,12 +7,16 @@ import { auth } from './auth';
 import { isRestoring } from './backups/service';
 import type { AppEnv } from './context';
 import { env, NATIVE_APP_ORIGINS } from './env';
+import { githubSecretKey } from './github/config';
+import { githubReceiver } from './github/receive';
+import { githubReceiverStore } from './github/store';
 import { CLIENT_IP_HEADER, clientIp, proxyList } from './lib/clientIp';
 import { requireCompatibleProtocol } from './lib/protocol';
 import { requestLogger } from './lib/requestLogger';
 import { mcpEndpoint } from './mcp/http';
 import { backupDownloadRoutes, backupRoutes } from './routes/backups';
 import { commentRoutes } from './routes/comments';
+import { githubRoutes } from './routes/github';
 import { mcpTokenRoutes } from './routes/mcpTokens';
 import { projectRoutes } from './routes/projects';
 import { shapeRoutes } from './routes/shapes';
@@ -81,6 +85,11 @@ export function createApp() {
     await next();
   });
   app.all('/api/mcp', mcpEndpoint(clientAddress, jsonBodyLimit));
+  // GitHub sends no session or protocol header, and signs a body it may make up to 25 MB.
+  app.route(
+    GITHUB_WEBHOOK_PATH,
+    githubReceiver({ store: githubReceiverStore, key: githubSecretKey }),
+  );
   app.route('/api/admin/backups', backupDownloadRoutes);
   app.use('/api/*', requireCompatibleProtocol);
   app.use('/api/*', (c, next) =>
@@ -89,7 +98,12 @@ export function createApp() {
 
   app.get('/api/compatibility', (c) => {
     c.header('Cache-Control', 'no-store');
-    return c.json({ ...SUPPORTED_API_PROTOCOLS, taskSize: true, statusColor: true });
+    return c.json({
+      ...SUPPORTED_API_PROTOCOLS,
+      taskSize: true,
+      statusColor: true,
+      githubTaskLinks: true,
+    });
   });
 
   app.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(withClientIp(c)));
@@ -108,6 +122,7 @@ export function createApp() {
     .route('/admin/backups', backupRoutes)
     .route('/mcp-tokens', mcpTokenRoutes)
     .route('/webhooks', webhookRoutes)
+    .route('/integrations/github', githubRoutes)
     .route('/workspaces', workspaceRoutes)
     .route('/projects', projectRoutes)
     .route('/statuses', statusRoutes)

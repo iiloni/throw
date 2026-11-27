@@ -8,7 +8,14 @@ import {
   Plus,
 } from 'lucide-react';
 import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion } from 'motion/react';
-import { Fragment, useLayoutEffect, useRef } from 'react';
+import {
+  Fragment,
+  type MouseEvent,
+  type PointerEvent,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
@@ -20,13 +27,17 @@ import { StatusGlyph } from './glyphs';
 import type { Category, Project, Status } from './model';
 import { StatusTile } from './StatusTile';
 import {
+  type BoardState,
   board,
+  type CollapsedZoneState,
+  collapseZoneGallery,
   countIn,
   createTask,
   current,
   type RailWidths,
   railResize,
   setRailWidth,
+  setZoneView,
   update,
   visibleIds,
   type ZoneState,
@@ -168,6 +179,15 @@ export function railGeometry({
   return { fullWidth: now.fullWidth, backlog: geometry('backlog'), closed: geometry('closed') };
 }
 
+/**
+ * Whether a rail has an edge to drag: a panel does, and so does one whose edge is held, until
+ * it is let go. A strip opens from its button and a gallery goes back from its header, so
+ * neither has one, and a rail standing in as dropzones for a held card keeps still.
+ */
+export function showsRailEdge(view: ZoneState, tracking: boolean, tiles: boolean) {
+  return !tiles && (view === 'panel' || tracking);
+}
+
 /** Where a rail's edge let go of at `width` settles: a strip, a panel that wide, or full. */
 export function settleRail(width: number, max: number): { view: ZoneState; width: number } {
   if (width <= PANEL_WIDTH - RAIL_SNAP) return { view: 'strip', width: PANEL_WIDTH };
@@ -207,8 +227,133 @@ export function useRailSpring(target: number, mode: string, tracking: boolean) {
   return { value, width: moving ? value : target };
 }
 
+/** How long a strip is held to open straight into the gallery. */
+export const STRIP_HOLD_MS = 400;
+/** How far a held pointer may wander before the press stops counting as a hold. */
+const STRIP_HOLD_SLOP = 10;
+
+/**
+ * A strip's press: a tap or click opens it as a column, and holding it opens the gallery
+ * outright. The click that follows a hold is swallowed, so letting go does not take the
+ * gallery back to a column; a keyboard's click (detail 0) never comes from a hold.
+ */
+export function useStripPress({ onPress, onHold }: { onPress: () => void; onHold: () => void }) {
+  const timer = useRef<number | undefined>(undefined);
+  const origin = useRef({ x: 0, y: 0 });
+  const held = useRef(false);
+
+  const cancel = () => {
+    window.clearTimeout(timer.current);
+    timer.current = undefined;
+  };
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+
+  return {
+    onPointerDown(event: PointerEvent<HTMLElement>) {
+      held.current = false;
+      cancel();
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      origin.current = { x: event.clientX, y: event.clientY };
+      timer.current = window.setTimeout(() => {
+        timer.current = undefined;
+        held.current = true;
+        haptics.threshold();
+        onHold();
+      }, STRIP_HOLD_MS);
+    },
+    onPointerMove(event: PointerEvent<HTMLElement>) {
+      if (
+        timer.current !== undefined &&
+        Math.hypot(event.clientX - origin.current.x, event.clientY - origin.current.y) >
+          STRIP_HOLD_SLOP
+      )
+        cancel();
+    },
+    onPointerUp: cancel,
+    onPointerCancel: cancel,
+    onPointerLeave: cancel,
+    // A touch held this long would also bring up the browser's menu over the gallery.
+    onContextMenu(event: MouseEvent<HTMLElement>) {
+      if (timer.current !== undefined || held.current) event.preventDefault();
+    },
+    onClick(event: MouseEvent<HTMLElement>) {
+      if (held.current && event.detail !== 0) {
+        held.current = false;
+        event.preventDefault();
+        return;
+      }
+      held.current = false;
+      onPress();
+    },
+  };
+}
+
 export function zoneStatuses(zone: Zone, statuses: Status[]) {
   return statuses.filter((status) => ZONES[zone].categories.includes(status.category));
+}
+
+const OVERLAY_SELECTOR = '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]';
+
+function hasBlockingOverlay() {
+  if (document.querySelector(OVERLAY_SELECTOR)) return true;
+  for (const popper of document.querySelectorAll('[data-radix-popper-content-wrapper]')) {
+    if (!popper.querySelector('[data-slot="tooltip-content"], [role="tooltip"]')) return true;
+  }
+  return false;
+}
+
+function isEditableElement(element: Element | null) {
+  if (!(element instanceof HTMLElement)) return false;
+  if (element.isContentEditable) return true;
+  const tag = element.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  return element.closest('[contenteditable="true"], [contenteditable=""]') !== null;
+}
+
+function isSearchFocused(element: Element | null) {
+  return Boolean(element?.closest('search, [role="search"]'));
+}
+
+/**
+ * Whether an Escape keydown should collapse `zone`'s full gallery: only when it is full and no
+ * higher-priority overlay, mode, search field or editable control owns the key.
+ */
+export function canCollapseGalleryOnEscape(
+  zone: Zone,
+  event: Pick<
+    KeyboardEvent,
+    'key' | 'defaultPrevented' | 'isComposing' | 'altKey' | 'ctrlKey' | 'metaKey' | 'target'
+  >,
+  state: Pick<BoardState, 'backlog' | 'closed' | 'openTaskId' | 'carrying' | 'selection'>,
+) {
+  if (
+    event.key !== 'Escape' ||
+    event.defaultPrevented ||
+    event.isComposing ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey
+  )
+    return false;
+  if (
+    state[zone] !== 'full' ||
+    state.openTaskId !== null ||
+    state.carrying !== null ||
+    state.selection.length > 0 ||
+    drag.get() !== null
+  )
+    return false;
+  if (hasBlockingOverlay()) return false;
+  const active = document.activeElement;
+  const target = event.target instanceof Element ? event.target : null;
+  if (
+    isEditableElement(active) ||
+    isEditableElement(target) ||
+    isSearchFocused(active) ||
+    isSearchFocused(target)
+  )
+    return false;
+  return true;
 }
 
 /**
@@ -218,7 +363,9 @@ export function zoneStatuses(zone: Zone, statuses: Status[]) {
  *
  * These are not columns and do not look like them: they are rails that run the height of
  * the window, over the ends of the columns' scroller, and never take a column's surface. An
- * open rail's inner edge drags it to any width between a column and the whole board.
+ * open panel's inner edge drags it to any width between a column and the whole board;
+ * a gallery goes back to a column from its header, and Escape returns it to the state it
+ * came from (panel or strip).
  */
 export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometry }) {
   const state = board.use();
@@ -253,11 +400,57 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
   );
   const { width } = useRailSpring(geometry.drawn, geometry.mode, geometry.tracking);
   const start = zone === 'backlog';
-  // A gallery takes the board, so the opposite zone steps back to its strip.
-  const setView = (next: ZoneState) =>
-    update((before) => ({ [zone]: next, [other]: next === 'full' ? 'strip' : before[other] }));
+  // A gallery takes the board, remembering where it came from so Escape can return it there.
+  const setView = (next: ZoneState) => setZoneView(zone, next);
   // The snap the held edge would make if let go now, to mark crossing into another.
   const snap = useRef<ZoneState>(view);
+  const railRef = useRef<HTMLElement>(null);
+  const stripButton = useRef<HTMLButtonElement>(null);
+  const galleryToggle = useRef<HTMLButtonElement>(null);
+  const restoreFocusTo = useRef<CollapsedZoneState | null>(null);
+  const stripPress = useStripPress({
+    onPress: () => setView('panel'),
+    onHold: () => setView('full'),
+  });
+
+  // Only listen once no board-level Escape mode (task pane, carry, selection) is active, so
+  // `useBoardBoundary`'s listener can dismiss those first without racing on the same keydown.
+  const canEscape =
+    view === 'full' &&
+    state.openTaskId === null &&
+    state.carrying === null &&
+    state.selection.length === 0;
+
+  useEffect(() => {
+    if (!canEscape) return;
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if (!canCollapseGalleryOnEscape(zone, event, board.get())) return;
+      const active = document.activeElement;
+      const shouldRestoreFocus =
+        !active ||
+        active === document.body ||
+        active === document.documentElement ||
+        active.id === 'main-content' ||
+        Boolean(railRef.current?.contains(active));
+      const target = collapseZoneGallery(zone);
+      if (!target) return;
+      event.preventDefault();
+      if (shouldRestoreFocus) restoreFocusTo.current = target;
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [canEscape, zone]);
+
+  useLayoutEffect(() => {
+    if (restoreFocusTo.current === null) return;
+    if (restoreFocusTo.current !== view) {
+      if (view !== 'full') restoreFocusTo.current = null;
+      return;
+    }
+    restoreFocusTo.current = null;
+    if (view === 'strip') stripButton.current?.focus({ preventScroll: true });
+    else if (view === 'panel') galleryToggle.current?.focus({ preventScroll: true });
+  }, [view]);
 
   function commit(next: { view: ZoneState; width: number }) {
     if (next.view === 'panel') setRailWidth(zone, next.width);
@@ -266,15 +459,12 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
 
   function resize(next: number, keyboard: boolean) {
     if (keyboard) {
-      // The keys walk a panel's width and step on to the gallery at the end; from the
-      // gallery they step back to the widest panel. Closing is the close button's.
-      commit(
-        view === 'full'
-          ? next < geometry.zone
-            ? { view: 'panel', width: Math.min(next, geometry.max - RAIL_SNAP) }
-            : { view: 'full', width: next }
-          : settleRail(Math.max(PANEL_WIDTH, next), geometry.max),
-      );
+      // The keys walk a panel's width and step on to the gallery at the end. Closing is the
+      // close button's.
+      const settled = settleRail(Math.max(PANEL_WIDTH, next), geometry.max);
+      commit(settled);
+      // A gallery has no edge, so the focus moves to the toggle that takes it back.
+      if (settled.view === 'full') galleryToggle.current?.focus();
       return;
     }
     railResize.set({ zone, width: next });
@@ -296,6 +486,7 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
 
   return (
     <motion.aside
+      ref={railRef}
       aria-label={title}
       data-origin={zone}
       data-status-home={statuses.map((status) => status.id).join(' ')}
@@ -345,12 +536,13 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
           ) : view === 'strip' && !geometry.tracking ? (
             <motion.button
               key="strip"
+              ref={stripButton}
               type="button"
               aria-label={`Open ${title.toLowerCase()}, ${count} tasks`}
               data-spotlight={hasBlocker ? 'blocker' : undefined}
               data-spotlight-instant={reduced ? '' : undefined}
-              onClick={() => setView('panel')}
-              className="spotlight-strip group absolute inset-0 flex flex-col items-center gap-4 pt-[calc(var(--safe-top)+2.375rem)] text-muted-foreground outline-none hover:bg-foreground/[0.04] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60 focus-visible:ring-inset"
+              {...stripPress}
+              className="spotlight-strip group absolute inset-0 flex select-none flex-col items-center gap-4 pt-[calc(var(--safe-top)+2.375rem)] text-muted-foreground outline-none [-webkit-touch-callout:none] hover:bg-foreground/[0.04] hover:text-foreground active:bg-foreground/[0.07] focus-visible:ring-[3px] focus-visible:ring-ring/60 focus-visible:ring-inset"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -383,6 +575,7 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
                   </IconButton>
                 )}
                 <IconButton
+                  ref={galleryToggle}
                   label={view === 'full' ? 'Back to a column' : 'Open as a gallery'}
                   onClick={() => setView(view === 'full' ? 'panel' : 'full')}
                 >
@@ -416,7 +609,7 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
           )}
         </AnimatePresence>
       </div>
-      {!tiles && (view !== 'strip' || geometry.tracking) && (
+      {showsRailEdge(view, geometry.tracking, tiles) && (
         <SplitHandle
           width={geometry.zone}
           min={STRIP_WIDTH}

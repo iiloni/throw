@@ -34,9 +34,11 @@ import {
   type Tag,
   type TagWriteResponse,
   type Task,
+  type TaskGithubLink,
   type TaskRelation,
   type TaskTag,
   tagSchema,
+  taskGithubLinkSchema,
   taskRelationSchema,
   taskSchema,
   taskTagKey,
@@ -63,7 +65,7 @@ import {
 import { orderQueuedWrites } from './orderQueuedWrites';
 import { reportRefusedChanges } from './refusedChanges';
 import { getServerUrl } from './serverUrl';
-import { shapeFetch } from './shapeFetch';
+import { githubLinksShapeFetch, shapeFetch } from './shapeFetch';
 import { noteLocalWrite, useSteadyRows } from './steadyRows';
 import {
   addPendingWrite,
@@ -265,6 +267,26 @@ export const taskTagsCollection = createCollection(
     1,
   ),
 );
+
+export const taskGithubLinksCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      ...alwaysSynced,
+      id: 'task-github-links',
+      schema: taskGithubLinkSchema,
+      getKey: (link) => link.id,
+      shapeOptions: { ...shapeOptions('task-github-links'), fetchClient: githubLinksShapeFetch },
+    }),
+    1,
+  ),
+);
+const emptyGithubLinks: TaskGithubLink[] = [];
+export function useTaskGithubLinks() {
+  const { data = emptyGithubLinks, isLoading } = useLiveQuery((q) =>
+    q.from({ link: taskGithubLinksCollection }),
+  );
+  return { links: useSteadyRows(data), isLoading };
+}
 
 /** Links between tasks, across the projects of a workspace. Always synced for board cards. */
 export const taskRelationsCollection = createCollection(

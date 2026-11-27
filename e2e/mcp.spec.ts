@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { createInterface } from 'node:readline';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -843,6 +843,10 @@ test('reparenting a manually ordered tag offline clears its position immediately
     await client.close();
   }
 
+  await page.goto(`/w/${project.workspaceId}/p/${project.id}?view=board`);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(project.name, {
+    timeout: APP_LOAD_TIMEOUT,
+  });
   const localTag = () =>
     page.evaluate(async (id) => {
       const { tagsCollection } = await import(/* @vite-ignore */ '/src/lib/collections.ts');
@@ -853,8 +857,13 @@ test('reparenting a manually ordered tag offline clears its position immediately
     parentId: null,
     position: originalPosition,
   });
-  const offline = (route: Route) => route.abort('connectionfailed');
-  await page.route('**/api/**', offline);
+  // Let Vite keep serving modules. Keep the tag route installed through reconnect so a
+  // retry always goes through the same handler, even as connectivity changes.
+  const tagPath = `/api/tags/${tagId}`;
+  let offline = true;
+  await page.route(`**${tagPath}`, (route) =>
+    offline ? route.abort('connectionfailed') : route.continue(),
+  );
   await page.evaluate(
     async ({ tagId, parentId }) => {
       const { updateTag } = await import(/* @vite-ignore */ '/src/lib/tags.ts');
@@ -863,15 +872,29 @@ test('reparenting a manually ordered tag offline clears its position immediately
     { tagId, parentId },
   );
   await expect.poll(localTag).toEqual({ parentId, position: null });
+  await expect(page.getByRole('status').filter({ hasText: 'Offline · 1 unsaved' })).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
 
-  await page.unroute('**/api/**', offline);
+  await page.evaluate(async () => {
+    const { waitForPendingWritesStored } = await import(
+      /* @vite-ignore */ '/src/lib/collections.ts'
+    );
+    await waitForPendingWritesStored();
+  });
+  const serverTag = async () =>
+    (await shapeRows(page.request, 'tags', account.headers)).find(({ id }) => id === tagId);
+  expect(await serverTag()).toMatchObject({ parent_id: null, position: originalPosition });
+
+  const replay = page.waitForResponse(
+    (response) => response.request().method() === 'PATCH' && response.url().endsWith(tagPath),
+    { timeout: APP_LOAD_TIMEOUT },
+  );
+  offline = false;
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  expect((await replay).ok()).toBe(true);
   await expect
-    .poll(
-      async () =>
-        (await shapeRows(page.request, 'tags', account.headers)).find(({ id }) => id === tagId),
-      { timeout: APP_LOAD_TIMEOUT },
-    )
+    .poll(serverTag, { timeout: APP_LOAD_TIMEOUT })
     .toMatchObject({ parent_id: parentId, position: null });
 });
 
@@ -1412,6 +1435,153 @@ test('status colours round trip through REST, MCP and the change feed @api', asy
       { field: 'color', before: 'mint', after: null },
       { field: 'color', before: null, after: 'dark-blue' },
     ]);
+  } finally {
+    await client.close();
+  }
+});
+
+test('GitHub deliveries reach the offline collection and MCP, with scoped manual links', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(120000);
+  const owner = await signUp(page);
+  const token = await makeToken(request, owner);
+  const client = await connect(token.token);
+  const stranger = await createAccount(request);
+  try {
+    const project = await makeProject(request, owner, token.metadata.workspaceId);
+    const { task } = await call(client, 'create_task', { projectId: project.id, title: 'Ship' });
+    const connection = await request.post(`/api/integrations/github/projects/${project.id}`, {
+      headers: owner.headers,
+      data: { repository: 'org/repo' },
+    });
+    expect(connection.status()).toBe(201);
+    const {
+      secret,
+      connection: { webhookUrl },
+    } = await connection.json();
+    async function send(event: string, fields: Record<string, unknown>) {
+      const body = JSON.stringify({ repository: { full_name: 'Org/Repo' }, ...fields });
+      const response = await request.post(new URL(webhookUrl).pathname, {
+        data: body,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-GitHub-Event': event,
+          'X-GitHub-Delivery': randomUUID(),
+          'X-Hub-Signature-256': `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`,
+        },
+      });
+      expect(response.status(), await response.text()).toBe(200);
+    }
+    const pr = {
+      number: 23,
+      title: 'Patch',
+      head: { ref: 'feat/thr-1', sha: 'abc' },
+      state: 'open',
+      draft: true,
+      updated_at: '2026-11-25T09:00:00Z',
+    };
+    await send('issues', { issue: { ...pr, title: 'THR-1 follow-up', number: 24 } });
+    await send('pull_request_review', {
+      pull_request: pr,
+      review: { id: 11, user: { id: 22 }, state: 'approved' },
+    });
+    const check = {
+      id: 9,
+      check_suite: { id: 9 },
+      head_sha: 'abc',
+      status: 'completed',
+      conclusion: 'success',
+      pull_requests: [{ number: 23 }],
+    };
+    await send('check_suite', { check_suite: check });
+    await send('check_run', { check_run: check });
+    await send('pull_request', { pull_request: pr });
+    await send('pull_request', { pull_request: pr });
+    await send('check_run', { check_run: { ...check, id: 10, conclusion: 'failure' } });
+    const second = await call(client, 'create_task', { projectId: project.id, title: 'Verify' });
+    await send('push', {
+      ref: `refs/heads/${pr.head.ref}`,
+      after: pr.head.sha,
+      commits: [{ message: `Verify ${second.task.key}` }],
+    });
+    const copied = await call(client, 'get_task', { task: second.task.id });
+    expect(copied.githubLinks).toHaveLength(1);
+    expect(copied.githubLinks[0]).toMatchObject({
+      number: 23,
+      reviewDecision: 'approved',
+      checksSummary: { failed: 1 },
+    });
+    const merged = {
+      ...pr,
+      head: { ...pr.head, ref: 'patch' },
+      state: 'closed',
+      merged: true,
+      merged_at: '2026-11-26T07:00:00Z',
+      updated_at: '2026-11-26T07:00:00Z',
+    };
+    await send('pull_request', { pull_request: merged });
+    await send('pull_request', { pull_request: pr });
+    const result = await call(client, 'get_task', { task: task.id });
+    expect(result.githubLinks).toHaveLength(2);
+    const link = result.githubLinks.find((l) => l.kind === 'pr')!;
+    expect(link).toMatchObject({
+      state: 'merged',
+      reviewDecision: 'approved',
+      checksSummary: { state: 'failing', passed: 1, failed: 1, pending: 0 },
+    });
+    expect(result.history.items.filter((i) => i.viaTokenName === 'GitHub')).toHaveLength(3);
+    const synced = () =>
+      page.evaluate(async (id) => {
+        const { taskGithubLinksCollection: c } = await import(
+          /* @vite-ignore */ '/src/lib/collections.ts'
+        );
+        return c.get(id);
+      }, link.id);
+    await expect.poll(synced, { timeout: 30000 }).toMatchObject(link);
+    // Electric publishes the in-memory row before the asynchronous SQLite commit completes.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(async (id) => {
+            const { taskGithubLinksCollection: c } = await import(
+              /* @vite-ignore */ '/src/lib/collections.ts'
+            );
+            const rows = await c.config.persistence.adapter.loadSubset(c.id, {});
+            return rows.find((row: { key: string }) => row.key === id)?.value;
+          }, link.id),
+        { timeout: 30000 },
+      )
+      .toMatchObject(link);
+    await page.route('**/api/shapes/**', (route) => route.abort());
+    await page.reload();
+    await expect.poll(synced, { timeout: 30000 }).toMatchObject(link);
+    expect(await shapeRows(request, 'task-github-links', stranger.headers)).toEqual([]);
+    const rows = await shapeRows(request, 'task-github-links', owner.headers);
+    expect(rows[0]).not.toHaveProperty('runs');
+    const url = 'https://github.com/org/repo/issues/81';
+    const path = `/api/integrations/github/tasks/${task.id}/links`;
+    expect((await request.post(path, { headers: stranger.headers, data: { url } })).status()).toBe(
+      404,
+    );
+    expect(
+      (await request.delete(`${path}/${link.id}`, { headers: stranger.headers })).status(),
+    ).toBe(404);
+    expect((await request.post(path, { headers: owner.headers, data: { url } })).status()).toBe(
+      201,
+    );
+    const manual = await call(client, 'link_github', { task: task.key, url });
+    expect(manual.txid).toBeNull();
+    expect(
+      (await request.delete(`${path}/${manual.link.id}`, { headers: owner.headers })).status(),
+    ).toBe(200);
+    expect(
+      (await call(client, 'unlink_github', { task: task.key, linkId: manual.link.id })).txid,
+    ).toBeNull();
+    expect((await call(client, 'unlink_github', { task: task.key, linkId: link.id })).txid).toEqual(
+      expect.any(Number),
+    );
   } finally {
     await client.close();
   }

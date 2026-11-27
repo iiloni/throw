@@ -15,6 +15,7 @@ import {
   type WebhookFold,
 } from './fold';
 
+type EventActor = WriteActor | { integration: 'github'; tokenId?: never };
 export const WEBHOOK_CHANNEL = 'throw_webhooks';
 
 export type WebhookChange = {
@@ -39,7 +40,7 @@ export type WebhookChange = {
 export function buildPayload(
   deliveryId: string,
   change: WebhookChange,
-  actor: WriteActor,
+  actor: EventActor,
   projectKey: string | null,
   occurredAt: Date,
 ): WebhookPayload {
@@ -59,9 +60,12 @@ export function buildPayload(
           taskKey:
             projectKey !== null && taskNumber !== undefined ? `${projectKey}-${taskNumber}` : null,
         }),
-    actor: actor.tokenId
-      ? { kind: 'token', viaTokenName: actor.viaTokenName }
-      : { kind: 'user', viaTokenName: null },
+    actor:
+      'integration' in actor
+        ? { kind: 'token', viaTokenName: 'GitHub', integration: 'github' }
+        : actor.tokenId
+          ? { kind: 'token', viaTokenName: actor.viaTokenName }
+          : { kind: 'user', viaTokenName: null },
     ...(rest.changedFields === undefined ? {} : { changedFields: rest.changedFields }),
     ...(rest.statusTo === undefined ? {} : { statusTo: rest.statusTo }),
     occurredAt: occurredAt.toISOString(),
@@ -72,7 +76,7 @@ export function buildPayload(
 export function followsChange(
   webhook: { projectId: string | null; ignoreTokenWrites: boolean; projectTrashed: boolean },
   change: Pick<WebhookChange, 'projectId' | 'entityType' | 'kind'>,
-  actor: WriteActor,
+  actor: EventActor,
 ) {
   if (actor.tokenId && webhook.ignoreTokenWrites) return false;
   if (webhook.projectId === null) return true;
@@ -266,7 +270,7 @@ const structureDeliveries = new WeakMap<
  * into its waiting delivery for the same task or project (`queueWaiting`, `fold.ts`) and
  * queues a comment to wait with them. The worker is woken when the transaction commits.
  */
-export async function enqueueWebhooks(tx: Transaction, actor: WriteActor, change: WebhookChange) {
+export async function enqueueWebhooks(tx: Transaction, actor: EventActor, change: WebhookChange) {
   const key = coalesceKeyOf(change);
   const occurredAt = new Date();
   const structureKey = change.event === 'structure.updated' ? (change.projectId ?? '') : null;
@@ -321,7 +325,12 @@ export async function enqueueWebhooks(tx: Transaction, actor: WriteActor, change
   }
 
   let projectKey = change.projectKey ?? null;
-  if (matching.length && change.projectKey === undefined && change.projectId !== null) {
+  if (
+    matching.length &&
+    change.projectKey === undefined &&
+    change.projectId !== null &&
+    !('integration' in actor)
+  ) {
     const [project] = await tx
       .select({ key: projects.key })
       .from(projects)

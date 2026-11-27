@@ -92,6 +92,34 @@
       "when": 1795474085635,
       "tag": "0012_webhook_quiet_window",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795706913056,
+      "tag": "0013_github_connections",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795711943770,
+      "tag": "0014_familiar_blackheart",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1795714118948,
+      "tag": "0015_melted_scarecrow",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1795733650742,
+      "tag": "0016_github_status_rules",
+      "breakpoints": true
     }
   ]
 }

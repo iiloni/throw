@@ -65,6 +65,27 @@ describe('buildPayload', () => {
   const deliveryId = '019a0000-0000-7000-8000-000000000001';
   const occurredAt = new Date('2026-11-22T10:00:00.000Z');
 
+  it('identifies GitHub to new receivers while keeping the v1 machine actor kind', () => {
+    const payload = buildPayload(
+      deliveryId,
+      {
+        event: 'task.updated',
+        workspaceId: token.workspaceId,
+        projectId,
+        entityType: 'task',
+        kind: 'updated',
+      },
+      { integration: 'github' },
+      'THR',
+      occurredAt,
+    );
+    expect(webhookPayloadSchema.parse(payload).actor).toEqual({
+      kind: 'token',
+      viaTokenName: 'GitHub',
+      integration: 'github',
+    });
+  });
+
   it('describes a task change with its key and status, without content', () => {
     const payload = buildPayload(
       deliveryId,

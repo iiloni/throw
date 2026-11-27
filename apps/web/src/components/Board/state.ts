@@ -1,4 +1,5 @@
 import { positionBetween } from '@throw/shared';
+import { useEffect } from 'react';
 import { z } from 'zod';
 import { isDesktop } from '@/lib/media';
 import { readPreference, usePersistentState, writePreference } from '@/lib/storage';
@@ -61,10 +62,10 @@ export const boardSettingsSchema = z.object({
   backlogRail: z.enum(['sticky', 'bound']).default('sticky'),
   closedRail: z.enum(['sticky', 'bound']).default('sticky'),
   /**
-   * Draw scrollbars. Off, a faded edge is all that says a list goes on; some people need the
-   * bar itself.
+   * Draw Catch's overlay scrollbars, everywhere in the app. Off, a faded edge is all that says
+   * a list goes on.
    */
-  scrollbars: z.boolean().default(false),
+  scrollbars: z.boolean().default(true),
   /** Subtasks as top-level cards in their own statuses, rather than with their parent. */
   subtasksAsCards: z.boolean().default(false),
 });
@@ -74,6 +75,18 @@ const BOARD_SETTINGS_KEY = 'throw-board-settings';
 
 export function useBoardSettings() {
   return usePersistentState(BOARD_SETTINGS_KEY, boardSettingsSchema, boardSettingsSchema.parse({}));
+}
+
+/**
+ * Applies the Scrollbars setting to the whole document, for every overlay scrollbar: boards,
+ * menus, pickers, dialogs and Settings alike.
+ */
+export function useScrollbarSetting() {
+  const [{ scrollbars }] = useBoardSettings();
+  useEffect(() => {
+    document.documentElement.toggleAttribute('data-hide-scrollbars', !scrollbars);
+    return () => document.documentElement.removeAttribute('data-hide-scrollbars');
+  }, [scrollbars]);
 }
 
 function storedBoardSettings() {
@@ -172,6 +185,8 @@ function expandColumnOf(state: BoardState, taskId: string) {
 
 /** A side zone is a strip, a single column, or a gallery across the whole board. */
 export type ZoneState = 'strip' | 'panel' | 'full';
+/** The resting state a rail returns to when leaving its full gallery via Escape. */
+export type CollapsedZoneState = Exclude<ZoneState, 'full'>;
 
 /**
  * How wide each desktop rail is open as a panel, when its edge has been dragged; null is the
@@ -243,6 +258,8 @@ export type BoardState = {
   projectId: string;
   backlog: ZoneState;
   closed: ZoneState;
+  /** The state each rail was in before entering its full gallery, for Escape to restore. */
+  railBeforeFull: Record<keyof RailWidths, CollapsedZoneState>;
   /** A status id, or null for every status in the zone. */
   backlogFilter: string | null;
   closedFilter: string | null;
@@ -277,6 +294,7 @@ export function initialBoard(boards: BoardData[] = []): BoardState {
     awaitingTasks: false,
     backlog: window.innerWidth >= 1180 ? 'panel' : 'strip',
     closed: 'strip',
+    railBeforeFull: { backlog: 'panel', closed: 'panel' },
     backlogFilter: null,
     closedFilter: null,
     subtasksAsCards: storedBoardSettings().subtasksAsCards,
@@ -843,6 +861,34 @@ export function toggleExpanded(taskId: string) {
       ? state.expanded.filter((id) => id !== taskId)
       : [...state.expanded, taskId],
   }));
+}
+
+/**
+ * Transitions a desktop side rail (`backlog` or `closed`) between strip, panel and full gallery.
+ * Entering a full gallery remembers whether the rail came from a strip or a panel so Escape can
+ * restore it, and steps the opposite rail back to its strip.
+ */
+export function setZoneView(zone: keyof RailWidths, next: ZoneState) {
+  const other: keyof RailWidths = zone === 'backlog' ? 'closed' : 'backlog';
+  update((before) => ({
+    [zone]: next,
+    [other]: next === 'full' ? 'strip' : before[other],
+    ...(next === 'full' && before[zone] !== 'full'
+      ? { railBeforeFull: { ...before.railBeforeFull, [zone]: before[zone] } }
+      : {}),
+  }));
+}
+
+/**
+ * Collapses a rail's full gallery back to the state it was in before entering full view
+ * (`'panel'` or `'strip'`). Returns the restored state, or null when the rail is not full.
+ */
+export function collapseZoneGallery(zone: keyof RailWidths): CollapsedZoneState | null {
+  const before = board.get();
+  if (before[zone] !== 'full') return null;
+  const target = before.railBeforeFull[zone];
+  update({ [zone]: target });
+  return target;
 }
 
 /** Opens whichever zone holds a status, so a card sent there from the keyboard stays in view. */

@@ -60,6 +60,8 @@ function serverCapability(preference: string) {
   };
 }
 
+// Only a live bootstrap response can enable the optional remote shape. SQLite opens independently.
+const githubLinksServer = createStore<string | null>(null);
 const taskSize = serverCapability('task-size');
 const statusColor = serverCapability('status-color');
 
@@ -90,6 +92,7 @@ export function checkCompatibility(force = false): Promise<void> {
     if (response.status === 404) {
       taskSize.remember(server, false);
       statusColor.remember(server, false);
+      githubLinksServer.set(null);
       updateSyncStatus({ incompatibility: 'server-too-old' });
     } else {
       if (!response.ok) throw new Error('Could not check API compatibility');
@@ -98,6 +101,7 @@ export function checkCompatibility(force = false): Promise<void> {
       if (!range.success) throw new Error('Could not verify API compatibility');
       taskSize.remember(server, range.data.taskSize);
       statusColor.remember(server, range.data.statusColor);
+      githubLinksServer.set(range.data.githubTaskLinks ? server : null);
       updateSyncStatus({
         incompatibility: protocolCompatibility(API_PROTOCOL_VERSION, range.data),
       });
@@ -182,7 +186,20 @@ function pause(ms: number, signal?: AbortSignal | null) {
   });
 }
 
-function waitForSync(ready: () => boolean, signal?: AbortSignal | null) {
+export async function waitForGithubLinks(signal?: AbortSignal | null) {
+  await checkCompatibility();
+  await waitForSync(
+    () => githubLinksServer.get() === getServerUrl(),
+    signal,
+    githubLinksServer.subscribe,
+  );
+}
+
+function waitForSync(
+  ready: () => boolean,
+  signal?: AbortSignal | null,
+  subscribe = subscribeToSyncStatus,
+) {
   return new Promise<void>((resolve, reject) => {
     const finish = () => {
       unsubscribe();
@@ -191,7 +208,7 @@ function waitForSync(ready: () => boolean, signal?: AbortSignal | null) {
       else resolve();
     };
     const abort = () => finish();
-    const unsubscribe = subscribeToSyncStatus(() => {
+    const unsubscribe = subscribe(() => {
       if (ready()) finish();
     });
     signal?.addEventListener('abort', abort, { once: true });

@@ -8,7 +8,14 @@ import { DragOverlay } from './DragOverlay';
 import { configureDrag, drag } from './drag';
 import { mockBoards } from './mockData';
 import { PhoneBoard } from './PhoneBoard';
-import { board, current, initialBoard, update, useBoardSettings } from './state';
+import {
+  board,
+  current,
+  initialBoard,
+  update,
+  useBoardSettings,
+  useScrollbarSetting,
+} from './state';
 import { TaskScreen } from './TaskView';
 
 /**
@@ -27,10 +34,7 @@ export function BoardPrototype() {
   const [settings] = useBoardSettings();
   configureDrag({ heldColumn: settings.heldColumn });
 
-  useEffect(() => {
-    document.documentElement.toggleAttribute('data-hide-scrollbars', !settings.scrollbars);
-    return () => document.documentElement.removeAttribute('data-hide-scrollbars');
-  }, [settings.scrollbars]);
+  useScrollbarSetting();
   const openTask = state.boards.length
     ? current(state).tasks.find((task) => task.id === state.openTaskId)
     : undefined;

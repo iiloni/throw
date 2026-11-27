@@ -39,18 +39,25 @@ function withDatabase(url: string, name: string, login?: { user: string; passwor
 }
 
 /**
- * Keep credentials out of archives and out of the data restored from imported archives.
- * Restore truncates the tables, so it also clears any active credentials on the server.
- * Webhooks hold signing secrets, and their delivery queue only means anything to the
- * server that queued it (ADR 0015).
+ * Tables whose data stays out of archives and out of the data restored from imported
+ * archives. Restore truncates the tables, so it also clears any active credentials on the
+ * server. Webhooks hold signing secrets, and their delivery queue only means anything to the
+ * server that queued it (ADR 0015). GitHub connections hold a webhook secret and perhaps an
+ * access token, and their delivery IDs belong with them (ADR 0017).
  */
-const WITHOUT_CREDENTIALS = [
-  '--exclude-table-data=public.session',
-  '--exclude-table-data=public.mcp_tokens',
-  '--exclude-table-data=public.mcp_structure_operations',
-  '--exclude-table-data=public.webhooks',
-  '--exclude-table-data=public.webhook_deliveries',
-];
+export const CREDENTIAL_TABLES = [
+  'session',
+  'mcp_tokens',
+  'mcp_structure_operations',
+  'webhooks',
+  'webhook_deliveries',
+  'github_connections',
+  'github_deliveries',
+] as const;
+
+const WITHOUT_CREDENTIALS = CREDENTIAL_TABLES.map(
+  (table) => `--exclude-table-data=public.${table}`,
+);
 
 const UNSAFE_ROLE =
   'The database user can make roles or reach the database host’s files or programs, which a backup could misuse. Restore with a superuser, or with a user that has none of those powers.';

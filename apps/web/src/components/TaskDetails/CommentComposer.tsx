@@ -1,4 +1,5 @@
 import type { CommentBody, Description } from '@throw/shared';
+import { SendHorizontal } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { LazyDescriptionEditor } from '@/components/DescriptionEditor/LazyDescriptionEditor';
 import { Button } from '@/components/ui/button';
@@ -6,18 +7,22 @@ import { readCommentDraft, storeCommentDraft } from '@/lib/commentDrafts';
 import { holdUpdateReload } from '@/lib/useUpdateReloadBlocked';
 import { cn } from '@/lib/utils';
 import { hasCommentText } from './history';
+import { commentSurface } from './timelineParts';
 
 const same = (a: Description, b: Description) => JSON.stringify(a) === JSON.stringify(b);
+const apple = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
 
 /**
  * Writes a new comment for `draftFor`'s task, or edits `initialContent`. A new comment's
  * text is kept on this device until it is posted or cancelled; an edit lives in the editor.
+ * `bare` leaves out its own surface, for an edit on the comment's card.
  */
 export function CommentComposer({
   initialContent = null,
   draftFor,
   onSave,
   onCancel,
+  bare = false,
   className,
 }: {
   className?: string;
@@ -25,6 +30,7 @@ export function CommentComposer({
   draftFor?: string;
   onSave: (body: CommentBody) => void;
   onCancel: () => void;
+  bare?: boolean;
 }) {
   const [start] = useState(() => (draftFor ? readCommentDraft(draftFor) : null) ?? initialContent);
   const [body, setBody] = useState(start);
@@ -46,11 +52,17 @@ export function CommentComposer({
     if (draftFor) storeCommentDraft(draftFor, null);
     onCancel();
   }
+  const verb = initialContent ? 'save' : 'send';
   return (
     <section
       aria-label="Comment editor"
       className={cn(
-        'mt-2 rounded-2xl bg-foreground/[0.045] px-3.5 pt-3 pb-2.5 ring-1 ring-foreground/[0.08]',
+        'comment-composer',
+        !bare &&
+          cn(
+            commentSurface,
+            'px-3.5 pt-3 pb-2 transition-shadow duration-200 focus-within:ring-ring/45 sm:px-4',
+          ),
         className,
       )}
       // Before the editor, which would otherwise take Mod-Enter for itself.
@@ -69,7 +81,9 @@ export function CommentComposer({
       <LazyDescriptionEditor
         initialContent={start}
         editable
-        scrollClearance={96}
+        sideMenu={false}
+        // The footer under the caret: Cancel and Send stay in view as lines are added.
+        scrollClearance={40}
         autoFocus
         placeholder="Write a comment…"
         onChange={(document) => {
@@ -82,12 +96,33 @@ export function CommentComposer({
           {error}
         </p>
       )}
-      <div className="mt-2 flex justify-end gap-1">
-        <Button type="button" variant="ghost" size="sm" onClick={cancel}>
+      <div className="mt-2 flex items-center gap-1">
+        {/* A keyboard's shortcut, where there is a keyboard to press it on. */}
+        <span
+          aria-hidden
+          className={cn(
+            'mr-auto hidden items-center gap-1 text-muted-foreground text-xs transition-opacity duration-150 pointer-fine:inline-flex',
+            !writing && 'opacity-0',
+          )}
+        >
+          <kbd className="rounded-md bg-foreground/[0.07] px-1.5 py-px font-sans text-[0.6875rem]">
+            {apple ? '⌘' : 'Ctrl'} ↵
+          </kbd>
+          to {verb}
+        </span>
+        <Button type="button" variant="ghost" size="sm" className="ml-auto" onClick={cancel}>
           Cancel
         </Button>
-        <Button type="button" size="sm" disabled={!writing} onClick={save}>
-          {initialContent ? 'Save comment' : 'Post comment'}
+        <Button
+          type="button"
+          size="sm"
+          disabled={!writing}
+          aria-keyshortcuts="Control+Enter Meta+Enter"
+          className="rounded-full transition-[opacity,background-color]"
+          onClick={save}
+        >
+          <SendHorizontal aria-hidden />
+          {initialContent ? 'Save' : 'Send'}
         </Button>
       </div>
     </section>

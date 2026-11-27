@@ -30,8 +30,11 @@ integrations.
 - **Changes to a task's core attributes are user-driven.** A user can initiate work in an
   external agent and authorize it to act in a workspace. Throw records which credential the
   agent used for each change. Throw itself never moves or completes a task on a schedule.
+  The one exception is a project's opt-in GitHub status rules, which the project sets up
+  and which follow verified GitHub events, recorded as GitHub's changes.
 - **Few integrations, all opt-in.** The first is [MCP](decisions/0014-mcp-server.md).
   [Webhooks](decisions/0015-webhooks.md) are its push companion: they tell an agent to look.
+  A project can follow a GitHub repository ([ADR 0017](decisions/0017-github-integration.md)).
 - **Boards are for managing, task views are for executing.** A card carries enough to manage
   a task's lifecycle; the work happens in the task's own view.
 
@@ -74,6 +77,13 @@ integrations.
 - Outbound webhooks that wake an external agent when a workspace or project changes. Each
   sends a small signed notice and the agent reads the change from the MCP feed. A user
   creates them in Settings; they run no rules and change nothing in Throw.
+- An opt-in GitHub connection per project, in project settings: GitHub sends the project's
+  repository events as signed webhooks. Task keys in pull requests and issues link them to
+  tasks. Devices sync link metadata, review decisions and check counts for offline use.
+  A project can opt into status rules: a linked pull request opened, reopened or converted
+  to a draft, made ready for review, merged or closed, or a linked issue closed, moves its
+  tasks to a status the project chose. Each rule is off until set, and the move is recorded as GitHub's. Releases
+  build on it ([ADR 0017](decisions/0017-github-integration.md)).
 
 ### Out of scope
 
@@ -86,8 +96,8 @@ integrations.
 | Attachments, images in descriptions | First follow-up after launch. |
 | List view | The board is the only layout. |
 | Filtering by tag across projects | Tags are per project. |
-| Automation inside Throw | Scheduled jobs and rules that change tasks are out of scope. Webhooks only notify. |
-| Other integrations, import, export | Out of scope for the first version. |
+| Automation inside Throw | Scheduled jobs and rules that change tasks are out of scope, except a project's opt-in GitHub status rules, which follow verified GitHub events. Webhooks only notify. |
+| Other integrations, import, export | Out of scope for the first version, beyond MCP, webhooks and GitHub. |
 | Reports (cycle time, burndown) | Later; the activity log makes them possible. |
 | Time tracking | Out of scope until further notice. |
 | Moving a task to another project | Not supported for now. A task filed in the wrong project is recreated. |
@@ -340,6 +350,10 @@ motion.
   remembered per project on the device. A card dropped on a strip is sent to its status
   without the column opening ([ADR 0008](decisions/0008-board-drag-model.md)); carrying a card
   into one from the keyboard, or opening one of its tasks, opens it.
+- A right click on a desktop column's header or strip opens its menu (2026-11-26): add a task
+  to it, fold or open it, fold the other columns, open them all, and edit its status in the
+  project's status settings. The cross-project board's category columns span projects, so
+  their menu only folds. A right click on a card still selects it.
 - A phone shows one column at a time and shares the project's folded columns: the pager skips
   them, so a column rarely visited costs no swipe. The current column folds from a control
   beside its name, and the next column takes its place. Each folded column stays on the flow
@@ -353,10 +367,11 @@ motion.
   the list scrolls.
 - Where cards are scrolled out of a column, the visible area's corners take the card radius
   at the cards' own edges, so a card that is cut off still shows four round corners.
-- Scrollbars are off by default, since the fades do their job with less noise. A
-  [setting](#board-settings) turns them on for people who need the bar. They are then
-  Catch's overlay scrollbars: drawn over the content, shown on hover on desktop and never
-  on touch screens.
+- Scrollbars are Catch's overlay scrollbars, on by default as in Catch: drawn over the
+  content, shown on hover on desktop and never on touch screens. Every scrolling list,
+  menu, picker and dialog draws them, not only the board. A [setting](#board-settings) turns
+  them off everywhere for people who find the fades enough. Dragging a thumb never takes
+  focus, so an editor keeps its caret.
 - A wheel turned where nothing scrolls up and down (the page, a rail's strip, a column short
   enough to fit) scrolls the columns sideways.
 
@@ -379,7 +394,7 @@ never drawn.
 | Column backgrounds | On | Gives each active column a faint surface. |
 | Backlog rail, Closed rail | Sticky | One setting for each. Sticky keeps the rail at the window's edge with the columns scrolling beneath it. With board puts it at its end of the columns, and it scrolls away with them. |
 | Subtasks as cards | Off | Shows subtasks as top-level cards; see [Subtasks on the board](#subtasks-on-the-board). |
-| Scrollbars | Off | Draws scrollbars. Off, a faded edge shows where a list goes on. |
+| Scrollbars | On | Draws overlay scrollbars across the app. Off, a faded edge shows where a list goes on. |
 | Holding a card | Compact | Compact or Full; see [Ordering and priority](#ordering-and-priority). |
 | Theme | System | System, Light or Dark. The browser and installed app bars follow the chosen theme. |
 
@@ -710,6 +725,13 @@ on the device and takes precedence over window width:
 - The cross-project board.
 - Settings at the bottom.
 
+A right click on a project in the rail, expanded or collapsed, opens the project's menu:
+project settings, project trash, rename and open in a new tab, the same actions as its `…`
+button (2026-11-26). A right click on Settings offers the board's display toggles while a board
+is open, and each Settings page to go straight to. On a touch screen with the desktop layout,
+a long press (half a second, felt as it opens) opens each of these menus where a right click
+would, and the tap its lift would send does nothing.
+
 On a board, search is a floating glass bar at the bottom of the board area, opened from the
 rail or with Ctrl/⌘K, which focuses it when it is already open (2026-11-22). It is not modal
 and has no results list: the board itself narrows as words are typed or
@@ -846,8 +868,8 @@ dock rather than opening as a page. Desktop has no drawer. The rules are in
   opens its search and replaces the view with `board`.
 - `/w/:workspaceId/p/:projectId/settings` manages a project inside the unified Settings hub
   alongside User and Admin pages: General (name, color and icon, saved as they change; the key;
-  deleting the project), Statuses, Priorities and Tags, with Trash beside them. Opening Settings
-  from the rail or phone title menu shows the active or remembered project's pages in the same
+  deleting the project), Statuses, Priorities, Tags and GitHub, with Trash beside them.
+  Opening Settings from the rail or phone title menu shows the active or remembered project's pages in the same
   sidebar (desktop) or dock page picker (phone); the rail's project `...` menu and the phone
   board's title menu jump directly to a project's settings. The optional `section` search
   parameter keeps the chosen page across reloads and reconnects.

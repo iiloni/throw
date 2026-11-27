@@ -40,10 +40,12 @@ test.describe('desktop', () => {
     await expect(page.getByText('1 selected', { exact: true })).toBeVisible();
     await card(page, titles[1]!).click({ button: 'right' });
     await expect(page.getByText('2 selected', { exact: true })).toBeVisible();
-    // Right-clicking the board around the cards leaves the selection alone.
+    // Right-clicking the board around the cards leaves the selection alone. Below the header,
+    // which has the column's own menu.
     await page
       .getByRole('region', { name: 'Build', exact: true })
-      .click({ button: 'right', position: { x: 8, y: 8 } });
+      .click({ button: 'right', position: { x: 6, y: 80 } });
+    await expect(page.getByRole('menu')).toHaveCount(0);
     await expect(page.getByText('2 selected', { exact: true })).toBeVisible();
 
     // Priority and size apply to every card and keep the selection.

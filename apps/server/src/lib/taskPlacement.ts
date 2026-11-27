@@ -8,17 +8,22 @@ import type { WriteActor } from './writeActor';
 type Lane = { projectId: string; statusId: string; priority: Priority; parentId: string | null };
 export type RelativePlacement = { side: 'before' | 'after'; neighborId: string };
 
-/** The project's write lock holds while the neighbors and resulting position are chosen. */
+/**
+ * The project's write lock holds while the neighbors and resulting position are chosen. An
+ * integration's write (ADR 0017) has no user and is scoped to its connection's workspace.
+ */
 export async function positionInLane(
   tx: Transaction,
-  actor: WriteActor,
+  actor: WriteActor | { userId?: never; workspaceId: string },
   lane: Lane,
   taskId: string,
   relative?: RelativePlacement,
 ): Promise<string | null> {
   const scope = and(
     eq(tasks.projectId, lane.projectId),
-    inArray(tasks.workspaceId, memberWorkspaces(tx, actor.userId, actor.workspaceId)),
+    actor.userId === undefined
+      ? eq(tasks.workspaceId, actor.workspaceId)
+      : inArray(tasks.workspaceId, memberWorkspaces(tx, actor.userId, actor.workspaceId)),
     ne(tasks.id, taskId),
     lane.parentId === null || relative ? isNull(tasks.deletedAt) : undefined,
     lane.parentId === null

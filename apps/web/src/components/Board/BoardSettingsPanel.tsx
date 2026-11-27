@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Popover } from 'radix-ui';
 import type { ReactNode } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
+import { ScrollBox } from '@/components/ui/scroll-area';
 import { haptics } from '@/lib/haptics';
 import { useDesktop, useMedia } from '@/lib/media';
 import { springs } from '@/lib/motion';
@@ -147,14 +148,66 @@ export function BoardSettingsPanel({
           sideOffset={10}
           collisionPadding={12}
           aria-label="Board settings"
-          className="shell-menu glass-thick z-50 max-h-[var(--radix-popover-content-available-height)] w-[22rem] max-w-[calc(100vw-1.5rem)] overflow-y-auto overscroll-contain rounded-3xl px-5 py-4 outline-none"
+          className="shell-menu glass-thick z-50 flex w-[22rem] max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-3xl outline-none"
         >
-          <h2 className="pb-1 font-display font-semibold text-lg tracking-[-0.01em]">Board</h2>
-          <BoardSettingsContent onReset={onReset} crossBoard={crossBoard} />
+          <ScrollBox
+            className="max-h-[var(--radix-popover-content-available-height)] [--scrollbar-inset:1rem]"
+            viewportClassName="px-5 py-4"
+          >
+            <h2 className="pb-1 font-display font-semibold text-lg tracking-[-0.01em]">Board</h2>
+            <BoardSettingsContent onReset={onReset} crossBoard={crossBoard} />
+          </ScrollBox>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
   );
+}
+
+export type BoardToggle = {
+  key: string;
+  label: string;
+  hint?: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+};
+
+/**
+ * The board's on/off preferences that this device can show: the panel's switches, and the
+ * quick toggles a right click on the rail's Settings offers.
+ */
+export function useBoardToggles(): BoardToggle[] {
+  const state = board.use();
+  const [settings, setSettings] = useBoardSettings();
+  // Columns and side rails are desktop layout; a phone has neither to change.
+  const phone = !useDesktop();
+  // ScrollBar hides itself on coarse pointers (`pointer-coarse:hidden`), so this toggle would be a no-op there.
+  const coarsePointer = useMedia('(pointer: coarse)');
+  const toggle = (
+    key: 'zoneLabels' | 'cardPriority' | 'cardSize' | 'surfaces' | 'scrollbars',
+    label: string,
+    hint?: string,
+  ): BoardToggle => ({
+    key,
+    label,
+    hint,
+    checked: settings[key],
+    onChange: (value) => setSettings({ ...settings, [key]: value }),
+  });
+  return [
+    {
+      key: 'subtasksAsCards',
+      label: 'Subtasks as cards',
+      checked: state.subtasksAsCards,
+      onChange: setSubtasksAsCards,
+    },
+    toggle('zoneLabels', 'Priority labels', 'Name each priority zone in a column.'),
+    toggle('cardPriority', 'Priority on cards', 'Mark cards that are not the default priority.'),
+    toggle('cardSize', 'Size on cards', 'Show the size on cards that have one.'),
+    ...(phone ? [] : [toggle('surfaces', 'Column backgrounds')]),
+    ...(coarsePointer
+      ? []
+      : [toggle('scrollbars', 'Scrollbars', 'Off, a faded edge shows where a list goes on.')]),
+  ];
 }
 
 export function BoardSettingsControls({
@@ -164,63 +217,19 @@ export function BoardSettingsControls({
   includeTheme?: boolean;
   crossBoard?: boolean;
 }) {
-  const state = board.use();
   const [settings, setSettings] = useBoardSettings();
   const [theme, setTheme] = useThemePreference();
-  // Columns and side rails are desktop layout; a phone has neither to change.
   const phone = !useDesktop();
-  // ScrollBar hides itself on coarse pointers (`pointer-coarse:hidden`), so this toggle would be a no-op there.
-  const coarsePointer = useMedia('(pointer: coarse)');
+  const toggles = useBoardToggles();
   const set = <K extends keyof BoardSettings>(key: K, value: BoardSettings[K]) =>
     setSettings({ ...settings, [key]: value });
   return (
     <>
-      <Row label="Subtasks as cards">
-        <Switch
-          label="Subtasks as cards"
-          checked={state.subtasksAsCards}
-          onChange={setSubtasksAsCards}
-        />
-      </Row>
-      <Row label="Priority labels" hint="Name each priority zone in a column.">
-        <Switch
-          label="Priority labels"
-          checked={settings.zoneLabels}
-          onChange={(value) => set('zoneLabels', value)}
-        />
-      </Row>
-      <Row label="Priority on cards" hint="Mark cards that are not the default priority.">
-        <Switch
-          label="Priority on cards"
-          checked={settings.cardPriority}
-          onChange={(value) => set('cardPriority', value)}
-        />
-      </Row>
-      <Row label="Size on cards" hint="Show the size on cards that have one.">
-        <Switch
-          label="Size on cards"
-          checked={settings.cardSize}
-          onChange={(value) => set('cardSize', value)}
-        />
-      </Row>
-      {!phone && (
-        <Row label="Column backgrounds">
-          <Switch
-            label="Column backgrounds"
-            checked={settings.surfaces}
-            onChange={(value) => set('surfaces', value)}
-          />
+      {toggles.map(({ key, label, hint, checked, onChange }) => (
+        <Row key={key} label={label} hint={hint}>
+          <Switch label={label} checked={checked} onChange={onChange} />
         </Row>
-      )}
-      {!coarsePointer && (
-        <Row label="Scrollbars" hint="Off, a faded edge shows where a list goes on.">
-          <Switch
-            label="Scrollbars"
-            checked={settings.scrollbars}
-            onChange={(value) => set('scrollbars', value)}
-          />
-        </Row>
-      )}
+      ))}
       {!crossBoard && (
         <>
           <Row

@@ -11,7 +11,7 @@ const MEMBER_WORKSPACES = 'SELECT workspace_id FROM workspace_members WHERE user
  * What clients may sync: an explicit column list per table, and the filter that keeps a
  * shape to rows in the user's workspaces. Server-only columns stay out.
  */
-const SHAPES: Record<string, { table: string; columns: string[]; where: string }> = {
+export const SHAPES: Record<string, { table: string; columns: string[]; where: string }> = {
   workspaces: {
     table: 'workspaces',
     columns: ['id', 'name', 'position'],
@@ -58,6 +58,29 @@ const SHAPES: Record<string, { table: string; columns: string[]; where: string }
     where: `workspace_id IN (${MEMBER_WORKSPACES})`,
   },
   // Links between those tasks, across projects of one workspace.
+  'task-github-links': {
+    table: 'task_github_links',
+    columns: [
+      'id',
+      'workspace_id',
+      'project_id',
+      'task_id',
+      'repo',
+      'kind',
+      'number',
+      'url',
+      'title',
+      'state',
+      'review_decision',
+      'checks_summary',
+      'branch',
+      'merge_commit_sha',
+      'merged_at',
+      'created_at',
+      'updated_at',
+    ],
+    where: `workspace_id IN (${MEMBER_WORKSPACES})`,
+  },
   'task-relations': {
     table: 'task_relations',
     columns: ['id', 'workspace_id', 'source_task_id', 'target_task_id', 'kind', 'created_at'],

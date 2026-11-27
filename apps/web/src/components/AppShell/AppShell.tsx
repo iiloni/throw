@@ -11,11 +11,26 @@ import {
 } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
-import { type ReactElement, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  type HTMLAttributes,
+  type ReactElement,
+  type ReactNode,
+  type Ref,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { z } from 'zod';
 import { AccountSwitcher } from '@/components/AccountSwitcher/AccountSwitcher';
 import { SignOutAccountHost } from '@/components/AccountSwitcher/SignOutAccountHost';
+import {
+  ProjectContextMenu,
+  ProjectDropdownItems,
+  projectBoardPath,
+} from '@/components/AppShell/ProjectMenu';
 import { ProjectSwitcher } from '@/components/AppShell/ProjectSwitcher';
+import { SettingsContextMenu } from '@/components/AppShell/SettingsMenu';
 import { ShellMenu } from '@/components/AppShell/ShellMenu';
 import { useSwitcherPull } from '@/components/AppShell/SwitcherPull';
 import {
@@ -47,6 +62,7 @@ import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { SettingsHub } from '@/components/SettingsLayout/SettingsHub';
 import { type ShellForm, ShellForms } from '@/components/ShellForms/ShellForms';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
+import { ScrollBox } from '@/components/ui/scroll-area';
 import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
 import { getSignedInUser, pagePath } from '@/lib/auth';
 import { useProjects, useWorkspaces } from '@/lib/collections';
@@ -314,10 +330,11 @@ export function AppShell() {
       // The task's own opening is the motion here; a cross-fade would run under it.
       if (!inPlace) selectProject(workspace.id, projectId, 'board', false, false);
     },
-    goProjectSettings: (project) => {
+    goProjectSettings: (project, section) => {
       void navigate({
         to: '/w/$workspaceId/p/$projectId/settings',
         params: { workspaceId: project.workspaceId, projectId: project.id },
+        search: section && section !== 'general' ? { section } : {},
       });
     },
     goTrash: (project) => {
@@ -404,83 +421,76 @@ export function AppShell() {
                   </RailButton>
                 </div>
               )}
-              <nav
-                aria-label="Projects"
-                className="mt-5 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden px-3"
-              >
-                {projects.map((item) => (
-                  <div key={item.id} className="group/project relative shrink-0">
+              <ScrollBox edges className="mt-5 flex-1 [--scrollbar-inset:0.5rem]">
+                <nav aria-label="Projects" className="flex flex-col gap-1 px-3">
+                  {projects.map((item) => (
+                    <ProjectContextMenu key={item.id} project={item}>
+                      <div
+                        data-rail-project={item.id}
+                        className="group/project relative shrink-0 rounded-2xl data-[state=open]:bg-accent/60"
+                      >
+                        <RailButton
+                          label={item.name}
+                          href={projectBoardPath(item)}
+                          expanded={expanded}
+                          active={projectBoard && project?.id === item.id}
+                          tint={item.color}
+                          className={expanded ? 'pr-11' : undefined}
+                          onClick={() => selectProject(item.workspaceId, item.id)}
+                        >
+                          <ProjectIcon name={item.icon} className="size-5 text-tint-accent" />
+                        </RailButton>
+                        {expanded && (
+                          <DropdownMenu.Root>
+                            <DropdownMenu.Trigger asChild>
+                              <button
+                                type="button"
+                                aria-label={`Project menu for ${item.name}`}
+                                className="absolute top-2 right-1 flex size-8 items-center justify-center rounded-full bg-background/80 text-muted-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+                              >
+                                <MoreHorizontal aria-hidden className="size-4" />
+                              </button>
+                            </DropdownMenu.Trigger>
+                            <DropdownMenu.Portal>
+                              <DropdownMenu.Content
+                                align="start"
+                                side="right"
+                                sideOffset={8}
+                                collisionPadding={12}
+                                className="shell-menu glass-thick z-40 min-w-52 rounded-2xl p-2"
+                              >
+                                <ProjectDropdownItems project={item} />
+                              </DropdownMenu.Content>
+                            </DropdownMenu.Portal>
+                          </DropdownMenu.Root>
+                        )}
+                      </div>
+                    </ProjectContextMenu>
+                  ))}
+                  {workspace && (
                     <RailButton
-                      label={item.name}
-                      href={`/w/${item.workspaceId}/p/${item.id}?view=board`}
+                      label="New project"
                       expanded={expanded}
-                      active={projectBoard && project?.id === item.id}
-                      tint={item.color}
-                      className={expanded ? 'pr-11' : undefined}
-                      onClick={() => selectProject(item.workspaceId, item.id)}
+                      onClick={() => setForm({ kind: 'new-project', workspace })}
                     >
-                      <ProjectIcon name={item.icon} className="size-5 text-tint-accent" />
+                      <Plus aria-hidden className="size-5" />
                     </RailButton>
-                    {expanded && (
-                      <DropdownMenu.Root>
-                        <DropdownMenu.Trigger asChild>
-                          <button
-                            type="button"
-                            aria-label={`Project menu for ${item.name}`}
-                            className="absolute top-2 right-1 flex size-8 items-center justify-center rounded-full bg-background/80 text-muted-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
-                          >
-                            <MoreHorizontal aria-hidden className="size-4" />
-                          </button>
-                        </DropdownMenu.Trigger>
-                        <DropdownMenu.Portal>
-                          <DropdownMenu.Content
-                            align="start"
-                            side="right"
-                            sideOffset={8}
-                            collisionPadding={12}
-                            className="glass-thick z-40 min-w-48 rounded-2xl p-2"
-                          >
-                            <DropdownMenu.Item
-                              className="flex min-h-11 cursor-pointer items-center rounded-xl px-3 text-sm outline-none focus:bg-accent"
-                              onSelect={() => context.goProjectSettings(item)}
-                            >
-                              Project settings
-                            </DropdownMenu.Item>
-                            <DropdownMenu.Item
-                              className="flex min-h-11 cursor-pointer items-center rounded-xl px-3 text-sm outline-none focus:bg-accent"
-                              onSelect={() => context.goTrash(item)}
-                            >
-                              Project trash
-                            </DropdownMenu.Item>
-                          </DropdownMenu.Content>
-                        </DropdownMenu.Portal>
-                      </DropdownMenu.Root>
-                    )}
-                  </div>
-                ))}
-                {workspace && (
-                  <RailButton
-                    label="New project"
-                    expanded={expanded}
-                    onClick={() => setForm({ kind: 'new-project', workspace })}
-                  >
-                    <Plus aria-hidden className="size-5" />
-                  </RailButton>
-                )}
-                {workspace && (
-                  <div className="mt-3 border-t pt-3">
-                    <RailButton
-                      label="All projects"
-                      href={`/w/${workspace.id}/board`}
-                      expanded={expanded}
-                      active={crossBoard}
-                      onClick={goBoard}
-                    >
-                      <Columns3 aria-hidden className="size-5" />
-                    </RailButton>
-                  </div>
-                )}
-              </nav>
+                  )}
+                  {workspace && (
+                    <div className="mt-3 border-t pt-3">
+                      <RailButton
+                        label="All projects"
+                        href={`/w/${workspace.id}/board`}
+                        expanded={expanded}
+                        active={crossBoard}
+                        onClick={goBoard}
+                      >
+                        <Columns3 aria-hidden className="size-5" />
+                      </RailButton>
+                    </div>
+                  )}
+                </nav>
+              </ScrollBox>
               <div className="mt-3 flex flex-col gap-2 overflow-hidden px-3">
                 {fullBoard && (
                   <div className="px-2">
@@ -489,15 +499,17 @@ export function AppShell() {
                 )}
 
                 <AccountSwitcher expanded={expanded} />
-                <RailButton
-                  label="Settings"
-                  href="/settings"
-                  expanded={expanded}
-                  active={settings}
-                  onClick={context.goSettings}
-                >
-                  <Settings aria-hidden className="size-5" />
-                </RailButton>
+                <SettingsContextMenu>
+                  <RailButton
+                    label="Settings"
+                    href="/settings"
+                    expanded={expanded}
+                    active={settings}
+                    onClick={context.goSettings}
+                  >
+                    <Settings aria-hidden className="size-5" />
+                  </RailButton>
+                </SettingsContextMenu>
                 <RailButton
                   label={expanded ? 'Collapse navigation' : 'Expand navigation'}
                   expanded={expanded}
@@ -574,7 +586,11 @@ function RailButton({
   href,
   tint,
   className,
-}: {
+  ref,
+  ...forwarded
+}: Omit<HTMLAttributes<HTMLElement>, 'children' | 'className' | 'onClick'> & {
+  /** Taken with the rest of its props from an `asChild` trigger, such as a context menu's. */
+  ref?: Ref<HTMLElement>;
   label: string;
   /** Extra tooltip and accessible description when status adds beyond `label` (e.g. active filters). */
   hintLabel?: string;
@@ -630,6 +646,8 @@ function RailButton({
   // (such as active search filters) also describe the control in both rail states.
   const hint = (control: ReactElement) => (
     <Hint
+      {...forwarded}
+      ref={ref}
       label={hintLabel ?? label}
       side="right"
       disabled={expanded && !hintLabel}

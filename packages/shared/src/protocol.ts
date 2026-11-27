@@ -12,6 +12,7 @@ export type ProtocolRange = z.infer<typeof protocolRangeSchema>;
 export const compatibilitySchema = protocolRangeSchema.safeExtend({
   taskSize: z.boolean().default(false),
   statusColor: z.boolean().default(false),
+  githubTaskLinks: z.boolean().default(false),
 });
 
 export const SUPPORTED_API_PROTOCOLS: ProtocolRange = { min: 1, max: API_PROTOCOL_VERSION };

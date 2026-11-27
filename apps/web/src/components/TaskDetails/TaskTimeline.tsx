@@ -1,33 +1,35 @@
+import { type ActivityEntry, descriptionSchema, type Project, type Task } from '@throw/shared';
+import { History, Link2, MessageCircle } from 'lucide-react';
+import { cancelFrame, frame, motion, useReducedMotion } from 'motion/react';
 import {
-  type ActivityEntry,
-  type Comment,
-  descriptionSchema,
-  type Project,
-  type Task,
-} from '@throw/shared';
-import { History, Link2, MessageCircle, Pencil, Trash2 } from 'lucide-react';
-import { motion } from 'motion/react';
-import { memo, type ReactNode, useDeferredValue, useEffect, useId, useMemo, useState } from 'react';
+  memo,
+  type ReactNode,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { z } from 'zod';
 import { Collapse } from '@/components/Collapse/Collapse';
-import { LazyDescriptionEditor } from '@/components/DescriptionEditor/LazyDescriptionEditor';
 import { Hint } from '@/components/Hint/Hint';
-import { IconButton } from '@/components/IconButton/IconButton';
 import { SegmentedTabs } from '@/components/SegmentedTabs/SegmentedTabs';
 import { useTabSwipe } from '@/components/SegmentedTabs/useTabSwipe';
 import { Button } from '@/components/ui/button';
 import { signedInUserId, useTaskTimeline } from '@/lib/collections';
 import { useHasCommentDraft } from '@/lib/commentDrafts';
-import { addComment, deleteComment, editComment } from '@/lib/comments';
+import { addComment } from '@/lib/comments';
 import { haptics } from '@/lib/haptics';
 import { getServerUrl } from '@/lib/serverUrl';
 import { usePersistentState } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 import { CommentComposer } from './CommentComposer';
-import { entrySentences, fullTime, type HistoryContext, shortTime } from './history';
+import { CommentList, CommentPrompt } from './Comments';
+import { entrySentences, type HistoryContext, shortTime } from './history';
+import { author, fullTime } from './timelineParts';
 
-const author = (id: string | null) =>
-  id !== null && id === signedInUserId ? 'You' : id ? 'Another member' : 'Deleted member';
 /** When the server received it, which is the order the history is in. */
 function Time({ at }: { at: string }) {
   return (
@@ -64,98 +66,6 @@ export function focusLinks() {
 
 // Rows render only when their own data changes: switching tabs must stay cheap, or the
 // render holds up the tab indicator's spring on a phone.
-const CommentRow = memo(function CommentRow({
-  comment,
-  pending,
-}: {
-  comment: Comment;
-  pending: boolean;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const own = comment.userId !== null && comment.userId === signedInUserId;
-  return (
-    <article aria-label={`${author(comment.userId)} commented`} className="py-1.5">
-      {editing ? (
-        <CommentComposer
-          initialContent={comment.body}
-          onSave={(body) => {
-            editComment(comment.id, body);
-            haptics.success();
-            setEditing(false);
-          }}
-          onCancel={() => setEditing(false)}
-          className="mt-0"
-        />
-      ) : (
-        <div className="rounded-2xl bg-foreground/[0.045] px-3.5 pt-1.5 pb-3">
-          <div className="flex min-h-8 items-center gap-2 text-muted-foreground text-xs">
-            <span className="font-medium text-foreground">{author(comment.userId)}</span>
-            {comment.viaTokenName && <span className="truncate">via {comment.viaTokenName}</span>}
-            {pending ? <span>Pending sync</span> : <Time at={comment.createdAt!} />}
-            {comment.editedAt && <span>· Edited</span>}
-            {own && !deleting && (
-              <span className="-mr-2 ml-auto flex">
-                <IconButton
-                  label="Edit comment"
-                  className="text-muted-foreground [&_svg]:size-3.5"
-                  onClick={() => setEditing(true)}
-                >
-                  <Pencil />
-                </IconButton>
-                <IconButton
-                  label="Delete comment"
-                  className="text-muted-foreground [&_svg]:size-3.5"
-                  onClick={() => setDeleting(true)}
-                >
-                  <Trash2 />
-                </IconButton>
-              </span>
-            )}
-          </div>
-          <div className="comment-body">
-            <LazyDescriptionEditor
-              key={JSON.stringify(comment.body)}
-              initialContent={comment.body}
-            />
-          </div>
-          {deleting && (
-            <div className="mt-2 flex flex-wrap items-center justify-end gap-1 border-border/60 border-t pt-2">
-              <p className="min-h-8 basis-full content-center text-muted-foreground text-xs">
-                Delete this comment?
-              </p>
-              <Button variant="ghost" size="sm" onClick={() => setDeleting(false)}>
-                Keep comment
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-destructive hover:text-destructive"
-                onClick={() => {
-                  try {
-                    deleteComment(comment.id);
-                    haptics.warning();
-                  } catch {
-                    setError('Could not delete this comment. Try again.');
-                  }
-                }}
-              >
-                Delete comment
-              </Button>
-            </div>
-          )}
-          {error && (
-            <p role="alert" className="mt-1 text-destructive text-sm">
-              {error}
-            </p>
-          )}
-        </div>
-      )}
-    </article>
-  );
-});
-
 const HistoryRow = memo(function HistoryRow({
   entry,
   context,
@@ -206,6 +116,89 @@ const HistoryRow = memo(function HistoryRow({
     </div>
   );
 });
+
+/** Room left above the tabs on a desktop pane, which has no toolbar floating over it. */
+const REVEAL_MARGIN = 16;
+/** Longest a reveal waits for the panel to show, and to finish opening (ms). */
+const REVEAL_WITHIN = 1500;
+const REVEAL_FOR = 3000;
+const noop = () => {};
+
+/**
+ * Scrolls the task's scroller down to show a panel being turned to, in step with the panel
+ * opening: to the end when the whole panel fits below the tabs, or else until the tabs reach
+ * the top of the view, below the toolbars floating over it on a phone. It only moves down,
+ * and leaves a panel that will fit in view alone. A scroll of the user's own cancels it.
+ *
+ * Called before the panel changes, so it knows the height the panel opens from. Each frame,
+ * after motion has drawn the panel's height, the scroll covers as much of its way as the
+ * height has of its own, so the two arrive together and the scroll is never cut short by an
+ * end that has not opened yet. Following that end does not bounce off it (`scrollBounce`).
+ */
+function revealPanel(section: HTMLElement, panelId: string, instant: boolean) {
+  const scroller = section.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
+  const box = section.querySelector<HTMLElement>('[data-collapse]');
+  const content = box?.firstElementChild;
+  if (!scroller || !box || !(content instanceof HTMLElement)) return noop;
+  const tabs = section.querySelector<HTMLElement>('[role="tablist"]') ?? section;
+  const style = getComputedStyle(scroller);
+  // A phone's scroll padding keeps focus clear of its floating toolbars and dock.
+  const above = Math.max(Number.parseFloat(style.scrollPaddingTop) || 0, REVEAL_MARGIN);
+  const below = Number.parseFloat(style.scrollPaddingBottom) || 0;
+  const from = scroller.scrollTop;
+  const fromHeight = box.hidden ? 0 : box.getBoundingClientRect().height;
+  const started = performance.now();
+  let checked = false;
+  const stop = () => {
+    cancelFrame(step);
+    scroller.removeEventListener('wheel', stop);
+    scroller.removeEventListener('touchstart', stop);
+  };
+  function step() {
+    const panel = document.getElementById(panelId);
+    const elapsed = performance.now() - started;
+    if (!scroller || !box || !(content instanceof HTMLElement)) return;
+    if (!panel || panel.hidden) {
+      if (elapsed > REVEAL_WITHIN) stop();
+      return;
+    }
+    const settled = box.getAttribute('data-collapse') === 'open';
+    const view = scroller.getBoundingClientRect();
+    const boxRect = box.getBoundingClientRect();
+    const height = boxRect.height;
+    // The panel's own height, laid out in full while the box around it opens.
+    const full = content.offsetHeight;
+    const scrollTop = scroller.scrollTop;
+    const end = scroller.scrollHeight - height + full - scroller.clientHeight;
+    const tabsAt = tabs.getBoundingClientRect().top - view.top + scrollTop;
+    const goal = Math.min(tabsAt - above, end);
+    if (!checked) {
+      checked = true;
+      const panelEnd = boxRect.top - view.top + scrollTop + full;
+      if (panelEnd <= from + scroller.clientHeight - below || goal <= from + 1) {
+        stop();
+        return;
+      }
+      // Nothing to keep step with: the new panel is as tall as the one it replaces.
+      if (!settled && Math.abs(full - fromHeight) < 1) {
+        stop();
+        scroller.scrollTo({ top: goal, behavior: instant ? 'instant' : 'smooth' });
+        return;
+      }
+    }
+    if (settled || elapsed > REVEAL_FOR) {
+      stop();
+      scroller.scrollTop = goal;
+      return;
+    }
+    const progress = Math.min(Math.max((height - fromHeight) / (full - fromHeight), 0), 1);
+    scroller.scrollTop = Math.max(from + (goal - from) * progress, scrollTop);
+  }
+  frame.postRender(step, true);
+  scroller.addEventListener('wheel', stop, { passive: true });
+  scroller.addEventListener('touchstart', stop, { passive: true });
+  return stop;
+}
 
 export function TaskRefusalNotice({ taskId }: { taskId: string }) {
   const { timeline } = useTaskTimeline(taskId);
@@ -296,6 +289,23 @@ export function TaskTimeline({
   );
   if ((stored === 'comments' || stored === 'history') && stored !== lastBase) setLastBase(stored);
   const showLinks = links?.inTabs ?? false;
+  const reducedMotion = useReducedMotion();
+  const ids = useId();
+  const section = useRef<HTMLElement | null>(null);
+  const stopReveal = useRef<(() => void) | null>(null);
+  useEffect(() => () => stopReveal.current?.(), []);
+  // A tab turned to by hand (or a link just made) brings its panel into view.
+  const turnTo = useCallback(
+    (next: (typeof allPanels)[number] | null) => {
+      stopReveal.current?.();
+      stopReveal.current = null;
+      // Measured before the change, from the panel as it stands.
+      if (next !== null && section.current)
+        stopReveal.current = revealPanel(section.current, `${ids}-${next}`, reducedMotion === true);
+      setTab(next ?? 'none');
+    },
+    [setTab, ids, reducedMotion],
+  );
   const tab = stored === 'none' ? null : !showLinks && stored === 'links' ? lastBase : stored;
   // The panel showing, or the one on its way out (and back in) while all are hidden.
   const [panel, setPanel] = useState(tab ?? 'comments');
@@ -311,10 +321,17 @@ export function TaskTimeline({
     value: tab,
     shown: tab === null ? null : shown,
     values: showLinks ? allPanels : basePanels,
-    onValueChange: setTab,
+    onValueChange: turnTo,
   });
+  const swipeRef = swipe.ref;
+  const sectionRef = useCallback(
+    (element: HTMLElement | null) => {
+      section.current = element;
+      swipeRef(element);
+    },
+    [swipeRef],
+  );
   const [focusing, setFocusing] = useState<string | null>(null);
-  const ids = useId();
   useEffect(() => {
     const onFocus = (event: Event) => {
       if (!(event instanceof CustomEvent) || typeof event.detail !== 'string') return;
@@ -326,10 +343,10 @@ export function TaskTimeline({
   }, [setTab]);
   useEffect(() => {
     if (!showLinks) return;
-    const onFocusLinks = () => setTab('links');
+    const onFocusLinks = () => turnTo('links');
     window.addEventListener(FOCUS_LINKS_EVENT, onFocusLinks);
     return () => window.removeEventListener(FOCUS_LINKS_EVENT, onFocusLinks);
-  }, [showLinks, setTab]);
+  }, [showLinks, turnTo]);
   useEffect(() => {
     if (!focusing || shown !== 'history' || !laidOut) return;
     const element = document.getElementById(`history-${focusing}`);
@@ -391,13 +408,13 @@ export function TaskTimeline({
       aria-label="Task history"
       data-task-timeline=""
       className="mt-8 touch-pan-y"
-      ref={swipe.ref}
+      ref={sectionRef}
       {...swipe.handlers}
     >
       <SegmentedTabs
         label={showLinks ? 'Comments, history and links' : 'Comments and history'}
         value={tab}
-        onValueChange={(next) => setTab(next ?? 'none')}
+        onValueChange={turnTo}
         collapsible
         drag={swipe.drag}
         options={tabOptions}
@@ -413,38 +430,25 @@ export function TaskTimeline({
             className="pt-2"
           >
             {!comments.length && !composing && empty('No comments yet.')}
-            <ol>
-              {comments.map((item) => (
-                <li
-                  key={item.id}
-                  id={`history-${item.id}`}
-                  tabIndex={-1}
-                  className="scroll-m-6 rounded-2xl outline-none [overflow-wrap:anywhere] focus:ring-2 focus:ring-ring/60"
-                >
-                  <CommentRow comment={item.comment} pending={item.pending} />
-                </li>
-              ))}
-            </ol>
-            {composing ? (
-              <CommentComposer
-                key={task.id}
-                draftFor={task.id}
-                onSave={(body) => {
-                  addComment(task.id, body);
-                  haptics.success();
-                  setComposingFor(null);
-                }}
-                onCancel={() => setComposingFor(null)}
-              />
-            ) : (
-              <button
-                type="button"
-                className="mt-2 flex min-h-12 w-full items-center rounded-2xl bg-foreground/[0.045] px-3.5 text-left text-muted-foreground text-sm outline-none transition-colors hover:bg-foreground/[0.07] focus-visible:ring-[3px] focus-visible:ring-ring/60"
-                onClick={() => setComposingFor(task.id)}
-              >
-                {hasDraft ? 'Resume comment draft' : 'Write a comment…'}
-              </button>
-            )}
+            <CommentList comments={comments} loading={isLoading} />
+            <CommentPrompt
+              composing={composing}
+              hasDraft={hasDraft}
+              onCompose={() => setComposingFor(task.id)}
+              composer={
+                <CommentComposer
+                  key={task.id}
+                  bare
+                  draftFor={task.id}
+                  onSave={(body) => {
+                    addComment(task.id, body);
+                    haptics.success();
+                    setComposingFor(null);
+                  }}
+                  onCancel={() => setComposingFor(null)}
+                />
+              }
+            />
           </div>
           <div
             role="tabpanel"

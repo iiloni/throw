@@ -1,6 +1,13 @@
 import type { ActivityChange, ActivityEntry } from '@throw/shared';
 import { describe, expect, it } from 'vitest';
-import { changeSentence, entrySentences, hasCommentText, shortTime } from './history';
+import {
+  changeSentence,
+  entrySentences,
+  hasCommentText,
+  relativeTime,
+  relativeTimeChange,
+  shortTime,
+} from './history';
 
 const context = {
   priorityNames: ['Urgent', '', '', '', 'Someday'],
@@ -187,5 +194,26 @@ describe('shortTime', () => {
   it('leaves the year out within this year, and keeps it before', () => {
     expect(shortTime(at(new Date(2026, 2, 3, 9, 5)), now)).not.toMatch(/2026/);
     expect(shortTime(at(new Date(2025, 2, 3, 9, 5)), now)).toMatch(/2025/);
+  });
+});
+
+describe('relativeTime', () => {
+  const now = new Date(2026, 10, 19, 15, 0);
+  const ago = (ms: number) => new Date(now.getTime() - ms).toISOString();
+  it('counts minutes and hours for the last few hours', () => {
+    expect(relativeTime(ago(20_000), now)).toBe('Just now');
+    expect(relativeTime(ago(5 * 60_000 + 30_000), now)).toMatch(/5/);
+    expect(relativeTime(ago(2 * 3600_000 + 60_000), now)).toMatch(/2/);
+  });
+  it('gives the time itself after that, or for a time ahead of this clock', () => {
+    const earlier = ago(7 * 3600_000);
+    expect(relativeTime(earlier, now)).toBe(shortTime(earlier, now));
+    const ahead = ago(-5 * 60_000);
+    expect(relativeTime(ahead, now)).toBe(shortTime(ahead, now));
+  });
+  it('says when it next changes', () => {
+    expect(relativeTimeChange(ago(90_000), now)).toBe(30_000);
+    expect(relativeTimeChange(ago(3600_000 + 60_000), now)).toBe(3600_000 - 60_000);
+    expect(relativeTimeChange(ago(7 * 3600_000), now)).toBeNull();
   });
 });

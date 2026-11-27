@@ -10,6 +10,8 @@ import { useResolvedTheme } from '@/lib/theme';
 import { CodeLanguagePicker } from './CodeLanguagePicker';
 import { codeBlock, syntaxHighlighting } from './codeBlock';
 import { pasteCode } from './codePaste';
+import { DescriptionSideMenuController } from './DescriptionSideMenu';
+import { DescriptionSlashMenu } from './DescriptionSlashMenu';
 import {
   type EditorControls,
   type FormattingState,
@@ -39,9 +41,13 @@ type Editor = BlockNoteEditor<
 >;
 
 // A finger formats from the dock's formatting bar, as in Catch; BlockNote's floating toolbar
-// suits a mouse.
+// and its drag handle, which moves blocks by HTML drag and drop, suit a mouse.
 const coarsePointer =
   typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+
+// The pane scrolls inside a clipped viewport no wider than its card, which cut off the
+// formatting toolbar and the block handle's menu. BlockNote themes the root it portals into.
+const portalElements = typeof document === 'undefined' ? undefined : { default: document.body };
 
 /** Content is read on mount; the owner changes the key to accept a remote revision. */
 export function DescriptionEditor({
@@ -51,6 +57,7 @@ export function DescriptionEditor({
   placeholder = 'Describe the work…',
   autoFocus = false,
   scrollClearance = 0,
+  sideMenu = true,
   onControls,
 }: {
   initialContent: Description;
@@ -59,6 +66,8 @@ export function DescriptionEditor({
   autoFocus?: boolean;
   /** Keep actions beneath an editor clear of the dock while typing. */
   scrollClearance?: number;
+  /** The block handle beside each block, which a comment's card has no room for. */
+  sideMenu?: boolean;
   onChange?: (document: Description) => void;
   /** Hands the owner this editor's controls while it is mounted, for its undo and redo. */
   onControls?: (controls: EditorControls | null) => void;
@@ -131,7 +140,8 @@ export function DescriptionEditor({
           ) || 0;
         const view = editor.prosemirrorView;
         const area = view.dom.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
-        if (!area) return;
+        // Something on the page is already scrolling itself into view around the editor.
+        if (!area || area.dataset.revealing !== undefined) return;
         const style = getComputedStyle(area);
         const covered = Number.parseFloat(style.scrollPaddingBottom) || 0;
         const coveredTop = Number.parseFloat(style.scrollPaddingTop) || 0;
@@ -165,10 +175,16 @@ export function DescriptionEditor({
         theme={theme}
         filePanel={false}
         formattingToolbar={!coarsePointer}
+        sideMenu={false}
+        slashMenu={false}
+        portalElements={portalElements}
         onChange={() => onChange?.(editor.document as Description)}
         onClick={openCodeLanguage}
         className="task-editor"
-      />
+      >
+        <DescriptionSlashMenu />
+        {sideMenu && !coarsePointer && <DescriptionSideMenuController />}
+      </BlockNoteView>
       {editable && languageBlock && (
         <CodeLanguagePicker
           key={languageBlock.id}

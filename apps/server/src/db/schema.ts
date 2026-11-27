@@ -4,11 +4,14 @@ import type {
   Color,
   CommentBody,
   Description,
+  GithubAuthMode,
+  GithubDeliveryStatus,
   Priority,
   PriorityNames,
   Size,
   StatusCategory,
   TagIconName,
+  TaskGithubLink,
   TaskRelationKind,
   WebhookPayload,
   WorkspaceRole,
@@ -569,5 +572,126 @@ export const webhookDeliveries = pgTable(
       .where(sql`${table.status} IN ('pending', 'held') AND ${table.attempts} = 0`),
     index().on(table.webhookId),
     index().on(table.createdAt),
+  ],
+);
+
+/**
+ * A project's connection to one GitHub repository (ADR 0017). Server-only like webhooks:
+ * never synced, excluded from backups and cleared by a restore, because it holds the inbound
+ * webhook secret and an optional access token, both encrypted under the server's auth secret.
+ * It belongs to the project, so any member of its workspace manages it (ADR 0004).
+ */
+export const githubConnections = pgTable(
+  'github_connections',
+  {
+    id: uuid().primaryKey(),
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    projectId: uuid()
+      .notNull()
+      .unique()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    /** `owner/repo` as it was entered; deliveries compare it without regard to case. */
+    repository: text().notNull(),
+    authMode: text().$type<GithubAuthMode>().notNull().default('webhook'),
+    enabled: boolean().notNull().default(true),
+    /** The inbound URL's last segment. It finds the connection; the signature proves the sender. */
+    webhookToken: text().notNull().unique(),
+    encryptedWebhookSecret: text().notNull(),
+    encryptedToken: text(),
+    createdBy: text().references(() => user.id, { onDelete: 'set null' }),
+    lastDeliveryAt: timestamp({ withTimezone: true }),
+    lastDeliveryId: text(),
+    lastDeliveryEvent: text(),
+    lastDeliveryStatus: text().$type<GithubDeliveryStatus>(),
+    lastDeliveryDetail: text(),
+    // Status rules (ADR 0017): the status each event moves linked tasks to, or null when off.
+    // Routes check a status is the project's own; deleting one turns its rules off.
+    prDraftOpenedStatusId: uuid().references(() => statuses.id, { onDelete: 'set null' }),
+    prReadyForReviewStatusId: uuid().references(() => statuses.id, { onDelete: 'set null' }),
+    prMergedStatusId: uuid().references(() => statuses.id, { onDelete: 'set null' }),
+    prClosedStatusId: uuid().references(() => statuses.id, { onDelete: 'set null' }),
+    issueClosedStatusId: uuid().references(() => statuses.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    index().on(table.workspaceId),
+    check('github_connections_auth_mode', sql`${table.authMode} IN ('webhook', 'token')`),
+    check(
+      'github_connections_token_mode',
+      sql`(${table.authMode} = 'token') = (${table.encryptedToken} IS NOT NULL)`,
+    ),
+  ],
+);
+
+/**
+ * The `X-GitHub-Delivery` IDs a connection has accepted, so a redelivery is answered without
+ * being handled twice. Recorded in the transaction that handles the delivery, and kept for a
+ * week: GitHub redelivers on request for three days.
+ */
+export const githubDeliveries = pgTable(
+  'github_deliveries',
+  {
+    connectionId: uuid()
+      .notNull()
+      .references(() => githubConnections.id, { onDelete: 'cascade' }),
+    deliveryId: text().notNull(),
+    signalKey: text(),
+    signal: jsonb(),
+    event: text().notNull(),
+    receivedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.connectionId, table.deliveryId] }),
+    index().on(table.connectionId, table.signalKey).where(sql`${table.signalKey} IS NOT NULL`),
+    index().on(table.receivedAt),
+  ],
+);
+
+export const taskGithubLinks = pgTable(
+  'task_github_links',
+  {
+    id: uuid().primaryKey(),
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    projectId: uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    taskId: uuid()
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    repo: text().notNull(),
+    kind: text().$type<TaskGithubLink['kind']>().notNull(),
+    number: integer().notNull(),
+    url: text().notNull(),
+    title: text().notNull(),
+    state: text().$type<TaskGithubLink['state']>().notNull(),
+    reviewDecision: text().$type<TaskGithubLink['reviewDecision']>(),
+    checksSummary: jsonb().$type<TaskGithubLink['checksSummary']>(),
+    branch: text(),
+    mergeCommitSha: text(),
+    mergedAt: timestamp({ withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    // Delivery ordering and aggregation data stay off the shape.
+    headSha: text(),
+    sourceUpdatedAt: timestamp({ withTimezone: true }),
+    runs: jsonb().$type<
+      Record<
+        string,
+        { id?: number; state: 'passing' | 'failing' | 'pending' | 'neutral'; at: string }
+      >
+    >(),
+    reviews:
+      jsonb().$type<Record<string, { state: TaskGithubLink['reviewDecision']; id: number }>>(),
+  },
+  (t) => [
+    index().on(t.workspaceId),
+    index().on(t.projectId, t.repo, t.kind, t.number),
+    index('task_github_links_head').on(t.projectId, t.repo, t.kind, t.headSha, t.branch),
+    uniqueIndex('task_github_links_item').on(t.taskId, t.repo, t.kind, t.number),
   ],
 );

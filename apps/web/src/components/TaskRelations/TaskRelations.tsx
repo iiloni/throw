@@ -23,6 +23,7 @@ import { Highlighted } from '@/components/CommandPalette/SearchContent';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { focusLinks } from '@/components/TaskDetails/TaskTimeline';
+import { ScrollBox } from '@/components/ui/scroll-area';
 import { useProjects, useStatuses, useTaskRelations, useTasks } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
@@ -359,12 +360,10 @@ export function RelationPicker({
             </IconButton>
           )}
         </div>
-        <div
-          ref={list}
-          id={`${ids}-tasks`}
-          role="listbox"
-          aria-label="Tasks to link"
-          className="flex max-h-[min(15rem,35dvh)] min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain [scrollbar-width:thin]"
+        <ScrollBox
+          viewportRef={list}
+          viewportProps={{ id: `${ids}-tasks`, role: 'listbox', 'aria-label': 'Tasks to link' }}
+          className="max-h-[min(15rem,35dvh)] flex-1 [--scrollbar-inset:0.25rem]"
         >
           {/* Few suggestions or matches sit right above the controls; more scroll from the best down. */}
           <div className="mt-auto flex flex-col gap-0.5">
@@ -390,7 +389,7 @@ export function RelationPicker({
               </p>
             )}
           </div>
-        </div>
+        </ScrollBox>
       </section>
       {error && (
         <p role="alert" className="shrink-0 px-1 text-destructive text-sm">
