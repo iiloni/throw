@@ -82,6 +82,21 @@ describe('watchScrollBounce', () => {
     expect(pageBounceY.isAnimating()).toBe(false);
   });
 
+  it('follows an end that moves as content opens below without bouncing', () => {
+    let height = PAGE_HEIGHT;
+    vi.spyOn(document.documentElement, 'scrollHeight', 'get').mockImplementation(() => height);
+    // Each step the content grows and the page keeps pace with its end.
+    for (const time of [0, 16, 32, 48, 64]) {
+      height += 30;
+      scrollThrough([time, height - VIEWPORT]);
+    }
+    expect(pageBounceY.isAnimating()).toBe(false);
+    // Once the end holds still, a fling into it bounces again.
+    scrollThrough([1000, height - VIEWPORT - 90], [1016, height - VIEWPORT - 60]);
+    scrollThrough([1032, height - VIEWPORT - 30], [1048, height - VIEWPORT]);
+    expect(pageBounceY.isAnimating()).toBe(true);
+  });
+
   it('waits for the finger to lift', () => {
     const touch = (type: string, touches: unknown[]) => {
       const event = new Event(type);
