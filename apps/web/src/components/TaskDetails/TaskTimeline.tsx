@@ -1,7 +1,17 @@
 import { type ActivityEntry, descriptionSchema, type Project, type Task } from '@throw/shared';
 import { History, Link2, MessageCircle } from 'lucide-react';
-import { motion } from 'motion/react';
-import { memo, type ReactNode, useDeferredValue, useEffect, useId, useMemo, useState } from 'react';
+import { cancelFrame, frame, motion, useReducedMotion } from 'motion/react';
+import {
+  memo,
+  type ReactNode,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { z } from 'zod';
 import { Collapse } from '@/components/Collapse/Collapse';
 import { Hint } from '@/components/Hint/Hint';
@@ -107,6 +117,89 @@ const HistoryRow = memo(function HistoryRow({
   );
 });
 
+/** Room left above the tabs on a desktop pane, which has no toolbar floating over it. */
+const REVEAL_MARGIN = 16;
+/** Longest a reveal waits for the panel to show, and to finish opening (ms). */
+const REVEAL_WITHIN = 1500;
+const REVEAL_FOR = 3000;
+const noop = () => {};
+
+/**
+ * Scrolls the task's scroller down to show a panel being turned to, in step with the panel
+ * opening: to the end when the whole panel fits below the tabs, or else until the tabs reach
+ * the top of the view, below the toolbars floating over it on a phone. It only moves down,
+ * and leaves a panel that will fit in view alone. A scroll of the user's own cancels it.
+ *
+ * Called before the panel changes, so it knows the height the panel opens from. Each frame,
+ * after motion has drawn the panel's height, the scroll covers as much of its way as the
+ * height has of its own, so the two arrive together and the scroll is never cut short by an
+ * end that has not opened yet. Following that end does not bounce off it (`scrollBounce`).
+ */
+function revealPanel(section: HTMLElement, panelId: string, instant: boolean) {
+  const scroller = section.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
+  const box = section.querySelector<HTMLElement>('[data-collapse]');
+  const content = box?.firstElementChild;
+  if (!scroller || !box || !(content instanceof HTMLElement)) return noop;
+  const tabs = section.querySelector<HTMLElement>('[role="tablist"]') ?? section;
+  const style = getComputedStyle(scroller);
+  // A phone's scroll padding keeps focus clear of its floating toolbars and dock.
+  const above = Math.max(Number.parseFloat(style.scrollPaddingTop) || 0, REVEAL_MARGIN);
+  const below = Number.parseFloat(style.scrollPaddingBottom) || 0;
+  const from = scroller.scrollTop;
+  const fromHeight = box.hidden ? 0 : box.getBoundingClientRect().height;
+  const started = performance.now();
+  let checked = false;
+  const stop = () => {
+    cancelFrame(step);
+    scroller.removeEventListener('wheel', stop);
+    scroller.removeEventListener('touchstart', stop);
+  };
+  function step() {
+    const panel = document.getElementById(panelId);
+    const elapsed = performance.now() - started;
+    if (!scroller || !box || !(content instanceof HTMLElement)) return;
+    if (!panel || panel.hidden) {
+      if (elapsed > REVEAL_WITHIN) stop();
+      return;
+    }
+    const settled = box.getAttribute('data-collapse') === 'open';
+    const view = scroller.getBoundingClientRect();
+    const boxRect = box.getBoundingClientRect();
+    const height = boxRect.height;
+    // The panel's own height, laid out in full while the box around it opens.
+    const full = content.offsetHeight;
+    const scrollTop = scroller.scrollTop;
+    const end = scroller.scrollHeight - height + full - scroller.clientHeight;
+    const tabsAt = tabs.getBoundingClientRect().top - view.top + scrollTop;
+    const goal = Math.min(tabsAt - above, end);
+    if (!checked) {
+      checked = true;
+      const panelEnd = boxRect.top - view.top + scrollTop + full;
+      if (panelEnd <= from + scroller.clientHeight - below || goal <= from + 1) {
+        stop();
+        return;
+      }
+      // Nothing to keep step with: the new panel is as tall as the one it replaces.
+      if (!settled && Math.abs(full - fromHeight) < 1) {
+        stop();
+        scroller.scrollTo({ top: goal, behavior: instant ? 'instant' : 'smooth' });
+        return;
+      }
+    }
+    if (settled || elapsed > REVEAL_FOR) {
+      stop();
+      scroller.scrollTop = goal;
+      return;
+    }
+    const progress = Math.min(Math.max((height - fromHeight) / (full - fromHeight), 0), 1);
+    scroller.scrollTop = Math.max(from + (goal - from) * progress, scrollTop);
+  }
+  frame.postRender(step, true);
+  scroller.addEventListener('wheel', stop, { passive: true });
+  scroller.addEventListener('touchstart', stop, { passive: true });
+  return stop;
+}
+
 export function TaskRefusalNotice({ taskId }: { taskId: string }) {
   const { timeline } = useTaskTimeline(taskId);
   const storageKey = `throw-refusals:${getServerUrl()}:${signedInUserId}:${taskId}`;
@@ -196,6 +289,23 @@ export function TaskTimeline({
   );
   if ((stored === 'comments' || stored === 'history') && stored !== lastBase) setLastBase(stored);
   const showLinks = links?.inTabs ?? false;
+  const reducedMotion = useReducedMotion();
+  const ids = useId();
+  const section = useRef<HTMLElement | null>(null);
+  const stopReveal = useRef<(() => void) | null>(null);
+  useEffect(() => () => stopReveal.current?.(), []);
+  // A tab turned to by hand (or a link just made) brings its panel into view.
+  const turnTo = useCallback(
+    (next: (typeof allPanels)[number] | null) => {
+      stopReveal.current?.();
+      stopReveal.current = null;
+      // Measured before the change, from the panel as it stands.
+      if (next !== null && section.current)
+        stopReveal.current = revealPanel(section.current, `${ids}-${next}`, reducedMotion === true);
+      setTab(next ?? 'none');
+    },
+    [setTab, ids, reducedMotion],
+  );
   const tab = stored === 'none' ? null : !showLinks && stored === 'links' ? lastBase : stored;
   // The panel showing, or the one on its way out (and back in) while all are hidden.
   const [panel, setPanel] = useState(tab ?? 'comments');
@@ -211,10 +321,17 @@ export function TaskTimeline({
     value: tab,
     shown: tab === null ? null : shown,
     values: showLinks ? allPanels : basePanels,
-    onValueChange: setTab,
+    onValueChange: turnTo,
   });
+  const swipeRef = swipe.ref;
+  const sectionRef = useCallback(
+    (element: HTMLElement | null) => {
+      section.current = element;
+      swipeRef(element);
+    },
+    [swipeRef],
+  );
   const [focusing, setFocusing] = useState<string | null>(null);
-  const ids = useId();
   useEffect(() => {
     const onFocus = (event: Event) => {
       if (!(event instanceof CustomEvent) || typeof event.detail !== 'string') return;
@@ -226,10 +343,10 @@ export function TaskTimeline({
   }, [setTab]);
   useEffect(() => {
     if (!showLinks) return;
-    const onFocusLinks = () => setTab('links');
+    const onFocusLinks = () => turnTo('links');
     window.addEventListener(FOCUS_LINKS_EVENT, onFocusLinks);
     return () => window.removeEventListener(FOCUS_LINKS_EVENT, onFocusLinks);
-  }, [showLinks, setTab]);
+  }, [showLinks, turnTo]);
   useEffect(() => {
     if (!focusing || shown !== 'history' || !laidOut) return;
     const element = document.getElementById(`history-${focusing}`);
@@ -291,13 +408,13 @@ export function TaskTimeline({
       aria-label="Task history"
       data-task-timeline=""
       className="mt-8 touch-pan-y"
-      ref={swipe.ref}
+      ref={sectionRef}
       {...swipe.handlers}
     >
       <SegmentedTabs
         label={showLinks ? 'Comments, history and links' : 'Comments and history'}
         value={tab}
-        onValueChange={(next) => setTab(next ?? 'none')}
+        onValueChange={turnTo}
         collapsible
         drag={swipe.drag}
         options={tabOptions}
