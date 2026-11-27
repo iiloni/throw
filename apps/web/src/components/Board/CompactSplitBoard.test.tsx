@@ -82,15 +82,13 @@ describe('CompactSplitBoard', () => {
     const state = { ...handoff(), column: active[1]!.id, view: 'closed' as const };
     render(<CompactSplitBoard handoff={state} />);
     expect(tab(/Closed/)).toHaveAttribute('aria-selected', 'true');
+    // The columns are first drawn when the board's view is first shown, on that column.
+    expect(screen.queryByRole('navigation', { name: 'Columns', hidden: true })).toBeNull();
+    fireEvent.click(tab(/Board/));
     expect(
-      // Behind the closed view, so hidden.
-      within(screen.getByRole('navigation', { name: 'Columns', hidden: true })).getByRole(
-        'button',
-        {
-          current: 'page',
-          hidden: true,
-        },
-      ),
+      within(screen.getByRole('navigation', { name: 'Columns' })).getByRole('button', {
+        current: 'page',
+      }),
     ).toHaveAccessibleName(active[1]!.name);
   });
 

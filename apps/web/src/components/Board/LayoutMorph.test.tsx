@@ -1,6 +1,6 @@
 import { render } from '@testing-library/react';
 import { useRef } from 'react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LayoutMorph } from './LayoutMorph';
 
 function Half({ compact, reduced }: { compact: boolean; reduced: boolean }) {
@@ -26,7 +26,13 @@ function Half({ compact, reduced }: { compact: boolean; reduced: boolean }) {
 }
 
 describe('LayoutMorph', () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it('draws the layout going in a layer of still copies as the layout changes', () => {
+    // jsdom lays nothing out: every element stands in the same box, so the card is on screen.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(0, 0, 200, 100),
+    );
     const { container, rerender } = render(<Half compact={false} reduced={false} />);
     expect(container.querySelector('[data-layout-morph]')).toBeNull();
     rerender(<Half compact reduced={false} />);

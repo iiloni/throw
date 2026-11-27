@@ -55,10 +55,13 @@ scrolls down and back as it scrolls up (`useDockScroll`), and a held card's stat
 its face. `useBoardHandoff`
 carries the column in view and list scrolls between the two layouts, and `LayoutMorph` morphs
 from one to the other: copies of the cards on screen fly to their new places, rails and the dock
-slide off or in at their edges, and only the surfaces behind the cards fade. Each layout takes its
+slide off or in at their edges, and only the surfaces behind the cards fade; the new headers wait
+for the old ones to go, and each landed card fades from its copy into itself. Each layout takes its
 resting width at once, clipped by the half while the pane slides (`useWidening` for the full one),
-and the pane's slide steps by painted frames, so mounting a layout costs no motion. The compact
-layout opens on the open task's own view and column.
+and the board stops following the row's width meanwhile (`useWidth`'s `hold`). The pane's slide
+steps by painted frames, so mounting a layout costs no motion, and the pane holds BlockNote back
+until it has opened, as the phone's task screen does. The compact layout opens on the open task's
+own view and column, and draws each other view the first time it is shown.
 Columns that run on under an open desktop pane fade out at the seam (`[data-seam]` in
 `styles.css`, from `ScrollArea`'s `sides` marks and `seamOf`), and columns scrolled out to the
 left fade at the board's start; each fade stands at a sticky rail's edge where one lies over

@@ -426,6 +426,10 @@ export function CompactSplitBoard({
     handoff.view = next;
     setViewState(next);
   };
+  // Each view is first drawn when it is first shown: the board arrives while the task pane
+  // opens, and the closed view's gallery alone can be most of a project's cards.
+  const [drawn, setDrawn] = useState(() => new Set([view]));
+  if (!drawn.has(view)) setDrawn(new Set(drawn).add(view));
   const [column, setColumn] = useState(handoff.column);
   const active = project.statuses.filter((status) => status.category === 'active');
   const dragging = makingWay(held);
@@ -485,11 +489,12 @@ export function CompactSplitBoard({
       role="tabpanel"
       aria-labelledby={`${ids}-${value}-tab`}
       data-view={value}
-      // Hidden rather than unmounted, so a card carried out of a view keeps the touch it began.
+      // Hidden rather than unmounted once drawn, so a card carried out of a view keeps the
+      // touch it began.
       hidden={view !== value}
       className={cn('absolute inset-0 flex-col', view === value ? 'flex' : 'hidden')}
     >
-      {content}
+      {drawn.has(value) && content}
     </div>
   );
 

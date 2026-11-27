@@ -24,12 +24,10 @@ import { getServerUrl } from '@/lib/serverUrl';
 import { usePersistentState } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 import { CommentComposer } from './CommentComposer';
-import { entrySentences, type HistoryContext, shortTime } from './history';
+import { entrySentences, fullTime, type HistoryContext, shortTime } from './history';
 
 const author = (id: string | null) =>
   id !== null && id === signedInUserId ? 'You' : id ? 'Another member' : 'Deleted member';
-const fullTime = (at: string) =>
-  new Date(at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 /** When the server received it, which is the order the history is in. */
 function Time({ at }: { at: string }) {
   return (

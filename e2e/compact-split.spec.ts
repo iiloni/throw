@@ -258,12 +258,14 @@ test.describe('the board beside a task on a narrow desktop', () => {
           return box ? { x: box.x, y: box.y } : null;
         };
         // How much of the card itself shows while its copy carries it: none, or the two draw
-        // over each other.
+        // over each other. Once it lands, the copy fades into the card under it.
         const ghost = () => {
           const layer = document.querySelector('[data-layout-morph]');
           if (
-            ![...(layer?.children ?? [])].some((holder) =>
-              holder.textContent?.includes('Review this'),
+            ![...(layer?.children ?? [])].some(
+              (holder) =>
+                holder.textContent?.includes('Review this') &&
+                (holder as HTMLElement).style.opacity === '',
             )
           )
             return 0;

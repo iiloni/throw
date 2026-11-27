@@ -177,15 +177,32 @@ export function entrySentences(entry: ActivityEntry, context: HistoryContext): s
 
 export { hasCommentText } from '@throw/shared';
 
+// Made once: `toLocaleString` builds a formatter on every call, and a long history formats
+// each of its entries as the task opens.
+const formats = new Map<string, Intl.DateTimeFormat>();
+function format(options: Intl.DateTimeFormatOptions) {
+  const key = JSON.stringify(options);
+  let made = formats.get(key);
+  if (!made) {
+    made = new Intl.DateTimeFormat(undefined, options);
+    formats.set(key, made);
+  }
+  return made;
+}
+
+/** A time in full, to the minute. */
+export function fullTime(at: string) {
+  return format({ dateStyle: 'medium', timeStyle: 'short' }).format(new Date(at));
+}
+
 /** As much of the time as tells it apart: today's are clock times, this year's leave out the year. */
 export function shortTime(at: string, now = new Date()) {
   const date = new Date(at);
   if (date.toDateString() === now.toDateString())
-    return date.toLocaleTimeString(undefined, { timeStyle: 'short' });
-  return date.toLocaleString(
-    undefined,
+    return format({ timeStyle: 'short' }).format(date);
+  return format(
     date.getFullYear() === now.getFullYear()
       ? { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }
       : { dateStyle: 'medium' },
-  );
+  ).format(date);
 }
