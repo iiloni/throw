@@ -195,6 +195,14 @@ checkout's stack. Never hard-code container or project names.
 - `./scripts/dev.sh logs app`, `psql`, `shell`, `seed`, `reset -y`: see `./scripts/dev.sh help`.
 - `pnpm format` (host): apply Biome formatting and import sorting.
 
+A fresh demo seed connects the admin’s Throw project to `iiloni/throw`. House move stays
+available for testing connection setup. Existing demo tasks and connection edits survive
+re-seeding. Run `./scripts/dev.sh github-sim pr-ready THR-1` to move its draft PR to review,
+then `checks-pass THR-1`, `review-approve THR-1` and `pr-merge THR-1` with the same command.
+Use `github-sim release --tag v0.2.0` to bind the next release. See `./scripts/dev.sh help`
+for manual connection overrides. On a fresh demo, `./scripts/github-seed-test.sh` verifies
+that a second seed preserves the GitHub fixtures.
+
 Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `userpassword`.
 
 Throw's worktree ports (20080 to 24000) and Compose project names (`throw_*`) do not overlap
