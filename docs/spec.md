@@ -30,6 +30,8 @@ integrations.
 - **Changes to a task's core attributes are user-driven.** A user can initiate work in an
   external agent and authorize it to act in a workspace. Throw records which credential the
   agent used for each change. Throw itself never moves or completes a task on a schedule.
+  The one exception is a project's opt-in GitHub status rules, which the project sets up
+  and which follow verified GitHub events, recorded as GitHub's changes.
 - **Few integrations, all opt-in.** The first is [MCP](decisions/0014-mcp-server.md).
   [Webhooks](decisions/0015-webhooks.md) are its push companion: they tell an agent to look.
   A project can follow a GitHub repository ([ADR 0017](decisions/0017-github-integration.md)).
@@ -80,8 +82,12 @@ integrations.
   tasks. Devices sync link metadata, review decisions and check counts for offline use.
   The task view lists linked pull requests and issues with their state, review and checks,
   and takes a pasted address to link one by hand; a card shows a quiet pull request mark,
-  previewed on hover with a mouse. Status changes on those events and releases build on it
-  ([ADR 0017](decisions/0017-github-integration.md)).
+  previewed on hover with a mouse.
+  A project can opt into status rules: a linked pull request opened, reopened or converted
+  to a draft, made ready for review, merged or closed, or a linked issue closed, moves its
+  tasks to a status the project chose. Each rule is off until set, and the move is recorded as GitHub's. Releases
+  and tag pushes bind merged tasks to shipped versions. MCP can list tasks by release or find
+  merged work awaiting a release ([ADR 0017](decisions/0017-github-integration.md)).
 
 ### Out of scope
 
@@ -94,7 +100,7 @@ integrations.
 | Attachments, images in descriptions | First follow-up after launch. |
 | List view | The board is the only layout. |
 | Filtering by tag across projects | Tags are per project. |
-| Automation inside Throw | Scheduled jobs and rules that change tasks are out of scope. Webhooks only notify. |
+| Automation inside Throw | Scheduled jobs and rules that change tasks are out of scope, except a project's opt-in GitHub status rules, which follow verified GitHub events. Webhooks only notify. |
 | Other integrations, import, export | Out of scope for the first version, beyond MCP, webhooks and GitHub. |
 | Reports (cycle time, burndown) | Later; the activity log makes them possible. |
 | Time tracking | Out of scope until further notice. |
@@ -678,6 +684,21 @@ view), comments and activity.
   keyboard focus or tap and offers language selection, copy and download. Pasting code
   removes its common indentation. The editor tries to detect the language locally for
   unlabelled pasted blocks and when pasting into an empty, unlabelled block.
+- Descriptions and comments reference other tasks of the workspace by identifier, as
+  `#THR-93` in any case (2026-11-26). The reference is stored and exported as that plain text,
+  so Markdown, MCP and older clients read and write it unchanged; the app draws it as a calm
+  link while the device holds a task by that identifier that is not in the trash. Code,
+  link labels and unknown identifiers stay text. A click or tap opens the task as a related
+  one opens: over this one when it is on the board, or on its own project's board. In an
+  editable description a plain press opens it rather than placing the caret; a modified
+  click (Alt, Shift, Ctrl/Cmd) or the keyboard edits its text. On desktop, resting the
+  pointer on a reference, focusing one in a posted comment or moving the caret into one
+  shows a glass card with its status, identifier, project, title, priority, blocked state and
+  tags, read from the synced data. Touch never shows the card. Typing `#` where a reference can start (not
+  inside a word, code or a link) offers the workspace's tasks, the current project's
+  latest open ones first, filtered by identifier or title; picking one writes its
+  `#KEY-N`. A space straight after `#` keeps the heading shortcut, and a query nothing
+  matches, or a finished identifier followed by more text, closes the menu.
 - Unfinished comments and comment edits can be resumed on the same device after closing the
   task or reloading. Cancel discards the draft, and Ctrl/Cmd+Enter posts or saves it.
 - The top toolbars follow Catch: back and the parent/task identifier breadcrumb on the

@@ -1,8 +1,8 @@
 # 0017 — GitHub integration
 
-Status: accepted (2026-11-26) for the connection and inbound webhooks (THR-122), synced links
-(THR-123) and their cards in the app (THR-124). Later parts of the integration amend this
-record as they land.
+Status: accepted (2026-11-26) for the connection and inbound webhooks (THR-122), links
+(THR-123), their cards in the app (THR-124), status rules (THR-125) and release bindings
+(THR-126). Later parts of the integration amend this record as they land.
 
 ## Context
 
@@ -26,7 +26,7 @@ without a public GitHub App registered for each server.
 
 **A project opts in by connecting one repository. GitHub pushes signed webhooks to Throw;
 Throw verifies each one before anything reads it.** A connection is the only way GitHub
-data enters Throw, and a project without one is unchanged.
+webhooks enter Throw. Members can also record releases and correct bindings manually in a disconnected project.
 
 ### The connection
 
@@ -170,16 +170,75 @@ pull request with its review, checks and branch. A touch screen and a card's dra
 mark alone. The boundaries supply links through `TaskPullRequestsContext`; the prototype has
 none.
 
-THR-125's status changes are the first writes Throw makes on its own. They stay opt-in per
-project and per rule, are triggered only by a verified event, and are recorded as the
-integration's; that part amends the spec's automation rule when it lands.
+
+### Status rules
+
+Status rules (THR-125) are the first automatic writes that change a task's own fields: links
+are the task's GitHub data, and a rule moves the task itself. They are opt-in
+per project and per rule, run only on a verified delivery, and are recorded as the
+integration's. A connection holds five rules, each a target status or off (null, the default):
+
+| Rule | Fires when a delivery… |
+| --- | --- |
+| `prDraftOpened` | opens, reopens or converts a linked pull request to a draft (`opened`, `reopened`, `converted_to_draft`). |
+| `prReadyForReview` | opens or reopens a linked pull request ready for review, or takes it out of draft (`ready_for_review`). |
+| `prMerged` | closes the task's last open pull request, when it or another of the task's pull requests merged. |
+| `prClosed` | closes the task's last open pull request, when none of them merged. |
+| `issueClosed` | closes the task's last open linked issue. |
+
+The rules are five nullable columns on `github_connections`, each a foreign key to `statuses`
+with `ON DELETE SET NULL`: deleting a status turns off the rules that named it. `PATCH
+…/projects/:projectId` takes `statusRules`, a partial object where null turns a rule off and
+a rule left out keeps its status. Every target must be a status of the connection's own
+project, which must not be in the trash, or the request is refused with 400; the statuses
+are held (`KEY SHARE`) until the write commits. The connection's metadata returns all five as
+`statusRules`. The rules stay server-only with the connection: a restore clears them with it.
+
+A rule runs inside `handleItem`'s transaction, after the delivery's links are written, for
+each active task the delivery links or refreshes:
+
+- **Only on a change of state.** The delivery's `action` must be one that changes the item's
+  state, the resulting state must be the rule's, and the task's link must have been in
+  another state or have just been made. An `edited` title, a `synchronize` push, labels,
+  reviews and checks never move a task, even when they first link it. Deliveries older than
+  the link (`updated_at` before its `sourceUpdatedAt`) are ignored before any of this, and a
+  second notice of the same state finds nothing changed.
+- **Several pull requests move a task together.** A merge or close moves it only when no
+  other pull request of the task is open or a draft, and counts as merged when any of them
+  merged; so merging one of two leaves the task where it is until the other closes. A new
+  draft does not pull a task back while another of its pull requests is ready for review.
+  Issues follow the same last-one-closes rule among the task's issues. A manual link counts
+  with the state it shows.
+- **As a move on the board.** A task already in the target status, a trashed task or one
+  under a trashed parent is left alone; a target that is no longer the project's is skipped.
+  Entering a closed category stamps `closedAt`, leaving one clears it, and moving between
+  closed statuses keeps it. A top-level task moved to an open lane takes the top of that
+  lane; one moved to a closed lane keeps its position (the closed zone sorts by closing time),
+  and a subtask keeps its place among its siblings.
+- **One record per task and delivery.** The link change and the status change go into one
+  history entry (`viaTokenName` GitHub, no user) and one `task.updated` webhook whose actor is
+  `{ kind: 'token', viaTokenName: 'GitHub', integration: 'github' }`, with `statusTo` and the
+  lane position in its values. Outbound webhooks only notify external receivers; nothing in
+  Throw sends to GitHub, so a rule cannot feed back into a delivery.
+
+Deliveries for one connection already take turns on its row, which the receiver locks
+`NO KEY UPDATE` before handling, so rules choose lane positions one delivery at a time.
+`handleItem` locks the task rows it reads `NO KEY UPDATE` too, in id order, so a rule's move
+and a device's write to the same task take turns; push deliveries, which never move a task,
+keep `SHARE`. A rule re-reads a subtask's parent under `KEY SHARE` and leaves the subtask
+alone if the parent was trashed meanwhile. Deleting a status locks the project, which the
+delivery holds `SHARE` first, so a delete and a delivery also take turns, as do a delete and
+a rules update, which takes the project's `SHARE` before the connection.
+
+Older servers do not return `statusRules`, and the app offers no rules then. An older app
+ignores the field. The protocol stays at 1.
 
 ### API and compatibility
 
 `/api/integrations/github/projects/:projectId` uses the app session and the protocol gate,
 with `Cache-Control: no-store`: `GET` (the connection or `null`), `POST` (connect; 409 when
-connected), `PATCH` (`repository`, `authMode`, `token`, `enabled`; a token implies `token`
-mode and `webhook` mode forgets it), `DELETE`, `POST …/secret` and `POST …/url`. A project
+connected), `PATCH` (`repository`, `authMode`, `token`, `enabled`, `statusRules`; a token
+implies `token` mode and `webhook` mode forgets it), `DELETE`, `POST …/secret` and `POST …/url`. A project
 outside the user's workspaces answers 404. Request and response schemas are in
 `packages/shared/src/github.ts`.
 
@@ -194,3 +253,31 @@ asks.
 - Each project needs its own webhook on GitHub. A GitHub App mode would remove that step.
 - A restore disconnects every project. Reconnecting means a new URL and secret on GitHub.
 - A changed `BETTER_AUTH_SECRET` breaks every connection until its secret is rotated.
+
+### Releases and tags (THR-126)
+
+A release belongs to a project, keyed by repository and case-sensitive tag name.
+A lightweight tag push records a published tag at the repository push time (receipt time
+if absent). The server remembers the last source push time per project, repository and tag,
+including deleted tags. Older pushes are ignored. For tied or missing times, a subsequent
+push advances the tag only if its before SHA matches the observed target. A release for the same tag takes over that row and keeps its ID. Deleting the
+release removes its bindings. If a tag push was observed and that tag still exists, the row
+reverts to a tag at its last observed commit with a null publication date. It remains visible
+but no longer counts as shipped, including after subsequent tag updates. Unpublishing retains the bindings but stops counting them as
+shipped. Published prereleases count as shipped. Disconnect and restore preserve both tables.
+
+On publication Throw binds active tasks whose linked PRs merged in this repo after the
+previous publication and through the new publication time. Tasks already bound to a published
+release in this repo are skipped. In token mode Throw checks candidate merge SHAs against
+the tag using GitHub compare. An unavailable comparison falls back to the time window.
+This is a snapshot of known merges at delivery time. Members can correct historical or
+out-of-order imports manually. Release metadata and bindings sync quietly without task
+history entries or outbound notifications.
+
+Protocol 1 advertises `githubReleases`. The read-only `github-releases` and
+`task-github-releases` shapes use workspace membership and independent persisted collections.
+Under `/api/integrations/github/projects/:projectId/releases`, GET lists releases and POST
+records a manual release. PUT or DELETE at `/:releaseId/tasks/:taskId` binds or unbinds a task
+of that project. Manual records work without a connection. MCP exposes `list_github_releases`,
+`bind_task_release`, `unbind_task_release` and `get_task.githubReleases`. Use `list_tasks`
+with `release` (tag name or UUID) or `unreleased: true` for merged tasks awaiting publication.

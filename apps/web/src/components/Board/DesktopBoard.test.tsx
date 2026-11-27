@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { OpenTaskPane, seamOf } from './DesktopBoard';
+import { OpenTaskPane } from './DesktopBoard';
 import { mockBoards } from './mockData';
 import { board, current, initialBoard, setTaskPaneWidth, update } from './state';
 
@@ -66,22 +66,5 @@ describe('OpenTaskPane', () => {
     const leaving = document.querySelector<HTMLElement>('[data-task-pane-frame]');
     // With reduced motion the exit transition has duration 0; if still present before unmount, it is inert.
     if (leaving) expect(leaving).toHaveAttribute('inert');
-  });
-});
-
-describe('seamOf', () => {
-  beforeEach(() => board.set(initialBoard(mockBoards())));
-
-  it('opens the seam with the task pane and shuts it as the task closes', () => {
-    expect(seamOf(board.get())).toBe('shut');
-    act(() => update({ openTaskId: current().tasks[0]!.id }));
-    expect(seamOf(board.get())).toBe('open');
-    act(() => update({ openTaskId: null }));
-    expect(seamOf(board.get())).toBe('shut');
-  });
-
-  it('stays shut for a task the board does not hold', () => {
-    act(() => update({ openTaskId: 'gone' }));
-    expect(seamOf(board.get())).toBe('shut');
   });
 });

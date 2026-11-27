@@ -1,21 +1,37 @@
 import '@blocknote/shadcn/style.css';
-import { type BlockNoteEditor, BlockNoteSchema, defaultBlockSpecs } from '@blocknote/core';
+import {
+  type BlockNoteEditor,
+  BlockNoteSchema,
+  createExtension,
+  defaultBlockSpecs,
+} from '@blocknote/core';
 import { HistoryExtension, SuggestionMenu } from '@blocknote/core/extensions';
 import { en } from '@blocknote/core/locales';
 import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/shadcn';
 import type { Description } from '@throw/shared';
-import { type MouseEvent, useEffect, useMemo, useState } from 'react';
+import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { TaskReferenceLayer } from '@/components/TaskReferences/TaskReferenceCard';
+import { useTaskReferences } from '@/components/TaskReferences/TaskReferences';
 import { useResolvedTheme } from '@/lib/theme';
 import { CodeLanguagePicker } from './CodeLanguagePicker';
 import { codeBlock, syntaxHighlighting } from './codeBlock';
 import { pasteCode } from './codePaste';
+import { DescriptionSideMenuController } from './DescriptionSideMenu';
+import { DescriptionSlashMenu } from './DescriptionSlashMenu';
+import { DescriptionTaskMenu } from './DescriptionTaskMenu';
 import {
   type EditorControls,
   type FormattingState,
   type TextStyle,
   touchEditor,
 } from './editorControls';
+import {
+  type ReferenceResolver,
+  referenceAtCaret,
+  refreshTaskReferences,
+  taskReferencePlugin,
+} from './taskReferencePlugin';
 
 // Catch's editor, narrowed to text blocks. No file nodes, upload handlers or embeds.
 export const descriptionEditorSchema = BlockNoteSchema.create({
@@ -39,9 +55,13 @@ type Editor = BlockNoteEditor<
 >;
 
 // A finger formats from the dock's formatting bar, as in Catch; BlockNote's floating toolbar
-// suits a mouse.
+// and its drag handle, which moves blocks by HTML drag and drop, suit a mouse.
 const coarsePointer =
   typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+
+// The pane scrolls inside a clipped viewport no wider than its card, which cut off the
+// formatting toolbar and the block handle's menu. BlockNote themes the root it portals into.
+const portalElements = typeof document === 'undefined' ? undefined : { default: document.body };
 
 /** Content is read on mount; the owner changes the key to accept a remote revision. */
 export function DescriptionEditor({
@@ -60,16 +80,39 @@ export function DescriptionEditor({
   autoFocus?: boolean;
   /** Keep actions beneath an editor clear of the dock while typing. */
   scrollClearance?: number;
-  /** BlockNote's drag handle beside each block, which a comment's card has no room for. */
+  /** The block handle beside each block, which a comment's card has no room for. */
   sideMenu?: boolean;
   onChange?: (document: Description) => void;
   /** Hands the owner this editor's controls while it is mounted, for its undo and redo. */
   onControls?: (controls: EditorControls | null) => void;
 }) {
   const theme = useResolvedTheme();
+  // `#KEY-N` resolves against the synced tasks as they are now; the plugin reads this on
+  // every change, and is asked to read it again when the tasks change (below).
+  const references = useTaskReferences();
+  const resolver = useRef<ReferenceResolver | null>(null);
+  resolver.current = references && {
+    editable,
+    resolve(identifier) {
+      const found = references.index.resolve(references.workspaceId, identifier);
+      return (
+        found && {
+          taskId: found.task.id,
+          category: found.status?.category ?? 'backlog',
+          label: found.task.title || 'Untitled task',
+        }
+      );
+    },
+  };
   const editor = useCreateBlockNote({
     schema: descriptionEditorSchema,
-    extensions: [syntaxHighlighting],
+    extensions: [
+      syntaxHighlighting,
+      createExtension({
+        key: 'taskReferences',
+        prosemirrorPlugins: [taskReferencePlugin(() => resolver.current)],
+      }),
+    ],
     pasteHandler: pasteCode,
     initialContent: initialContent?.length
       ? (initialContent as (typeof descriptionEditorSchema.PartialBlock)[])
@@ -93,6 +136,30 @@ export function DescriptionEditor({
       if (id) setLanguageBlock((open) => (open?.id === id ? null : { id, anchor: language }));
     }
   }
+  // biome-ignore lint/correctness/useExhaustiveDependencies: redraw when the tasks change
+  useEffect(() => {
+    const view = editor.prosemirrorView;
+    if (view) refreshTaskReferences(view);
+  }, [editor, references]);
+  // On a desktop, the caret resting inside a reference shows its card, as hovering does.
+  const [root, setRoot] = useState<HTMLDivElement | null>(null);
+  const [caretReference, setCaretReference] = useState<Element | null>(null);
+  useEffect(() => {
+    if (!editable || coarsePointer) return;
+    const read = () =>
+      setCaretReference(
+        editor.isFocused() && editor.prosemirrorView
+          ? referenceAtCaret(editor.prosemirrorView)
+          : null,
+      );
+    const offSelection = editor.onSelectionChange(read);
+    const dom = editor.prosemirrorView?.dom;
+    dom?.addEventListener('blur', read);
+    return () => {
+      offSelection();
+      dom?.removeEventListener('blur', read);
+    };
+  }, [editor, editable]);
   const controls = useMemo(() => createControls(editor), [editor]);
   useEffect(() => {
     if (!editable || !onControls) return;
@@ -162,18 +229,32 @@ export function DescriptionEditor({
   }, [editor, editable, scrollClearance]);
 
   return (
-    <div className="description-editor">
+    <div ref={setRoot} className="description-editor">
       <BlockNoteView
         editor={editor}
         editable={editable}
         theme={theme}
         filePanel={false}
         formattingToolbar={!coarsePointer}
-        sideMenu={sideMenu}
+        sideMenu={false}
+        slashMenu={false}
+        portalElements={portalElements}
         onChange={() => onChange?.(editor.document as Description)}
         onClick={openCodeLanguage}
         className="task-editor"
-      />
+      >
+        <DescriptionSlashMenu />
+        {references && <DescriptionTaskMenu references={references} />}
+        {sideMenu && !coarsePointer && <DescriptionSideMenuController />}
+      </BlockNoteView>
+      {references && (
+        <TaskReferenceLayer
+          root={root}
+          references={references}
+          editable={editable}
+          caret={caretReference}
+        />
+      )}
       {editable && languageBlock && (
         <CodeLanguagePicker
           key={languageBlock.id}

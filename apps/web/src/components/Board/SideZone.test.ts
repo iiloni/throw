@@ -1,12 +1,16 @@
-import { act, renderHook } from '@testing-library/react';
-import type { MouseEvent, PointerEvent } from 'react';
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { createElement, type MouseEvent, type PointerEvent } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SEARCH_SIDEBAR_MIN, SIDEBAR_WIDTH } from '@/components/BoardSearch/BoardSearch';
 import { boardRestWidth } from './DesktopBoard';
+import { drag } from './drag';
+import { mockBoards } from './mockData';
 import {
+  canCollapseGalleryOnEscape,
   PANEL_WIDTH,
   RAIL_SNAP,
   railGeometry,
+  SideZone,
   STRIP_HOLD_MS,
   STRIP_WIDTH,
   settleRail,
@@ -14,6 +18,7 @@ import {
   useStripPress,
   ZONE_GAP,
 } from './SideZone';
+import { board, initialBoard, setZoneView, update } from './state';
 
 const rowWidth = 1200;
 const base = {
@@ -266,5 +271,232 @@ describe('useStripPress', () => {
     press().onContextMenu(menu);
     expect(onHold).not.toHaveBeenCalled();
     expect(menu.preventDefault).not.toHaveBeenCalled();
+  });
+});
+
+describe('canCollapseGalleryOnEscape', () => {
+  const escapeEvent = (overrides: Partial<KeyboardEvent> = {}) =>
+    ({
+      key: 'Escape',
+      defaultPrevented: false,
+      isComposing: false,
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      target: document.body,
+      ...overrides,
+    }) as KeyboardEvent;
+
+  const fullState = () => ({
+    backlog: 'full' as const,
+    closed: 'strip' as const,
+    openTaskId: null,
+    carrying: null,
+    selection: [] as string[],
+  });
+
+  afterEach(() => {
+    drag.set(null);
+    document.body.innerHTML = '';
+  });
+
+  it('allows collapsing only the full zone on a plain, unhandled Escape', () => {
+    expect(canCollapseGalleryOnEscape('backlog', escapeEvent(), fullState())).toBe(true);
+    expect(canCollapseGalleryOnEscape('closed', escapeEvent(), fullState())).toBe(false);
+    expect(canCollapseGalleryOnEscape('backlog', escapeEvent({ key: 'Enter' }), fullState())).toBe(
+      false,
+    );
+    expect(
+      canCollapseGalleryOnEscape('backlog', escapeEvent({ defaultPrevented: true }), fullState()),
+    ).toBe(false);
+    expect(
+      canCollapseGalleryOnEscape('backlog', escapeEvent({ isComposing: true }), fullState()),
+    ).toBe(false);
+    expect(canCollapseGalleryOnEscape('backlog', escapeEvent({ ctrlKey: true }), fullState())).toBe(
+      false,
+    );
+  });
+
+  it('yields to active task pane, carry, selection and drag modes', () => {
+    const sampleTask = mockBoards()[0]!.tasks[0]!;
+    expect(
+      canCollapseGalleryOnEscape('backlog', escapeEvent(), { ...fullState(), openTaskId: 't-1' }),
+    ).toBe(false);
+    expect(
+      canCollapseGalleryOnEscape('backlog', escapeEvent(), {
+        ...fullState(),
+        carrying: { taskId: sampleTask.id, seen: sampleTask, preview: sampleTask },
+      }),
+    ).toBe(false);
+    expect(
+      canCollapseGalleryOnEscape('backlog', escapeEvent(), { ...fullState(), selection: ['t-1'] }),
+    ).toBe(false);
+    drag.set({
+      ids: [sampleTask.id],
+      width: 240,
+      height: 80,
+      grab: { x: 0, y: 0 },
+      origin: 'backlog',
+      priority: sampleTask.priority,
+      target: null,
+      rail: null,
+      phase: 'dragging',
+      swallowed: false,
+      touch: false,
+      over: false,
+      page: 0,
+      moved: true,
+    });
+    expect(canCollapseGalleryOnEscape('backlog', escapeEvent(), fullState())).toBe(false);
+  });
+
+  it('yields to higher-priority overlays but ignores passive tooltips', () => {
+    for (const html of [
+      '<div role="dialog"></div>',
+      '<div role="alertdialog"></div>',
+      '<div role="menu"></div>',
+      '<div role="listbox"></div>',
+      '<div data-radix-popper-content-wrapper><div>Popover</div></div>',
+    ]) {
+      document.body.innerHTML = html;
+      expect(canCollapseGalleryOnEscape('backlog', escapeEvent(), fullState())).toBe(false);
+    }
+    document.body.innerHTML =
+      '<div data-radix-popper-content-wrapper><div data-slot="tooltip-content"><span role="tooltip">Back to a column</span></div></div>';
+    expect(canCollapseGalleryOnEscape('backlog', escapeEvent(), fullState())).toBe(true);
+  });
+
+  it('yields when an editable element or search control is focused', () => {
+    for (const html of [
+      '<input type="text" />',
+      '<textarea></textarea>',
+      '<select><option>One</option></select>',
+      '<div contenteditable="true" tabindex="0">Edit</div>',
+      '<search><button type="button">Filter</button></search>',
+    ]) {
+      document.body.innerHTML = html;
+      const focusable = document.body.querySelector<HTMLElement>(
+        'input, textarea, select, [contenteditable], button',
+      )!;
+      focusable.focus();
+      expect(
+        canCollapseGalleryOnEscape('backlog', escapeEvent({ target: focusable }), fullState()),
+      ).toBe(false);
+    }
+  });
+});
+
+describe('SideZone Escape collapse', () => {
+  function renderZone(zone: 'backlog' | 'closed') {
+    function Harness() {
+      const state = board.use();
+      const rails = railGeometry({
+        rowWidth: 1440,
+        views: { backlog: state.backlog, closed: state.closed },
+        widths: { backlog: null, closed: null },
+        resize: null,
+        holding: false,
+        origin: null,
+      });
+      return createElement(SideZone, { zone, geometry: rails[zone] });
+    }
+    return render(createElement(Harness));
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    drag.set(null);
+    board.set(initialBoard(mockBoards()));
+  });
+
+  afterEach(() => {
+    drag.set(null);
+  });
+
+  it('collapses a panel-opened gallery back to panel and restores focus to its toggle', () => {
+    act(() => {
+      setZoneView('backlog', 'panel');
+      setZoneView('backlog', 'full');
+    });
+    renderZone('backlog');
+    const toggle = screen.getByRole('button', { name: 'Back to a column' });
+    act(() => toggle.focus());
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(board.get().backlog).toBe('panel');
+    expect(screen.getByRole('button', { name: 'Open as a gallery' })).toHaveFocus();
+  });
+
+  it('collapses a strip-opened gallery back to strip and restores focus to the strip button', () => {
+    act(() => {
+      setZoneView('closed', 'strip');
+      setZoneView('closed', 'full');
+    });
+    renderZone('closed');
+    const toggle = screen.getByRole('button', { name: 'Back to a column' });
+    act(() => toggle.focus());
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(board.get().closed).toBe('strip');
+    expect(screen.getByRole('button', { name: /^Open closed,/ })).toHaveFocus();
+  });
+
+  it('leaves focus alone when collapsing from an unrelated control outside the rail', () => {
+    act(() => {
+      setZoneView('backlog', 'strip');
+      setZoneView('backlog', 'full');
+    });
+    const outside = document.createElement('button');
+    outside.textContent = 'Nav';
+    document.body.appendChild(outside);
+    try {
+      renderZone('backlog');
+      act(() => outside.focus());
+
+      fireEvent.keyDown(window, { key: 'Escape' });
+
+      expect(board.get().backlog).toBe('strip');
+      expect(outside).toHaveFocus();
+    } finally {
+      outside.remove();
+    }
+  });
+
+  it('does not collapse on the same Escape that closes a task or clears selection', () => {
+    const taskId = mockBoards()[0]!.tasks[0]!.id;
+    act(() => {
+      setZoneView('backlog', 'panel');
+      setZoneView('backlog', 'full');
+      update({ openTaskId: taskId });
+    });
+    renderZone('backlog');
+
+    // Simulate useBoardBoundary dismissing the task synchronously without calling preventDefault.
+    const boundary = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      const live = board.get();
+      if (live.selection.length > 0) update({ selection: [] });
+      else if (live.openTaskId) update({ openTaskId: null });
+    };
+    window.addEventListener('keydown', boundary);
+    try {
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(board.get().openTaskId).toBeNull();
+      expect(board.get().backlog).toBe('full');
+
+      // Selection also takes precedence before gallery collapse.
+      act(() => update({ selection: [taskId] }));
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(board.get().selection).toEqual([]);
+      expect(board.get().backlog).toBe('full');
+
+      // With overlays and modes clear, the next Escape collapses the gallery.
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(board.get().backlog).toBe('panel');
+    } finally {
+      window.removeEventListener('keydown', boundary);
+    }
   });
 });

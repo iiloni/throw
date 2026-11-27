@@ -1,11 +1,12 @@
-import { githubItemUrl } from '@throw/shared';
-import { and, eq, inArray, or } from 'drizzle-orm';
+import { type ActivityChange, githubItemUrl } from '@throw/shared';
+import { and, eq, inArray, not, or } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { z } from 'zod';
 import { taskGithubLinks as links, projects, tasks } from '../db/schema';
 import type { GithubEventHandler } from './dispatch';
-import { activeTask, recordLink, taskFields } from './linkData';
+import { activeTask, linkChange, recordGithubChange, recordLink, taskFields } from './linkData';
 import { reconcileSignals } from './linkSignals';
+import { loadStatusRules, moveForRule, statusTrigger } from './statusRules';
 
 const item = z.object({
   number: z.int().positive().max(2147483647),
@@ -32,6 +33,7 @@ export function taskNumbers(key: string, text: string) {
   ];
 }
 const ignored = (reason: string) => ({ status: 'ignored' as const, reason });
+const action = z.object({ action: z.string() });
 export const handleItem: GithubEventHandler = async (tx, { connection, event, payload }) => {
   const kind = event === 'issues' ? 'issue' : 'pr';
   const pull = kind === 'pr' ? pr.safeParse(payload.pull_request).data : undefined;
@@ -67,7 +69,8 @@ export const handleItem: GithubEventHandler = async (tx, { connection, event, pa
       ),
     )
     .orderBy(tasks.id)
-    .for('share', { of: tasks });
+    // Held for update, as a status rule may move them; ordered so deliveries take them in turn.
+    .for('no key update', { of: tasks });
   const state =
     pull?.merged || pull?.merged_at
       ? 'merged'
@@ -80,7 +83,28 @@ export const handleItem: GithubEventHandler = async (tx, { connection, event, pa
   if (rows.some(({ link }) => link?.sourceUpdatedAt && link.sourceUpdatedAt > sourceUpdatedAt))
     return { status: 'ok' };
   const previous = rows.find(({ link }) => link)?.link;
+  const rules = await loadStatusRules(tx, connection.id);
+  const ruled =
+    rows.length > 0 && !!rules && Object.values(rules).some((statusId) => statusId !== null);
+  // The tasks' other links of this kind, which decide a rule for a task with several.
+  const others = ruled
+    ? await tx
+        .select({ taskId: links.taskId, state: links.state })
+        .from(links)
+        .where(
+          and(
+            inArray(
+              links.taskId,
+              rows.map(({ task }) => task.taskId),
+            ),
+            eq(links.kind, kind),
+            not(and(eq(links.repo, repo), eq(links.number, data.number))!),
+          ),
+        )
+    : [];
+  const deliveryAction = action.safeParse(payload).data?.action;
   for (const { task, link } of rows) {
+    let linkItem: ActivityChange | undefined;
     const metadata = {
       title: data.title,
       state,
@@ -114,7 +138,7 @@ export const handleItem: GithubEventHandler = async (tx, { connection, event, pa
           url: githubItemUrl(repo, kind, data.number),
         })
         .returning();
-      await recordLink(tx, task, created!, null, state);
+      linkItem = linkChange(created!, null, state);
     } else {
       await tx
         .update(links)
@@ -123,8 +147,20 @@ export const handleItem: GithubEventHandler = async (tx, { connection, event, pa
           ...signals,
         })
         .where(eq(links.id, link.id));
-      if (link.state !== state) await recordLink(tx, task, link, link.state, state);
+      if (link.state !== state) linkItem = linkChange(link, link.state, state);
     }
+    const trigger =
+      ruled &&
+      statusTrigger({
+        kind,
+        action: deliveryAction,
+        state,
+        previous: link?.state ?? null,
+        others: others.filter((other) => other.taskId === task.taskId).map((o) => o.state),
+      });
+    const target = trigger ? (rules?.[trigger] ?? null) : null;
+    const move = target ? await moveForRule(tx, task, target) : null;
+    await recordGithubChange(tx, task, { link: linkItem, move });
   }
   return { status: 'ok' };
 };

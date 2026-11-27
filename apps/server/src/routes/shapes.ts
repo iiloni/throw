@@ -58,6 +58,39 @@ export const SHAPES: Record<string, { table: string; columns: string[]; where: s
     where: `workspace_id IN (${MEMBER_WORKSPACES})`,
   },
   // Links between those tasks, across projects of one workspace.
+  'github-releases': {
+    table: 'github_releases',
+    columns: [
+      'id',
+      'workspace_id',
+      'project_id',
+      'repo',
+      'tag_name',
+      'name',
+      'url',
+      'target_commitish',
+      'source',
+      'is_draft',
+      'is_prerelease',
+      'published_at',
+      'created_at',
+      'updated_at',
+    ],
+    where: `workspace_id IN (${MEMBER_WORKSPACES})`,
+  },
+  'task-github-releases': {
+    table: 'task_github_releases',
+    columns: [
+      'id',
+      'workspace_id',
+      'project_id',
+      'task_id',
+      'release_id',
+      'matched_by',
+      'created_at',
+    ],
+    where: `workspace_id IN (${MEMBER_WORKSPACES})`,
+  },
   'task-github-links': {
     table: 'task_github_links',
     columns: [

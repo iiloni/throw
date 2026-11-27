@@ -360,6 +360,7 @@ const CommentCard = memo(function CommentCard({
             <CommentComposer
               bare
               initialContent={comment.body}
+              taskId={comment.taskId}
               onSave={(body) => {
                 editComment(comment.id, body);
                 haptics.success();
@@ -372,6 +373,7 @@ const CommentCard = memo(function CommentCard({
               <LazyDescriptionEditor
                 key={JSON.stringify(comment.body)}
                 initialContent={comment.body}
+                referencesFor={comment.taskId}
               />
             </div>
           )}

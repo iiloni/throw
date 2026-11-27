@@ -8,11 +8,19 @@ import {
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { auth } from '../auth';
+import { demoRepository, demoSecret, simulatedEvent } from '../dev/githubEvents';
+import { env } from '../env';
+import { githubSecretKey } from '../github/config';
+import { dispatchGithubEvent } from '../github/dispatch';
+import { newWebhookToken } from '../github/secrets';
 import { memberWorkspaces } from '../lib/workspaces';
+import { encryptSecret } from '../webhooks/signing';
 import { sql as connection, db, type Transaction } from './client';
 import {
   commentActivity,
   comments,
+  githubConnections,
+  githubDeliveries,
   projects,
   statuses,
   tags,
@@ -40,6 +48,7 @@ import {
   THROW_COMMENTS,
   THROW_CREATED_DAYS_AGO,
   THROW_EXTRA_STATUSES,
+  THROW_GITHUB_EVENTS,
   THROW_TAGS,
   THROW_TASKS,
 } from './seedFixtures';
@@ -239,7 +248,75 @@ async function fillProject(
       createdAt: task.createdAt!,
     });
   }
-  return { count: fixtures.tasks.length, tasks: seeded };
+  return { count: fixtures.tasks.length, tasks: seeded, statuses: allStatuses };
+}
+
+async function seedThrowGithub(
+  tx: Transaction,
+  project: typeof projects.$inferSelect,
+  userId: string,
+  seeded: Map<string, SeededTask>,
+  allStatuses: StatusRow[],
+) {
+  const connection = {
+    id: uuidv7(),
+    workspaceId: project.workspaceId,
+    projectId: project.id,
+    repository: demoRepository,
+  };
+  const created = await tx
+    .insert(githubConnections)
+    .values({
+      ...connection,
+      createdBy: userId,
+      webhookToken: newWebhookToken(),
+      encryptedWebhookSecret: encryptSecret(demoSecret(env.BETTER_AUTH_SECRET), githubSecretKey),
+    })
+    .onConflictDoNothing({ target: githubConnections.projectId })
+    .returning({ id: githubConnections.id });
+  if (!created.length) return;
+  const now = Date.now();
+  for (const fixture of THROW_GITHUB_EVENTS) {
+    const spec =
+      'ref' in fixture ? THROW_TASKS.find((task) => task.ref === fixture.ref) : undefined;
+    const key = 'ref' in fixture ? seeded.get(fixture.ref)!.identifier : undefined;
+    for (const command of fixture.events) {
+      const receivedAt = new Date(now - fixture.daysAgo * 86400000);
+      const deliveryId = uuidv7();
+      const item = simulatedEvent(command, demoRepository, key, {
+        now: receivedAt,
+        pr: 'pr' in fixture ? fixture.pr : undefined,
+        tag: 'v0.1.0',
+        title: spec?.title,
+      });
+      await tx
+        .insert(githubDeliveries)
+        .values({ connectionId: connection.id, deliveryId, event: item.event, receivedAt });
+      const handled = await dispatchGithubEvent(tx, { connection, deliveryId, ...item });
+      if (handled.status === 'ignored') throw new Error(handled.reason);
+      await tx
+        .update(githubConnections)
+        .set({
+          lastDeliveryAt: receivedAt,
+          lastDeliveryId: deliveryId,
+          lastDeliveryEvent: item.event,
+          lastDeliveryStatus: 'ok',
+        })
+        .where(eq(githubConnections.id, connection.id));
+    }
+  }
+  // Enable rules after replaying the history so the board opens in its curated layout.
+  const status = (name: string) => allStatuses.find((s) => s.name === name)!.id;
+  await tx
+    .update(githubConnections)
+    .set({
+      prDraftOpenedStatusId: status('In progress'),
+      prReadyForReviewStatusId: status('In review'),
+      prMergedStatusId: status('Done'),
+      prClosedStatusId: status('Cancelled'),
+      issueClosedStatusId: status('Done'),
+    })
+    .where(eq(githubConnections.id, connection.id));
 }
 
 /** Links the demo projects' tasks, once both were filled in this run. */
@@ -268,15 +345,17 @@ if (profile === 'basic' || profile === 'demo') {
   if (profile === 'demo') {
     await ensureAccount(ACCOUNTS.user);
     await ensureDemoProjects(adminId);
-    const throwProject = await ensureDemoContent(adminId, 'Throw', (tx, project) =>
-      fillProject(tx, project, adminId, {
+    const throwProject = await ensureDemoContent(adminId, 'Throw', async (tx, project) => {
+      const filled = await fillProject(tx, project, adminId, {
         statuses: THROW_EXTRA_STATUSES,
         tags: THROW_TAGS,
         tasks: THROW_TASKS,
         comments: THROW_COMMENTS,
         createdDaysAgo: THROW_CREATED_DAYS_AGO,
-      }),
-    );
+      });
+      await seedThrowGithub(tx, project, adminId, filled.tasks, filled.statuses);
+      return filled;
+    });
     const houseProject = await ensureDemoContent(adminId, 'House move', (tx, project) =>
       fillProject(tx, project, adminId, {
         statuses: [],

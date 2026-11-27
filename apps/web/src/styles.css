@@ -1,8 +1,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* Catch's editor surface inherits the task's tint, type and theme. */
-.bn-container.task-editor[data-color-scheme] {
+/*
+ * Catch's editor surface inherits the task's tint, type and theme. Its menus are portalled
+ * to a themed root of their own beside the page (DescriptionEditor), which takes the type too.
+ */
+.bn-root.task-editor[data-color-scheme] {
   --bn-colors-editor-background: transparent;
   --bn-colors-editor-text: var(--foreground);
   --bn-font-family: var(--font-sans);
@@ -207,6 +210,57 @@
 }
 .bn-container.task-editor a {
   color: var(--brand-link);
+}
+/*
+ * A task reference (`#THR-93`), drawn over its own text in the editor (taskReferencePlugin)
+ * and in the preview it opens from, so the two match through the swap. Closed work reads
+ * struck through, as related tasks do.
+ */
+.task-ref {
+  border-radius: 0.375em;
+  padding: 0.05em 0.3em;
+  background: color-mix(in oklab, var(--brand-link) 12%, transparent);
+  color: var(--brand-link);
+  font-weight: 500;
+  cursor: pointer;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  transition: background-color 150ms var(--ease-emphasized);
+}
+.task-ref:hover {
+  background: color-mix(in oklab, var(--brand-link) 20%, transparent);
+}
+.task-ref:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+.task-ref:is([data-category="done"], [data-category="cancelled"]) {
+  background: color-mix(in oklab, var(--foreground) 7%, transparent);
+  color: var(--muted-foreground);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in oklab, var(--foreground) 35%, transparent);
+}
+/*
+ * The block handle sits in the card's padding beside the text (DescriptionSideMenu), so it
+ * is narrower than BlockNote's: its grip, not its box, should take the gutter's middle.
+ */
+.bn-root.task-editor .bn-side-menu .bn-button {
+  width: 1.25rem;
+  min-width: 1.25rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+  border-radius: 0.375rem;
+  color: var(--muted-foreground);
+  cursor: grab;
+}
+.bn-root.task-editor .bn-side-menu .bn-button > svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+/* The handle's menu is laid out inside the handle, which would wrap it to the handle's width. */
+.bn-root.task-editor .bn-drag-handle-menu {
+  width: max-content;
+  min-width: 8rem;
 }
 
 /*
@@ -1050,14 +1104,14 @@ body:has(section.board-column[data-column-color]) .column-strip {
   --edge-bottom: 0px;
 }
 /*
- * The board's sides (DesktopBoard, WorkspaceDesktopBoard): columns scrolled out to the left
- * fade where they go, at the board's start or under a sticky backlog rail; and while a task
- * is open beside the board, columns that run on under it fade out before the split view's
- * seam (or before a sticky closed rail there) rather than being cut down a straight line
- * beside the grip. As at a column's ends, a fade and no shadow, so it reads the same on light
- * and dark. The mask stays and only its widths change, so the seam's fade eases in and out
- * with the pane instead of popping. Not inherited: the board's cards are not restyled on every
- * frame of it. A mask leaves hit testing alone, so the faded cards still take clicks and drags.
+ * The board's sides (DesktopBoard, WorkspaceDesktopBoard): columns that run on past either end
+ * fade where they go rather than being cut down a straight line. On the left that is the
+ * board's start or a sticky backlog rail; on the right, a sticky closed rail, the split view's
+ * seam beside an open task, or the window's edge. As at a column's ends, a fade and no shadow,
+ * so it reads the same on light and dark. The mask stays and only its widths change, so a fade
+ * eases in and out as columns come to run on (as the pane opens) instead of popping. Not
+ * inherited: the board's cards are not restyled on every frame of it. A mask leaves hit
+ * testing alone, so the faded cards still take clicks and drags.
  */
 @property --edge-left {
   syntax: "<length>";
@@ -1096,7 +1150,7 @@ body:has(section.board-column[data-column-color]) .column-strip {
 [data-slot="scroll-area"][data-seam][data-more-left] > [data-slot="scroll-area-viewport"] {
   --edge-left: var(--side-fade);
 }
-[data-slot="scroll-area"][data-seam="open"][data-more-right] > [data-slot="scroll-area-viewport"] {
+[data-slot="scroll-area"][data-seam][data-more-right] > [data-slot="scroll-area-viewport"] {
   --edge-right: var(--side-fade);
 }
 :root[data-hide-scrollbars] [data-slot="scroll-area-scrollbar"] {

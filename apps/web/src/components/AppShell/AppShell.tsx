@@ -62,6 +62,7 @@ import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { SettingsHub } from '@/components/SettingsLayout/SettingsHub';
 import { type ShellForm, ShellForms } from '@/components/ShellForms/ShellForms';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
+import { UpdateDot } from '@/components/UpdateDot/UpdateDot';
 import { ScrollBox } from '@/components/ui/scroll-area';
 import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
 import { getSignedInUser, pagePath } from '@/lib/auth';
@@ -72,6 +73,7 @@ import { projectsIn } from '@/lib/projects';
 import { pageBounceY } from '@/lib/scrollBounce';
 import { usePersistentState } from '@/lib/storage';
 import { useAwaitingSync } from '@/lib/syncStatus';
+import { UPDATE_READY_DESCRIPTION, useUpdateReady } from '@/lib/updateReady';
 import { watchUpdates } from '@/lib/updates';
 import { holdUpdateReload } from '@/lib/useUpdateReloadBlocked';
 import { cn } from '@/lib/utils';
@@ -172,6 +174,7 @@ export function AppShell() {
   const searchActive = boardSearch && boardState.searching;
   const searchFilterCount = boardSearch ? activeFilterCount(boardState) : 0;
   const searchFiltered = searchFilterCount > 0;
+  const updateReady = useUpdateReady();
   const searchHint = searchFiltered
     ? `Search (${searchFilterCount} ${searchFilterCount === 1 ? 'active filter' : 'active filters'})`
     : undefined;
@@ -505,9 +508,14 @@ export function AppShell() {
                     href="/settings"
                     expanded={expanded}
                     active={settings}
+                    aria-description={updateReady ? UPDATE_READY_DESCRIPTION : undefined}
+                    badge={<UpdateDot className="mr-1.5 ml-auto" />}
                     onClick={context.goSettings}
                   >
-                    <Settings aria-hidden className="size-5" />
+                    <span className="relative flex items-center justify-center">
+                      <Settings aria-hidden className="size-5" />
+                      {!expanded && <UpdateDot className="absolute -top-0.5 -right-0.5" />}
+                    </span>
                   </RailButton>
                 </SettingsContextMenu>
                 <RailButton

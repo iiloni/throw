@@ -1562,14 +1562,19 @@ test('task size stays unavailable on older servers while other task edits sync',
     await route.fulfill({ response, headers, json: changes });
   });
 
-  const account = await fixture(page);
-  await expect(controls(page).getByRole('button', { name: /^Size:/ })).toHaveCount(0);
-  const title = account.pane.getByRole('textbox', { name: 'Task title' });
-  await title.fill('Edited on the preview server');
-  await title.press('Enter');
-  await expect
-    .poll(async () => (await taskRow(page, account))?.title)
-    .toBe('Edited on the preview server');
+  try {
+    const account = await fixture(page);
+    await expect(controls(page).getByRole('button', { name: /^Size:/ })).toHaveCount(0);
+    const title = account.pane.getByRole('textbox', { name: 'Task title' });
+    await title.fill('Edited on the preview server');
+    await title.press('Enter');
+    await expect
+      .poll(async () => (await taskRow(page, account))?.title)
+      .toBe('Edited on the preview server');
+  } finally {
+    // Electric can still be long-polling when the page and its fetched responses are disposed.
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+  }
 });
 
 test('description code blocks dedent pasted code, highlight it and export the source', async ({

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { timestampSchema } from './sync';
+import { timestampSchema, txidResponseSchema } from './sync';
 
 /** A project's connection to one GitHub repository (ADR 0017). Server-only, never synced. */
 
@@ -91,6 +91,47 @@ export const createGithubConnectionSchema = z
   });
 
 /**
+ * The events a project can move tasks on (ADR 0017), each to one of its own statuses. Every
+ * rule is off until a status is chosen for it.
+ *
+ * - `prDraftOpened`: a linked pull request opens, reopens or is converted to a draft.
+ * - `prReadyForReview`: a linked pull request opens or reopens ready for review, or leaves
+ *   draft (`ready_for_review`).
+ * - `prMerged` / `prClosed`: the task's last open pull request closes; merged when any of the
+ *   task's pull requests merged.
+ * - `issueClosed`: the task's last open linked issue closes.
+ */
+export const GITHUB_STATUS_TRIGGERS = [
+  'prDraftOpened',
+  'prReadyForReview',
+  'prMerged',
+  'prClosed',
+  'issueClosed',
+] as const;
+export type GithubStatusTrigger = (typeof GITHUB_STATUS_TRIGGERS)[number];
+
+/** Each trigger's target status, or null when the rule is off. */
+export const githubStatusRulesSchema = z.object({
+  prDraftOpened: z.uuid().nullable(),
+  prReadyForReview: z.uuid().nullable(),
+  prMerged: z.uuid().nullable(),
+  prClosed: z.uuid().nullable(),
+  issueClosed: z.uuid().nullable(),
+});
+export type GithubStatusRules = z.infer<typeof githubStatusRulesSchema>;
+
+export const NO_GITHUB_STATUS_RULES: GithubStatusRules = {
+  prDraftOpened: null,
+  prReadyForReview: null,
+  prMerged: null,
+  prClosed: null,
+  issueClosed: null,
+};
+
+/** The rules a request changes. A rule it leaves out keeps its status. */
+export const githubStatusRulesUpdateSchema = githubStatusRulesSchema.partial().strict();
+
+/**
  * `token` replaces the stored token. Switching to `webhook` forgets it; switching to `token`
  * needs one unless the connection already holds it.
  */
@@ -100,6 +141,7 @@ export const updateGithubConnectionSchema = z
     authMode: githubAuthModeSchema,
     token: githubTokenSchema,
     enabled: z.boolean(),
+    statusRules: githubStatusRulesUpdateSchema,
   })
   .partial()
   .refine((body) => Object.keys(body).length > 0, 'Change at least one field')
@@ -138,6 +180,8 @@ export const githubConnectionSchema = z.object({
   webhookUrl: z.string(),
   createdAt: timestampSchema,
   lastDelivery: githubDeliverySchema.nullable(),
+  /** Absent from servers older than the status rules, which cannot store them. */
+  statusRules: githubStatusRulesSchema.optional(),
 });
 export type GithubConnection = z.infer<typeof githubConnectionSchema>;
 
@@ -205,3 +249,44 @@ export const linkGithubRequestSchema = z.object({
   title: z.string().trim().min(1).max(1024).optional(),
   state: state.optional(),
 });
+
+export const createGithubReleaseSchema = z.strictObject({
+  repo: githubRepositorySchema,
+  tagName: z.string().trim().min(1).max(1024),
+  name: z.string().max(2048).nullable().optional(),
+  targetCommitish: z.string().max(1024).nullable().optional(),
+  isDraft: z.boolean().optional(),
+  isPrerelease: z.boolean().optional(),
+  publishedAt: timestampSchema.nullable().optional(),
+});
+export type CreateGithubRelease = z.input<typeof createGithubReleaseSchema>;
+export const githubReleaseSchema = z.object({
+  id: z.uuid(),
+  workspaceId: z.uuid(),
+  projectId: z.uuid(),
+  repo: z.string(),
+  tagName: z.string(),
+  name: z.string().nullable(),
+  url: z.url(),
+  targetCommitish: z.string().nullable(),
+  source: z.enum(['release', 'tag', 'manual']),
+  isDraft: z.boolean(),
+  isPrerelease: z.boolean(),
+  publishedAt: timestampSchema.nullable(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+});
+export const githubReleaseWriteSchema = githubReleaseSchema.extend(txidResponseSchema.shape);
+export const releaseBindingResponseSchema = txidResponseSchema.extend({ bound: z.boolean() });
+export type GithubRelease = z.infer<typeof githubReleaseSchema>;
+export const githubReleasesResponseSchema = z.object({ releases: z.array(githubReleaseSchema) });
+export const taskGithubReleaseSchema = z.object({
+  id: z.uuid(),
+  workspaceId: z.uuid(),
+  projectId: z.uuid(),
+  taskId: z.uuid(),
+  releaseId: z.uuid(),
+  matchedBy: z.enum(['manual', 'window', 'ancestry']),
+  createdAt: timestampSchema,
+});
+export type TaskGithubRelease = z.infer<typeof taskGithubReleaseSchema>;

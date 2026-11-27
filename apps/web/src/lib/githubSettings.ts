@@ -1,4 +1,4 @@
-import type { GithubConnection } from '@throw/shared';
+import type { GithubConnection, GithubStatusRules } from '@throw/shared';
 import { createContext, useCallback, useEffect, useMemo } from 'react';
 import { ApiError, api } from './api';
 import { createStore } from './store';
@@ -80,6 +80,23 @@ export function useGithubConnection(projectId: string | undefined) {
     changed: set,
     removed: () => set(null),
   };
+}
+
+/**
+ * A connection's status rules, or null when its server is older than them and cannot store
+ * any, so the rules are not offered.
+ */
+export const githubStatusRules = (connection: GithubConnection | null) =>
+  connection?.statusRules ?? null;
+
+/**
+ * Saves the rules named (ADR 0017); null turns one off and a rule left out keeps its status.
+ * Rejects with the server's 400 when a status is not the project's. Hand the connection it
+ * returns to `changed`.
+ */
+export async function saveGithubStatusRules(projectId: string, rules: Partial<GithubStatusRules>) {
+  const { connection } = await api.updateGithubConnection(projectId, { statusRules: rules });
+  return connection;
 }
 
 export const GithubConnectionContext = createContext<ReturnType<typeof useGithubConnection> | null>(

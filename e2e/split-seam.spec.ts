@@ -81,19 +81,55 @@ async function insetMatches(page: Page, seam: Locator, rail: 'Backlog' | 'Closed
     .toBeLessThan(2);
 }
 
+/** The window the boards' columns fit in, and one too narrow for them with no task open. */
+const ROOMY = { width: 1280, height: 800 };
+const NARROW = { width: 900, height: 800 };
+
+/**
+ * With no task open, columns that run on past the board's right end fade there too, as they
+ * do at its start: before a sticky closed rail, or at the window's edge without one.
+ */
+async function assertShutSide(page: Page, { stickyClosed = false } = {}) {
+  const seam = scroller(page);
+  await expect(page.locator('[data-task-pane-frame]')).toHaveCount(0);
+  await expect(seam).not.toHaveAttribute('data-more-right');
+  await expect.poll(() => fade(seam, 'right')).toBe(0);
+
+  await page.setViewportSize(NARROW);
+  await expect(seam).toHaveAttribute('data-more-right', '');
+  await expect.poll(() => fade(seam, 'right')).toBe(FADE);
+  if (stickyClosed) await insetMatches(page, seam, 'Closed');
+  else expect(await inset(seam, 'right')).toBe(0);
+  await takesPointer(seam, 'right');
+  if (process.env.SEAM_SHOTS) {
+    await page.screenshot({
+      path: `${process.env.SEAM_SHOTS}-${test.info().title}-shut-${Date.now()}.png`,
+    });
+  }
+
+  // Scrolled to the end, nothing is cut there and nothing fades there.
+  await viewport(seam).evaluate((element) => element.scrollTo({ left: element.scrollWidth }));
+  await expect(seam).not.toHaveAttribute('data-more-right');
+  await expect.poll(() => fade(seam, 'right')).toBe(0);
+  await viewport(seam).evaluate((element) => element.scrollTo({ left: 0 }));
+
+  // Given room again, the columns fit and the fade eases out.
+  await page.setViewportSize(ROOMY);
+  await expect(seam).not.toHaveAttribute('data-more-right');
+  await expect.poll(() => fade(seam, 'right')).toBe(0);
+}
+
 async function assertSides(
   page: Page,
   opener: Locator,
   { stickyClosed = false, stickyBacklog = false } = {},
 ) {
+  await assertShutSide(page, { stickyClosed });
   const seam = scroller(page);
-  await expect(seam).toHaveAttribute('data-seam', 'shut');
-  await expect.poll(() => fade(seam, 'right')).toBe(0);
 
   await opener.click();
   const handle = page.getByRole('separator', { name: 'Resize task' });
   await expect(handle).toBeVisible();
-  await expect(seam).toHaveAttribute('data-seam', 'open');
   // The board runs on under the open task: the fade stands at its edge.
   await expect(seam).toHaveAttribute('data-more-right', '');
   await expect.poll(() => fade(seam, 'right')).toBe(FADE);
@@ -106,16 +142,27 @@ async function assertSides(
   // A card in the fade still takes the pointer.
   await takesPointer(seam, 'right');
 
-  // Nor does the fade stand in the handle's way.
+  // Nor does the fade stand in the handle's way. It narrows the task: widened, it would leave
+  // the board too little room for its rails, and the board would take its compact layout.
+  // Grab it where the pane came to rest, not where it was while sliding open.
+  let last = Number.NaN;
+  await expect
+    .poll(async () => {
+      const x = (await handle.boundingBox())?.x ?? Number.NaN;
+      const still = x === last;
+      last = x;
+      return still;
+    })
+    .toBe(true);
   const grip = (await handle.boundingBox())!;
   const before = Number(await handle.getAttribute('aria-valuenow'));
   await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
   await page.mouse.down();
-  await page.mouse.move(grip.x + grip.width / 2 - 60, grip.y + grip.height / 2, { steps: 6 });
+  await page.mouse.move(grip.x + grip.width / 2 + 60, grip.y + grip.height / 2, { steps: 6 });
   await page.mouse.up();
   await expect
     .poll(async () => Number(await handle.getAttribute('aria-valuenow')))
-    .toBeGreaterThan(before + 40);
+    .toBeLessThan(before - 40);
 
   // Scrolled along, the columns that leave on the left fade too, at a sticky backlog rail's
   // edge where one lies over the scroller's start.
@@ -143,9 +190,8 @@ async function assertSides(
   await expect.poll(() => fade(seam, 'left')).toBe(0);
   await expect.poll(() => fade(seam, 'right')).toBe(FADE);
 
-  // It leaves as the pane starts to close, easing out rather than waiting for the pane to go.
+  // Once the pane has gone the columns fit again, and the fade eases out.
   await page.getByRole('button', { name: 'Back to the board', exact: true }).click();
-  await expect(seam).toHaveAttribute('data-seam', 'shut');
   await expect.poll(() => fade(seam, 'right')).toBe(0);
   await expect(page.locator('[data-task-pane-frame]')).toHaveCount(0);
 }
@@ -153,10 +199,10 @@ async function assertSides(
 test.describe('board side fades', () => {
   test.skip(({ isMobile }) => isMobile, 'The split view is desktop only.');
 
-  test('fade the project board at the open task and the backlog, the closed rail bound or not', async ({
+  test('fade the project board at the closed rail, the open task and the backlog, the closed rail bound or not', async ({
     page,
   }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.setViewportSize(ROOMY);
     await fixture(page);
     // Sticky rails stand at both ends: the columns fade where they meet them.
     await assertSides(page, card(page, 'Low priority'), {
@@ -165,19 +211,21 @@ test.describe('board side fades', () => {
     });
 
     // Bound, the closed rail scrolls with the columns and runs on under the task.
-    await page.evaluate(() =>
+    await page.evaluate(() => {
       localStorage.setItem(
         'throw-board-settings',
         JSON.stringify({ backlogRail: 'sticky', closedRail: 'bound' }),
-      ),
-    );
+      );
+      // The task opens at its first width again, so the columns run on under it.
+      localStorage.removeItem('throw-task-pane-width');
+    });
     await page.reload();
     await expect(card(page, 'Low priority')).toBeVisible({ timeout: 30_000 });
     await assertSides(page, card(page, 'Low priority'), { stickyBacklog: true });
   });
 
-  test('fade the workspace board at the open task and its start', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
+  test('fade the workspace board at its end, the open task and its start', async ({ page }) => {
+    await page.setViewportSize(ROOMY);
     await workspaceFixture(page);
     await assertSides(page, card(page, 'Bake bread'));
   });
