@@ -67,3 +67,8 @@ it.each(['github-releases', 'task-github-releases'])(
     expect(shape.where).toEqual(SHAPES['task-github-links']!.where);
   },
 );
+
+it('backs up invite hashes and claim history without syncing them', () => {
+  expect(CREDENTIAL_TABLES).not.toContain('invites');
+  expect(Object.values(SHAPES).map((shape) => shape.table)).not.toContain('invites');
+});

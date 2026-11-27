@@ -113,6 +113,20 @@ export const verification = pgTable(
   (table) => [index().on(table.identifier)],
 );
 
+// Invite hashes and their claim history are server-only (ADR 0018).
+export const invites = pgTable('invites', {
+  id: uuid().primaryKey().defaultRandom(),
+  tokenHash: text().notNull().unique(),
+  label: text().notNull().default(''),
+  createdBy: text()
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  createdAt: createdAt(),
+  expiresAt: timestamp({ withTimezone: true }).notNull(),
+  usedAt: timestamp({ withTimezone: true }),
+  usedBy: text().references(() => user.id, { onDelete: 'set null' }),
+});
+
 // App tables. Rows belong to a workspace, and a user reaches them through membership, never
 // through a user id of their own (docs/spec.md).
 

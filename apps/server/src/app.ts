@@ -1,5 +1,10 @@
 import { getConnInfo } from '@hono/node-server/conninfo';
-import { API_PROTOCOL_HEADER, GITHUB_WEBHOOK_PATH, SUPPORTED_API_PROTOCOLS } from '@throw/shared';
+import {
+  API_PROTOCOL_HEADER,
+  GITHUB_WEBHOOK_PATH,
+  INVITE_HEADER,
+  SUPPORTED_API_PROTOCOLS,
+} from '@throw/shared';
 import { type Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
@@ -14,7 +19,8 @@ import { CLIENT_IP_HEADER, clientIp, proxyList } from './lib/clientIp';
 import { requireCompatibleProtocol } from './lib/protocol';
 import { requestLogger } from './lib/requestLogger';
 import { mcpEndpoint } from './mcp/http';
-import { backupDownloadRoutes, backupRoutes } from './routes/backups';
+import { adminRoutes } from './routes/admin';
+import { backupDownloadRoutes } from './routes/backups';
 import { commentRoutes } from './routes/comments';
 import { githubRoutes } from './routes/github';
 import { mcpTokenRoutes } from './routes/mcpTokens';
@@ -65,7 +71,7 @@ export function createApp() {
   const appCors = cors({
     origin: [...NATIVE_APP_ORIGINS, ...env.TRUSTED_ORIGINS],
     credentials: true,
-    allowHeaders: ['Content-Type', 'Authorization', API_PROTOCOL_HEADER],
+    allowHeaders: ['Content-Type', 'Authorization', API_PROTOCOL_HEADER, INVITE_HEADER],
     exposeHeaders: [
       'set-auth-token',
       'electric-offset',
@@ -104,6 +110,7 @@ export function createApp() {
       statusColor: true,
       githubTaskLinks: true,
       githubReleases: true,
+      adminUsers: true,
     });
   });
 
@@ -120,7 +127,7 @@ export function createApp() {
     .basePath('/api')
     .get('/health', (c) => c.json({ ok: true }))
     .route('/updates', updateRoutes)
-    .route('/admin/backups', backupRoutes)
+    .route('/admin', adminRoutes)
     .route('/mcp-tokens', mcpTokenRoutes)
     .route('/webhooks', webhookRoutes)
     .route('/integrations/github', githubRoutes)

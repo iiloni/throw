@@ -64,6 +64,7 @@ describe('protocol gate', () => {
       statusColor: true,
       githubTaskLinks: true,
       githubReleases: true,
+      adminUsers: true,
     });
   });
 

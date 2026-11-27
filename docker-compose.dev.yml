@@ -23,6 +23,7 @@ services:
       THROW_SEED_PROFILE: ${THROW_SEED_PROFILE:-demo}
       # Seeding and the E2E tests make accounts of their own.
       REGISTRATION: open
+      THROW_DB_TESTS: '1'
       # The E2E webhook receiver listens on the app container's loopback over plain HTTP.
       WEBHOOK_ALLOW_LOOPBACK_HTTP: 'true'
       THROW_DEV_HOST: 0.0.0.0

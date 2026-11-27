@@ -53,6 +53,8 @@ integrations.
   with a separate database per app; each app needs its own Electric and replication slot.
 - Deployment lives in an operator-owned directory, with a combined Compose example in Throw
   ([deployment guide](deployment.md), ADR 0010). Each app pins and updates its own image.
+- Server admins manage users and single-use signup links through online administrative
+  endpoints ([ADR 0018](decisions/0018-admin-users-and-invites.md)).
 - Server admins can make, schedule, download and restore whole-server database backups
   ([backup guide](backups.md), ADR 0011).
 - Build starts after Catch reaches maturity.

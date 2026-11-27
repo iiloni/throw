@@ -501,8 +501,8 @@ ids. Do not add a dependency on Catch's repository; the two release independentl
 - All clients authenticate with Better Auth bearer tokens (`set-auth-token` header), not
   cookies, so the Android app on another origin shares the web app's code path. Only the
   signed token from `set-auth-token` works as a bearer token.
-- Sign-up closes after the first account unless `REGISTRATION=open`, which dev stacks set.
-  Catch's invite links have not been ported, so a closed server has one account.
+- The first signup becomes admin. Further signups need invites by default (ADR 0018).
+  `REGISTRATION=closed` blocks further signups and dev stacks set `REGISTRATION=open`.
 - With several accounts signed in, browser addresses start with `/u/<n>` (ADR 0016). The
   router never sees it, but `window.location.pathname` does: compare `currentPath()` and
   build a raw `<a href>` or a full page load within the account with `pagePath`.

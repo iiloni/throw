@@ -43,7 +43,8 @@ function withDatabase(url: string, name: string, login?: { user: string; passwor
  * archives. Restore truncates the tables, so it also clears any active credentials on the
  * server. Webhooks hold signing secrets, and their delivery queue only means anything to the
  * server that queued it (ADR 0015). GitHub connections hold a webhook secret and perhaps an
- * access token, and their delivery IDs belong with them (ADR 0017).
+ * access token, and their delivery IDs belong with them (ADR 0017). Invite hashes and their
+ * claim history are backed up with accounts (ADR 0018).
  */
 export const CREDENTIAL_TABLES = [
   'session',

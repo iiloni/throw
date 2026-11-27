@@ -32,8 +32,8 @@ Electric are private to the Docker network; expose only the app through HTTP/2 H
    ```
 
 5. Create the first account before opening access generally: it becomes the server admin.
-   Registration closes afterwards. Throw has no invitation UI yet; `REGISTRATION=open`
-   deliberately permits further signups. Catch and Throw accounts are independent.
+   Later signups require a seven-day admin invite by default. Set `REGISTRATION=closed`
+   to block them all or `REGISTRATION=open` for unrestricted signup. Catch and Throw accounts are independent.
 6. Make a backup, export it off the host and verify a restore in a disposable deployment
    before relying on it. Enable daily backups in Settings. Use `./update.sh` for updates.
 
