@@ -1519,6 +1519,11 @@ test('GitHub deliveries reach the offline collection and MCP, with scoped manual
     const unreleased = () =>
       call(client, 'list_tasks', { projectId: project.id, unreleased: true });
     expect((await unreleased()).items.map((t) => t.id)).toContain(task.id);
+    await send('release', {
+      action: 'published',
+      release: { ...release, tag_name: 'v0', published_at: '2026-11-26T06:59:59Z' },
+    });
+    expect((await unreleased()).items.map((t) => t.id)).toContain(task.id);
     await send('release', { action: 'published', release });
     const [shipped] = (await call(client, 'list_github_releases', { projectId: project.id }))
       .releases;
@@ -1529,6 +1534,16 @@ test('GitHub deliveries reach the offline collection and MCP, with scoped manual
       expect(
         (await call(client, 'list_tasks', { release: filter })).items.map((t) => t.id),
       ).toContain(task.id);
+    for (const shape of ['github-releases', 'task-github-releases'])
+      expect(await shapeRows(request, shape, stranger.headers)).toEqual([]);
+    const bindingPath = `/api/integrations/github/projects/${project.id}/releases/${shipped!.id}/tasks/${task.id}`;
+    expect((await request.delete(bindingPath, { headers: stranger.headers })).status()).toBe(404);
+    expect((await request.put(bindingPath, { headers: stranger.headers })).status()).toBe(404);
+    await send('release', {
+      action: 'published',
+      release: { ...release, tag_name: 'v2', published_at: '2026-11-27T00:00:00Z' },
+    });
+    expect((await call(client, 'get_task', { task: task.key })).githubReleases).toEqual([shipped]);
     async function cachedRelease() {
       return page.evaluate(
         async ({ releaseId, taskId }) => {
@@ -1582,8 +1597,6 @@ test('GitHub deliveries reach the offline collection and MCP, with scoped manual
     expect((await unreleased()).items.map((t) => t.id)).toContain(task.id);
     await send('release', { action: 'deleted', release });
     expect((await call(client, 'get_task', { task: task.id })).githubReleases).toEqual([]);
-    for (const shape of ['github-releases', 'task-github-releases'])
-      expect(await shapeRows(request, shape, stranger.headers)).toEqual([]);
     expect(await shapeRows(request, 'task-github-links', stranger.headers)).toEqual([]);
     const rows = await shapeRows(request, 'task-github-links', owner.headers);
     expect(rows[0]).not.toHaveProperty('runs');
