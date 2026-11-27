@@ -853,8 +853,13 @@ test('reparenting a manually ordered tag offline clears its position immediately
     parentId: null,
     position: originalPosition,
   });
-  const offline = (route: Route) => route.abort('connectionfailed');
-  await page.route('**/api/**', offline);
+  // Load Vite's modules before taking the browser offline. The request fixture can still
+  // inspect the server while the browser's outbox waits for connectivity.
+  await page.evaluate(async () => {
+    await import(/* @vite-ignore */ '/src/lib/tags.ts');
+  });
+  await page.context().setOffline(true);
+  await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
   await page.evaluate(
     async ({ tagId, parentId }) => {
       const { updateTag } = await import(/* @vite-ignore */ '/src/lib/tags.ts');
@@ -864,14 +869,25 @@ test('reparenting a manually ordered tag offline clears its position immediately
   );
   await expect.poll(localTag).toEqual({ parentId, position: null });
 
-  await page.unroute('**/api/**', offline);
-  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.evaluate(async () => {
+    const { waitForPendingWritesStored } = await import(
+      /* @vite-ignore */ '/src/lib/collections.ts'
+    );
+    await waitForPendingWritesStored();
+  });
+  const serverTag = async () =>
+    (await shapeRows(page.request, 'tags', account.headers)).find(({ id }) => id === tagId);
+  expect(await serverTag()).toMatchObject({ parent_id: null, position: originalPosition });
+
+  const replay = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PATCH' && response.url().endsWith(`/api/tags/${tagId}`),
+    { timeout: APP_LOAD_TIMEOUT },
+  );
+  await page.context().setOffline(false);
+  expect((await replay).ok()).toBe(true);
   await expect
-    .poll(
-      async () =>
-        (await shapeRows(page.request, 'tags', account.headers)).find(({ id }) => id === tagId),
-      { timeout: APP_LOAD_TIMEOUT },
-    )
+    .poll(serverTag, { timeout: APP_LOAD_TIMEOUT })
     .toMatchObject({ parent_id: parentId, position: null });
 });
 
