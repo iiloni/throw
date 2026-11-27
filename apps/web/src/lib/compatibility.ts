@@ -198,6 +198,10 @@ export async function waitForGithubLinks(signal?: AbortSignal | null) {
   );
 }
 
+export async function ensureGithubReleasesSupport() {
+  await checkCompatibility();
+  if (githubReleasesServer.get() !== getServerUrl()) throw new CompatibilityError('server-too-old');
+}
 export async function waitForGithubReleases(signal?: AbortSignal | null) {
   await checkCompatibility();
   await waitForSync(

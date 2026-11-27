@@ -268,6 +268,7 @@ export async function listTasks(
       .where(
         and(
           eq(taskGithubReleases.taskId, tasks.id),
+          inArray(taskGithubReleases.workspaceId, workspacesFor(actor)),
           inArray(githubReleases.workspaceId, workspacesFor(actor)),
           filter,
         ),
@@ -297,6 +298,7 @@ export async function listTasks(
               .where(
                 and(
                   eq(taskGithubLinks.taskId, tasks.id),
+                  inArray(taskGithubLinks.workspaceId, workspacesFor(actor)),
                   eq(taskGithubLinks.kind, 'pr'),
                   eq(taskGithubLinks.state, 'merged'),
                 ),
@@ -533,6 +535,7 @@ export async function getTask(
         .where(
           and(
             eq(taskGithubReleases.taskId, task.id),
+            inArray(taskGithubReleases.workspaceId, workspacesFor(actor)),
             inArray(githubReleases.workspaceId, workspacesFor(actor)),
           ),
         )

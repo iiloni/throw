@@ -46,7 +46,12 @@ test('manual releases and lightweight tags survive disconnect and stay project s
     publishedAt: null,
     repo: 'octo/repo',
   });
-  expect((await request.post(path, { headers, data: manual })).status()).toBe(409);
+  const replay = await request.post(path, { headers, data: { ...manual, tagName: ' v0 ' } });
+  expect(replay.status()).toBe(200);
+  expect(await replay.json()).toMatchObject({ tagName: 'v0', txid: null });
+  expect((await request.post(path, { headers, data: { ...manual, name: 'Other' } })).status()).toBe(
+    409,
+  );
   const connected = await request.post(base, { headers, data: { repository: 'Octo/Repo' } });
   const { secret, connection } = await connected.json();
   const body = JSON.stringify({

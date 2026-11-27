@@ -22,6 +22,18 @@ afterEach(() => {
 });
 
 describe('client compatibility transport', () => {
+  it('keeps release management requests off older servers', async () => {
+    fetcher.mockResolvedValueOnce(json(compatible));
+    const { api } = await import('./api');
+    await expect(api.githubReleases('project')).rejects.toThrow('server update');
+    await expect(
+      api.createGithubRelease('project', { repo: 'a/b', tagName: 'v1' }),
+    ).rejects.toThrow('server update');
+    await expect(api.setGithubReleaseBinding('project', 'release', 'task', true)).rejects.toThrow(
+      'server update',
+    );
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
   it('keeps the GitHub stream idle on older protocol-1 servers and starts it after an upgrade', async () => {
     const url = 'https://throw.example/api/shapes/task-github-links';
     fetcher.mockResolvedValueOnce(json(compatible));

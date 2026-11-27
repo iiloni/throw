@@ -121,15 +121,14 @@ export const githubRoutes = new Hono<AppEnv>()
     '/projects/:projectId/releases',
     projectParam,
     zValidator('json', createGithubReleaseSchema),
-    async (c) =>
-      c.json(
-        await createRelease(
-          { userId: c.get('user')!.id },
-          c.req.valid('param').projectId,
-          c.req.valid('json'),
-        ),
-        201,
-      ),
+    async (c) => {
+      const result = await createRelease(
+        { userId: c.get('user')!.id },
+        c.req.valid('param').projectId,
+        c.req.valid('json'),
+      );
+      return c.json(result, result.txid === null ? 200 : 201);
+    },
   )
   .on(
     ['PUT', 'DELETE'],

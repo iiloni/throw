@@ -1525,8 +1525,16 @@ test('GitHub deliveries reach the offline collection and MCP, with scoped manual
     });
     expect((await unreleased()).items.map((t) => t.id)).toContain(task.id);
     await send('release', { action: 'published', release });
-    const [shipped] = (await call(client, 'list_github_releases', { projectId: project.id }))
-      .releases;
+    const first = await call(client, 'list_github_releases', { projectId: project.id, limit: 1 });
+    const [shipped] = first.releases;
+    expect(first.nextCursor?.id).toBe(shipped?.id);
+    const next = await call(client, 'list_github_releases', {
+      projectId: project.id,
+      limit: 1,
+      cursor: first.nextCursor,
+    });
+    expect(next.releases.map((row) => row.tagName)).toEqual(['v0']);
+    expect(next.nextCursor).toBeNull();
     expect(shipped).toMatchObject({ tagName: 'v1', isPrerelease: true });
     expect((await unreleased()).items).toHaveLength(0);
     expect((await call(client, 'get_task', { task: task.key })).githubReleases).toEqual([shipped]);
@@ -1590,6 +1598,9 @@ test('GitHub deliveries reach the offline collection and MCP, with scoped manual
     await call(client, 'unbind_task_release', { task: task.key, releaseId: shipped!.id });
     expect((await unreleased()).items.map((t) => t.id)).toContain(task.id);
     await call(client, 'bind_task_release', { task: task.key, releaseId: shipped!.id });
+    expect(
+      await call(client, 'bind_task_release', { task: task.key, releaseId: shipped!.id }),
+    ).toEqual({ bound: true, txid: null });
     await send('release', {
       action: 'unpublished',
       release: { ...release, draft: true, published_at: null },

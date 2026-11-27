@@ -26,7 +26,7 @@ without a public GitHub App registered for each server.
 
 **A project opts in by connecting one repository. GitHub pushes signed webhooks to Throw;
 Throw verifies each one before anything reads it.** A connection is the only way GitHub
-webhooks enter Throw, and a project without one is unchanged.
+webhooks enter Throw. Members can also record releases and correct bindings manually in a disconnected project.
 
 ### The connection
 

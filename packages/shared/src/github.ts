@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { timestampSchema } from './sync';
+import { timestampSchema, txidResponseSchema } from './sync';
 
 /** A project's connection to one GitHub repository (ADR 0017). Server-only, never synced. */
 
@@ -252,7 +252,7 @@ export const linkGithubRequestSchema = z.object({
 
 export const createGithubReleaseSchema = z.strictObject({
   repo: githubRepositorySchema,
-  tagName: z.string().min(1).max(1024),
+  tagName: z.string().trim().min(1).max(1024),
   name: z.string().max(2048).nullable().optional(),
   targetCommitish: z.string().max(1024).nullable().optional(),
   isDraft: z.boolean().optional(),
@@ -276,6 +276,8 @@ export const githubReleaseSchema = z.object({
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
 });
+export const githubReleaseWriteSchema = githubReleaseSchema.extend(txidResponseSchema.shape);
+export const releaseBindingResponseSchema = txidResponseSchema.extend({ bound: z.boolean() });
 export type GithubRelease = z.infer<typeof githubReleaseSchema>;
 export const githubReleasesResponseSchema = z.object({ releases: z.array(githubReleaseSchema) });
 export const taskGithubReleaseSchema = z.object({

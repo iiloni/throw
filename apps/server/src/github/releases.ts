@@ -1,5 +1,5 @@
 import type { CreateGithubRelease, GithubRelease } from '@throw/shared';
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { db, type Transaction } from '../db/client';
 import {
@@ -8,6 +8,7 @@ import {
   githubReleases as releases,
   tasks,
 } from '../db/schema';
+import { currentTxid } from '../lib/txid';
 import { memberWorkspaces } from '../lib/workspaces';
 import type { WriteActor } from '../lib/writeActor';
 import { activeTask } from './linkData';
@@ -38,15 +39,37 @@ async function memberProject(tx: Transaction, actor: WriteActor, projectId: stri
   if (!project) throw new LinkError('Project not found', 404);
   return project;
 }
-export function listReleases(actor: WriteActor, projectId: string) {
+export function listReleases(
+  actor: WriteActor,
+  projectId: string,
+  page?: { limit: number; cursor?: { id: string; publishedAt: string | null } },
+) {
   return db.transaction(async (tx) => {
     await memberProject(tx, actor, projectId);
-    const rows = await tx
+    const date = sql`coalesce(${releases.publishedAt},'-infinity'::timestamptz)`;
+    const cursor = page?.cursor;
+    const query = tx
       .select()
       .from(releases)
-      .where(eq(releases.projectId, projectId))
-      .orderBy(desc(releases.publishedAt), releases.tagName);
-    return { releases: rows.map(publicRelease) };
+      .where(
+        and(
+          eq(releases.projectId, projectId),
+          cursor
+            ? sql`(${date},${releases.id}) < (coalesce(${cursor.publishedAt}::timestamptz,'-infinity'::timestamptz),${cursor.id}::uuid)`
+            : undefined,
+        ),
+      )
+      .orderBy(desc(date), desc(releases.id));
+    const rows = await (page ? query.limit(page.limit + 1) : query);
+    const items = rows.slice(0, page?.limit).map(publicRelease);
+    const last = items.at(-1);
+    return {
+      releases: items,
+      nextCursor:
+        page && rows.length > page.limit && last
+          ? { id: last.id, publishedAt: last.publishedAt }
+          : null,
+    };
   });
 }
 export const releaseUrl = (repo: string, tag: string) =>
@@ -73,8 +96,29 @@ export function createRelease(actor: WriteActor, projectId: string, input: Creat
       })
       .onConflictDoNothing()
       .returning();
-    if (!row) throw new LinkError('Release tag already exists in this repository', 409);
-    return publicRelease(row);
+    if (row) return { ...publicRelease(row), txid: await currentTxid(tx) };
+    const [existing] = await tx
+      .select()
+      .from(releases)
+      .where(
+        and(
+          eq(releases.projectId, projectId),
+          eq(releases.repo, repo),
+          eq(releases.tagName, input.tagName),
+        ),
+      );
+    if (
+      existing?.source === 'manual' &&
+      existing.name === (input.name ?? null) &&
+      existing.targetCommitish === (input.targetCommitish ?? null) &&
+      existing.isDraft === (input.isDraft ?? false) &&
+      existing.isPrerelease === (input.isPrerelease ?? false) &&
+      (!input.publishedAt ||
+        input.isDraft ||
+        existing.publishedAt?.getTime() === Date.parse(input.publishedAt))
+    )
+      return { ...publicRelease(existing), txid: null };
+    throw new LinkError('Release tag already exists in this repository', 409);
   });
 }
 
@@ -108,18 +152,20 @@ export function setReleaseBinding(
       .where(and(eq(tasks.id, taskId), eq(tasks.projectId, projectId), activeTask(tx)))
       .for('share', { of: tasks });
     if (!task) throw new LinkError('Task not found', 404);
-    if (bind)
-      await tx
-        .insert(bindings)
-        .values({ id: uuidv7(), workspaceId, projectId, releaseId, taskId, matchedBy: 'manual' })
-        .onConflictDoUpdate({
-          target: [bindings.taskId, bindings.releaseId],
-          set: { matchedBy: 'manual' },
-        });
-    else
-      await tx
-        .delete(bindings)
-        .where(and(eq(bindings.taskId, taskId), eq(bindings.releaseId, releaseId)));
-    return { bound: bind };
+    const changed = bind
+      ? await tx
+          .insert(bindings)
+          .values({ id: uuidv7(), workspaceId, projectId, releaseId, taskId, matchedBy: 'manual' })
+          .onConflictDoUpdate({
+            target: [bindings.taskId, bindings.releaseId],
+            set: { matchedBy: 'manual' },
+            setWhere: ne(bindings.matchedBy, 'manual'),
+          })
+          .returning({ id: bindings.id })
+      : await tx
+          .delete(bindings)
+          .where(and(eq(bindings.taskId, taskId), eq(bindings.releaseId, releaseId)))
+          .returning({ id: bindings.id });
+    return { bound: bind, txid: changed.length ? await currentTxid(tx) : null };
   });
 }

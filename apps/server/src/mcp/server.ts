@@ -286,7 +286,7 @@ export function throwMcpServer(actor: McpActor) {
     'list_github_releases',
     mcpTools.list_github_releases,
     'List releases and tags recorded for a project.',
-    (actor, input) => listReleases(actor, input.projectId),
+    (actor, input) => listReleases(actor, input.projectId, input),
     true,
   );
   for (const name of ['bind_task_release', 'unbind_task_release'] as const) {

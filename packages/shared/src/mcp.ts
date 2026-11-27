@@ -4,6 +4,7 @@ import {
   githubReleaseSchema,
   githubReleasesResponseSchema,
   linkGithubRequestSchema,
+  releaseBindingResponseSchema,
   taskGithubLinkSchema,
 } from './github';
 import { positionSchema } from './position';
@@ -350,16 +351,21 @@ export const mcpTools = {
     output: tagResult,
   },
   list_github_releases: {
-    input: z.strictObject({ projectId: uuid }),
-    output: githubReleasesResponseSchema,
+    input: pageInput.extend({
+      projectId: uuid,
+      cursor: z.object({ id: uuid, publishedAt: timestampSchema.nullable() }).optional(),
+    }),
+    output: githubReleasesResponseSchema.extend({
+      nextCursor: z.object({ id: uuid, publishedAt: timestampSchema.nullable() }).nullable(),
+    }),
   },
   bind_task_release: {
     input: z.strictObject({ task: taskRef, releaseId: uuid }),
-    output: z.object({ bound: z.boolean() }),
+    output: releaseBindingResponseSchema,
   },
   unbind_task_release: {
     input: z.strictObject({ task: taskRef, releaseId: uuid }),
-    output: z.object({ bound: z.boolean() }),
+    output: releaseBindingResponseSchema,
   },
   list_tasks: {
     input: pageInput.extend({
