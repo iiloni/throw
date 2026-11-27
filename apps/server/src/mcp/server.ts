@@ -3,6 +3,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { changeCursorErrorSchema, mcpTools } from '@throw/shared';
 import type { z } from 'zod';
 import { addGithubLink, LinkError, removeGithubLink } from '../github/manualLinks';
+import { listReleases, setReleaseBinding } from '../github/releases';
 import type { McpActor } from '../lib/mcpTokens';
 import { StarterStatusIdTaken } from '../lib/projectWrites';
 import { StatusIdTaken } from '../lib/statusWrites';
@@ -63,6 +64,7 @@ export function throwMcpServer(actor: McpActor) {
           idempotentHint:
             readOnly ||
             name.endsWith('_github') ||
+            name.endsWith('_task_release') ||
             name.endsWith('_project') ||
             name.endsWith('_status') ||
             name.endsWith('_tag') ||
@@ -72,7 +74,8 @@ export function throwMcpServer(actor: McpActor) {
             name.startsWith('update_') ||
             name === 'set_task_tags' ||
             name === 'remove_task_relation' ||
-            name === 'unlink_github',
+            name === 'unlink_github' ||
+            name === 'unbind_task_release',
         },
       },
       async (args: unknown): Promise<CallToolResult> => {
@@ -279,5 +282,29 @@ export function throwMcpServer(actor: McpActor) {
     async (actor, input) =>
       removeGithubLink(actor, (await requireTask(actor, input.task)).id, input.linkId),
   );
+  register(
+    'list_github_releases',
+    mcpTools.list_github_releases,
+    'List releases and tags recorded for a project.',
+    (actor, input) => listReleases(actor, input.projectId),
+    true,
+  );
+  for (const name of ['bind_task_release', 'unbind_task_release'] as const) {
+    register(
+      name,
+      mcpTools[name],
+      name === 'bind_task_release' ? 'Bind a task to a release.' : 'Remove a task from a release.',
+      async (actor, input) => {
+        const task = await requireTask(actor, input.task);
+        return setReleaseBinding(
+          actor,
+          task.projectId,
+          input.releaseId,
+          task.id,
+          name === 'bind_task_release',
+        );
+      },
+    );
+  }
   return server;
 }

@@ -58,3 +58,12 @@ it('backs up task GitHub links and exposes only their public metadata to workspa
     'updated_at',
   ]);
 });
+
+it.each(['github-releases', 'task-github-releases'])(
+  'retains %s across backup and restore and scopes sync to workspace members',
+  (name) => {
+    const shape = SHAPES[name]!;
+    expect(CREDENTIAL_TABLES).not.toContain(shape.table);
+    expect(shape.where).toEqual(SHAPES['task-github-links']!.where);
+  },
+);

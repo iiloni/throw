@@ -62,6 +62,7 @@ function serverCapability(preference: string) {
 
 // Only a live bootstrap response can enable the optional remote shape. SQLite opens independently.
 const githubLinksServer = createStore<string | null>(null);
+const githubReleasesServer = createStore<string | null>(null);
 const taskSize = serverCapability('task-size');
 const statusColor = serverCapability('status-color');
 
@@ -93,6 +94,7 @@ export function checkCompatibility(force = false): Promise<void> {
       taskSize.remember(server, false);
       statusColor.remember(server, false);
       githubLinksServer.set(null);
+      githubReleasesServer.set(null);
       updateSyncStatus({ incompatibility: 'server-too-old' });
     } else {
       if (!response.ok) throw new Error('Could not check API compatibility');
@@ -102,6 +104,7 @@ export function checkCompatibility(force = false): Promise<void> {
       taskSize.remember(server, range.data.taskSize);
       statusColor.remember(server, range.data.statusColor);
       githubLinksServer.set(range.data.githubTaskLinks ? server : null);
+      githubReleasesServer.set(range.data.githubReleases ? server : null);
       updateSyncStatus({
         incompatibility: protocolCompatibility(API_PROTOCOL_VERSION, range.data),
       });
@@ -192,6 +195,15 @@ export async function waitForGithubLinks(signal?: AbortSignal | null) {
     () => githubLinksServer.get() === getServerUrl(),
     signal,
     githubLinksServer.subscribe,
+  );
+}
+
+export async function waitForGithubReleases(signal?: AbortSignal | null) {
+  await checkCompatibility();
+  await waitForSync(
+    () => githubReleasesServer.get() === getServerUrl(),
+    signal,
+    githubReleasesServer.subscribe,
   );
 }
 

@@ -1,6 +1,7 @@
 import type {
   CreateComment,
   CreateGithubConnection,
+  CreateGithubRelease,
   CreateMcpToken,
   CreateProject,
   CreateStatus,
@@ -27,6 +28,8 @@ import {
   createMcpTokenResponseSchema,
   githubConnectionResponseSchema,
   githubConnectionSecretResponseSchema,
+  githubReleaseSchema,
+  githubReleasesResponseSchema,
   mcpTokensResponseSchema,
   webhookResponseSchema,
   webhookSecretResponseSchema,
@@ -172,6 +175,20 @@ export const api = {
       method: 'POST',
       signal: AbortSignal.timeout(20_000),
     }).then(githubConnectionResponseSchema.parse),
+  githubReleases: (projectId: string) =>
+    request<unknown>(`/integrations/github/projects/${projectId}/releases`, {}).then(
+      githubReleasesResponseSchema.parse,
+    ),
+  createGithubRelease: (projectId: string, body: CreateGithubRelease) =>
+    request<unknown>(`/integrations/github/projects/${projectId}/releases`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }).then(githubReleaseSchema.parse),
+  setGithubReleaseBinding: (projectId: string, releaseId: string, taskId: string, bound: boolean) =>
+    apiResponse(
+      `/integrations/github/projects/${projectId}/releases/${releaseId}/tasks/${taskId}`,
+      { method: bound ? 'PUT' : 'DELETE' },
+    ),
   versionInfo: () => bootstrap<VersionInfo>('/updates'),
   releases: () => bootstrap<ReleasesResponse>('/updates/releases'),
   createWorkspace: (body: CreateWorkspace) =>

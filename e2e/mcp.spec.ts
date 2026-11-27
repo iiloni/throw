@@ -1509,6 +1509,43 @@ test('GitHub deliveries reach the offline collection and MCP, with scoped manual
       checksSummary: { state: 'failing', passed: 1, failed: 1, pending: 0 },
     });
     expect(result.history.items.filter((i) => i.viaTokenName === 'GitHub')).toHaveLength(3);
+    const release = {
+      tag_name: 'v1',
+      name: 'First release',
+      draft: false,
+      prerelease: true,
+      published_at: '2026-11-26T08:00:00Z',
+    };
+    const unreleased = () =>
+      call(client, 'list_tasks', { projectId: project.id, unreleased: true });
+    expect((await unreleased()).items.map((t) => t.id)).toContain(task.id);
+    await send('release', { action: 'published', release });
+    const [shipped] = (await call(client, 'list_github_releases', { projectId: project.id }))
+      .releases;
+    expect(shipped).toMatchObject({ tagName: 'v1', isPrerelease: true });
+    expect((await unreleased()).items).toHaveLength(0);
+    expect((await call(client, 'get_task', { task: task.key })).githubReleases).toEqual([shipped]);
+    for (const filter of [shipped!.id, 'v1'])
+      expect(
+        (await call(client, 'list_tasks', { release: filter })).items.map((t) => t.id),
+      ).toContain(task.id);
+    async function cachedRelease() {
+      return page.evaluate(
+        async ({ releaseId, taskId }) => {
+          const { githubReleasesCollection: r, taskGithubReleasesCollection: b } = await import(
+            /* @vite-ignore */ '/src/lib/collections.ts'
+          );
+          const persisted = await b.config.persistence.adapter.loadSubset(b.id, {});
+          return [
+            r.get(releaseId)?.tagName,
+            [...b.state.values()].some((binding) => binding.taskId === taskId),
+            persisted.some((entry: { value: { taskId: string } }) => entry.value.taskId === taskId),
+          ];
+        },
+        { releaseId: shipped!.id, taskId: task.id },
+      );
+    }
+    await expect.poll(cachedRelease, { timeout: 30000 }).toEqual(['v1', true, true]);
     const synced = () =>
       page.evaluate(async (id) => {
         const { taskGithubLinksCollection: c } = await import(
@@ -1534,6 +1571,19 @@ test('GitHub deliveries reach the offline collection and MCP, with scoped manual
     await page.route('**/api/shapes/**', (route) => route.abort());
     await page.reload();
     await expect.poll(synced, { timeout: 30000 }).toMatchObject(link);
+    await expect.poll(cachedRelease, { timeout: 30000 }).toEqual(['v1', true, true]);
+    await call(client, 'unbind_task_release', { task: task.key, releaseId: shipped!.id });
+    expect((await unreleased()).items.map((t) => t.id)).toContain(task.id);
+    await call(client, 'bind_task_release', { task: task.key, releaseId: shipped!.id });
+    await send('release', {
+      action: 'unpublished',
+      release: { ...release, draft: true, published_at: null },
+    });
+    expect((await unreleased()).items.map((t) => t.id)).toContain(task.id);
+    await send('release', { action: 'deleted', release });
+    expect((await call(client, 'get_task', { task: task.id })).githubReleases).toEqual([]);
+    for (const shape of ['github-releases', 'task-github-releases'])
+      expect(await shapeRows(request, shape, stranger.headers)).toEqual([]);
     expect(await shapeRows(request, 'task-github-links', stranger.headers)).toEqual([]);
     const rows = await shapeRows(request, 'task-github-links', owner.headers);
     expect(rows[0]).not.toHaveProperty('runs');

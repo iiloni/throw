@@ -27,17 +27,20 @@ import { alias } from 'drizzle-orm/pg-core';
 import { db } from '../db/client';
 import {
   comments,
+  githubReleases,
   projects,
   statuses,
   tags,
   taskActivity,
   taskGithubLinks,
+  taskGithubReleases,
   taskRelations,
   tasks,
   taskTags,
   workspaces,
 } from '../db/schema';
 import { publicLink } from '../github/linkData';
+import { publicRelease } from '../github/releases';
 import type { McpActor } from '../lib/mcpTokens';
 import { memberWorkspaces } from '../lib/workspaces';
 import { blocksToMarkdown } from './markdown';
@@ -239,7 +242,7 @@ function taskFilter(reference: string) {
 
 export async function findTask(actor: McpActor, reference: string) {
   const [task] = await db
-    .select({ id: tasks.id, key })
+    .select({ id: tasks.id, projectId: tasks.projectId, key })
     .from(tasks)
     .innerJoin(projects, eq(tasks.projectId, projects.id))
     .where(and(inArray(tasks.workspaceId, workspacesFor(actor)), taskFilter(reference)))
@@ -257,12 +260,51 @@ export async function listTasks(
   actor: McpActor,
   input: McpInput<'list_tasks'>,
 ): Promise<McpOutput<'list_tasks'>> {
+  const bound = (filter: SQL | undefined) =>
+    db
+      .select({ id: githubReleases.id })
+      .from(taskGithubReleases)
+      .innerJoin(githubReleases, eq(githubReleases.id, taskGithubReleases.releaseId))
+      .where(
+        and(
+          eq(taskGithubReleases.taskId, tasks.id),
+          inArray(githubReleases.workspaceId, workspacesFor(actor)),
+          filter,
+        ),
+      );
   const parentId =
     typeof input.parent === 'string' ? (await requireTask(actor, input.parent)).id : input.parent;
   const rows = await taskPage(
     actor,
     input,
     input.projectId ? eq(tasks.projectId, input.projectId) : undefined,
+    input.release
+      ? exists(
+          bound(
+            or(
+              eq(githubReleases.tagName, input.release),
+              sql`${githubReleases.id}::text = ${input.release}`,
+            ),
+          ),
+        )
+      : undefined,
+    input.unreleased
+      ? and(
+          exists(
+            db
+              .select({ id: taskGithubLinks.id })
+              .from(taskGithubLinks)
+              .where(
+                and(
+                  eq(taskGithubLinks.taskId, tasks.id),
+                  eq(taskGithubLinks.kind, 'pr'),
+                  eq(taskGithubLinks.state, 'merged'),
+                ),
+              ),
+          ),
+          sql`NOT ${exists(bound(and(eq(githubReleases.isDraft, false), isNotNull(githubReleases.publishedAt))))}`,
+        )
+      : undefined,
     input.statusId ? eq(tasks.statusId, input.statusId) : undefined,
     input.category ? eq(statuses.category, input.category) : undefined,
     input.priority ? eq(tasks.priority, input.priority) : undefined,
@@ -424,7 +466,7 @@ export async function getTask(
     .limit(1);
   if (!task) throw new ToolError('Task not found.');
 
-  const [subtaskRows, commentRows, historyRows, assignments, linked, githubRows] =
+  const [subtaskRows, commentRows, historyRows, assignments, linked, githubRows, releases] =
     await Promise.all([
       taskPage(actor, input.subtasks, eq(tasks.parentId, task.id)),
       db
@@ -484,6 +526,17 @@ export async function getTask(
           ),
         )
         .orderBy(taskGithubLinks.id),
+      db
+        .select({ release: githubReleases })
+        .from(taskGithubReleases)
+        .innerJoin(githubReleases, eq(githubReleases.id, taskGithubReleases.releaseId))
+        .where(
+          and(
+            eq(taskGithubReleases.taskId, task.id),
+            inArray(githubReleases.workspaceId, workspacesFor(actor)),
+          ),
+        )
+        .orderBy(githubReleases.tagName),
     ]);
 
   const commentPage = timelinePage(commentRows, input.comments.limit);
@@ -497,6 +550,7 @@ export async function getTask(
       blocked: linked.blocked,
     },
     relations: linked.relations,
+    githubReleases: releases.map(({ release }) => publicRelease(release)),
     githubLinks: githubRows.map(publicLink),
     subtasks: uuidPage(subtaskRows.map(summarize), input.subtasks),
     comments: {

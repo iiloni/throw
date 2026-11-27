@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import { activityChangeSchema } from './activity';
-import { linkGithubRequestSchema, taskGithubLinkSchema } from './github';
+import {
+  githubReleaseSchema,
+  githubReleasesResponseSchema,
+  linkGithubRequestSchema,
+  taskGithubLinkSchema,
+} from './github';
 import { positionSchema } from './position';
 import { prioritySchema } from './priorities';
 import { projectKeySchema, projectSchema, storedProjectKeySchema } from './projects';
@@ -344,8 +349,22 @@ export const mcpTools = {
     }),
     output: tagResult,
   },
+  list_github_releases: {
+    input: z.strictObject({ projectId: uuid }),
+    output: githubReleasesResponseSchema,
+  },
+  bind_task_release: {
+    input: z.strictObject({ task: taskRef, releaseId: uuid }),
+    output: z.object({ bound: z.boolean() }),
+  },
+  unbind_task_release: {
+    input: z.strictObject({ task: taskRef, releaseId: uuid }),
+    output: z.object({ bound: z.boolean() }),
+  },
   list_tasks: {
     input: pageInput.extend({
+      release: z.string().min(1).optional(),
+      unreleased: z.boolean().optional(),
       query: z.string().trim().min(1).max(200).optional(),
       projectId: uuid.optional(),
       statusId: uuid.optional(),
@@ -386,6 +405,7 @@ export const mcpTools = {
           .describe('A blocking task is still open and out of the trash. Informational only.'),
       }),
       relations: z.array(relation),
+      githubReleases: z.array(githubReleaseSchema).default([]),
       githubLinks: z.array(taskGithubLinkSchema).default([]),
       subtasks: uuidPage(task),
       comments: timelinePage(comment),
