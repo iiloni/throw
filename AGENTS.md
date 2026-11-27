@@ -62,10 +62,10 @@ and the board stops following the row's width meanwhile (`useWidth`'s `hold`). T
 steps by painted frames, so mounting a layout costs no motion, and the pane holds BlockNote back
 until it has opened, as the phone's task screen does. The compact layout opens on the open task's
 own view and column, and draws each other view the first time it is shown.
-Columns that run on under an open desktop pane fade out at the seam (`[data-seam]` in
-`styles.css`, from `ScrollArea`'s `sides` marks and `seamOf`), and columns scrolled out to the
-left fade at the board's start; each fade stands at a sticky rail's edge where one lies over
-that end of the scroller.
+Columns that run on past either end of a desktop board fade out there (`[data-seam]` in
+`styles.css`, from `ScrollArea`'s `sides` marks): at the board's start on the left, and on the
+right at an open pane's seam or the window's edge; each fade stands at a sticky rail's edge
+where one lies over that end of the scroller.
 Outbound webhooks (ADR 0015) are server-only: `apps/server/src/webhooks` queues deliveries
 in the write's transaction, checks receivers against its SSRF policy and sends them from a
 worker; Settings manages them at `/settings/webhooks`. A webhook's quiet window is a

@@ -17,14 +17,7 @@ import {
   useCompactBoard,
   useWidening,
 } from './CompactSplitBoard';
-import {
-  boardRestWidth,
-  OpenTaskPane,
-  SelectionBar,
-  seamOf,
-  usePaneSpace,
-  useWidth,
-} from './DesktopBoard';
+import { boardRestWidth, OpenTaskPane, SelectionBar, usePaneSpace, useWidth } from './DesktopBoard';
 import { drag, makingWay } from './drag';
 import { PriorityIcon } from './glyphs';
 import { LayoutMorph } from './LayoutMorph';
@@ -111,7 +104,7 @@ export function WorkspaceDesktopBoard() {
           ) : (
             <ScrollArea
               sides
-              data-seam={seamOf(state)}
+              data-seam=""
               data-board-layout=""
               className="min-w-0 flex-1"
               style={widening === null ? undefined : { width: widening, flex: 'none' }}
