@@ -463,6 +463,110 @@ describe('relation filters', () => {
   });
 });
 
+describe('release filters', () => {
+  const release = (id: string, tagName: string, extra: { isDraft?: boolean } = {}) => ({
+    id,
+    projectId: project.id,
+    tagName,
+    name: null,
+    isDraft: extra.isDraft ?? false,
+    isPrerelease: false,
+    publishedAt: extra.isDraft ? null : '2026-11-01T00:00:00.000Z',
+    source: 'release' as const,
+  });
+  const released = () =>
+    receiveBoard(
+      {
+        ...projectBoardData(
+          project,
+          statuses,
+          [task('Weed beds', 2), task('Paint fence', 4), task('Tidy desk', null)],
+          [],
+          secondaryTagsByTask([]),
+        ),
+        releases: {
+          releases: [
+            release('r2', 'v0.2.0'),
+            release('r1', 'v0.1.0'),
+            release('r3', 'v0.3.0', { isDraft: true }),
+          ],
+          byTask: new Map([
+            ['Weed beds', new Set(['r1'])],
+            ['Paint fence', new Set(['r2', 'r3'])],
+          ]),
+          unreleased: new Set(['Tidy desk']),
+        },
+      },
+      { rename: () => {}, place: () => true, send: () => true },
+    );
+
+  it('leaves Release out where the board has no GitHub work, as the prototype does', () => {
+    const { unmount } = render(<BoardSearch />);
+    fireEvent.click(screen.getByRole('button', { name: 'Filter and sort' }));
+    expect(screen.queryByRole('tab', { name: 'Release' })).not.toBeInTheDocument();
+    unmount();
+    render(<BoardSearchSidebar />);
+    expect(screen.queryByRole('region', { name: 'Release' })).not.toBeInTheDocument();
+  });
+
+  it('chooses Unreleased and releases, newest first, and removes them by their chips', () => {
+    released();
+    render(<BoardSearch />);
+    fireEvent.click(screen.getByRole('button', { name: 'Filter and sort' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Release' }));
+    const panel = screen.getByRole('region', { name: 'Filters and sort' });
+    expect(
+      within(panel)
+        .getAllByRole('button', { name: /^(Unreleased|Release )/ })
+        .map((button) => button.getAttribute('aria-label')),
+    ).toEqual([
+      'Unreleased, 1 task',
+      'Release v0.2.0, 1 task',
+      'Release v0.1.0, 1 task',
+      'Release v0.3.0, Draft, 1 task',
+    ]);
+    fireEvent.click(within(panel).getByRole('button', { name: /^Release v0\.1\.0,/ }));
+    fireEvent.click(within(panel).getByRole('button', { name: /^Release v0\.2\.0,/ }));
+    // Kept newest first, whichever was chosen first.
+    expect(board.get().filter.releaseIds).toEqual(['r2', 'r1']);
+    expect(field()).toHaveAccessibleDescription('2 matching');
+    fireEvent.click(within(panel).getByRole('button', { name: /^Unreleased,/ }));
+    expect(field()).toHaveAccessibleDescription('3 matching');
+    const chips = screen.getByRole('group', { name: 'Active filters' });
+    fireEvent.click(within(chips).getByRole('button', { name: 'Remove release v0.2.0 filter' }));
+    fireEvent.click(within(chips).getByRole('button', { name: 'Remove Unreleased filter' }));
+    expect(board.get().filter).toMatchObject({ releaseIds: ['r1'], unreleased: false });
+    expect(field()).toHaveAccessibleDescription('1 matching');
+  });
+
+  it('shows a Release section in the docked sidebar', () => {
+    released();
+    render(<BoardSearchSidebar />);
+    const section = screen.getByRole('region', { name: 'Release' });
+    fireEvent.click(within(section).getByRole('button', { name: /^Unreleased,/ }));
+    expect(board.get().filter.unreleased).toBe(true);
+    expect(screen.getByRole('group', { name: 'Active filters' })).toHaveTextContent(/Unreleased/);
+  });
+
+  it('folds a long release history behind a count until it is asked for', () => {
+    const many = Array.from({ length: 11 }, (_, index) =>
+      release(`r${index}`, `v1.${10 - index}.0`),
+    );
+    receiveBoard(
+      {
+        ...projectBoardData(project, statuses, [task('Weed beds', 2)], [], secondaryTagsByTask([])),
+        releases: { releases: many, byTask: new Map(), unreleased: new Set() },
+      },
+      { rename: () => {}, place: () => true, send: () => true },
+    );
+    render(<BoardSearchSidebar />);
+    const section = screen.getByRole('region', { name: 'Release' });
+    expect(within(section).getAllByRole('button', { name: /^Release / })).toHaveLength(8);
+    fireEvent.click(within(section).getByRole('button', { name: '3 more' }));
+    expect(within(section).getAllByRole('button', { name: /^Release / })).toHaveLength(11);
+  });
+});
+
 describe('search over a soft keyboard', () => {
   // jsdom computes no Tailwind, so these pin the rules that keep search above `--keyboard`.
   it('lifts the floating bar by translate, so its measured height and the columns stay', () => {

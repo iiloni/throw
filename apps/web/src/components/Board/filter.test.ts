@@ -1,5 +1,6 @@
-import type { Project, Status, Tag, Task, TaskRelation } from '@throw/shared';
+import type { GithubRelease, Project, Status, Tag, Task, TaskRelation } from '@throw/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { boardReleases } from '@/lib/githubReleases';
 import { boardRelations } from './blockers';
 import { carryAcross, carryVertically, pickUp, setDown } from './carry';
 import {
@@ -355,6 +356,141 @@ describe('relation filters', () => {
     expect(countIn(board.get(), 'build')).toBe(2);
     clearFilters();
     expect(board.get().filter.relations).toEqual([]);
+  });
+});
+
+const release = (
+  id: string,
+  tagName: string,
+  edit: Partial<GithubRelease> = {},
+): GithubRelease => ({
+  id,
+  workspaceId: 'workspace',
+  projectId: project.id,
+  repo: 'org/repo',
+  tagName,
+  name: null,
+  url: `https://github.com/org/repo/releases/tag/${tagName}`,
+  targetCommitish: null,
+  source: 'release',
+  isDraft: false,
+  isPrerelease: false,
+  publishedAt: '2026-11-01T00:00:00.000Z',
+  createdAt: '2026-11-01T00:00:00.000Z',
+  updatedAt: '2026-11-01T00:00:00.000Z',
+  ...edit,
+});
+const releases = [
+  release('r1', 'v0.1.0'),
+  release('r2', 'v0.2.0', { publishedAt: '2026-11-10T00:00:00.000Z' }),
+  release('r3', 'v0.3.0', { isDraft: true, publishedAt: null }),
+  release('r4', 'v9.9.9'),
+];
+const bind = (taskId: string, releaseId: string) => ({ taskId, releaseId });
+const merged = (
+  taskId: string,
+  state: 'merged' | 'open' = 'merged',
+  kind: 'pr' | 'issue' = 'pr',
+) => ({
+  taskId,
+  kind,
+  state,
+});
+/**
+ * Weed beds shipped in v0.1.0; Paint fence in v0.2.0. Write report merged and sits in the
+ * v0.3.0 draft, so it waits still; Tidy desk merged with no release; Order seeds is open work.
+ * Plan garden office's closed issue says nothing about releases. Nothing is bound to v9.9.9.
+ */
+function releasedData() {
+  const own = data();
+  return {
+    ...own,
+    releases: boardReleases(
+      own.tasks.map((row) => row.id),
+      releases,
+      [bind('weed beds', 'r1'), bind('paint fence', 'r2'), bind('write report', 'r3')],
+      [
+        merged('weed beds'),
+        merged('write report'),
+        merged('tidy desk'),
+        merged('order seeds', 'open'),
+        merged('plan garden office', 'merged', 'issue'),
+      ],
+    ),
+  };
+}
+const shownReleased = (edit: Partial<BoardFilter>, subtasksAsCards = true) =>
+  [...(matchingIds(releasedData(), filter(edit), subtasksAsCards) ?? [])].sort();
+
+describe('release filter', () => {
+  it('lists the releases holding the board’s tasks, newest first, unpublished last', () => {
+    expect(releasedData().releases?.releases.map((row) => row.tagName)).toEqual([
+      'v0.2.0',
+      'v0.1.0',
+      'v0.3.0',
+    ]);
+  });
+
+  it('has nothing to choose without releases or merged pull requests, as the prototype', () => {
+    const own = data();
+    const ids = own.tasks.map((row) => row.id);
+    expect(boardReleases(ids, releases, [], [merged('tidy desk', 'open')])).toBeUndefined();
+    expect(boardReleases(ids, releases, [bind('elsewhere', 'r1')], [])).toBeUndefined();
+    expect(shown({ unreleased: true }, true)).toEqual([]);
+    expect(shown({ releaseIds: ['r1'] }, true)).toEqual([]);
+  });
+
+  it('finds merged work that no shipped release holds, as MCP’s unreleased does', () => {
+    expect(shownReleased({ unreleased: true })).toEqual(['tidy desk', 'write report']);
+  });
+
+  it('matches any chosen release, or Unreleased beside them, with the other filters', () => {
+    expect(shownReleased({ releaseIds: ['r1'] })).toEqual(['weed beds']);
+    expect(shownReleased({ releaseIds: ['r1', 'r2'] })).toEqual(['paint fence', 'weed beds']);
+    expect(shownReleased({ releaseIds: ['r2'], unreleased: true })).toEqual([
+      'paint fence',
+      'tidy desk',
+      'write report',
+    ]);
+    expect(shownReleased({ unreleased: true, sizes: [5] })).toEqual(['write report']);
+  });
+
+  it('keeps a parent card on the board when only its subtask is in the release', () => {
+    const own = data();
+    const withSubtask = {
+      ...own,
+      releases: boardReleases(
+        own.tasks.map((row) => row.id),
+        releases,
+        [bind('order seeds', 'r2')],
+        [],
+      ),
+    };
+    expect(
+      [...(matchingIds(withSubtask, filter({ releaseIds: ['r2'] }), false) ?? [])].sort(),
+    ).toEqual(['order seeds', 'weed beds']);
+  });
+
+  it('counts what each release and Unreleased would leave, given the rest', () => {
+    const counts = facetCounts(releasedData(), filter({ sizes: [2, 4], releaseIds: ['r1'] }), true);
+    expect(Object.fromEntries(counts.releases)).toEqual({ r1: 1, r2: 1 });
+    expect(counts.unreleased).toBe(0);
+    // Sizes count only what v0.1.0 holds.
+    expect(counts.sizes.get(2)).toBe(1);
+    expect(counts.sizes.get(4)).toBe(0);
+    expect(facetCounts(releasedData(), EMPTY_FILTER, true).unreleased).toBe(2);
+  });
+
+  it('counts each chosen release as a filter, and clears them', () => {
+    expect(chosenFilters(filter({ releaseIds: ['r1', 'r2'], unreleased: true }))).toBe(3);
+    board.set(initialBoard());
+    receiveBoard(releasedData(), { rename: () => {}, place: () => true, send: () => true });
+    setFilter({ unreleased: true });
+    expect(narrowed(board.get())).toBe(true);
+    expect(activeFilterCount(board.get())).toBe(1);
+    expect(countIn(board.get(), 'build')).toBe(2);
+    clearFilters();
+    expect(board.get().filter).toMatchObject({ releaseIds: [], unreleased: false });
   });
 });
 

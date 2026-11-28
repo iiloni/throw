@@ -11,7 +11,15 @@ import { useThemePreference } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { type BoardSettings, board, setSubtasksAsCards, useBoardSettings } from './state';
 
-function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+export function Row({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: ReactNode;
+}) {
   return (
     <div className="flex min-h-12 items-center gap-4 py-1.5">
       <div className="min-w-0 flex-1">
@@ -23,7 +31,7 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
   );
 }
 
-function Switch({
+export function Switch({
   label,
   checked,
   onChange,

@@ -5,7 +5,7 @@ import type { PaletteMode } from '@/components/CommandPalette/CommandPalette';
 import type { ShellForm } from '@/components/ShellForms/ShellForms';
 import type { SettingsSection } from '@/lib/projectSettings';
 
-export const viewSchema = z.enum(['backlog', 'board', 'search']);
+export const viewSchema = z.enum(['backlog', 'board', 'search', 'graph']);
 export type ProjectView = z.infer<typeof viewSchema>;
 export const navigationSchema = z.object({
   workspaceId: z.string().nullable(),
@@ -45,6 +45,11 @@ export type ShellState = {
   /** Opens a task in its project's board, moving to that project first if needed. */
   openTask: (projectId: string, taskId: string, created?: boolean) => void;
   goBoard: () => void;
+  /**
+   * Shows the board on screen as its columns or as the dependency graph, in place: the view
+   * is in the address, so a reload or a link keeps it, and changing it adds no history.
+   */
+  showView: (view: 'board' | 'graph') => void;
   goSettings: () => void;
   /** A project's settings, at `section` when given. */
   goProjectSettings: (project: Project, section?: SettingsSection) => void;

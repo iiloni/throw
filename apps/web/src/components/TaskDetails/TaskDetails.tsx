@@ -39,8 +39,15 @@ import { TaskGithubLinks } from '@/components/TaskGithubLinks/TaskGithubLinks';
 import { TaskRelations, useRelationGroups } from '@/components/TaskRelations/TaskRelations';
 import { TaskTags } from '@/components/TaskTags/TaskTags';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
-import { useTags, useTaskGithubLinksOf, useTaskTags } from '@/lib/collections';
+import {
+  useGithubReleases,
+  useTags,
+  useTaskGithubLinksOf,
+  useTaskGithubReleasesOf,
+  useTaskTags,
+} from '@/lib/collections';
 import { sortGithubLinks, useGithubRepository, useShownGithubLinks } from '@/lib/githubLinks';
+import { taskReleases } from '@/lib/githubReleases';
 import { haptics } from '@/lib/haptics';
 import { createTask, restoreTask, sendTask, trashTask } from '@/lib/tasks';
 import { cn } from '@/lib/utils';
@@ -159,14 +166,27 @@ export function TaskDetails({
   const { links: githubRows, isLoading: githubLoading } = useTaskGithubLinksOf(task.id);
   const shownGithub = useShownGithubLinks(githubRows);
   const githubLinks = useMemo(() => sortGithubLinks(shownGithub), [shownGithub]);
+  const { releases: allReleases, isLoading: releasesLoading } = useGithubReleases();
+  const { bindings, isLoading: bindingsLoading } = useTaskGithubReleasesOf(task.id);
+  const released = useMemo(
+    () => taskReleases(task.id, allReleases, bindings, githubLinks),
+    [task.id, allReleases, bindings, githubLinks],
+  );
   const column = useTaskColumn({
     paneWidth: phone ? null : paneWidth,
     hasExtras:
       hasTags ||
       (task.parentId === null && children.length > 0) ||
       relationGroups.length > 0 ||
-      githubLinks.length > 0,
-    ready: !tagsLoading && !taskTagsLoading && !relationsLoading && !githubLoading,
+      githubLinks.length > 0 ||
+      released.releases.length > 0,
+    ready:
+      !tagsLoading &&
+      !taskTagsLoading &&
+      !relationsLoading &&
+      !githubLoading &&
+      !releasesLoading &&
+      !bindingsLoading,
   });
   const tagRow = (
     <TaskTags tags={tags} primaryTagId={task.primaryTagId} secondaryTagIds={secondaryTagIds} />
@@ -180,16 +200,22 @@ export function TaskDetails({
     else shell?.openTask(other.projectId, other.id);
   }
   const linkCount =
-    relationGroups.reduce((sum, group) => sum + group.items.length, 0) + githubLinks.length;
+    relationGroups.reduce((sum, group) => sum + group.items.length, 0) +
+    githubLinks.length +
+    released.releases.length;
   const hasOpenBlocker = relationGroups.some(
     (group) =>
       group.role === 'blocked_by' && group.items.some((item) => !item.closed && !item.trashed),
   );
-  /** The task's links: related tasks, then its pull requests and issues. */
+  /** The task's links: related tasks, then its releases, pull requests and issues. */
   const relations = () => (
     <div className="flex flex-col gap-3">
       <TaskRelations task={task} groups={relationGroups} onOpen={openRelated} />
-      <TaskGithubLinks links={githubLinks} />
+      <TaskGithubLinks
+        links={githubLinks}
+        releases={released.releases}
+        unreleased={released.unreleased}
+      />
     </div>
   );
   // The picker also takes a pasted pull request or issue once the project follows a repository.
@@ -416,6 +442,7 @@ export function TaskDetails({
                   : 'Back to the board'
               }
               onClick={leaveTask}
+              shortcut="closeTask"
               className="size-10 shrink-0 [&_svg]:size-5"
             >
               <ChevronLeft />

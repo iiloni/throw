@@ -1,6 +1,7 @@
 import type * as React from 'react';
 import { Hint, type HintSide } from '@/components/Hint/Hint';
 import { Button } from '@/components/ui/button';
+import type { ShortcutId } from '@/lib/shortcuts';
 import { cn } from '@/lib/utils';
 
 type Props = React.ComponentProps<typeof Button> & {
@@ -9,6 +10,8 @@ type Props = React.ComponentProps<typeof Button> & {
   /** Docks go without: a tooltip left open as the dock hides would take the next Escape. */
   tooltip?: boolean;
   tooltipSide?: HintSide;
+  /** A keyboard shortcut for the same action, shown in the tooltip. */
+  shortcut?: ShortcutId;
 };
 
 /** Icon-only button. Stops clicks from reaching a clickable card. */
@@ -18,6 +21,7 @@ export function IconButton({
   onClick,
   tooltip = true,
   tooltipSide,
+  shortcut,
   ...props
 }: Props) {
   const button = (
@@ -35,7 +39,7 @@ export function IconButton({
   );
 
   return (
-    <Hint label={label} side={tooltipSide} disabled={!tooltip}>
+    <Hint label={label} side={tooltipSide} disabled={!tooltip} shortcut={shortcut}>
       {button}
     </Hint>
   );

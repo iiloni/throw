@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { TaskGithubLink } from '@throw/shared';
+import type { GithubRelease, TaskGithubLink } from '@throw/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { taskReleases } from '@/lib/githubReleases';
 import { GithubPullMark, pullMarkLabel } from './GithubPullMark';
 import { TaskGithubLinks } from './TaskGithubLinks';
 
@@ -84,7 +85,8 @@ describe('the task pane’s GitHub links', () => {
     expect(pull).toHaveAttribute('rel', 'noopener noreferrer');
     expect(pull).toHaveTextContent('Speed up sync');
     expect(pull).toHaveTextContent('Approved');
-    expect(pull).toHaveTextContent('feat/sync');
+    // The head branch stays on the link, not on its card.
+    expect(pull).not.toHaveTextContent('feat/sync');
     expect(
       within(pull).getByRole('img', { name: 'Checks: 1 failed, 2 pending, 3 passed' }),
     ).toBeInTheDocument();
@@ -170,5 +172,91 @@ describe('a card’s pull request mark', () => {
     expect(
       within(preview).getByRole('link', { name: /^Pull request org\/repo#2: Second, Closed/ }),
     ).toHaveAttribute('href', 'https://github.com/org/repo/pull/2');
+  });
+});
+
+function release(id: string, tagName: string, extra: Partial<GithubRelease> = {}): GithubRelease {
+  return {
+    id,
+    workspaceId: 'w',
+    projectId: 'p',
+    repo: 'org/repo',
+    tagName,
+    name: null,
+    url: `https://github.com/org/repo/releases/tag/${tagName}`,
+    targetCommitish: null,
+    source: 'release',
+    isDraft: false,
+    isPrerelease: false,
+    publishedAt: '2026-11-01T00:00:00.000Z',
+    createdAt: '2026-11-01T00:00:00.000Z',
+    updatedAt: '2026-11-01T00:00:00.000Z',
+    ...extra,
+  };
+}
+
+describe('the task pane’s release pills', () => {
+  const pills = () =>
+    within(screen.getByRole('list', { name: 'Releases' }))
+      .getAllByRole('listitem')
+      .map((item) => item.textContent);
+
+  it('leads the GitHub section with the releases that shipped the task, opening each on GitHub', () => {
+    const merged = link({ number: 7, state: 'merged' });
+    const rows = [
+      release('0199a0a0-0000-7000-8000-00000000000a', 'v0.1.0'),
+      release('0199a0a0-0000-7000-8000-00000000000b', 'v0.2.0-rc.1', {
+        isPrerelease: true,
+        publishedAt: '2026-11-10T00:00:00.000Z',
+      }),
+      release('0199a0a0-0000-7000-8000-00000000000c', 'v9.9.9'),
+    ];
+    const { releases, unreleased } = taskReleases(
+      't1',
+      rows,
+      [
+        { taskId: 't1', releaseId: rows[0]!.id },
+        { taskId: 't1', releaseId: rows[1]!.id },
+        { taskId: 'other', releaseId: rows[2]!.id },
+      ],
+      [merged],
+    );
+    expect(unreleased).toBe(false);
+    render(<TaskGithubLinks links={[merged]} releases={releases} unreleased={unreleased} />);
+    const section = screen.getByRole('region', { name: 'GitHub' });
+    expect(
+      within(section)
+        .getAllByRole('heading')
+        .map((h) => h.textContent),
+    ).toEqual(['Release', 'Pull requests']);
+    // Newest first; a pre-release says so beside its tag.
+    expect(pills()).toEqual(['v0.2.0-rc.1Pre-release', 'v0.1.0']);
+    const pill = screen.getByRole('link', { name: 'Release v0.1.0. Open on GitHub' });
+    expect(pill).toHaveAttribute('href', 'https://github.com/org/repo/releases/tag/v0.1.0');
+    expect(pill).toHaveAttribute('target', '_blank');
+    expect(pill).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('says Merged · unreleased while merged work waits for a shipped release', () => {
+    const merged = link({ state: 'merged' });
+    const draft = release('0199a0a0-0000-7000-8000-00000000000d', 'v0.3.0', {
+      isDraft: true,
+      publishedAt: null,
+    });
+    const own = taskReleases('t1', [draft], [{ taskId: 't1', releaseId: draft.id }], [merged]);
+    expect(own.unreleased).toBe(true);
+    render(<TaskGithubLinks links={[merged]} {...own} />);
+    expect(pills()).toEqual(['v0.3.0Draft', 'Merged · unreleased']);
+  });
+
+  it('shows no release for open work, and a manual binding without any pull request', () => {
+    const open = link();
+    expect(taskReleases('t1', [], [], [open]).unreleased).toBe(false);
+    const { unmount } = render(<TaskGithubLinks links={[open]} />);
+    expect(screen.queryByRole('list', { name: 'Releases' })).not.toBeInTheDocument();
+    unmount();
+    const tag = release('0199a0a0-0000-7000-8000-00000000000e', 'v1.0.0', { source: 'tag' });
+    render(<TaskGithubLinks links={[]} releases={[tag]} />);
+    expect(pills()).toEqual(['v1.0.0Tag']);
   });
 });

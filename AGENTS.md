@@ -84,6 +84,10 @@ from the GitHub page's Status rules (`GithubConnection/StatusRules.tsx`): a stat
 desktop and the drawer's status grid (`StatusOptions`) on a phone.
 GitHub releases and task bindings sync as read-only collections (ADR 0017). Webhook binding
 lives in `github/releaseEvents.ts`, with manual REST and MCP actions in `github/releases.ts`.
+The task pane leads its GitHub links with release pills (`TaskReleases`), or Merged · unreleased
+while a merged pull request waits for a shipped release; both boards filter by Unreleased or a
+release through `BoardData.releases` (`boardReleases` in `lib/githubReleases.ts`, matching MCP's
+`unreleased`), which the prototype leaves out to hide the Release filter.
 Descriptions and comments draw `#KEY-N` task references as links over their plain stored
 text, so Markdown and MCP keep `#KEY-N` (`lib/taskReferences.ts`; the server's
 `mcp/markdown.ts` leaves `#` unescaped before one). The app route's `TaskReferencesProvider` indexes
@@ -150,6 +154,13 @@ supply the priority, size and tag panels and the trash action (`components/BulkA
 with the dock (the Drawer's `MoveFace`) and `MovePanel`'s views fade across on the drawer's spring;
 a leaving one is inert and frozen at what it last showed. A selection made in the open backlog or
 on the closed tasks' page floats at the screen's foot over that list (the Drawer's `floatMove`).
+Keyboard shortcuts live in `lib/shortcuts.ts`: their definitions and default chords, the
+device's overrides (local storage) and one window listener. A component runs one with
+`useShortcut(id, handler)`; plain keys never run while typing or while a dialog, menu or list
+has the keys, and a handler returning false leaves the key to the page. `Hint`, `IconButton`
+and `DockControl` take a `shortcut` to show its keycaps (`components/KeyboardShortcuts/Keys.tsx`);
+the shell hosts the `?` list (`ShortcutsHelp`), and `/settings/shortcuts` rebinds them. Escape,
+Enter, Space and the card arrows stay in their components and are listed as built in.
 Settings (`/settings/*`) and project settings (`/w/:workspaceId/p/:projectId/settings`,
 with project trash beside it at `/trash`) share Catch's `SettingsLayout`: pages listed
 beside the open one on wide screens, and a dock page picker on phones
@@ -166,6 +177,18 @@ is held and turns drops into `moveTask` and `sendTask` calls; `Board/carry.ts` i
 keyboard carry. The collection hooks hold
 their last rows through a reconnect's full snapshot (`lib/steadyRows.ts`), so the board
 does not unmount while a shape reloads.
+
+The dependency graph (`components/DependencyGraph`) is either board seen as its blocking
+relations, at `view=graph` (`ShellState.showView`; the rail's Dependency graph button and the
+phone switcher's footer switch, and `pageAt` cross-fades between the two; the shell reads
+`view` from the rendered match, not the location, so the transition captures the view it
+leaves). Its nodes, edges and controls settle in on every arrival as a board's cards do
+(`useEntryMotion`, staggered by layer); nodes joining a graph on screen pop in. The boundaries
+render it in place of the board, so the task pane, task screens, search and filters are the
+board's own. `graphModel.ts` turns the board's data, relations and `TaskBlockersContext` into
+nodes and edges (states match the cards' blocked mark), `layout.ts` is the pure layered
+layout and `analysis.ts` the critical path, reachability and bottleneck counts, all unit
+tested. `viewport.ts` pans and zooms by motion values; the canvas fits itself until moved.
 
 Several accounts can be signed in on one device (ADR 0016): `lib/auth.ts` keeps the list,
 the tab's account (`sessionStorage`) and the `/u/<n>` address prefix the router strips and

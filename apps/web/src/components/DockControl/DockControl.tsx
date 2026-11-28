@@ -2,6 +2,7 @@ import { motion } from 'motion/react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { Hint } from '@/components/Hint/Hint';
 import { springs } from '@/lib/motion';
+import type { ShortcutId } from '@/lib/shortcuts';
 import { cn } from '@/lib/utils';
 
 // As Catch's note toolbar: inset in the dock so their corners follow its corners, and only
@@ -21,19 +22,25 @@ export type ControlProps = Pick<
 export function DockControl({
   label,
   tooltip,
+  shortcut,
   onOpen,
   className,
   children,
   ...props
 }: ControlProps & {
+  /** Names a task's control, so its shortcut can find the button that opens its panel. */
+  'data-task-control'?: string;
+  'data-task-for'?: string;
   label: string;
   tooltip: boolean;
+  /** A keyboard shortcut that opens the same panel, shown in the tooltip. */
+  shortcut?: ShortcutId;
   onOpen(element: HTMLButtonElement): void;
   className?: string;
   children: ReactNode;
 }) {
   return (
-    <Hint label={label} disabled={!tooltip}>
+    <Hint label={label} disabled={!tooltip} shortcut={shortcut}>
       <motion.button
         type="button"
         aria-label={label}

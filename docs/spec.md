@@ -63,7 +63,8 @@ integrations.
 
 - Workspaces, projects, tasks and one level of subtasks.
 - Custom statuses mapped to categories, five priority ranks, optional task sizes and nested tags.
-- The project board, the cross-project board and the task view.
+- The project board, the cross-project board and the task view, and a dependency graph
+  of either board's blocking relations.
 - Comments and a full activity log.
 - Task relations across the projects of a workspace: blocks, duplicate of and relates to.
 - Search, filters and a temporary sort on the boards, and a command palette elsewhere.
@@ -87,7 +88,8 @@ integrations.
   to a draft, made ready for review, merged or closed, or a linked issue closed, moves its
   tasks to a status the project chose. Each rule is off until set, and the move is recorded as GitHub's. Releases
   and tag pushes bind merged tasks to shipped versions. MCP can list tasks by release or find
-  merged work awaiting a release ([ADR 0017](decisions/0017-github-integration.md)).
+  merged work awaiting a release; the task pane shows the release that shipped a task, and boards
+  filter by a release or by Unreleased ([ADR 0017](decisions/0017-github-integration.md)).
 
 ### Out of scope
 
@@ -98,7 +100,7 @@ integrations.
 | Dates, reminders, recurring tasks | Arrive with or after milestones. |
 | Cycles and sprints | Not planned. |
 | Attachments, images in descriptions | First follow-up after launch. |
-| List view | The board is the only layout. |
+| List view | The board is the only layout for work itself. The [dependency graph](#the-dependency-graph) is a companion view of blocking relations, not a second way to arrange tasks: nothing is moved or ordered in it. |
 | Filtering by tag across projects | Tags are per project. |
 | Automation inside Throw | Scheduled jobs and rules that change tasks are out of scope, except a project's opt-in GitHub status rules, which follow verified GitHub events. Webhooks only notify. |
 | Other integrations, import, export | Out of scope for the first version, beyond MCP, webhooks and GitHub. |
@@ -640,6 +642,41 @@ view, so it reads and moves the same way.
   with the same remembered preference as desktop. The move drawer offers the held cards' project statuses
   when they share one project, and the four categories when they do not.
 
+## The dependency graph
+
+A companion view of either board, at the same address with `view=graph` (2026-11-27). It
+draws the board's tasks as nodes and `blocks` relations as arrows from blocker to blocked,
+left to right, so what holds work up, what is ready and what everything else waits on can be
+read at a glance. It is built on the device from synced tasks, relations, statuses and
+projects, so it works offline.
+
+- A node is the board's card at a fixed size: identifier, title, status, priority, and how it
+  stands. Ready (open, nothing open blocks it) and Blocked follow the card's blocked mark
+  exactly: a task is blocked while any open, untrashed task blocks it, in any project. Done
+  and Cancelled work steps back, and an arrow from closed work is drawn dashed as settled.
+- A task of another project joined to the board by an arrow comes in as a dashed node named
+  by its project, with what blocks it in turn, however far up, so its blocked mark is
+  explained there too; opening it goes to its own board, keeping the graph.
+- The layout is layered and deterministic: weakly connected groups are stacked largest
+  first, layers are ordered to cut crossings, and an arrow that would close a cycle is drawn
+  in red against the flow rather than hidden.
+- The board's search and filters narrow the graph, matching each task on its own (a subtask
+  is a node of its own). Toggles, kept on the device, show closed work and tasks with no
+  blocking relation (both hidden by default) and mark the critical path (the longest chain of
+  open work) or ready work. A task many others wait on is marked with how much work it frees.
+- Hovering or focusing a node, or opening its task, lights its blockers and dependents all the
+  way along and fades the rest. Arrow keys walk the graph: sideways along arrows, up and down
+  through the drawing.
+- Clicking a node opens its task as a card does: in the pane beside the graph on a desktop, as
+  the task screen on a phone. The view and the open task stay in the address.
+- It fits itself to the space until moved. A wheel zooms about the pointer (Shift or a
+  sideways swipe pans), a drag pans, two fingers pinch; buttons zoom, reset to 100% and fit,
+  and `+`, `-` and `0` do the same from the keyboard.
+- The desktop rail's Dependency graph button toggles it. On a phone the project switcher's footer switches, and the graph's dock goes back
+  to the board, opens the graph's settings as a drawer page and fits the graph. Moving
+  between boards keeps the graph, and switching cross-fades as between boards: the graph's
+  tasks settle in from the first blockers onwards, and the board's cards settle in on the way back.
+
 ## The task view
 
 The full task is where the work is done: description, subtasks (in a dedicated subtask
@@ -877,12 +914,48 @@ Back or Escape first closes a list open inside it. Quick capture's card floats a
 dock rather than opening as a page. Desktop has no drawer. The rules are in
 [ADR 0009](decisions/0009-the-drawer.md).
 
+### Keyboard shortcuts
+
+Shortcuts cover the common work where a keyboard is attached, on any layout (2026-11-27):
+
+| Where | Shortcut | Default |
+| --- | --- | --- |
+| Everywhere | Search (the board's bar on a desktop board, the palette elsewhere) | Ctrl/⌘K, `/` |
+| | New task (the palette's quick capture, in the board's project) | `N` |
+| | Expand or collapse the navigation rail | Ctrl/⌘ `\` |
+| | This list | `?`, Ctrl/⌘/ |
+| Boards | Open or close the backlog / closed tasks | `[` / `]` |
+| | Move focus between cards | arrows |
+| Open task | Status, priority, size, tags; link a task | `S` `P` `Z` `T`; `L` |
+| | Write a comment; show comments, history, links | `C`; `1` `2` `3` |
+
+Keys built into a control are listed beside them for reference: Enter opens a focused card,
+Space picks it up and the arrows carry it (ADR 0008), Escape puts it back, clears the
+selection or closes the task as it does today, and Ctrl/⌘Enter posts a comment or captures
+from search. A plain key never runs while typing in a field or editor, or while a dialog,
+menu, list or popover has the keys; a chord with Ctrl/⌘ reaches past a field only where it
+must (search and this list). The task's keys press its own dock controls, so a panel opens
+exactly as a tap opens it and focus goes into it.
+
+Tooltips and the menus that show an action add its keys after the label, as this device has
+them, in the platform's symbols (⌘ ⌥ ⇧ on Apple devices, Ctrl Alt Shift elsewhere), and the
+control names them in `aria-keyshortcuts`. `?` opens the list as a centred dialog on desktop
+and a page of the drawer on a phone.
+
+Settings' Keyboard shortcuts page lists the same groups. Each shortcut's keys can be changed
+by recording a new chord in place, added to, removed or reset, and all of them reset at once.
+A chord another shortcut uses is offered to move from it; one the browser, system or editor
+keeps (copy, bold, a new tab) or a built-in key is refused with the reason. Choices are a
+device preference kept in local storage, like the board's rail widths, and apply at once to
+tooltips, the list and the keys themselves.
+
 ### Shell routes and remembered selection
 
 - `/w/:workspaceId/p/:projectId?view=board` is a project. `view=backlog` opens its
   phone board with the backlog half open. Legacy `view=search` links open the search over
   the board (the bar on desktop, the drawer's search on a phone) and replace the view with
-  `board`. The palette has no route of its own.
+  `board`. `view=graph` shows either board as its dependency graph. The palette has no
+  route of its own.
 - `/w/:workspaceId/board` is the cross-project board for that workspace; `view=search`
   opens its search and replaces the view with `board`.
 - `/w/:workspaceId/p/:projectId/settings` manages a project inside the unified Settings hub
@@ -901,7 +974,8 @@ dock rather than opening as a page. Desktop has no drawer. The rules are in
 - `/settings` redirects to `/settings/general`. Settings is one hub with the active or
   remembered project's pages (when the workspace has a project), Catch's User pages — General
   (theme, the app icon on dev and preview builds, and board), Account (name, password, the
-  server on Android, signing out), MCP tokens at `/settings/mcp`, Webhooks at
+  server on Android, signing out), [Keyboard shortcuts](#keyboard-shortcuts) at
+  `/settings/shortcuts`, MCP tokens at `/settings/mcp`, Webhooks at
   `/settings/webhooks`, Update — and Backups for the server's admin at
   `/settings/admin/backups`. Wide, all sections are listed beside the open page with a Back to
   board link when a project exists; on a phone the dock picks between them. Changing the

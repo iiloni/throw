@@ -719,7 +719,11 @@ function SelectionDock({ reduced }: { reduced: boolean }) {
             })}
           />
         </div>
-        <IconButton label="Clear selection" onClick={() => update({ selection: [] })}>
+        <IconButton
+          label="Clear selection"
+          shortcut="clearSelection"
+          onClick={() => update({ selection: [] })}
+        >
           <X />
         </IconButton>
       </div>
