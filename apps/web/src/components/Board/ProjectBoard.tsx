@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { ShellMenu } from '@/components/AppShell/ShellMenu';
 import { useShell } from '@/components/AppShell/shell';
 import { useSelectionContent } from '@/components/BulkActions/BulkActions';
+import { DependencyGraph } from '@/components/DependencyGraph/DependencyGraph';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { type TaskPanel, taskDrawerContent } from '@/components/TaskDetails/TaskControls';
 import { TaskDetails } from '@/components/TaskDetails/TaskDetails';
@@ -155,7 +156,17 @@ export function ProjectBoard({
           <SelectionContentContext.Provider value={selectionContent}>
             <div className="relative h-full" aria-busy={awaitingTasks}>
               {!phone && <h1 className="sr-only">{project.name}</h1>}
-              {phone ? (
+              {shell.view === 'graph' ? (
+                <DependencyGraph
+                  phone={phone}
+                  title={
+                    <h1 aria-label={project.name} className="min-w-0">
+                      <ShellMenu phone titleClassName="text-[1.75rem]" />
+                    </h1>
+                  }
+                  syncIndicator={<SyncIndicator />}
+                />
+              ) : phone ? (
                 <PhoneBoard
                   projectMenu={
                     <h1 aria-label={project.name} className="min-w-0">
