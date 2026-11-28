@@ -611,4 +611,63 @@ test.describe('desktop rails', () => {
     await page.keyboard.press('Escape');
     await expect(backlog.getByRole('button', { name: 'Open as a gallery' })).toBeVisible();
   });
+
+  test('a mouse resting on the backlog strip peeks it open over the columns, until it leaves or is used', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const board = await fixture(page, true);
+    await board.add('Peeked idea', 'Ideas');
+    await board.add('Being built', 'Build');
+    const backlog = rail(page, 'Backlog');
+    // A wide window opens the backlog as a column; the peek is a strip's.
+    await backlog.getByRole('button', { name: 'Close backlog' }).click();
+    const strip = page.getByRole('button', { name: /^Open backlog,/ });
+    const column = await settled(card(page, 'Being built'));
+    const columnX = (await column.boundingBox())!.x;
+    const box = (await strip.boundingBox())!;
+    const onStrip = () => page.mouse.move(box.x + box.width / 2, box.y + 240);
+    const away = () => page.mouse.move(columnX + 600, 500);
+
+    // Passing over the strip does nothing.
+    await onStrip();
+    await page.waitForTimeout(600);
+    await away();
+    await page.waitForTimeout(1400);
+    await expect(strip).toBeVisible();
+    expect(await widthOf(backlog)).toBe(64);
+
+    // Resting on it opens it as a column over the board, which stays where it was.
+    await onStrip();
+    await expect(backlog).toHaveAttribute('data-peek', '');
+    await expect(card(page, 'Peeked idea')).toBeVisible();
+    await expect.poll(() => widthOf(backlog)).toBe(304);
+    expect((await column.boundingBox())!.x).toBe(columnX);
+
+    // Leaving it takes it back to its strip.
+    await away();
+    await expect(strip).toBeVisible();
+    await expect(backlog).not.toHaveAttribute('data-peek');
+    await expect.poll(() => widthOf(backlog)).toBe(64);
+
+    // Used, it stays open, and the columns make room for it.
+    await onStrip();
+    await expect(backlog).toHaveAttribute('data-peek', '');
+    await backlog.getByRole('button', { name: 'All', exact: true }).click();
+    await expect(backlog).not.toHaveAttribute('data-peek');
+    await away();
+    await page.waitForTimeout(800);
+    await expect(backlog.getByRole('button', { name: 'Close backlog' })).toBeVisible();
+    await expect.poll(async () => (await column.boundingBox())!.x).toBeGreaterThan(columnX + 200);
+
+    // Opening a task from a peek keeps it open too.
+    await backlog.getByRole('button', { name: 'Close backlog' }).click();
+    await onStrip();
+    await expect(backlog).toHaveAttribute('data-peek', '');
+    await card(page, 'Peeked idea').click();
+    await expect(backlog).not.toHaveAttribute('data-peek');
+    await away();
+    await page.waitForTimeout(800);
+    await expect(backlog.getByRole('button', { name: 'Close backlog' })).toBeVisible();
+  });
 });

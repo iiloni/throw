@@ -276,6 +276,11 @@ export type BoardState = {
   closed: ZoneState;
   /** The state each rail was in before entering its full gallery, for Escape to restore. */
   railBeforeFull: Record<keyof RailWidths, CollapsedZoneState>;
+  /**
+   * A strip a mouse has rested on, shown open over the columns for a glance until the pointer
+   * leaves it. Its rail is still a strip, so the columns keep their places and nothing is kept.
+   */
+  railPeek: keyof RailWidths | null;
   /** A status id, or null for every status in the zone. */
   backlogFilter: string | null;
   closedFilter: string | null;
@@ -311,6 +316,7 @@ export function initialBoard(boards: BoardData[] = []): BoardState {
     backlog: window.innerWidth >= 1180 ? 'panel' : 'strip',
     closed: 'strip',
     railBeforeFull: { backlog: 'panel', closed: 'panel' },
+    railPeek: null,
     backlogFilter: null,
     closedFilter: null,
     subtasksAsCards: storedBoardSettings().subtasksAsCards,
@@ -343,11 +349,18 @@ export function update(
   )
     return;
   const moving = 'openTaskId' in next && next.openTaskId !== state.openTaskId;
+  // Any change to a peeked rail's own state settles it: opened, it stays; closed, it goes.
+  const peekSettles = state.railPeek !== null && state.railPeek in next && !('railPeek' in next);
   // Returning down the trail finds its task where it was left, so only a new opening grows.
   if (moving && next.openTaskId && !isDesktop() && !state.taskTrail.includes(next.openTaskId))
     rememberTaskOrigin(next.openTaskId, origin);
   // Opening a task any other way starts a new trail.
-  board.set({ ...state, ...(moving && !('taskTrail' in next) ? { taskTrail: [] } : {}), ...next });
+  board.set({
+    ...state,
+    ...(moving && !('taskTrail' in next) ? { taskTrail: [] } : {}),
+    ...(peekSettles ? { railPeek: null } : {}),
+    ...next,
+  });
   if (moving && next.openTaskId) expandColumnOf(board.get(), next.openTaskId);
   // A new subtask left as it was made was never wanted: it goes rather than stay untitled.
   if (moving && fresh !== null && fresh === state.openTaskId) {
@@ -888,11 +901,29 @@ export function setZoneView(zone: keyof RailWidths, next: ZoneState) {
   const other: keyof RailWidths = zone === 'backlog' ? 'closed' : 'backlog';
   update((before) => ({
     [zone]: next,
-    [other]: next === 'full' ? 'strip' : before[other],
+    ...(next === 'full' ? { [other]: 'strip' } : {}),
     ...(next === 'full' && before[zone] !== 'full'
       ? { railBeforeFull: { ...before.railBeforeFull, [zone]: before[zone] } }
       : {}),
   }));
+}
+
+/** Shows a strip open over the columns for a glance, without opening its rail. */
+export function peekRail(zone: keyof RailWidths) {
+  update((state) => (state[zone] === 'strip' && state.railPeek !== zone ? { railPeek: zone } : {}));
+}
+
+/** Takes a peeked rail back to its strip. */
+export function endRailPeek(zone: keyof RailWidths) {
+  update((state) => (state.railPeek === zone ? { railPeek: null } : {}));
+}
+
+/** Whether `zone` is showing open over the columns for a glance. */
+export function isPeeking(
+  state: Pick<BoardState, 'railPeek' | 'backlog' | 'closed'>,
+  zone: keyof RailWidths,
+) {
+  return state.railPeek === zone && state[zone] === 'strip';
 }
 
 /**

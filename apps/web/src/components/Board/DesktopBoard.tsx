@@ -233,6 +233,7 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
     resize: resizing,
     holding: dragging,
     origin: held?.origin ?? null,
+    peek: state.railPeek,
   });
 
   // A wheel turned where nothing scrolls up and down (the page, a rail's strip, a column

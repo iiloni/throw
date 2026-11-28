@@ -12,9 +12,11 @@ import {
   Fragment,
   type MouseEvent,
   type PointerEvent,
+  type RefObject,
   useEffect,
   useLayoutEffect,
   useRef,
+  useState,
 } from 'react';
 import { Hint } from '@/components/Hint/Hint';
 import { IconButton } from '@/components/IconButton/IconButton';
@@ -27,6 +29,7 @@ import { drag, makingWay } from './drag';
 import { GALLERY_INSET, ZoneGallery } from './Gallery';
 import { StatusGlyph } from './glyphs';
 import type { Category, Project, Status } from './model';
+import { createRailPeek } from './railPeek';
 import { StatusTile } from './StatusTile';
 import {
   type BoardState,
@@ -36,6 +39,9 @@ import {
   countIn,
   createTask,
   current,
+  endRailPeek,
+  isPeeking,
+  peekRail,
   type RailWidths,
   railResize,
   setRailWidth,
@@ -87,7 +93,10 @@ const clamp = (value: number, min: number, max: number) =>
 export type RailGeometry = {
   /** The width it takes from the columns: where the columns start beside it. */
   zone: number;
-  /** The width it is drawn at, which widens a strip over the gap while it shows dropzones. */
+  /**
+   * The width it is drawn at, which widens a strip over the gap while it shows dropzones, or
+   * over the columns to a panel's width while it is peeked at.
+   */
   drawn: number;
   /** The width its cards are laid out at: never narrower than a single column. */
   content: number;
@@ -112,6 +121,7 @@ export function railGeometry({
   resize,
   holding,
   origin,
+  peek = null,
 }: {
   rowWidth: number;
   /**
@@ -131,7 +141,15 @@ export function railGeometry({
   holding: boolean;
   /** The zone the held card came from. */
   origin: string | null;
+  /**
+   * A strip shown open for a glance (`BoardState.railPeek`): drawn as its panel over the
+   * columns, which keep its strip's room, as does the other rail.
+   */
+  peek?: Zone | null;
 }) {
+  // A card held from elsewhere takes a peeked rail back to its strip's dropzones.
+  const peeks = (zone: Zone) =>
+    peek === zone && views[zone] === 'strip' && !(holding && origin !== zone);
   // Each rail's width in a row this wide, and the widest its edge could take it.
   const widthsIn = (row: number) => {
     const fullWidth = Math.max(0, row - STRIP_WIDTH - ZONE_GAP * 2);
@@ -149,9 +167,13 @@ export function railGeometry({
       const view = views[zone];
       const max = room(natural(other));
       const live = resize?.zone === zone ? resize.width : null;
-      const width =
-        live ?? (view === 'full' ? fullWidth : view === 'panel' ? panel(zone, max) : STRIP_WIDTH);
-      return { width, max, live };
+      const open =
+        view === 'full'
+          ? fullWidth
+          : view === 'panel' || peeks(zone)
+            ? panel(zone, max)
+            : STRIP_WIDTH;
+      return { width: live ?? open, max, live };
     };
     return { fullWidth, backlog: of('backlog', 'closed'), closed: of('closed', 'backlog') };
   };
@@ -162,8 +184,10 @@ export function railGeometry({
     const { width, max, live } = now[zone];
     const tiles = holding && origin !== zone;
     const besideGallery = views[zone === 'backlog' ? 'closed' : 'backlog'] === 'full';
+    const peeking = peeks(zone);
     return {
-      zone: width,
+      // A peek lies over the columns, which keep the strip's room, as does the other rail.
+      zone: peeking ? STRIP_WIDTH : width,
       drawn:
         tiles && view === 'strip' && live === null
           ? besideGallery
@@ -174,7 +198,7 @@ export function railGeometry({
       // where the row is going.
       content: Math.max(PANEL_WIDTH, live ?? rest[zone].width),
       max,
-      mode: `${view}:${holding}:${tiles}:${widths[zone]}`,
+      mode: `${view}:${peeking}:${holding}:${tiles}:${widths[zone]}`,
       tracking: live !== null,
     };
   };
@@ -359,6 +383,49 @@ export function canCollapseGalleryOnEscape(
 }
 
 /**
+ * The timing of a strip opened for a glance (`railPeek.ts`), against the board: it opens only
+ * while nothing is held, carried or open over the board, and stays while a card held from it,
+ * its own edge or a menu still needs it.
+ */
+function useRailPeek(
+  zone: Zone,
+  rail: RefObject<HTMLElement | null>,
+  restoreFocus: (to: CollapsedZoneState) => void,
+) {
+  const [peek] = useState(() =>
+    createRailPeek({
+      canOpen: () => {
+        const state = board.get();
+        return (
+          state[zone] === 'strip' &&
+          state.carrying === null &&
+          drag.get() === null &&
+          railResize.get() === null &&
+          !hasBlockingOverlay()
+        );
+      },
+      open: () => peekRail(zone),
+      isOpen: () => isPeeking(board.get(), zone),
+      isHeld: () => drag.get() !== null || railResize.get()?.zone === zone || hasBlockingOverlay(),
+      close: () => {
+        // Focus inside the rail would be lost with it, so it goes to the strip left in its place.
+        if (rail.current?.contains(document.activeElement)) restoreFocus('strip');
+        endRailPeek(zone);
+      },
+    }),
+  );
+  // A peek is never kept: a rail leaving the board takes its peek with it.
+  useEffect(
+    () => () => {
+      peek.dispose();
+      endRailPeek(zone);
+    },
+    [peek, zone],
+  );
+  return peek;
+}
+
+/**
  * The backlog or the closed zone: a strip, a column, or a gallery across the board. While a
  * card from elsewhere is held, it is a column of dropzones, one per status, whatever state
  * it was in.
@@ -376,10 +443,13 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
   const { project } = current(state);
   const { title, icon: Icon } = ZONES[zone];
   const statuses = zoneStatuses(zone, project.statuses);
-  const view = state[zone];
   const count = statuses.reduce((sum, status) => sum + countIn(state, status.id), 0);
   // A card held from this zone keeps the zone as it is, so it can still be placed here.
   const tiles = makingWay(held) && held.origin !== zone;
+  // A strip a mouse rested on shows as its panel, over the columns, until the pointer leaves.
+  // A card held from elsewhere takes it back to the strip's dropzones.
+  const peeking = isPeeking(state, zone) && !tiles;
+  const view = peeking ? 'panel' : state[zone];
   const other = zone === 'backlog' ? 'closed' : 'backlog';
   // A gallery covers the active columns, so their statuses join the dropzones: in the strip
   // beside it, or in the gallery itself when the card came from that strip's zone. The
@@ -414,6 +484,30 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
     onPress: () => setView('panel'),
     onHold: () => setView('full'),
   });
+  const peek = useRailPeek(zone, railRef, (to) => {
+    restoreFocusTo.current = to;
+  });
+  // Only the backlog opens for a glance: it is where tasks are picked from.
+  const peekable = zone === 'backlog';
+  // Used, a peeked rail stays open, as if its strip had been pressed.
+  const keepPeek = () => {
+    if (isPeeking(board.get(), zone)) setView('panel');
+  };
+
+  // Once the peek is over, opened for good or closed, there is nothing left to time.
+  useEffect(() => {
+    if (!peeking) peek.settle();
+  }, [peeking, peek]);
+
+  // A card picked up from elsewhere owns the rail: its strip turns into dropzones. One of its own
+  // cards carried from the keyboard keeps it open; one carried from a column lets it go.
+  const carried = state.carrying?.seen.statusId;
+  const carriedHere = carried === undefined ? null : statuses.some((item) => item.id === carried);
+  useEffect(() => {
+    if (!isPeeking(board.get(), zone)) return;
+    if (tiles || carriedHere === false) endRailPeek(zone);
+    else if (carriedHere) setZoneView(zone, 'panel');
+  }, [tiles, carriedHere, zone]);
 
   // Only listen once no board-level Escape mode (task pane, carry, selection) is active, so
   // `useBoardBoundary`'s listener can dismiss those first without racing on the same keydown.
@@ -467,7 +561,8 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
 
   function commit(next: { view: ZoneState; width: number }) {
     if (next.view === 'panel') setRailWidth(zone, next.width);
-    if (next.view !== view) setView(next.view);
+    // A peeked edge let go of settles the peek, even back to its strip.
+    if (next.view !== view || peeking) setView(next.view);
   }
 
   function resize(next: number, keyboard: boolean) {
@@ -489,7 +584,8 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
   function hold(active: boolean) {
     if (active) {
       snap.current = view;
-      railResize.set({ zone, width: geometry.zone });
+      // A peek's edge starts where it is drawn, over the columns.
+      railResize.set({ zone, width: geometry.drawn });
       return;
     }
     const live = railResize.get();
@@ -504,8 +600,20 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
       data-origin={zone}
       data-status-home={statuses.map((status) => status.id).join(' ')}
       data-side={start ? 'start' : 'end'}
-      className="board-rail relative z-20 flex min-h-0 shrink-0 flex-col"
+      data-peek={peeking ? '' : undefined}
+      className={cn(
+        'board-rail relative z-20 flex min-h-0 shrink-0 flex-col transition-[box-shadow] duration-200',
+        // Lying over the columns, a peek is lifted off them, and edged where shadows vanish.
+        peeking &&
+          (start
+            ? 'shadow-[1px_0_0_var(--border),18px_0_40px_-16px_var(--glass-shadow)]'
+            : 'shadow-[-1px_0_0_var(--border),-18px_0_40px_-16px_var(--glass-shadow)]'),
+      )}
       style={{ width }}
+      onPointerEnter={peekable ? () => peek.enter() : undefined}
+      onPointerLeave={peekable ? () => peek.leave() : undefined}
+      // Anything clicked in a peek (a card, a filter, its header's buttons) keeps it open.
+      onClickCapture={peeking ? keepPeek : undefined}
     >
       {/* Clips the rail's content as it springs; the edge's grip reaches out past it. */}
       <div className="absolute inset-0 overflow-hidden">
@@ -560,6 +668,17 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
                 data-spotlight={hasBlocker ? 'blocker' : undefined}
                 data-spotlight-instant={reduced ? '' : undefined}
                 {...stripPress}
+                onPointerEnter={
+                  peekable ? (event) => peek.enterStrip(event.pointerType) : undefined
+                }
+                onPointerDown={(event) => {
+                  peek.cancelDwell();
+                  stripPress.onPointerDown(event);
+                }}
+                onPointerLeave={() => {
+                  peek.cancelDwell();
+                  stripPress.onPointerLeave();
+                }}
                 className="spotlight-strip group absolute inset-0 flex select-none flex-col items-center gap-4 pt-[calc(var(--safe-top)+2.375rem)] text-muted-foreground outline-none [-webkit-touch-callout:none] hover:bg-foreground/[0.04] hover:text-foreground active:bg-foreground/[0.07] focus-visible:ring-[3px] focus-visible:ring-ring/60 focus-visible:ring-inset"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -634,7 +753,7 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
       </div>
       {showsRailEdge(view, geometry.tracking, tiles) && (
         <SplitHandle
-          width={geometry.zone}
+          width={geometry.drawn}
           min={STRIP_WIDTH}
           keyMin={PANEL_WIDTH}
           max={geometry.max}

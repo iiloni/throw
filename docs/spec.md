@@ -336,6 +336,13 @@ motion.
 - The rails lie over the two ends of the active columns' scroller. Opening or closing
   either one pushes the columns along; when the columns do not all fit, the ones at the far
   end scroll under the other rail.
+- A mouse resting on the backlog's strip for a moment opens it for a glance: it lies over
+  the columns at its column's width, without pushing them, and goes back to its strip shortly
+  after the pointer leaves it. Being the one rail drawn over the columns, it has a hairline
+  edge and a soft shadow. Clicking anything in it, dragging its edge, or the backlog shortcut
+  keeps it open as a column; a card held from it keeps it open until the card is dropped, and
+  a card held from elsewhere turns it back into its strip's dropzones. Touch, pens and the
+  keyboard open the strip as before.
 - While a card from another zone is held, each rail turns into dropzones, one per status in
   its category. It does this in place: no column moves and none is covered. A rail that is
   a strip widens into the gap beside it, and no further, so the status names can be read.
