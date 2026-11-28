@@ -64,9 +64,17 @@ function reachableCards(except: HTMLElement) {
   });
 }
 
+/** The column or rail a card is listed in. */
+const laneOf = (card: Element) => card.closest('[data-column]') ?? card.closest('.board-column');
+
 /** Moves focus from a card to the next one an arrow points to; false when there is none. */
 export function focusNextCard(from: HTMLElement, direction: CardDirection) {
-  const target = pickCard(from.getBoundingClientRect(), reachableCards(from), direction);
+  let cards = reachableCards(from);
+  // Up and down stay in the card's own list: a scrolled column can pass under a sticky rail,
+  // where the rail's cards would otherwise overlap it.
+  const lane = direction === 'up' || direction === 'down' ? laneOf(from) : null;
+  if (lane) cards = cards.filter(({ item }) => laneOf(item) === lane);
+  const target = pickCard(from.getBoundingClientRect(), cards, direction);
   if (!target) return false;
   target.focus({ preventScroll: true });
   target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
