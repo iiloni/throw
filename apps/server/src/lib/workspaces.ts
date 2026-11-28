@@ -1,7 +1,7 @@
 import { DEFAULT_WORKSPACE_NAME, positionBetween } from '@throw/shared';
 import { and, eq, type SQLWrapper } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
-import { type Db, db, type Transaction } from '../db/client';
+import type { Db, Transaction } from '../db/client';
 import { workspaceMembers, workspaces } from '../db/schema';
 
 type Queryable = Db | Transaction;
@@ -31,12 +31,10 @@ export async function isMember(queryable: Queryable, userId: string, workspaceId
 }
 
 /** Every account starts with a workspace, so there is somewhere to put a first project. */
-export async function createDefaultWorkspace(userId: string) {
-  await db.transaction(async (tx) => {
-    const id = uuidv7();
-    await tx
-      .insert(workspaces)
-      .values({ id, name: DEFAULT_WORKSPACE_NAME, position: positionBetween(null, null) });
-    await tx.insert(workspaceMembers).values({ workspaceId: id, userId, role: 'owner' });
-  });
+export async function createDefaultWorkspace(tx: Transaction, userId: string) {
+  const id = uuidv7();
+  await tx
+    .insert(workspaces)
+    .values({ id, name: DEFAULT_WORKSPACE_NAME, position: positionBetween(null, null) });
+  await tx.insert(workspaceMembers).values({ workspaceId: id, userId, role: 'owner' });
 }

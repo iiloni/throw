@@ -22,6 +22,8 @@ GitHub connections and their delivery IDs are excluded, including when restoring
 contains them. After a restore, issue fresh MCP tokens, recreate webhooks for the clients you
 want to reconnect, and connect projects to GitHub again (updating the webhook's URL and secret
 on GitHub).
+Invite hashes and claim history are restored as of backup time. An unexpired link used or
+revoked since the backup may work again. Revoke it after restore if needed.
 Task, comment and board structure history retain their attribution. Restore invalidates
 saved MCP change cursors, so reconnecting clients need to read the board again or start a
 [time-based catch-up](decisions/0014-mcp-server.md#change-feed).

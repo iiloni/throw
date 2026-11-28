@@ -138,6 +138,35 @@ try {
     'Content-Type': 'application/json',
     'X-Throw-Protocol': String(protocol.max),
   };
+  const invite = await fetch(`${base}/api/admin/invites`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ label: 'restore fixture' }),
+  });
+  assert.equal(invite.status, 201);
+  const { token: inviteToken } = await invite.json();
+  const guest = await fetch(`${base}/api/auth/sign-up/email`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: 'http://localhost:3000',
+      'X-Throw-Invite': inviteToken,
+    },
+    body: JSON.stringify({ email: 'guest@example.com', name: 'Guest', password: secret() }),
+  });
+  assert.equal(guest.status, 200);
+  const { user: guestUser } = await guest.json();
+  const claim = () =>
+    JSON.parse(
+      sql(
+        "SELECT json_build_object('at', used_at, 'by', used_by) FROM invites WHERE label = 'restore fixture';",
+      ),
+    );
+  const savedClaim = claim();
+  assert.equal(savedClaim.by, guestUser.id);
+  assert.ok(Number.isFinite(Date.parse(savedClaim.at)));
+  const savedInviteHash = sql("SELECT token_hash FROM invites WHERE label = 'restore fixture';");
+  assert.match(savedInviteHash, /^[a-f0-9]{64}$/);
   const inventoryResponse = await fetch(`${base}/api/mcp-tokens`, { headers });
   assert.equal(inventoryResponse.status, 200);
   const inventory = await inventoryResponse.json();
@@ -182,7 +211,7 @@ try {
     'catch',
     'catch',
   );
-  assert.equal(sql('SELECT count(*) FROM session;'), '1');
+  assert.equal(sql('SELECT count(*) FROM session;'), '2');
   const made = dc(['exec', '-T', 'throw', 'node', 'dist/backups/cli.mjs', 'create'], {
     capture: true,
   });
@@ -191,6 +220,7 @@ try {
   dc(['exec', '-T', 'throw', 'node', 'dist/backups/cli.mjs', 'inspect', name]);
   sql(`UPDATE workspaces SET name = 'after backup' WHERE id = '${id}';`);
   sql(`DELETE FROM github_releases WHERE id = '${releaseId}';`);
+  sql("DELETE FROM invites WHERE label = 'restore fixture';");
   // Restore into the same live tables; observe their identity as Electric does.
   const oid = sql("SELECT 'public.workspaces'::regclass::oid;");
   dc(['stop', 'throw']);
@@ -202,6 +232,11 @@ try {
     ),
     'v1',
   );
+  assert.equal(
+    sql("SELECT token_hash FROM invites WHERE label = 'restore fixture';"),
+    savedInviteHash,
+  );
+  assert.deepEqual(claim(), savedClaim);
   assert.notEqual(sql('SELECT generation FROM change_feed_generation;'), cursorGeneration);
   assert.equal(
     sql(
