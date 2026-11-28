@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import type { Project, Status, Task, TaskRelation } from '@throw/shared';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type { Project, Status, Task, TaskGithubLink, TaskRelation } from '@throw/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { blockedLabel } from '@/components/Board/blockers';
 import { blockersByTask, RelationPicker, relationGroups, TaskRelations } from './TaskRelations';
@@ -11,6 +11,9 @@ const fake = vi.hoisted(() => ({
   projects: [] as Project[],
   statuses: [] as Status[],
   relations: [] as TaskRelation[],
+  repository: null as string | null,
+  githubLinks: [] as TaskGithubLink[],
+  linkGithub: vi.fn(async () => {}),
 }));
 vi.mock('@/lib/taskRelations', () => ({
   addTaskRelation: fake.add,
@@ -22,6 +25,12 @@ vi.mock('@/lib/collections', () => ({
   useProjects: () => ({ projects: fake.projects, isLoading: false }),
   useStatuses: () => ({ statuses: fake.statuses, isLoading: false }),
   useTaskRelations: () => ({ relations: fake.relations, isLoading: false }),
+  useTaskGithubLinksOf: () => ({ links: fake.githubLinks, isLoading: false }),
+}));
+vi.mock('@/lib/githubLinks', async (original) => ({
+  ...(await original<typeof import('@/lib/githubLinks')>()),
+  useGithubRepository: () => fake.repository,
+  linkGithub: fake.linkGithub,
 }));
 
 const project = (id: string, key: string, name: string): Project => ({
@@ -95,6 +104,8 @@ beforeEach(() => {
     relation('r4', 'closed', 'me', 'blocks'),
     relation('r5', 'trashed', 'me', 'blocks'),
   ];
+  fake.repository = null;
+  fake.githubLinks = [];
 });
 afterEach(() => {
   cleanup();
@@ -210,5 +221,49 @@ describe('the task view', () => {
     fireEvent.keyDown(field, { key: 'Enter' });
     expect(fake.add).toHaveBeenCalledWith('me', 'blocked_by', 'started');
     expect(onPicked).toHaveBeenCalled();
+  });
+  it('takes a task search for a pasted GitHub address while the project is unconnected', () => {
+    render(<RelationPicker task={me} onPicked={vi.fn()} />);
+    const field = screen.getByRole('combobox', { name: 'Find a task' });
+    expect(field).toHaveAttribute('placeholder', 'Search every project by title or key');
+    fireEvent.change(field, { target: { value: 'https://github.com/org/repo/pull/5' } });
+    expect(screen.queryByRole('option', { name: /Link pull request/ })).not.toBeInTheDocument();
+  });
+
+  it('links a pasted pull request from the connected repository, and explains others', async () => {
+    fake.repository = 'org/repo';
+    const onPicked = vi.fn();
+    render(<RelationPicker task={me} onPicked={onPicked} />);
+    const field = screen.getByRole('combobox', { name: 'Find a task' });
+    expect(field).toHaveAttribute('placeholder', 'Search tasks, or paste a GitHub link');
+    fireEvent.change(field, { target: { value: 'https://github.com/other/repo/pull/5' } });
+    expect(screen.getByRole('option', { name: /Link pull request #5/ })).toBeDisabled();
+    expect(screen.getByText('This project follows org/repo.')).toBeInTheDocument();
+    fireEvent.change(field, { target: { value: ' https://github.com/Org/Repo/pull/5 ' } });
+    const option = screen.getByRole('option', { name: /Link pull request #5/ });
+    expect(option).toBeEnabled();
+    expect(field.getAttribute('aria-activedescendant')).toBe(option.id);
+    // The relation kinds have nothing to say about a pull request.
+    expect(screen.getByRole('radiogroup', { name: 'Relation' }).parentElement).toHaveClass(
+      'hidden',
+    );
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(fake.linkGithub).toHaveBeenCalledWith('me', 'app', 'https://github.com/org/repo/pull/5');
+    await waitFor(() => expect(onPicked).toHaveBeenCalled());
+    expect(fake.add).not.toHaveBeenCalled();
+  });
+
+  it('shows why a pasted link failed and stays open', async () => {
+    fake.repository = 'org/repo';
+    const { GithubLinkError } = await import('@/lib/githubLinks');
+    fake.linkGithub.mockRejectedValueOnce(new GithubLinkError('Nope.'));
+    const onPicked = vi.fn();
+    render(<RelationPicker task={me} onPicked={onPicked} />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Find a task' }), {
+      target: { value: 'https://github.com/org/repo/issues/9' },
+    });
+    fireEvent.click(screen.getByRole('option', { name: /Link issue #9/ }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Nope.');
+    expect(onPicked).not.toHaveBeenCalled();
   });
 });

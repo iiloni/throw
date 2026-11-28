@@ -23,8 +23,22 @@ import { Highlighted } from '@/components/CommandPalette/SearchContent';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { focusLinks } from '@/components/TaskDetails/TaskTimeline';
+import { GithubStateIcon } from '@/components/TaskGithubLinks/TaskGithubLinks';
 import { ScrollBox } from '@/components/ui/scroll-area';
-import { useProjects, useStatuses, useTaskRelations, useTasks } from '@/lib/collections';
+import {
+  useProjects,
+  useStatuses,
+  useTaskGithubLinksOf,
+  useTaskRelations,
+  useTasks,
+} from '@/lib/collections';
+import {
+  GithubLinkError,
+  githubKindLabel,
+  linkGithub,
+  pastedGithubLink,
+  useGithubRepository,
+} from '@/lib/githubLinks';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { addTaskRelation, RelationError, removeTaskRelation } from '@/lib/taskRelations';
@@ -275,6 +289,11 @@ export function RelationPicker({
   const ids = useId();
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
+  // A project that follows a repository also links its pull requests and issues, pasted here.
+  const repository = useGithubRepository(task.projectId);
+  const { links: githubLinks } = useTaskGithubLinksOf(task.id);
+  const pasted = repository ? pastedGithubLink(query, repository, githubLinks) : null;
+  const [linking, setLinking] = useState(false);
   // With a keyboard at hand the search is ready to type into; a touch screen keeps its
   // keyboard down until the field is tapped, so the suggestions stay in view.
   useEffect(() => {
@@ -300,12 +319,15 @@ export function RelationPicker({
     return roles;
   }, [relations, task.id]);
   const searching = query.trim() !== '';
+  const isPasted = pasted !== null;
   const rows = useMemo(
     () =>
-      searching
-        ? searchTasks(index, query, { currentProjectId: task.projectId, limit: RESULTS })
-        : relationSuggestions(index, task, new Set(linked.keys())),
-    [searching, index, query, task, linked],
+      isPasted
+        ? []
+        : searching
+          ? searchTasks(index, query, { currentProjectId: task.projectId, limit: RESULTS })
+          : relationSuggestions(index, task, new Set(linked.keys())),
+    [isPasted, searching, index, query, task, linked],
   );
   const options = rows.map((row) => ({
     row,
@@ -331,6 +353,22 @@ export function RelationPicker({
       );
     }
   }
+  async function pickGithub() {
+    if (!pasted || pasted.problem || linking) return;
+    setLinking(true);
+    setError(null);
+    try {
+      await linkGithub(task.id, task.projectId, pasted.url);
+      haptics.success();
+      focusLinks();
+      onPicked();
+    } catch (caught) {
+      if (!(caught instanceof GithubLinkError)) throw caught;
+      setError(caught.message);
+    } finally {
+      setLinking(false);
+    }
+  }
   function move(step: 1 | -1) {
     if (enabled.length === 0) return;
     const at = enabled.findIndex((option) => option.row.task.id === active);
@@ -347,7 +385,13 @@ export function RelationPicker({
             id={`${ids}-heading`}
             className="min-w-0 truncate px-1 font-semibold text-[0.6875rem] text-muted-foreground uppercase tracking-[0.06em]"
           >
-            {searching ? 'Matching tasks' : project ? `Open in ${project.name}` : 'Open tasks'}
+            {pasted
+              ? 'From GitHub'
+              : searching
+                ? 'Matching tasks'
+                : project
+                  ? `Open in ${project.name}`
+                  : 'Open tasks'}
           </h3>
           {onClose && (
             <IconButton
@@ -367,6 +411,14 @@ export function RelationPicker({
         >
           {/* Few suggestions or matches sit right above the controls; more scroll from the best down. */}
           <div className="mt-auto flex flex-col gap-0.5">
+            {pasted && (
+              <GithubOption
+                id={`${ids}-github`}
+                item={pasted}
+                linking={linking}
+                onPick={() => void pickGithub()}
+              />
+            )}
             {options.map(({ row, taken }) => (
               <PickerOption
                 key={row.task.id}
@@ -381,11 +433,13 @@ export function RelationPicker({
                 onPick={() => pick(row.task)}
               />
             ))}
-            {options.length === 0 && (
+            {options.length === 0 && !pasted && (
               <p role="status" className="px-1 py-3 text-muted-foreground text-sm">
                 {searching
                   ? `No tasks match “${query.trim()}”.`
-                  : 'Search by title or key, such as THR-12, to link a task from any project.'}
+                  : repository
+                    ? `Search by title or key, such as THR-12, to link a task from any project, or paste a pull request or issue from ${repository}.`
+                    : 'Search by title or key, such as THR-12, to link a task from any project.'}
               </p>
             )}
           </div>
@@ -397,7 +451,7 @@ export function RelationPicker({
         </p>
       )}
       <div className="flex shrink-0 flex-col gap-2.5 border-foreground/[0.07] border-t pt-2.5">
-        <div className="flex flex-col gap-1">
+        <div className={cn('flex flex-col gap-1', pasted && 'hidden')}>
           <RelationKinds
             value={role}
             describedBy={`${ids}-explain`}
@@ -426,8 +480,12 @@ export function RelationPicker({
             aria-expanded
             aria-autocomplete="list"
             aria-controls={`${ids}-tasks`}
-            aria-activedescendant={active ? optionId(active) : undefined}
-            placeholder="Search every project by title or key"
+            aria-activedescendant={pasted ? `${ids}-github` : active ? optionId(active) : undefined}
+            placeholder={
+              repository
+                ? 'Search tasks, or paste a GitHub link'
+                : 'Search every project by title or key'
+            }
             autoComplete="off"
             autoCapitalize="off"
             spellCheck={false}
@@ -446,6 +504,10 @@ export function RelationPicker({
                 move(event.key === 'ArrowDown' ? 1 : -1);
               } else if (event.key === 'Enter') {
                 event.preventDefault();
+                if (pasted) {
+                  void pickGithub();
+                  return;
+                }
                 const chosen = options.find((option) => option.row.task.id === active);
                 if (chosen) pick(chosen.row.task);
               }
@@ -524,6 +586,50 @@ function RelationKinds({
         </label>
       ))}
     </div>
+  );
+}
+
+/** A pasted pull request or issue, which picking links to the task. */
+function GithubOption({
+  id,
+  item,
+  linking,
+  onPick,
+}: {
+  id: string;
+  item: NonNullable<ReturnType<typeof pastedGithubLink>>;
+  linking: boolean;
+  onPick(): void;
+}) {
+  const blocked = item.problem !== null;
+  return (
+    <button
+      type="button"
+      id={id}
+      role="option"
+      aria-selected={!blocked}
+      aria-disabled={blocked || linking || undefined}
+      data-active={!blocked || undefined}
+      data-github-option=""
+      disabled={blocked || linking}
+      tabIndex={-1}
+      onPointerDown={(event) => event.preventDefault()}
+      onClick={onPick}
+      className="flex min-h-[3.25rem] w-full min-w-0 shrink-0 items-center gap-3 rounded-xl px-3 py-1.5 text-left outline-none transition-colors duration-150 hover:bg-foreground/[0.05] disabled:cursor-default disabled:hover:bg-transparent data-active:bg-foreground/[0.07]"
+    >
+      <GithubStateIcon
+        link={{ kind: item.kind, state: 'open' }}
+        className="size-4 shrink-0 text-muted-foreground"
+      />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className={cn('truncate text-sm', blocked && 'text-muted-foreground')}>
+          {linking
+            ? 'Linking…'
+            : `Link ${githubKindLabel[item.kind].toLowerCase()} #${item.number}`}
+        </span>
+        <span className="truncate text-muted-foreground text-xs">{item.problem ?? item.repo}</span>
+      </span>
+    </button>
   );
 }
 

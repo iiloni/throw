@@ -88,6 +88,10 @@ text, so Markdown and MCP keep `#KEY-N` (`lib/taskReferences.ts`; the server's
 the synced tasks (`TaskReferences/referenceIndex.ts`) and `LazyDescriptionEditor`'s `referencesFor` names
 the task whose text it is; the editor decorates with `DescriptionEditor/taskReferencePlugin.ts`, offers
 tasks after `#` (`DescriptionTaskMenu.tsx`) and shows `TaskReferenceCard` on desktop.
+A task's linked pull requests and issues show in its Links tab or side column
+(`components/TaskGithubLinks`), and the relation picker links a pasted address while the
+project is connected (`lib/githubLinks.ts`, online only). Board cards show a pull request mark
+from `TaskPullRequestsContext` (`Board/githubLinks.ts`), previewed on hover with a mouse.
 The activity log syncs to devices and comments are built (`lib/comments.ts`), with a
 timeline query in `collections.ts` and a task history view in `TaskDetails/TaskTimeline.tsx`; its comment cards, list motion and
 composer prompt are `TaskDetails/Comments.tsx`.

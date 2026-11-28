@@ -11,6 +11,7 @@ import {
   useState,
 } from 'react';
 import { Hint } from '@/components/Hint/Hint';
+import { GithubPullMark } from '@/components/TaskGithubLinks/GithubPullMark';
 import { TaskTags } from '@/components/TaskTags/TaskTags';
 import { haptics } from '@/lib/haptics';
 import { afterPaint, animateSteadySpring, springs, stopSteady } from '@/lib/motion';
@@ -28,6 +29,7 @@ import {
 } from './blockers';
 import { carryAcross, carryVertically, pickUp, putBack, setDown } from './carry';
 import { consumeDragClick, drag, isPrimed, pressCard } from './drag';
+import { useTaskPullRequests } from './githubLinks';
 import { PriorityGlyph, StatusGlyph } from './glyphs';
 import {
   identifier,
@@ -149,6 +151,7 @@ export function TaskCardFace({
   statusControl,
   statusAsControl = false,
   spotlight = false,
+  links = false,
 }: {
   project: Project;
   task: Task;
@@ -158,12 +161,15 @@ export function TaskCardFace({
   statusAsControl?: boolean;
   /** True for interactive board cards that can trigger the blocker spotlight on linger. */
   spotlight?: boolean;
+  /** True where the pull request mark can link and preview: not on a copy of a card. */
+  links?: boolean;
 }) {
   const [settings] = useBoardSettings();
   const state = board.use();
   const status = statusById(project, task.statusId);
   const blockers = useTaskBlockers(task.id);
   const blocked = blockers.length > 0 && task.closedAt === null;
+  const pulls = useTaskPullRequests(task.id);
   const spotlightActive = useSpotlightActiveFor(task.id, spotlight);
   const parent = task.parentId
     ? current(state).tasks.find((item) => item.id === task.parentId)
@@ -239,6 +245,7 @@ export function TaskCardFace({
             </span>
           </Hint>
         )}
+        {pulls.length > 0 && <GithubPullMark pulls={pulls} interactive={links} />}
         {parent && state.actions && (
           <Hint label={`Subtask of ${parent.title}`}>
             <span role="img" aria-label={`Subtask of ${parent.title}`}>
@@ -433,6 +440,7 @@ export function TaskCard({
         showStatus={showStatus}
         statusControl={statusControl}
         spotlight={spotlightEnabled}
+        links={!overlay}
       />
       <motion.span
         aria-hidden

@@ -80,6 +80,9 @@ integrations.
 - An opt-in GitHub connection per project, in project settings: GitHub sends the project's
   repository events as signed webhooks. Task keys in pull requests and issues link them to
   tasks. Devices sync link metadata, review decisions and check counts for offline use.
+  The task view lists linked pull requests and issues with their state, review and checks,
+  and takes a pasted address to link one by hand; a card shows a quiet pull request mark,
+  previewed on hover with a mouse.
   A project can opt into status rules: a linked pull request opened, reopened or converted
   to a draft, made ready for review, merged or closed, or a linked issue closed, moves its
   tasks to a status the project chose. Each rule is off until set, and the move is recorded as GitHub's. Releases
