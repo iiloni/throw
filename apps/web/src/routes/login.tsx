@@ -1,4 +1,5 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
+import { INVITE_HEADER, inviteFromFragment, inviteFromText } from '@throw/shared';
 import { type FormEvent, useState } from 'react';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { Button } from '@/components/ui/button';
@@ -30,7 +31,11 @@ const devCredentials =
 
 function LoginPage() {
   const { redirect: returnTo } = Route.useSearch();
-  const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
+  // An invite link opens the form to make the account it is for (ADR 0018).
+  const [invite] = useState(() => inviteFromFragment(window.location.hash));
+  const [mode, setMode] = useState<'sign-in' | 'sign-up'>(invite ? 'sign-up' : 'sign-in');
+  // The invited person makes their own account: the seeded admin's details would be in the way.
+  const prefill = invite ? undefined : devCredentials;
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   // Reached to add another account, or after the session in use ended (ADR 0016).
@@ -41,17 +46,23 @@ function LoginPage() {
     const form = new FormData(event.currentTarget);
     const email = String(form.get('email'));
     const password = String(form.get('password'));
+    // The Android app, and a page the link's fragment did not reach, take the link here.
+    const pasted = mode === 'sign-up' ? String(form.get('invite') ?? '').trim() : '';
+    const token = invite ?? (pasted ? inviteFromText(pasted) : null);
+    if (pasted && !token) {
+      setError('That is not a whole invite link. Copy the link again and paste all of it.');
+      return;
+    }
     setPending(true);
     setError(null);
     try {
       const result =
         mode === 'sign-in'
           ? await authClient.signIn.email({ email, password })
-          : await authClient.signUp.email({
-              email,
-              password,
-              name: String(form.get('name') ?? ''),
-            });
+          : await authClient.signUp.email(
+              { email, password, name: String(form.get('name') ?? '') },
+              token ? { headers: { [INVITE_HEADER]: token } } : undefined,
+            );
       if (result.error) {
         setError(result.error.message ?? 'Something went wrong');
         return;
@@ -60,7 +71,9 @@ function LoginPage() {
       const expired = takeExpiredUser();
       const { user } = result.data;
       const sameAccount = !expired || expired === user.id;
-      const destination = sameAccount ? authReturnTo(returnTo, window.location.hash) : '/';
+      // An invite's fragment is spent: it must not ride along to the destination.
+      const fragment = invite ? '' : window.location.hash;
+      const destination = sameAccount ? authReturnTo(returnTo, fragment) : '/';
       // A full load, so the collections open this user's copy of their data on the device,
       // at this account's addresses once several are signed in.
       window.location.assign(accountPath(user.id, destination));
@@ -77,12 +90,17 @@ function LoginPage() {
         <BrandLockup orientation="horizontal" iconSize={48} />
       </h1>
       <form onSubmit={submit} className="flex w-full max-w-sm flex-col gap-3">
+        {invite && mode === 'sign-up' && (
+          <p role="status" className="text-center text-muted-foreground text-sm">
+            You have been invited to this Throw server. Make your account to join.
+          </p>
+        )}
         {mode === 'sign-up' && <Input name="name" placeholder="Name" aria-label="Name" />}
         <Input
           name="email"
           type="email"
           required
-          defaultValue={devCredentials?.email}
+          defaultValue={prefill?.email}
           placeholder="Email"
           aria-label="Email"
         />
@@ -91,11 +109,24 @@ function LoginPage() {
           type="password"
           required
           minLength={8}
-          defaultValue={devCredentials?.password}
+          defaultValue={prefill?.password}
           placeholder="Password"
           aria-label="Password"
         />
-        {error && <p className="text-destructive text-sm">{error}</p>}
+        {mode === 'sign-up' && !invite && (
+          <Input
+            name="invite"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="Invite link, if you were sent one"
+            aria-label="Invite link"
+          />
+        )}
+        {error && (
+          <p role="alert" className="text-destructive text-sm">
+            {error}
+          </p>
+        )}
         <Button type="submit" disabled={pending}>
           {mode === 'sign-in' ? 'Sign in' : 'Create account'}
         </Button>

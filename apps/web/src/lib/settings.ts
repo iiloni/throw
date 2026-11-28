@@ -13,6 +13,7 @@ import {
   SlidersHorizontal,
   Tags,
   Trash2,
+  UsersRound,
   Webhook,
 } from 'lucide-react';
 import { z } from 'zod';
@@ -30,6 +31,7 @@ export const SETTINGS_TABS = [
   { path: '/settings/mcp', label: 'MCP tokens', icon: KeyRound, section: 'User' },
   { path: '/settings/webhooks', label: 'Webhooks', icon: Webhook, section: 'User' },
   { path: '/settings/update', label: 'Update', icon: Download, section: 'User' },
+  { path: '/settings/admin/users', label: 'Users', icon: UsersRound, section: 'Admin' },
   { path: '/settings/admin/backups', label: 'Backups', icon: DatabaseBackup, section: 'Admin' },
 ] as const satisfies ReadonlyArray<{
   path: string;

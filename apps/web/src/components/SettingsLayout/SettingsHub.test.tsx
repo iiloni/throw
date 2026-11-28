@@ -146,6 +146,7 @@ it('shows project pages beside User and Admin sections and Back to board when a 
   expect(within(userGroup).getByRole('link', { name: 'Webhooks' })).toBeInTheDocument();
 
   const adminGroup = within(nav).getByRole('region', { name: 'Admin' });
+  expect(within(adminGroup).getByRole('link', { name: 'Users' })).toBeInTheDocument();
   expect(within(adminGroup).getByRole('link', { name: 'Backups' })).toBeInTheDocument();
 });
 

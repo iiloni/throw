@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { inviteFromText } from '@throw/shared';
 import { type FormEvent, useState } from 'react';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { Button } from '@/components/ui/button';
@@ -28,12 +29,14 @@ function SetupPage() {
       return;
     }
     setServerUrl(url);
+    // An invite link names its server, so pasting it here also opens its sign-up.
+    const invite = url.includes('#') ? inviteFromText(url) : null;
     // Reload so the auth client and sync pick up the new server.
     window.location.assign(
       pagePath(
         authReturnTo(
           redirect ? `/login?${new URLSearchParams({ redirect })}` : '/login',
-          window.location.hash,
+          invite ? `#invite=${invite}` : window.location.hash,
         ),
       ),
     );
@@ -56,6 +59,7 @@ function SetupPage() {
           placeholder="https://throw.example.com"
           aria-label="Server URL"
         />
+        <p className="text-muted-foreground text-sm">Or paste an invite link you were sent.</p>
         {error && <p className="text-destructive text-sm">{error}</p>}
         <Button type="submit">Connect</Button>
       </form>

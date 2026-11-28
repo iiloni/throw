@@ -193,6 +193,11 @@ nodes and edges (states match the cards' blocked mark), `layout.ts` is the pure 
 layout and `analysis.ts` the critical path, reachability and bottleneck counts, all unit
 tested. `viewport.ts` pans and zooms by motion values; the canvas fits itself until moved.
 
+Server admins manage every account and the signup invites at `/settings/admin/users`
+(ADR 0018): `components/UserManagement` (roles, password resets and deletion, each confirmed in a
+`ManagementSurface`) and `components/UserInvites`, through `lib/admin.ts`. The sign-in page reads
+an invite link's `#invite=` fragment, or a pasted link, and sends it in `X-Throw-Invite`.
+
 Several accounts can be signed in on one device (ADR 0016): `lib/auth.ts` keeps the list,
 the tab's account (`sessionStorage`) and the `/u/<n>` address prefix the router strips and
 adds (`routerRewrite`); `lib/accounts.ts` switches (a full load) and signs one account out.

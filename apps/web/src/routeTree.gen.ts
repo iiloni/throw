@@ -26,6 +26,7 @@ import { Route as AppSettingsUpdateRouteImport } from './routes/_app/settings/up
 import { Route as AppSettingsWebhooksRouteImport } from './routes/_app/settings/webhooks'
 import { Route as AppSettingsAdminIndexRouteImport } from './routes/_app/settings/admin/index'
 import { Route as AppSettingsAdminBackupsRouteImport } from './routes/_app/settings/admin/backups'
+import { Route as AppSettingsAdminUsersRouteImport } from './routes/_app/settings/admin/users'
 import { Route as AppWWorkspaceIdIndexRouteImport } from './routes/_app/w.$workspaceId.index'
 import { Route as AppWWorkspaceIdBoardRouteImport } from './routes/_app/w.$workspaceId.board'
 import { Route as AppWWorkspaceIdTrashRouteImport } from './routes/_app/w.$workspaceId.trash'
@@ -117,6 +118,11 @@ const AppSettingsAdminBackupsRoute = AppSettingsAdminBackupsRouteImport.update({
   path: '/backups',
   getParentRoute: () => AppSettingsAdminRoute,
 } as any)
+const AppSettingsAdminUsersRoute = AppSettingsAdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AppSettingsAdminRoute,
+} as any)
 const AppWWorkspaceIdIndexRoute = AppWWorkspaceIdIndexRouteImport.update({
   id: '/w/$workspaceId/',
   path: '/w/$workspaceId/',
@@ -167,6 +173,7 @@ export interface FileRoutesByFullPath {
   '/settings/webhooks': typeof AppSettingsWebhooksRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
+  '/settings/admin/users': typeof AppSettingsAdminUsersRoute
   '/w/$workspaceId/board': typeof AppWWorkspaceIdBoardRoute
   '/w/$workspaceId/trash': typeof AppWWorkspaceIdTrashRoute
   '/settings/admin/': typeof AppSettingsAdminIndexRoute
@@ -189,6 +196,7 @@ export interface FileRoutesByTo {
   '/settings/webhooks': typeof AppSettingsWebhooksRoute
   '/settings': typeof AppSettingsIndexRoute
   '/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
+  '/settings/admin/users': typeof AppSettingsAdminUsersRoute
   '/w/$workspaceId/board': typeof AppWWorkspaceIdBoardRoute
   '/w/$workspaceId/trash': typeof AppWWorkspaceIdTrashRoute
   '/settings/admin': typeof AppSettingsAdminIndexRoute
@@ -215,6 +223,7 @@ export interface FileRoutesById {
   '/_app/settings/webhooks': typeof AppSettingsWebhooksRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
+  '/_app/settings/admin/users': typeof AppSettingsAdminUsersRoute
   '/_app/w/$workspaceId/board': typeof AppWWorkspaceIdBoardRoute
   '/_app/w/$workspaceId/trash': typeof AppWWorkspaceIdTrashRoute
   '/_app/settings/admin/': typeof AppSettingsAdminIndexRoute
@@ -241,6 +250,7 @@ export interface FileRouteTypes {
     | '/settings/webhooks'
     | '/settings/'
     | '/settings/admin/backups'
+    | '/settings/admin/users'
     | '/w/$workspaceId/board'
     | '/w/$workspaceId/trash'
     | '/settings/admin/'
@@ -263,6 +273,7 @@ export interface FileRouteTypes {
     | '/settings/webhooks'
     | '/settings'
     | '/settings/admin/backups'
+    | '/settings/admin/users'
     | '/w/$workspaceId/board'
     | '/w/$workspaceId/trash'
     | '/settings/admin'
@@ -288,6 +299,7 @@ export interface FileRouteTypes {
     | '/_app/settings/webhooks'
     | '/_app/settings/'
     | '/_app/settings/admin/backups'
+    | '/_app/settings/admin/users'
     | '/_app/w/$workspaceId/board'
     | '/_app/w/$workspaceId/trash'
     | '/_app/settings/admin/'
@@ -426,6 +438,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsAdminBackupsRouteImport
       parentRoute: typeof AppSettingsAdminRoute
     }
+    '/_app/settings/admin/users': {
+      id: '/_app/settings/admin/users'
+      path: '/users'
+      fullPath: '/settings/admin/users'
+      preLoaderRoute: typeof AppSettingsAdminUsersRouteImport
+      parentRoute: typeof AppSettingsAdminRoute
+    }
     '/_app/w/$workspaceId/': {
       id: '/_app/w/$workspaceId/'
       path: '/w/$workspaceId'
@@ -473,11 +492,13 @@ declare module '@tanstack/react-router' {
 
 interface AppSettingsAdminRouteChildren {
   AppSettingsAdminBackupsRoute: typeof AppSettingsAdminBackupsRoute
+  AppSettingsAdminUsersRoute: typeof AppSettingsAdminUsersRoute
   AppSettingsAdminIndexRoute: typeof AppSettingsAdminIndexRoute
 }
 
 const AppSettingsAdminRouteChildren: AppSettingsAdminRouteChildren = {
   AppSettingsAdminBackupsRoute: AppSettingsAdminBackupsRoute,
+  AppSettingsAdminUsersRoute: AppSettingsAdminUsersRoute,
   AppSettingsAdminIndexRoute: AppSettingsAdminIndexRoute,
 }
 
