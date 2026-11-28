@@ -281,9 +281,11 @@ export function TaskColumnFrame({
         >
           {/* At its full width throughout, so its content never reflows as it opens. */}
           <div className="absolute inset-y-0 right-0 w-64">
-            <ScrollArea className="h-full [--scrollbar-inset:0.5rem]">
+            <ScrollArea edges className="h-full [--scrollbar-inset:0.5rem]">
               <ScrollAreaViewport>
-                <div className="flex flex-col gap-6 p-1 pb-6">{children}</div>
+                <div data-scrollbar-gutter="" className="flex flex-col gap-6 p-1 pb-6">
+                  {children}
+                </div>
               </ScrollAreaViewport>
               <ScrollBar />
             </ScrollArea>
