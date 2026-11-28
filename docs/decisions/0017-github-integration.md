@@ -148,7 +148,8 @@ The task pane lists a task's links with its relations: in the Links tab on phone
 panes, and in the side column of a wide desktop pane ([ADR 0012](0012-task-side-column.md)),
 which a task with only GitHub links also opens. Each item is a row that opens GitHub in a new
 tab: its kind and state icon, number, repository, title, a state pill (`Draft`, `Open`,
-`Merged`, `Closed`), a pull request's review decision and check counts, and its branch. Rows
+`Merged`, `Closed`), and a pull request's review decision and check counts. The head branch
+is kept for linking but not shown: beside the title it is noise, and gone once merged. Rows
 update in place as deliveries sync. Removing one hides it at once on every surface and brings
 it back if the server refuses; adding cannot be optimistic, since the server builds the row.
 
@@ -166,7 +167,7 @@ the newest) as a quiet `#number` beside its identifier, with `+n` for others, ti
 open green, draft gray, merged violet, closed red, and an open or draft one with failing checks
 red. Issues stay in the task pane. With a mouse the mark is a link to that pull request, outside
 the card's press (`data-no-drag`), and lingering on or focusing it opens a glass preview of each
-pull request with its review, checks and branch. A touch screen and a card's drag copy show the
+pull request with its review and checks. A touch screen and a card's drag copy show the
 mark alone. The boundaries supply links through `TaskPullRequestsContext`; the prototype has
 none.
 

@@ -4,7 +4,6 @@ import {
   CircleCheck,
   CircleDot,
   Clock,
-  GitBranch,
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
@@ -150,13 +149,8 @@ export function GithubLinkSummary({
       >
         {link.title}
       </span>
+      {/* The head branch stays out: it is noise beside the title, and gone once merged. */}
       <GithubLinkStatus link={link} />
-      {link.branch && (
-        <span className="flex min-w-0 items-center gap-1 text-muted-foreground text-xs">
-          <GitBranch aria-hidden className="size-3 shrink-0" />
-          <span className="min-w-0 truncate font-mono text-[0.6875rem]">{link.branch}</span>
-        </span>
-      )}
     </span>
   );
 }

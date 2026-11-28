@@ -110,7 +110,7 @@ test('a linked pull request shows on its card and as a live card in the task pan
     await expect(preview).toBeVisible();
     await expect(preview).toContainText(pr.title);
     await expect(preview).toContainText('Approved');
-    await expect(preview).toContainText(pr.head.ref);
+    await expect(preview).not.toContainText(pr.head.ref);
     await expect(preview.getByRole('img', { name: 'Checks: 1 failed, 2 passed' })).toBeVisible();
     await page.screenshot({ path: test.info().outputPath('board-preview.png') });
     await page.emulateMedia({ colorScheme: 'dark' });
@@ -146,7 +146,7 @@ test('a linked pull request shows on its card and as a live card in the task pan
   await expect(item).toContainText(pr.title);
   await expect(item).toContainText('Open');
   await expect(item).toContainText('Approved');
-  await expect(item).toContainText(pr.head.ref);
+  await expect(item).not.toContainText(pr.head.ref);
   await page.screenshot({ path: test.info().outputPath('task-pane-pull.png') });
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.waitForTimeout(800);

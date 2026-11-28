@@ -85,7 +85,8 @@ describe('the task pane’s GitHub links', () => {
     expect(pull).toHaveAttribute('rel', 'noopener noreferrer');
     expect(pull).toHaveTextContent('Speed up sync');
     expect(pull).toHaveTextContent('Approved');
-    expect(pull).toHaveTextContent('feat/sync');
+    // The head branch stays on the link, not on its card.
+    expect(pull).not.toHaveTextContent('feat/sync');
     expect(
       within(pull).getByRole('img', { name: 'Checks: 1 failed, 2 pending, 3 passed' }),
     ).toBeInTheDocument();
