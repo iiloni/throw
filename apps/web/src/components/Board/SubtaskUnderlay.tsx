@@ -1,15 +1,35 @@
 import type { Color } from '@throw/shared';
-import { ChevronDown } from 'lucide-react';
+import { Ban, ChevronDown } from 'lucide-react';
 import { animate, useMotionValue, useReducedMotion } from 'motion/react';
-import { useLayoutEffect, useRef } from 'react';
+import { useContext, useLayoutEffect, useMemo, useRef } from 'react';
 import { Hint } from '@/components/Hint/Hint';
 import { afterPaint, springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
-import { useIsBlockerSpotlightTarget, useParentHasSpotlightBlocker } from './blockers';
+import {
+  blockedHint,
+  blockedLabel,
+  consumeBlockerHoldClick,
+  type SubtaskBlockers,
+  subtaskBlockers,
+  subtasksBlockedHint,
+  subtasksBlockedLabel,
+  subtasksSpotlightKey,
+  type TaskBlocker,
+  TaskBlockersContext,
+  useIsBlockerSpotlightTarget,
+  useParentHasSpotlightBlocker,
+  useSpotlightActiveFor,
+  useSpotlightShowsBlocked,
+  useSpotlightSync,
+  useTaskBlockers,
+} from './blockers';
 import { StatusGlyph } from './glyphs';
 import { type Category, isClosed, type Project, projectOf, statusById, type Task } from './model';
 import { StatusMenu } from './StatusMenu';
 import { board, current, setSubtaskStatus, toggleExpanded, update } from './state';
+import { holdHandlers, lingerHandlers, useBlockerHold } from './useBlockerHold';
+
+const noBlockers: readonly TaskBlocker[] = [];
 
 type Props = {
   parent: Task;
@@ -25,14 +45,18 @@ type Props = {
 export function SubtaskUnderlay({ parent, subtasks, inert = false }: Props) {
   const state = board.use();
   const reduced = useReducedMotion();
+  const boardProject = current(state).project;
   // Subtasks share their parent's project, whose statuses they move among.
-  const project = projectOf(current(state).project, parent);
+  const project = projectOf(boardProject, parent);
   const expanded = state.expanded.includes(parent.id);
   const category = (task: Task) => statusById(project, task.statusId)?.category ?? 'backlog';
   const done = subtasks.filter((task) => category(task) === 'done').length;
   const open = subtasks.filter((task) => !isClosed(category(task))).length;
   const spotlightBlocker = useParentHasSpotlightBlocker(parent.id, !inert);
   const list = useUnfold(expanded, Boolean(reduced));
+  const blocked = useSubtaskBlockers(parent.id, subtasks);
+  const doneLabel = `${done} of ${subtasks.length} subtasks done`;
+  const blockedTab = useBlockedSubtasksMark(parent.id, blocked, boardProject, !inert);
 
   return (
     <div
@@ -46,9 +70,13 @@ export function SubtaskUnderlay({ parent, subtasks, inert = false }: Props) {
         type="button"
         tabIndex={inert ? -1 : 0}
         aria-expanded={expanded}
-        aria-label={`${done} of ${subtasks.length} subtasks done`}
-        onClick={() => toggleExpanded(parent.id)}
+        aria-label={blocked ? `${doneLabel}, ${subtasksBlockedLabel(blocked)}` : doneLabel}
+        onClick={() => {
+          if (consumeBlockerHoldClick()) return;
+          toggleExpanded(parent.id);
+        }}
         className="flex h-10 w-full items-center gap-2.5 rounded-b-2xl px-3.5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
+        {...blockedTab.host}
       >
         {/* One pip per subtask: the shape of the work, not only a fraction. */}
         <span aria-hidden className="flex min-w-0 flex-1 items-center gap-1">
@@ -65,6 +93,7 @@ export function SubtaskUnderlay({ parent, subtasks, inert = false }: Props) {
             );
           })}
         </span>
+        {blocked && blockedTab.mark}
         <span
           className={cn(
             'shrink-0 font-medium tabular-nums',
@@ -91,7 +120,14 @@ export function SubtaskUnderlay({ parent, subtasks, inert = false }: Props) {
       >
         <ul inert={!expanded || inert}>
           {subtasks.map((task) => (
-            <SubtaskRow key={task.id} project={project} task={task} origin={!inert} />
+            <SubtaskRow
+              key={task.id}
+              project={project}
+              boardProject={boardProject}
+              parentId={parent.id}
+              task={task}
+              origin={!inert}
+            />
           ))}
           <li aria-hidden className="h-1.5" />
           <li className="sr-only">{open} still open</li>
@@ -177,6 +213,75 @@ export function settleSubtaskLists(root: ParentNode) {
   };
 }
 
+/**
+ * The parent's open subtasks' blockers, rolled up for its tab. Kept as one value while nothing
+ * in it changes, since a spotlight compares its blockers by identity.
+ */
+function useSubtaskBlockers(parentId: string, subtasks: readonly Task[]) {
+  const map = useContext(TaskBlockersContext);
+  const open = subtasks
+    .filter((task) => task.closedAt === null)
+    .map((task) => task.id)
+    .join(' ');
+  return useMemo(() => {
+    if (!map || open === '') return null;
+    return subtaskBlockers(
+      parentId,
+      open.split(' ').map((id) => ({ id, closedAt: null })),
+      (id) => map.get(id) ?? noBlockers,
+    );
+  }, [map, parentId, open]);
+}
+
+/**
+ * The tab's mark for blocked subtasks, beside its count: red while any is held up from outside
+ * the parent, quiet while they only wait on one another. A mouse lingering on it, or a finger
+ * held on it on a tablet, lights up every one of their blockers.
+ */
+function useBlockedSubtasksMark(
+  parentId: string,
+  rollup: SubtaskBlockers | null,
+  project: Project,
+  enabled: boolean,
+) {
+  const key = subtasksSpotlightKey(parentId);
+  const blockers = rollup?.all ?? noBlockers;
+  const blockedIds = rollup?.blockedIds;
+  const scope = useMemo(
+    () => (blockedIds ? { owner: parentId, blocked: blockedIds } : undefined),
+    [parentId, blockedIds],
+  );
+  const active = useSpotlightActiveFor(key, enabled);
+  const hold = useBlockerHold(key, blockers, scope);
+  useSpotlightSync(key, blockers, enabled, scope);
+  const outside = (rollup?.blockedOutside ?? 0) > 0;
+  const count = rollup?.blockedIds.length ?? 0;
+  return {
+    host: enabled && rollup ? holdHandlers(hold) : {},
+    mark: rollup && (
+      <Hint label={subtasksBlockedHint(rollup, project)}>
+        <span
+          ref={hold.badge}
+          data-subtasks-blocked={outside ? 'outside' : 'inside'}
+          data-spotlight-trigger={active ? 'active' : undefined}
+          {...(enabled ? lingerHandlers(key, blockers, scope) : {})}
+          className={cn(
+            '-my-1 flex shrink-0 items-center gap-1 rounded-md px-1 py-1 font-medium tabular-nums transition-colors',
+            outside ? 'text-destructive/80' : 'text-foreground/50',
+            active &&
+              (outside
+                ? 'bg-destructive/15 text-destructive'
+                : 'bg-foreground/10 text-foreground/80'),
+          )}
+        >
+          <Ban aria-hidden className="size-3" />
+          {count > 1 && <span aria-hidden>{count}</span>}
+        </span>
+      </Hint>
+    ),
+  };
+}
+
 const neutralPip = {
   backlog: 'bg-foreground/15',
   active: 'bg-foreground/45',
@@ -224,10 +329,31 @@ function SubtaskPip({
  * row stands for the task, as a relation row does: its screen opens out of it and closes back
  * in. A dragged copy's rows are not where a task can go.
  */
-function SubtaskRow({ project, task, origin }: { project: Project; task: Task; origin: boolean }) {
+function SubtaskRow({
+  project,
+  boardProject,
+  parentId,
+  task,
+  origin,
+}: {
+  project: Project;
+  /** The board's own project, which a blocked hint names other projects from. */
+  boardProject: Project;
+  parentId: string;
+  task: Task;
+  origin: boolean;
+}) {
   const status = statusById(project, task.statusId);
   const spotlightBlocker = useIsBlockerSpotlightTarget(task.id);
   const rowRef = useRef<HTMLLIElement>(null);
+  const own = useTaskBlockers(task.id);
+  const blockers = task.closedAt === null ? own : noBlockers;
+  const blocked = blockers.length > 0;
+  const scope = useMemo(() => ({ owner: parentId, blocked: [task.id] }), [parentId, task.id]);
+  const hold = useBlockerHold(task.id, blockers, scope);
+  // Lit from its own mark or from the parent's tab: either way its blockers are showing.
+  const showing = useSpotlightShowsBlocked(task.id, origin && blocked);
+  useSpotlightSync(task.id, blockers, origin, scope);
   if (!status) return null;
   const closed = isClosed(status.category);
   return (
@@ -258,8 +384,12 @@ function SubtaskRow({ project, task, origin }: { project: Project; task: Task; o
       </StatusMenu>
       <button
         type="button"
-        onClick={() => update({ openTaskId: task.id }, rowRef.current)}
-        className="flex min-h-9 min-w-0 flex-1 items-center self-stretch rounded-xl pr-3 pl-1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
+        onClick={() => {
+          if (consumeBlockerHoldClick()) return;
+          update({ openTaskId: task.id }, rowRef.current);
+        }}
+        className="flex min-h-9 min-w-0 flex-1 items-center gap-2 self-stretch rounded-xl pr-3 pl-1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
+        {...(origin && blocked ? holdHandlers(hold) : {})}
       >
         <span
           className={cn(
@@ -269,6 +399,24 @@ function SubtaskRow({ project, task, origin }: { project: Project; task: Task; o
         >
           {task.title}
         </span>
+        {blocked && (
+          <Hint label={blockedHint(blockers, boardProject)}>
+            <span
+              ref={hold.badge}
+              role="img"
+              data-blocked=""
+              data-spotlight-trigger={showing ? 'active' : undefined}
+              aria-label={blockedLabel(blockers)}
+              {...(origin ? lingerHandlers(task.id, blockers, scope) : {})}
+              className={cn(
+                '-m-1 flex shrink-0 items-center rounded-md p-1 text-destructive/80 transition-colors',
+                showing && 'bg-destructive/15 text-destructive',
+              )}
+            >
+              <Ban aria-hidden className="size-3" />
+            </span>
+          </Hint>
+        )}
       </button>
     </li>
   );

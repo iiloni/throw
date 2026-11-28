@@ -290,6 +290,10 @@ export type FacetCounts = {
  * sizes, a project's of those that match everything but the project scope, and a relation's of
  * those that match everything but the relations. A release's count, and Unreleased's, are of
  * cards that match everything but the release choice.
+ *
+ * Cards are counted as `matchingIds` shows them: while subtasks stay with their parent, a
+ * subtask that matches counts its parent's card, once however many of its subtasks match. So
+ * Blocked counts a card whose tab shows a blocked subtask, as the board then keeps it.
  */
 export function facetCounts(
   data: BoardData,
@@ -297,15 +301,17 @@ export function facetCounts(
   subtasksAsCards: boolean,
 ): FacetCounts {
   const query = prepareQuery(filter.query);
-  const tags = new Map<string, number>();
-  const sizes = new Map<Size | null, number>([...SIZES, null].map((size) => [size, 0]));
-  const projects = new Map<string, number>();
-  const relations = new Map<RelationFilter, number>(
-    RELATION_FILTERS.map((relation) => [relation, 0]),
+  const tags = new Map<string, Set<string>>();
+  const untagged = new Set<string>();
+  const sizes = new Map<Size | null, Set<string>>(
+    [...SIZES, null].map((size) => [size, new Set<string>()]),
   );
-  const releases = new Map<string, number>();
-  let untagged = 0;
-  let unreleased = 0;
+  const projects = new Map<string, Set<string>>();
+  const relations = new Map<RelationFilter, Set<string>>(
+    RELATION_FILTERS.map((relation) => [relation, new Set<string>()]),
+  );
+  const releases = new Map<string, Set<string>>();
+  const unreleased = new Set<string>();
   const anyTag = { ...filter, tagIds: [], untagged: false };
   const anySize = { ...filter, sizes: [], unsized: false };
   const anyProject = { ...filter, projectId: null };
@@ -313,28 +319,47 @@ export function facetCounts(
   const anyRelease = { ...filter, releaseIds: [], unreleased: false };
   const linked = data.relations;
   const shipped = data.releases;
+  const cards = new Set(
+    data.tasks.filter((task) => subtasksAsCards || task.parentId === null).map((task) => task.id),
+  );
+  const add = <K>(counts: Map<K, Set<string>>, key: K, card: string) => {
+    let set = counts.get(key);
+    if (!set) {
+      set = new Set();
+      counts.set(key, set);
+    }
+    set.add(card);
+  };
   for (const task of data.tasks) {
-    if (!subtasksAsCards && task.parentId !== null) continue;
+    const card = subtasksAsCards || task.parentId === null ? task.id : task.parentId;
+    if (!cards.has(card)) continue;
     if (matchesFilter(data.project, task, anyTag, query, data)) {
       const assigned = cardTags(data.project, task);
-      if (assigned.size === 0) untagged += 1;
-      for (const id of assigned) tags.set(id, (tags.get(id) ?? 0) + 1);
+      if (assigned.size === 0) untagged.add(card);
+      for (const id of assigned) add(tags, id, card);
     }
-    if (matchesFilter(data.project, task, anySize, query, data))
-      sizes.set(task.size, (sizes.get(task.size) ?? 0) + 1);
+    if (matchesFilter(data.project, task, anySize, query, data)) add(sizes, task.size, card);
     if (task.projectId && matchesFilter(data.project, task, anyProject, query, data))
-      projects.set(task.projectId, (projects.get(task.projectId) ?? 0) + 1);
+      add(projects, task.projectId, card);
     if (linked && matchesFilter(data.project, task, anyRelation, query, data))
       for (const relation of RELATION_FILTERS)
-        if (hasRelation(task, relation, linked))
-          relations.set(relation, (relations.get(relation) ?? 0) + 1);
+        if (hasRelation(task, relation, linked)) add(relations, relation, card);
     if (shipped && matchesFilter(data.project, task, anyRelease, query, data)) {
-      if (shipped.unreleased.has(task.id)) unreleased += 1;
-      for (const id of shipped.byTask.get(task.id) ?? [])
-        releases.set(id, (releases.get(id) ?? 0) + 1);
+      if (shipped.unreleased.has(task.id)) unreleased.add(card);
+      for (const id of shipped.byTask.get(task.id) ?? []) add(releases, id, card);
     }
   }
-  return { tags, untagged, sizes, projects, relations, releases, unreleased };
+  const sized = <K>(counts: Map<K, Set<string>>) =>
+    new Map([...counts].map(([key, set]) => [key, set.size]));
+  return {
+    tags: sized(tags),
+    untagged: untagged.size,
+    sizes: sized(sizes),
+    projects: sized(projects),
+    relations: sized(relations),
+    releases: sized(releases),
+    unreleased: unreleased.size,
+  };
 }
 
 function time(at: string | undefined) {

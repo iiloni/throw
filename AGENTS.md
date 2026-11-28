@@ -118,6 +118,10 @@ Task relations (blocks, duplicates, relates to) link tasks across a workspace's 
 actions in `lib/taskRelations.ts`, the pane's list, relation picker (opened inline from the
 Links tab / open side column or from the dock's More panel) and card blocked mark in
 `components/TaskRelations` (cards read `Board/blockers.ts`, which the prototype leaves empty).
+A parent card's subtask tab rolls up its open subtasks' blockers (`subtaskBlockers`): red while
+one waits on a task outside the parent, quiet while they only wait on each other. Each blocked
+subtask row has its own mark. Every mark spotlights its blockers on hover, or on a tablet hold
+(`Board/useBlockerHold.ts`), keeping the parent card lit as the spotlight's `owner`.
 The task pane shows comments, server history and (on narrow desktop panes and phones,
 moving to the ADR 0012 side column when wide) task links under `SegmentedTabs`.
 Touch screens swipe between them with `useTabSwipe`. Refused changes have a quiet task-only
