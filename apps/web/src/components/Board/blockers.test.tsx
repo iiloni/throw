@@ -12,11 +12,12 @@ import {
   blockerSpotlight,
   cancelBlockerSpotlight,
   SPOTLIGHT_DWELL_MS,
+  SPOTLIGHT_HOLD_MS,
   syncBlockerSpotlight,
   type TaskBlocker,
   TaskBlockersContext,
 } from './blockers';
-import { type DragState, drag } from './drag';
+import { type DragState, drag, isPrimed, TOUCH_SLOP } from './drag';
 import type { BoardData, Project, Task } from './model';
 import { railGeometry, SideZone } from './SideZone';
 import { board, initialBoard, receiveBoard, update } from './state';
@@ -541,5 +542,156 @@ describe('component spotlight rendering', () => {
 
     const blockedCard = screen.getByRole('article', { name: 'APP-1 Ship release' });
     expect(blockedCard).toHaveAttribute('data-spotlight-instant', '');
+  });
+});
+
+describe('touch press-and-hold on the blocked badge', () => {
+  const blockerMap = new Map<string, readonly TaskBlocker[]>([
+    ['blocked-task', [makeBlocker('blocker-task', 'APP-2')]],
+  ]);
+  const finger = { pointerType: 'touch', pointerId: 7, button: 0, clientX: 100, clientY: 100 };
+
+  /** Cards as a board lays them out: side by side (`full`), paged (`compact`) or a phone's. */
+  function renderBoard(layout: 'full' | 'compact' | 'phone') {
+    const data = makeBoardData();
+    board.set(initialBoard([data]));
+    const cards = (
+      <>
+        <TaskCard task={data.tasks[0]!} />
+        <TaskCard task={data.tasks[1]!} />
+        <TaskCard task={data.tasks[2]!} />
+      </>
+    );
+    render(
+      <TooltipProvider>
+        <TaskBlockersContext.Provider value={blockerMap}>
+          {layout === 'phone' ? (
+            <div>{cards}</div>
+          ) : (
+            <div data-board-layout="" data-compact-board={layout === 'compact' ? '' : undefined}>
+              {cards}
+            </div>
+          )}
+        </TaskBlockersContext.Provider>
+      </TooltipProvider>,
+    );
+    const blockedCard = screen.getByRole('article', { name: 'APP-1 Ship release' });
+    const blockerCard = screen.getByRole('article', { name: 'APP-2 Finish API' });
+    const badge = blockedCard.querySelector<HTMLElement>('[data-blocked]')!;
+    return { blockedCard, blockerCard, badge };
+  }
+
+  it('spotlights the blockers once the finger has held, and hides them the moment it lifts', () => {
+    const { blockedCard, blockerCard, badge } = renderBoard('full');
+
+    fireEvent.pointerDown(badge, finger);
+    act(() => vi.advanceTimersByTime(SPOTLIGHT_HOLD_MS - 10));
+    expect(blockedCard).not.toHaveAttribute('data-spotlight');
+
+    act(() => vi.advanceTimersByTime(10));
+    expect(blockedCard).toHaveAttribute('data-spotlight', 'blocked');
+    expect(blockerCard).toHaveAttribute('data-spotlight', 'blocker');
+    expect(badge).toHaveAttribute('data-spotlight-trigger', 'active');
+
+    // Held well past the board's long press: the card is neither picked up nor selected.
+    act(() => vi.advanceTimersByTime(1000));
+    expect(isPrimed()).toBe(false);
+    expect(board.get().selection).toEqual([]);
+    expect(blockedCard).toHaveAttribute('data-spotlight', 'blocked');
+
+    fireEvent.pointerUp(badge, finger);
+    expect(blockedCard).not.toHaveAttribute('data-spotlight');
+    expect(blockerCard).not.toHaveAttribute('data-spotlight');
+    expect(blockerSpotlight.get()).toBeNull();
+
+    // The click the lift sends neither opens nor selects the card.
+    fireEvent.click(badge);
+    expect(board.get().openTaskId).toBeNull();
+    expect(board.get().selection).toEqual([]);
+  });
+
+  it('hides at once when the browser cancels the touch or the badge loses its capture', () => {
+    const { blockedCard, badge } = renderBoard('full');
+
+    fireEvent.pointerDown(badge, finger);
+    act(() => vi.advanceTimersByTime(SPOTLIGHT_HOLD_MS));
+    expect(blockedCard).toHaveAttribute('data-spotlight', 'blocked');
+    fireEvent.pointerCancel(badge, finger);
+    expect(blockedCard).not.toHaveAttribute('data-spotlight');
+
+    fireEvent.pointerDown(badge, finger);
+    act(() => vi.advanceTimersByTime(SPOTLIGHT_HOLD_MS));
+    expect(blockedCard).toHaveAttribute('data-spotlight', 'blocked');
+    fireEvent.lostPointerCapture(badge, finger);
+    expect(blockedCard).not.toHaveAttribute('data-spotlight');
+  });
+
+  it('lets a finger that sets off scrolling go, before or after the spotlight shows', () => {
+    const { blockedCard, badge } = renderBoard('full');
+
+    // A small wobble keeps the hold.
+    fireEvent.pointerDown(badge, finger);
+    fireEvent.pointerMove(badge, { ...finger, clientX: 100 + TOUCH_SLOP - 2 });
+    act(() => vi.advanceTimersByTime(SPOTLIGHT_HOLD_MS));
+    expect(blockedCard).toHaveAttribute('data-spotlight', 'blocked');
+    fireEvent.pointerMove(badge, { ...finger, clientY: 100 + TOUCH_SLOP + 5 });
+    expect(blockedCard).not.toHaveAttribute('data-spotlight');
+    fireEvent.pointerUp(badge, finger);
+
+    // A scroll that starts on the badge never lights the board.
+    fireEvent.pointerDown(badge, finger);
+    fireEvent.pointerMove(badge, { ...finger, clientY: 100 + TOUCH_SLOP + 5 });
+    act(() => vi.advanceTimersByTime(SPOTLIGHT_HOLD_MS * 2));
+    expect(blockedCard).not.toHaveAttribute('data-spotlight');
+    expect(blockerSpotlight.get()).toBeNull();
+  });
+
+  it('keeps the browser menu away while held, and a short tap still opens the card', () => {
+    const { blockedCard, badge } = renderBoard('full');
+
+    fireEvent.pointerDown(badge, finger);
+    act(() => vi.advanceTimersByTime(SPOTLIGHT_HOLD_MS));
+    expect(fireEvent.contextMenu(badge)).toBe(false);
+    fireEvent.pointerUp(badge, finger);
+    fireEvent.click(badge);
+    expect(board.get().openTaskId).toBeNull();
+    act(() => vi.advanceTimersByTime(100));
+
+    fireEvent.pointerDown(badge, finger);
+    act(() => vi.advanceTimersByTime(SPOTLIGHT_HOLD_MS / 2));
+    fireEvent.pointerUp(badge, finger);
+    fireEvent.click(badge);
+    expect(blockedCard).not.toHaveAttribute('data-spotlight');
+    expect(board.get().openTaskId).toBe('blocked-task');
+  });
+
+  it('leaves the badge to the card on paged boards: the compact board and a phone', () => {
+    for (const layout of ['compact', 'phone'] as const) {
+      stubDesktop(layout === 'compact');
+      const { blockedCard, badge } = renderBoard(layout);
+
+      fireEvent.pointerDown(badge, finger);
+      act(() => vi.advanceTimersByTime(SPOTLIGHT_HOLD_MS));
+      expect(blockedCard).not.toHaveAttribute('data-spotlight');
+      expect(blockerSpotlight.get()).toBeNull();
+      // The card's own long press selects it, as anywhere else on the card.
+      expect(isPrimed()).toBe(true);
+      expect(board.get().selection).toEqual(['blocked-task']);
+      fireEvent.pointerUp(badge, finger);
+      cleanup();
+    }
+  });
+
+  it('leaves a mouse press on the badge to the card, which still drags from it', () => {
+    const { blockedCard, badge } = renderBoard('full');
+    const mouse = { pointerType: 'mouse', pointerId: 1, button: 0, clientX: 100, clientY: 100 };
+    document.elementFromPoint = () => null;
+
+    fireEvent.pointerDown(badge, mouse);
+    fireEvent.pointerMove(window, { ...mouse, clientX: 140 });
+    expect(drag.get()?.ids).toEqual(['blocked-task']);
+    expect(blockedCard).not.toHaveAttribute('data-spotlight');
+    fireEvent.pointerCancel(window, mouse);
+    expect(drag.get()?.phase).not.toBe('dragging');
   });
 });

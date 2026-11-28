@@ -7,7 +7,7 @@ import {
 import { createContext, useContext, useEffect, useSyncExternalStore } from 'react';
 import { isDesktop } from '@/lib/media';
 import { createStore } from '@/lib/store';
-import { drag } from './drag';
+import { drag, LONG_PRESS_MS } from './drag';
 import { type BoardRelations, type Category, type Project, targetCategory } from './model';
 import { board } from './state';
 
@@ -133,6 +133,13 @@ export function blockedHint(blockers: readonly TaskBlocker[], project: Project) 
  */
 export const SPOTLIGHT_DWELL_MS = 400;
 
+/**
+ * How long a finger rests on the blocked badge before its blockers light up: the board's own
+ * long press, so holding the badge feels like holding a card. A tap opens the card as before,
+ * and a finger that sets off scrolling leaves the board as it was.
+ */
+export const SPOTLIGHT_HOLD_MS = LONG_PRESS_MS;
+
 export type BlockerSpotlight = {
   /** The blocked task whose badge is being lingered on. */
   blockedTaskId: string;
@@ -234,8 +241,16 @@ function watchCancellation() {
   };
 }
 
-/** Start the dwell timer for a blocked task's badge on desktop. */
-export function armBlockerSpotlight(taskId: string, blockers: readonly TaskBlocker[]) {
+/**
+ * Start the dwell timer for a blocked task's badge on desktop: a lingering mouse by default, or
+ * a held finger with `SPOTLIGHT_HOLD_MS`. `onShow` runs if the spotlight comes on.
+ */
+export function armBlockerSpotlight(
+  taskId: string,
+  blockers: readonly TaskBlocker[],
+  delay = SPOTLIGHT_DWELL_MS,
+  onShow?: () => void,
+) {
   if (!isDesktop() || blockers.length === 0 || drag.get() !== null) {
     cancelBlockerSpotlight();
     return;
@@ -263,8 +278,37 @@ export function armBlockerSpotlight(taskId: string, blockers: readonly TaskBlock
       return;
     }
     blockerSpotlight.set(makeSpotlight(taskId, latest));
-  }, SPOTLIGHT_DWELL_MS);
+    onShow?.();
+  }, delay);
   pending = { taskId, blockers, timer };
+}
+
+let swallowClick = false;
+
+/**
+ * Ends a finger's hold on `taskId`'s badge: hides the spotlight and, if it was showing, keeps
+ * the click the lift sends from reaching the card, which it is not a tap on.
+ */
+export function releaseBlockerHold(taskId: string) {
+  if (blockerSpotlightShown(taskId)) {
+    swallowClick = true;
+    setTimeout(() => {
+      swallowClick = false;
+    }, 80);
+  }
+  cancelBlockerSpotlight(taskId);
+}
+
+/** True once after a hold that showed the spotlight, for the click its lift sends. */
+export function consumeBlockerHoldClick() {
+  const value = swallowClick;
+  swallowClick = false;
+  return value;
+}
+
+/** Whether the spotlight is on for `taskId`'s blockers. */
+export function blockerSpotlightShown(taskId: string) {
+  return blockerSpotlight.get()?.blockedTaskId === taskId;
 }
 
 /** Keeps an active or pending spotlight in sync when synced relations or statuses change. */

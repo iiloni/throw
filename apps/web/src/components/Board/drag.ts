@@ -115,8 +115,10 @@ export function configureDrag(next: Config) {
   config = next;
 }
 
-const LONG_PRESS_MS = 260;
-const TOUCH_SLOP = 10;
+/** How long a finger rests on a card before it is held. */
+export const LONG_PRESS_MS = 260;
+/** How far a finger may wander before its press is a scroll. */
+export const TOUCH_SLOP = 10;
 const MOUSE_SLOP = 6;
 /**
  * How far a held card goes from where it lifted before the board makes way for it, unless it
