@@ -3,8 +3,9 @@ import { createElement, type MouseEvent, type PointerEvent } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SEARCH_SIDEBAR_MIN, SIDEBAR_WIDTH } from '@/components/BoardSearch/BoardSearch';
 import { boardRestWidth } from './DesktopBoard';
-import { drag } from './drag';
+import { type DragState, drag, makingWay } from './drag';
 import { mockBoards } from './mockData';
+import { PEEK_DWELL_MS, PEEK_GRACE_MS } from './railPeek';
 import {
   canCollapseGalleryOnEscape,
   PANEL_WIDTH,
@@ -18,7 +19,37 @@ import {
   useStripPress,
   ZONE_GAP,
 } from './SideZone';
-import { board, initialBoard, setZoneView, update } from './state';
+import {
+  board,
+  current,
+  endRailPeek,
+  initialBoard,
+  isPeeking,
+  peekRail,
+  revealStatus,
+  setZoneView,
+  update,
+} from './state';
+
+/** A card held and moving, from `origin`. */
+function heldFrom(origin: string, taskId: string): DragState {
+  return {
+    ids: [taskId],
+    width: 280,
+    height: 80,
+    grab: { x: 10, y: 10 },
+    origin,
+    priority: 3,
+    target: null,
+    rail: null,
+    phase: 'dragging',
+    swallowed: false,
+    touch: false,
+    over: false,
+    page: 0,
+    moved: true,
+  };
+}
 
 const rowWidth = 1200;
 const base = {
@@ -498,5 +529,271 @@ describe('SideZone Escape collapse', () => {
     } finally {
       window.removeEventListener('keydown', boundary);
     }
+  });
+});
+
+describe('railGeometry peek', () => {
+  const strips = { ...base, views: { backlog: 'strip', closed: 'strip' } as const };
+
+  it('draws a peeked strip as its panel over the columns, which keep the strip’s room', () => {
+    const rest = railGeometry(strips);
+    const peek = railGeometry({ ...strips, peek: 'backlog' });
+    expect(peek.backlog.zone).toBe(STRIP_WIDTH);
+    expect(peek.backlog.drawn).toBe(PANEL_WIDTH);
+    expect(peek.backlog.content).toBe(PANEL_WIDTH);
+    // Its own spring opens it, and the columns' (zone) has nowhere to go.
+    expect(peek.backlog.mode).not.toBe(rest.backlog.mode);
+    expect(peek.closed).toEqual(rest.closed);
+  });
+
+  it('peeks as wide as the panel was last dragged, and leaves an open panel alone', () => {
+    const widths = { backlog: 480, closed: null };
+    expect(railGeometry({ ...strips, widths, peek: 'backlog' }).backlog.drawn).toBe(480);
+    expect(railGeometry({ ...base, peek: 'backlog' }).backlog).toEqual(railGeometry(base).backlog);
+  });
+
+  it('does not narrow the other rail for a peek', () => {
+    const views = { backlog: 'strip', closed: 'panel' } as const;
+    const widths = { backlog: null, closed: 5000 };
+    expect(railGeometry({ ...base, views, widths, peek: 'backlog' }).closed).toEqual(
+      railGeometry({ ...base, views, widths }).closed,
+    );
+  });
+
+  it('turns back into dropzones for a card held from elsewhere', () => {
+    const held = { ...strips, holding: true, origin: 'active' };
+    expect(railGeometry({ ...held, peek: 'backlog' }).backlog).toEqual(railGeometry(held).backlog);
+    // A card held from the peek itself keeps it open.
+    const own = railGeometry({ ...strips, holding: true, origin: 'backlog', peek: 'backlog' });
+    expect(own.backlog).toMatchObject({ zone: STRIP_WIDTH, drawn: PANEL_WIDTH });
+  });
+
+  it('follows a peek’s held edge over the columns', () => {
+    const held = railGeometry({
+      ...strips,
+      peek: 'backlog',
+      resize: { zone: 'backlog', width: 420 },
+    });
+    expect(held.backlog).toMatchObject({ zone: STRIP_WIDTH, drawn: 420, tracking: true });
+  });
+});
+
+describe('rail peek state', () => {
+  beforeEach(() => {
+    board.set({ ...initialBoard(mockBoards()), backlog: 'strip', closed: 'strip' });
+  });
+
+  it('peeks only at a strip', () => {
+    peekRail('backlog');
+    expect(board.get().railPeek).toBe('backlog');
+    expect(board.get().backlog).toBe('strip');
+    expect(isPeeking(board.get(), 'backlog')).toBe(true);
+    endRailPeek('backlog');
+    expect(board.get().railPeek).toBeNull();
+
+    board.set({ ...board.get(), backlog: 'panel' });
+    peekRail('backlog');
+    expect(board.get().railPeek).toBeNull();
+  });
+
+  it('settles a peek into whatever its rail is set to', () => {
+    peekRail('backlog');
+    setZoneView('backlog', 'panel');
+    expect(board.get()).toMatchObject({ backlog: 'panel', railPeek: null });
+
+    setZoneView('backlog', 'strip');
+    peekRail('backlog');
+    setZoneView('backlog', 'strip');
+    expect(board.get()).toMatchObject({ backlog: 'strip', railPeek: null });
+
+    peekRail('backlog');
+    setZoneView('backlog', 'full');
+    // Escape takes the gallery back to the strip the peek stood on.
+    expect(board.get()).toMatchObject({ backlog: 'full', railPeek: null });
+    expect(board.get().railBeforeFull.backlog).toBe('strip');
+  });
+
+  it('keeps a peek while the other rail opens as a column, and ends it for a gallery', () => {
+    peekRail('backlog');
+    setZoneView('closed', 'panel');
+    expect(board.get().railPeek).toBe('backlog');
+    setZoneView('closed', 'full');
+    expect(board.get()).toMatchObject({ backlog: 'strip', railPeek: null });
+  });
+
+  it('keeps a peek open for a card sent there from the keyboard', () => {
+    const backlogStatus = current().project.statuses.find((item) => item.category === 'backlog')!;
+    peekRail('backlog');
+    revealStatus(backlogStatus.id);
+    expect(board.get()).toMatchObject({ backlog: 'panel', railPeek: null });
+  });
+});
+
+describe('SideZone peek', () => {
+  function renderZone() {
+    function Harness() {
+      const state = board.use();
+      const held = drag.use();
+      const rails = railGeometry({
+        rowWidth: 1440,
+        views: { backlog: state.backlog, closed: state.closed },
+        widths: { backlog: null, closed: null },
+        resize: null,
+        holding: makingWay(held),
+        origin: held?.origin ?? null,
+        peek: state.railPeek,
+      });
+      return createElement(SideZone, { zone: 'backlog', geometry: rails.backlog });
+    }
+    return render(createElement(Harness));
+  }
+  const strip = () => screen.getByRole('button', { name: /^Open backlog,/ });
+  const rail = () => screen.getByRole('complementary', { name: 'Backlog' });
+  function dwell() {
+    fireEvent.pointerEnter(strip(), { pointerType: 'mouse' });
+    act(() => vi.advanceTimersByTime(PEEK_DWELL_MS));
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    localStorage.clear();
+    drag.set(null);
+    board.set({ ...initialBoard(mockBoards()), backlog: 'strip', closed: 'strip' });
+  });
+
+  afterEach(() => {
+    drag.set(null);
+    vi.useRealTimers();
+  });
+
+  it('opens over the columns after a mouse rests on the strip, and closes after it leaves', () => {
+    renderZone();
+    dwell();
+    expect(board.get()).toMatchObject({ backlog: 'strip', railPeek: 'backlog' });
+    expect(rail()).toHaveAttribute('data-peek');
+    expect(screen.getByRole('button', { name: 'Close backlog' })).toBeInTheDocument();
+
+    fireEvent.pointerLeave(rail(), { pointerType: 'mouse' });
+    act(() => vi.advanceTimersByTime(PEEK_GRACE_MS - 50));
+    fireEvent.pointerEnter(rail(), { pointerType: 'mouse' });
+    act(() => vi.advanceTimersByTime(PEEK_GRACE_MS));
+    expect(board.get().railPeek).toBe('backlog');
+
+    fireEvent.pointerLeave(rail(), { pointerType: 'mouse' });
+    act(() => vi.advanceTimersByTime(PEEK_GRACE_MS));
+    expect(board.get().railPeek).toBeNull();
+    expect(strip()).toBeInTheDocument();
+  });
+
+  it('shows how long is left of the dwell around the strip’s icon', () => {
+    const view = renderZone();
+    expect(view.container.querySelector('[data-dwell-ring]')).toBeNull();
+    fireEvent.pointerEnter(strip(), { pointerType: 'mouse' });
+    expect(strip()).toHaveAttribute('data-dwelling');
+    expect(view.container.querySelector('[data-dwell-ring]')).not.toBeNull();
+    fireEvent.pointerDown(strip(), { pointerType: 'mouse', button: 0 });
+    // Pressed, the strip keeps to its own press: the ring goes and nothing peeks.
+    expect(strip()).not.toHaveAttribute('data-dwelling');
+    act(() => vi.advanceTimersByTime(PEEK_DWELL_MS));
+    expect(board.get().railPeek).toBeNull();
+  });
+
+  it('does not open for a touch, or for a mouse that leaves first', () => {
+    renderZone();
+    fireEvent.pointerEnter(strip(), { pointerType: 'touch' });
+    act(() => vi.advanceTimersByTime(PEEK_DWELL_MS));
+    expect(board.get().railPeek).toBeNull();
+
+    fireEvent.pointerEnter(strip(), { pointerType: 'mouse' });
+    act(() => vi.advanceTimersByTime(PEEK_DWELL_MS / 2));
+    fireEvent.pointerLeave(strip(), { pointerType: 'mouse' });
+    act(() => vi.advanceTimersByTime(PEEK_DWELL_MS));
+    expect(board.get().railPeek).toBeNull();
+  });
+
+  it('stays open once something in it is clicked', () => {
+    renderZone();
+    dwell();
+    fireEvent.click(screen.getByRole('button', { name: 'All' }));
+    expect(board.get()).toMatchObject({ backlog: 'panel', railPeek: null });
+    fireEvent.pointerLeave(rail(), { pointerType: 'mouse' });
+    act(() => vi.advanceTimersByTime(PEEK_GRACE_MS * 2));
+    expect(board.get().backlog).toBe('panel');
+  });
+
+  it('closes from its own close button, and opens as a gallery from its toggle', () => {
+    renderZone();
+    dwell();
+    fireEvent.click(screen.getByRole('button', { name: 'Close backlog' }));
+    expect(board.get()).toMatchObject({ backlog: 'strip', railPeek: null });
+
+    dwell();
+    fireEvent.click(screen.getByRole('button', { name: 'Open as a gallery' }));
+    expect(board.get()).toMatchObject({ backlog: 'full', railPeek: null });
+  });
+
+  it('stays open for the backlog shortcut', () => {
+    renderZone();
+    dwell();
+    fireEvent.keyDown(window, { key: '[' });
+    expect(board.get()).toMatchObject({ backlog: 'panel', railPeek: null });
+  });
+
+  it('keeps a card held from it while it is over it, and lets go once it is dragged out', () => {
+    renderZone();
+    dwell();
+    const taskId = mockBoards()[0]!.tasks[0]!.id;
+    act(() => drag.set(heldFrom('backlog', taskId)));
+    // Moved about inside it, the peek stays for the card to be placed there.
+    act(() => vi.advanceTimersByTime(PEEK_GRACE_MS * 4));
+    expect(board.get().railPeek).toBe('backlog');
+    expect(rail()).toHaveAttribute('data-peek');
+
+    // Dragged out, it goes back to its strip with the card still held, uncovering the columns.
+    fireEvent.pointerLeave(rail(), { pointerType: 'mouse' });
+    act(() => vi.advanceTimersByTime(PEEK_GRACE_MS));
+    expect(board.get().railPeek).toBeNull();
+    expect(drag.get()).not.toBeNull();
+    // Nor does it open again under the held card.
+    fireEvent.pointerEnter(strip(), { pointerType: 'mouse' });
+    act(() => vi.advanceTimersByTime(PEEK_DWELL_MS));
+    expect(board.get().railPeek).toBeNull();
+  });
+
+  it('keeps a card dragged back in before the grace runs out', () => {
+    renderZone();
+    dwell();
+    const taskId = mockBoards()[0]!.tasks[0]!.id;
+    act(() => drag.set(heldFrom('backlog', taskId)));
+    fireEvent.pointerLeave(rail(), { pointerType: 'mouse' });
+    act(() => vi.advanceTimersByTime(PEEK_GRACE_MS - 50));
+    fireEvent.pointerEnter(rail(), { pointerType: 'mouse' });
+    act(() => vi.advanceTimersByTime(PEEK_GRACE_MS * 2));
+    expect(board.get().railPeek).toBe('backlog');
+  });
+
+  it('gives way to a card held from elsewhere', () => {
+    renderZone();
+    dwell();
+    const taskId = mockBoards()[0]!.tasks[0]!.id;
+    act(() => drag.set(heldFrom('active', taskId)));
+    expect(board.get().railPeek).toBeNull();
+    expect(rail()).not.toHaveAttribute('data-peek');
+  });
+
+  it('does not open while a card is held', () => {
+    renderZone();
+    const taskId = mockBoards()[0]!.tasks[0]!.id;
+    act(() => drag.set(heldFrom('backlog', taskId)));
+    fireEvent.pointerEnter(strip(), { pointerType: 'mouse' });
+    act(() => vi.advanceTimersByTime(PEEK_DWELL_MS));
+    expect(board.get().railPeek).toBeNull();
+  });
+
+  it('is not kept once the rail leaves the board', () => {
+    const view = renderZone();
+    dwell();
+    view.unmount();
+    expect(board.get().railPeek).toBeNull();
   });
 });
