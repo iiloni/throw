@@ -11,8 +11,9 @@ in one database transaction. A failed signup leaves the invite available.
 
 Admins issue and revoke invites under `/api/admin/invites`. Creation returns a random
 token once. The shared login-link format puts the token in the fragment. The signup
-API accepts the token in `X-Throw-Invite`. A companion web client change will read
-the fragment and forward it at signup. The database stores its SHA-256 hash. A label is for the
+API accepts the token in `X-Throw-Invite`. The sign-in page reads the fragment and
+forwards it at signup; the Android app, which the link does not open, takes the link pasted
+into sign-up or into its server setup. The database stores its SHA-256 hash. A label is for the
 admin's reference. At most 100 invites are usable at once. Deleting an invite revokes
 the link and preserves the account it made. Backups retain invite hashes, expiry times
 and claim history. Restoring an archive can therefore reactivate a link revoked or used
@@ -33,6 +34,10 @@ structure and comment history and GitHub connections keep nullable author/creato
 references. The account's credentials, sessions, memberships, MCP tokens (and replay
 records), owned webhooks (and deliveries) and issued invites cascade. Other admins'
 invites claimed by the deleted account stay used with a null recipient.
+
+Admins manage both at Settings → Users (`/settings/admin/users`), listed under Admin with
+Backups once the session says the account is an admin. A temporary password or invite link is
+shown once, and holds back an update's reload while it is on screen.
 
 These online REST endpoints are outside sync and the outbox. Protocol 1 advertises the
 additive `adminUsers` capability on `/api/compatibility`. Clients can hide these controls
