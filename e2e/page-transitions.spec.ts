@@ -284,3 +284,54 @@ test('reduced motion turns page transitions into a short cross-fade', async ({
   expect(fade.animations).toContain('::view-transition-new(root) page-fade-in');
   expect(fade.animations.some((name) => /page-(rise|from|to)/.test(name))).toBe(false);
 });
+
+test('a phone keeps one drawer across boards, the graph and settings', async ({
+  page,
+  isMobile,
+  browserName,
+}) => {
+  test.skip(
+    !isMobile && browserName !== 'firefox',
+    'Desktop has no drawer; Firefox also checks the phone layout with a pointer.',
+  );
+  if (!isMobile) await page.setViewportSize({ width: 412, height: 915 });
+  await workspaceFixture(page);
+  await expect(card(page, 'Water tomatoes')).toBeVisible();
+  const drawers = page.locator('[data-drawer]');
+  await expect(drawers).toHaveCount(1);
+  // Marked once: a drawer drawn again for the next screen would come without the mark.
+  await drawers.evaluate((element) => element.setAttribute('data-kept', ''));
+  const kept = page.locator('[data-drawer][data-kept]');
+  const dock = (name: string | RegExp) => kept.getByRole('button', { name, exact: true });
+
+  // Another project's board: the same drawer, docked with its backlog.
+  await openMenu(page, true);
+  await expect(kept).toHaveAttribute('data-page');
+  await (await switcherItem(page, 'Kitchen')).click();
+  await expect(card(page, 'Bake bread')).toBeVisible();
+  await expect(kept).not.toHaveAttribute('data-page');
+  await expect(dock(/^Backlog \d+$/)).toBeVisible();
+
+  // The dependency graph's dock takes the board's place in it.
+  await openMenu(page, true);
+  await (await switcherItem(page, 'Dependency graph')).click();
+  await expect(dock('Fit to screen')).toBeVisible();
+  await expect(dock(/^Backlog \d+$/)).toHaveCount(0);
+
+  // Settings give it their page picker, which opens as one of its pages.
+  await openMenu(page, true);
+  await (await switcherItem(page, 'Project settings')).click();
+  await expect(page.getByLabel('Project name', { exact: true })).toBeVisible();
+  const picker = kept.getByRole('button', { name: /^Settings page: / });
+  await expect(picker).toBeVisible();
+  await picker.click();
+  await expect(kept).toHaveAttribute('data-page');
+  await page.keyboard.press('Escape');
+  await expect(kept).not.toHaveAttribute('data-page');
+
+  // And back on the board it shows the backlog's dock again.
+  await page.goBack();
+  await expect(dock('Fit to screen')).toBeVisible();
+  await expect(drawers).toHaveCount(1);
+  await expect(kept).toHaveCount(1);
+});

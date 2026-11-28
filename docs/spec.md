@@ -1007,13 +1007,12 @@ The project board uses synced tasks, statuses and tags, with the backlog in the
 drawer on a phone. Cards resolve their primary tag's root color with `taskTagColor` and
 show its tags as badges; a partially synced tag tree leaves the card neutral. The drawer
 (`components/Drawer`) carries the backlog, the closed tasks, board settings, and search and
-capture, and becomes the move drawer while a card is held or selected; the board owns it
-for now. Away from boards, the shell hosts that same Drawer component for settings, project settings
-and trash forms. Workspace trash has no dock at rest; settings pages give it their page
-picker. Tag management uses this host on phones and a
-centred dialog on desktop. On a phone board the board owns the drawer, so the
-shell's forms (new project, new or renamed workspace) open as a page of the board's drawer
-rather than a sheet of their own (2026-11-19). The cross-project board adapts every project's tasks at the same
+capture, and becomes the move drawer while a card is held or selected. The shell owns it
+(2026-11-28): one drawer stays mounted across boards, the dependency graph, settings and the
+trash, and each screen hands it its dock and pages. Workspace trash has no dock at rest;
+settings pages give it their page picker. Tag management uses it on phones and a centred
+dialog on desktop. The shell's forms (new project, new or renamed workspace) open as a page of
+the same drawer over whatever screen is open, board or not, rather than a sheet of their own. The cross-project board adapts every project's tasks at the same
 kind of boundary (`Board/WorkspaceBoard.tsx`). Both desktop boards search and filter through
 the board's bar (`components/BoardSearch`); a phone's cross-project board uses the command
 palette, with the same filters. Cards move on both boards by dragging, from the keyboard, by long press

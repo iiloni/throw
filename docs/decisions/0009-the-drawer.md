@@ -1,8 +1,8 @@
 # 0009: The drawer
 
 Status: accepted (2026-10-15), amended 2026-10-17 for quick capture's card, 2026-10-19
-for the move drawer, 2026-11-23 for the project switcher and half-height pages and
-2026-11-24 for pages closing into the dock
+for the move drawer, 2026-11-23 for the project switcher and half-height pages,
+2026-11-24 for pages closing into the dock and 2026-11-28 for the shell's own drawer
 
 ## Context
 
@@ -127,8 +127,8 @@ and the tag manager are centred dialogs.
   closing returns the drawer to what it showed before. Pages that fit their content and full
   pages are unchanged.
 - **The project switcher is drawer content (2026-11-23).** On a phone the page title opens
-  the shell's `ProjectSwitcher` as a page that fits its content, in the board's drawer or the
-  shell's own: the workspace's projects as tinted tiles, a workspace row that opens a
+  the shell's `ProjectSwitcher` as a page that fits its content, in the shell's drawer: the
+  workspace's projects as tinted tiles, a workspace row that opens a
   Workspaces view (Back returns to the projects), and settings and the trash as a footer.
   Pulling down from the top of a board opens the same page (`SwitcherPull`). The desktop
   rail keeps its workspace menu.
@@ -137,3 +137,26 @@ and the tag manager are centred dialogs.
   including a board whose drawer is open with its own content, and must not replace that
   content or wait for it to close. Settings' own confirmations, such as restoring or
   deleting a server backup, use `ManagementSurface` like other management forms.
+- **The shell owns the drawer (2026-11-28).** The drawer was one component but four mounts:
+  the project board, the cross-project board and the dependency graph each drew their own, and
+  `ManagementSurface` drew a fourth away from boards, lending its pages to a board's drawer
+  through a store while one was open. Every screen change unmounted the drawer and mounted
+  another, so its glass, its height and a page closing over the change started again from
+  nothing. Now `DrawerHost` in the app shell draws the only one, and it stays mounted as
+  screens change, as Catch's dock does. Screens hand it what to show with `useDrawerSlot`
+  (the drawer's own props: dock, backlog, pages, the capture card, the move target), the
+  newest screen's showing. Management forms and the project switcher lend it a page over any
+  screen with `useLentDrawerPage`, which makes the rest of the app inert behind it, boards
+  included; closing the newest lent page shows any opened before it again. The prototype mounts
+  a host of its own.
+  - A dock taking another's place, from a board to its graph or to settings, fades across it
+    on the drawer's spring (`face`); another project's board keeps it still. A screen that
+    arrives or leaves with nothing in sight, such as the trash, places the drawer at once
+    rather than sliding it, so the drawer comes and goes with its page as each screen's own
+    did; between two docks the drawer moves to the new one's height. A page open as the screen
+    changes closes into the new dock as any page does.
+  - The drawer's content is drawn in the shell, outside the screen's tree, so it reads the
+    shell's contexts. A board boundary carries its own to it (`BoardDrawerBridge`), and a
+    context it adds for drawer content must join that bridge. The board stops painting under a
+    drawer page by a mark of its own (`data-board-cover`), since the drawer is no longer its
+    sibling.

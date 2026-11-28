@@ -21,9 +21,10 @@ import {
 } from 'react';
 import { NarrowedBar } from '@/components/BoardSearch/BoardFilters';
 import { type PhoneCapture, usePhonePalette } from '@/components/CommandPalette/PhonePalette';
-import { type Detent, Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
+import { DockFace } from '@/components/Drawer/DockFace';
+import type { Detent, DrawerPage } from '@/components/Drawer/Drawer';
+import { useDrawerSlot } from '@/components/Drawer/DrawerHost';
 import { IconButton } from '@/components/IconButton/IconButton';
-import { boardDrawerPage } from '@/components/ManagementSurface/ManagementSurface';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
@@ -176,7 +177,7 @@ export function PhoneBoard({
         <NarrowedBar />
       </header>
 
-      <div className="relative flex min-h-0 flex-1" inert={covered}>
+      <div className="relative flex min-h-0 flex-1" data-board-cover="" inert={covered}>
         <div
           ref={pagerRef}
           data-pager=""
@@ -521,11 +522,12 @@ export const dockButton =
   'relative flex size-[var(--dock-height)] shrink-0 items-center justify-center rounded-[var(--dock-radius)] outline-none focus-visible:ring-2 focus-visible:ring-ring/70';
 
 /**
- * The backlog in the drawer (ADR 0009). Collapsed, its header is the dock: the backlog's
+ * The backlog in the shell's drawer (ADR 0009). Collapsed, its header is the dock: the backlog's
  * handle beside search and the create button. Half open, it is a supply to take work from,
  * with the board still above: a card carried off sinks it out of the way so the whole screen
  * is board to place it on. Full, it is the backlog to groom, and its cards are reordered in
- * place. The closed tasks and board settings open in it as pages.
+ * place. The closed tasks and board settings open in it as pages. It draws nothing here: it
+ * hands the drawer what to show.
  */
 function BoardDrawer({
   page,
@@ -550,7 +552,6 @@ function BoardDrawer({
 }) {
   const state = board.use();
   const held = drag.use();
-  const lent = boardDrawerPage.use();
   const fingerDown = holding.use();
   const { project } = current(state);
   const statuses = zoneStatuses('backlog', project.statuses);
@@ -698,35 +699,30 @@ function BoardDrawer({
     },
   };
 
-  return (
-    <Drawer
-      label={task ? 'Task drawer' : 'Backlog'}
-      origin="backlog"
-      dock={
-        <AnimatePresence initial={false}>
-          <DockFace key={task ? 'task' : 'board'}>{task ? task.dock : dock}</DockFace>
-        </AnimatePresence>
-      }
-      detent={task || capturing ? 'closed' : detent}
-      detents={task || capturing ? ['closed'] : undefined}
-      onDetent={goTo}
-      move={!task && !capturing && (makingWay(held) || pick) ? <MovePanel pick={pick} /> : null}
-      // Cards chosen from the open backlog or closed tasks leave that list in view to choose more.
-      floatMove={pick}
-      // An open task's drawer moves only while one of its panels is open.
-      gesturesDisabled={
-        held !== null || fingerDown || (!!task && !task.page) || (capturing && !capture.page)
-      }
-      page={
-        lent ? lent.page : task ? task.page : capturing ? capture.page : page ? pages[page] : null
-      }
-      onClosePage={
-        lent ? lent.close : task ? task.closePage : capturing ? capture.closePage : onClosePage
-      }
-      card={task ? null : capture.card}
-      raised={!!task || raised}
-      onSettle={saveDetent}
-    >
+  useDrawerSlot({
+    label: task ? 'Task drawer' : 'Backlog',
+    face: 'project-board',
+    origin: 'backlog',
+    dock: (
+      <AnimatePresence initial={false}>
+        <DockFace key={task ? 'task' : 'board'}>{task ? task.dock : dock}</DockFace>
+      </AnimatePresence>
+    ),
+    detent: task || capturing ? 'closed' : detent,
+    detents: task || capturing ? ['closed'] : undefined,
+    onDetent: goTo,
+    move: !task && !capturing && (makingWay(held) || pick) ? <MovePanel pick={pick} /> : null,
+    // Cards chosen from the open backlog or closed tasks leave that list in view to choose more.
+    floatMove: pick,
+    // An open task's drawer moves only while one of its panels is open.
+    gesturesDisabled:
+      held !== null || fingerDown || (!!task && !task.page) || (capturing && !capture.page),
+    page: task ? task.page : capturing ? capture.page : page ? pages[page] : null,
+    onClosePage: task ? task.closePage : capturing ? capture.closePage : onClosePage,
+    card: task ? null : capture.card,
+    raised: !!task || raised,
+    onSettle: saveDetent,
+    children: (
       <div
         className="flex min-h-0 flex-1 flex-col"
         inert={!!task || capturing || (detent === 'closed' && !held)}
@@ -739,28 +735,9 @@ function BoardDrawer({
           className="flex-1"
         />
       </div>
-    </Drawer>
-  );
-}
-
-/** The board's dock and an open task's trade places, as Catch's dock does for a note. */
-export function DockFace({ children }: { children: ReactNode }) {
-  const present = useIsPresent();
-  const reduced = useReducedMotion();
-  return (
-    <motion.div
-      aria-hidden={!present || undefined}
-      inert={!present}
-      // Leaving, it stops taking up room so the new face sits where it will rest.
-      className={cn(!present && 'absolute inset-x-0 top-0')}
-      initial={{ opacity: 0, scale: 0.92 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.92, transition: { duration: reduced ? 0 : 0.16 } }}
-      transition={reduced ? { duration: 0 } : springs.smooth}
-    >
-      {children}
-    </motion.div>
-  );
+    ),
+  });
+  return null;
 }
 
 /** The backlog's handle shows a stack of cards, as deep as the backlog, up to three. */

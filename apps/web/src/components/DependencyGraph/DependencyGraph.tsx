@@ -25,7 +25,7 @@ import { Row, Switch } from '@/components/Board/BoardSettingsPanel';
 import { type TaskBlocker, TaskBlockersContext } from '@/components/Board/blockers';
 import { OpenTaskPane, useWidth } from '@/components/Board/DesktopBoard';
 import { isFiltering, matchingIds } from '@/components/Board/filter';
-import { DockFace, dockButton } from '@/components/Board/PhoneBoard';
+import { dockButton } from '@/components/Board/PhoneBoard';
 import { board, current, update } from '@/components/Board/state';
 import { TaskContentContext } from '@/components/Board/taskContent';
 import { useTaskSurfaceShown } from '@/components/Board/taskTransition';
@@ -35,10 +35,11 @@ import {
   BoardSearchSidebar,
   SEARCH_SIDEBAR_MIN,
 } from '@/components/BoardSearch/BoardSearch';
-import { Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
+import { DockFace } from '@/components/Drawer/DockFace';
+import type { DrawerPage } from '@/components/Drawer/Drawer';
+import { useDrawerSlot } from '@/components/Drawer/DrawerHost';
 import { Hint } from '@/components/Hint/Hint';
 import { IconButton } from '@/components/IconButton/IconButton';
-import { boardDrawerPage } from '@/components/ManagementSurface/ManagementSurface';
 import { useProjects, useStatuses, useTaskRelations, useTasks } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
@@ -534,7 +535,6 @@ function PhoneGraph({
 }) {
   const state = board.use();
   const task = useContext(TaskContentContext)?.drawer;
-  const lent = boardDrawerPage.use();
   const raised = useTaskSurfaceShown();
   const [options, setOptions] = useState(false);
   const covered = state.openTaskId !== null || options;
@@ -587,6 +587,20 @@ function PhoneGraph({
       </motion.button>
     </div>
   );
+  useDrawerSlot({
+    label: task ? 'Task drawer' : 'Graph drawer',
+    face: 'graph',
+    origin: 'graph',
+    dock: (
+      <AnimatePresence initial={false}>
+        <DockFace key={task ? 'task' : 'graph'}>{task ? task.dock : dock}</DockFace>
+      </AnimatePresence>
+    ),
+    gesturesDisabled: !!task && !task.page,
+    page: task ? task.page : options ? optionsPage : null,
+    onClosePage: task ? task.closePage : () => setOptions(false),
+    raised: !!task || raised,
+  });
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <header className="shrink-0 pt-[var(--safe-top)]" inert={covered}>
@@ -600,27 +614,9 @@ function PhoneGraph({
         <div className="px-4 pb-1">{summary}</div>
         <NarrowedBar />
       </header>
-      <div className="relative flex min-h-0 flex-1" inert={covered}>
+      <div className="relative flex min-h-0 flex-1" data-board-cover="" inert={covered}>
         {children}
       </div>
-      <Drawer
-        label={task ? 'Task drawer' : 'Graph drawer'}
-        origin="graph"
-        dock={
-          <AnimatePresence initial={false}>
-            <DockFace key={task ? 'task' : 'graph'}>{task ? task.dock : dock}</DockFace>
-          </AnimatePresence>
-        }
-        detent="closed"
-        detents={['closed']}
-        onDetent={() => {}}
-        gesturesDisabled={!!task && !task.page}
-        page={lent ? lent.page : task ? task.page : options ? optionsPage : null}
-        onClosePage={lent ? lent.close : task ? task.closePage : () => setOptions(false)}
-        raised={!!task || raised}
-      >
-        {null}
-      </Drawer>
     </div>
   );
 }

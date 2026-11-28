@@ -11,7 +11,7 @@ export type TaskDrawerContent = {
 /** The real task's content enters at the same boundary as its synced board data. */
 export const TaskContentContext = createContext<{
   body(taskId: string): ReactNode;
-  /** Set while a task is open on a phone; the board's drawer shows it in place of its own. */
+  /** Set while a task is open on a phone; the shell's drawer shows it in place of the board's own dock. */
   drawer?: TaskDrawerContent | null;
 } | null>(null);
 
