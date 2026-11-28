@@ -400,6 +400,29 @@ export function Drawer({
     return () => observer.disconnect();
   }, [moveInHead, reduced, y]);
 
+  // An open page ends above the keyboard, so the keyboard rising shortens the surface every
+  // offset is measured from; a fitted page left where it was would sit behind the keyboard.
+  // The Android app overlays the keyboard rather than resizing the window, so this, not the
+  // window's resize, is what follows it, frame by frame as `--keyboard` moves. A slide under
+  // way whose target moved is re-aimed instead, keeping its velocity.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: offsets reads refs
+  useLayoutEffect(() => {
+    const element = surface.current;
+    if (!element) return;
+    let measured = element.offsetHeight;
+    const observer = new ResizeObserver(() => {
+      if (element.offsetHeight === measured) return;
+      measured = element.offsetHeight;
+      if (pulled.current) return;
+      const to = resting.current();
+      if (sliding.current) {
+        if (Math.abs(to - rest.current) > 0.5) void slide(to, springs.pane);
+      } else if (Math.abs(to - y.get()) > 0.5) place(to);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [reduced, y]);
+
   // The move target floating over a groomed backlog covers its foot, so the list keeps that
   // much room clear at its end too.
   const footer = useRef<HTMLDivElement>(null);

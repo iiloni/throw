@@ -203,3 +203,30 @@ test('regular accounts cannot open the user directory', async ({ page, isMobile 
     expect(response.status()).toBe(403);
   }
 });
+
+test('a phone form stays above the keyboard as it rises', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Only the phone drawer rides above the keyboard.');
+  await signInAsAdmin(page);
+  await page.goto('/settings/admin/users');
+  await page.getByRole('button', { name: 'Create invite', exact: true }).click();
+  const form = page.getByRole('dialog', { name: 'Create invite' });
+  const field = form.getByLabel('Who is it for?');
+  await expect(field).toBeFocused();
+  // The Android app overlays the keyboard and reports it through `--keyboard`, frame by frame,
+  // rather than resizing the window.
+  const keyboard = 320;
+  for (const height of [80, 200, keyboard]) {
+    await page.evaluate(
+      (value) => document.documentElement.style.setProperty('--keyboard', `${value}px`),
+      height,
+    );
+    await page.waitForTimeout(50);
+  }
+  const top = (page.viewportSize()?.height ?? 0) - keyboard;
+  const submit = form.getByRole('button', { name: 'Create invite', exact: true });
+  await expect
+    .poll(async () => ((await submit.boundingBox())?.y ?? Infinity) + 1)
+    .toBeLessThan(top);
+  const box = await field.boundingBox();
+  expect((box?.y ?? Infinity) + (box?.height ?? 0)).toBeLessThan(top);
+});
