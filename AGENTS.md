@@ -148,7 +148,8 @@ the desktop `SelectionBar` and the phone `MovePanel` share its controls, and the
 supply the priority, size and tag panels and the trash action (`components/BulkActions`) through
 `SelectionContentContext`, so the prototype only moves. On a phone the move target trades places
 with the dock (the Drawer's `MoveFace`) and `MovePanel`'s views fade across on the drawer's spring;
-a leaving one is inert and frozen at what it last showed.
+a leaving one is inert and frozen at what it last showed. A selection made in the open backlog or
+on the closed tasks' page floats at the screen's foot over that list (the Drawer's `floatMove`).
 Settings (`/settings/*`) and project settings (`/w/:workspaceId/p/:projectId/settings`,
 with project trash beside it at `/trash`) share Catch's `SettingsLayout`: pages listed
 beside the open one on wide screens, and a dock page picker on phones

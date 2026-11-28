@@ -711,6 +711,8 @@ function BoardDrawer({
       detents={task || capturing ? ['closed'] : undefined}
       onDetent={goTo}
       move={!task && !capturing && (makingWay(held) || pick) ? <MovePanel pick={pick} /> : null}
+      // Cards chosen from the open backlog or closed tasks leave that list in view to choose more.
+      floatMove={pick}
       // An open task's drawer moves only while one of its panels is open.
       gesturesDisabled={
         held !== null || fingerDown || (!!task && !task.page) || (capturing && !capture.page)

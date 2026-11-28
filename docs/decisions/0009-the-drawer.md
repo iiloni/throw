@@ -77,7 +77,11 @@ task, a page or capture take precedence: the board does not pass `move` while on
 The move target and the dock trade places as the board's dock and a task's do, and its views
 (the hint, the grid and a selection's pickers) fade across one another on the drawer's own
 spring, as its pages do (2026-11-27). A leaving view or target keeps what it last showed and
-is inert, so a quick second tap or a held card never lands on it.
+is inert, so a quick second tap or a held card never lands on it. Cards selected from the
+open backlog or the closed tasks' half page leave that list where it is: the selection's
+controls float at the foot of the screen as they do over the groomed backlog, so more cards
+can be chosen from the same list, and the glass springs to each picker's height. Only a
+collapsed drawer takes the selection into its header.
 
 **Content over the board is modal; the backlog is not.** At half height the backlog is a
 supply of work with the board usable above it. Anything else the drawer shows traps focus,

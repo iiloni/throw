@@ -279,6 +279,78 @@ test.describe('phone', () => {
     expect(seen.at(-1)!.leaving).toBe(0);
   });
 
+  test('cards chosen in the open backlog or closed tasks leave that list in view to choose more', async ({
+    page,
+  }) => {
+    const board = await fixture(page);
+    const touch = await finger(page);
+    const drawer = page.locator('[data-drawer]');
+    const floating = page.locator('[data-drawer] [data-drop-expand]');
+    await page.getByRole('button', { name: /^Backlog \d+$/ }).click();
+    await expect(drawer).toHaveAttribute('data-detent', 'half');
+    await touch.press(card(page, 'Idea for later'));
+    await touch.lift();
+    // The backlog stays half open with the selection floating at its foot, not sunk under it.
+    await expect(page.getByText('1 selected')).toBeVisible();
+    await expect(floating).toBeVisible();
+    await touch.tap(card(page, 'Planned first'));
+    await expect(page.getByText('2 selected')).toBeVisible();
+    await expect(drawer).toHaveAttribute('data-detent', 'half');
+
+    // A picker grows the floating glass on a spring, its foot held at the bottom of the screen.
+    const glass = floating.first();
+    const tap = await centre(
+      await settled(toolbar(page).getByRole('button', { name: 'Change status' })),
+    );
+    const sizes = page.evaluate(async () => {
+      const seen: { height: number; bottom: number }[] = [];
+      for (let frame = 0; frame < 40; frame++) {
+        await new Promise(requestAnimationFrame);
+        const rect = document
+          .querySelector('[data-drawer] [data-drop-expand]')!
+          .getBoundingClientRect();
+        seen.push({ height: Math.round(rect.height), bottom: Math.round(rect.bottom) });
+      }
+      return seen;
+    });
+    await touch.tap(tap);
+    const seen = await sizes;
+    const heights = new Set(seen.map(({ height }) => height));
+    expect(heights.size).toBeGreaterThan(3);
+    const bottoms = seen.map(({ bottom }) => bottom);
+    expect(Math.max(...bottoms) - Math.min(...bottoms)).toBeLessThanOrEqual(1);
+    await expect(glass).toBeVisible();
+
+    // Sending lets the selection go, and the backlog is as it was.
+    await touch.tap(page.locator(`[data-drop-status="${board.status('Review')}"]`));
+    await expect
+      .poll(async () =>
+        Promise.all(
+          ['Idea for later', 'Planned first'].map(
+            async (title) => (await taskRow(page, board.headers, board.ids[title]!))?.status_id,
+          ),
+        ),
+      )
+      .toEqual([board.status('Review'), board.status('Review')]);
+    await expect(page.getByText('2 selected')).toHaveCount(0);
+    await expect(floating).toHaveCount(0);
+    await expect(drawer).toHaveAttribute('data-detent', 'half');
+
+    // The closed tasks' page keeps its place the same way, and clearing leaves it open.
+    await page.getByRole('button', { name: /done this week. Show closed tasks/ }).click();
+    await expect(drawer).toHaveAttribute('data-page', 'closed');
+    await touch.press(card(page, 'Finished'));
+    await touch.lift();
+    await touch.tap(card(page, 'Cancelled work'));
+    await expect(page.getByText('2 selected')).toBeVisible();
+    await expect(drawer).toHaveAttribute('data-page', 'closed');
+    await touch.tap(page.getByRole('button', { name: 'Clear selection' }));
+    await expect(floating).toHaveCount(0);
+    await expect(page.locator('[data-move-panel]')).toHaveCount(0);
+    await expect(drawer).toHaveAttribute('data-page', 'closed');
+    await expect(card(page, 'Finished')).toBeVisible();
+  });
+
   test('the drawer’s selection controls change priority, size and tags, and trash with undo', async ({
     page,
   }, testInfo) => {

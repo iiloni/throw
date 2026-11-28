@@ -330,6 +330,56 @@ describe('Drawer motion', () => {
     vi.unstubAllGlobals();
   });
 
+  it('floats a selection over the open list it was chosen from, and a held card in its header', async () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const view = (
+      floatMove: boolean,
+      detent: 'closed' | 'half',
+      page: DrawerPage | null = null,
+    ) => (
+      <Drawer
+        label="Backlog"
+        dock={<p>Dock</p>}
+        detent={detent}
+        onDetent={() => {}}
+        page={page}
+        onClosePage={() => {}}
+        move={<p>Selection</p>}
+        floatMove={floatMove}
+      >
+        <p>Backlog list</p>
+      </Drawer>
+    );
+    // The one shown, not a copy still leaving the place it moved from.
+    const selection = () =>
+      screen.getAllByText('Selection').find((element) => !element.closest('[inert]'))!;
+    const inFooter = () => selection().closest('[data-drawer] [data-drop-expand]') !== null;
+    const { rerender } = render(view(true, 'half'));
+    // The list and its dock stay in view, the selection at their foot.
+    expect(inFooter()).toBe(true);
+    expect(screen.getByText('Dock').closest('[hidden]')).toBeNull();
+    await settled();
+    expect(offset()).toBe(HALF);
+    // A held card sinks the list under the target as before.
+    rerender(view(false, 'half'));
+    expect(inFooter()).toBe(false);
+    expect(screen.getByText('Dock').closest('[hidden]')).not.toBeNull();
+    // A collapsed drawer has no list in view, so the selection is its header.
+    rerender(view(true, 'closed'));
+    expect(screen.getByText('Dock').closest('[hidden]')).not.toBeNull();
+    // A half page, as the closed tasks are, keeps its place too.
+    rerender(view(true, 'closed', closed));
+    expect(inFooter()).toBe(true);
+    expect(screen.getByText('History')).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
   it('slides by frames, so a long frame does not carry it most of the way at once', async () => {
     motionPreference.reduced = false;
     const onSettle = vi.fn();

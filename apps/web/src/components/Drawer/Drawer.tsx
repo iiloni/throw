@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import {
   AnimatePresence,
+  animate,
   type MotionStyle,
   type MotionValue,
   motion,
@@ -108,6 +109,7 @@ export function Drawer({
   raised = false,
   card = null,
   move = null,
+  floatMove = false,
   onSettle,
 }: {
   label: string;
@@ -133,6 +135,12 @@ export function Drawer({
    * height keeps its place, and the move target floats at its foot instead.
    */
   move?: ReactNode;
+  /**
+   * The move target is a selection's, chosen from what the drawer shows: while the drawer is
+   * open, at half height or on a half page, it floats at the foot as it does over the groomed
+   * backlog, so the list stays in view and more of it can be chosen (ADR 0009).
+   */
+  floatMove?: boolean;
   /** The drawer has come to rest after sliding: work that would hold up its frames can run. */
   onSettle?: () => void;
 }) {
@@ -153,7 +161,9 @@ export function Drawer({
   const pageHalf = halfPage && expanded !== page?.key;
   const docked = paged && !!page.dock;
   const moving = move !== null;
-  const grooming = moving && detent === 'full' && !paged;
+  const grooming =
+    moving &&
+    ((detent === 'full' && !paged) || (floatMove && (paged ? halfPage : detent !== 'closed')));
   const moveInHead = moving && !grooming;
   const carded = card !== null;
   const pageAboveKeyboard = paged && !carded && (!raised || !page.fit);
@@ -169,6 +179,8 @@ export function Drawer({
   // room, unless the page has a field of its own being typed in, which needs both.
   const closedAt = useRef(0);
   const reveal = useTransform(y, (at) => `${closedAt.current - at}px`);
+  // Holds the floating move target at the foot of the screen, wherever the drawer rests.
+  const onScreen = useTransform(y, (at) => -at);
   const [typingInPage, setTypingInPage] = useState(false);
   const holding = useRef(0);
   const closeTop = () => (paged ? onClosePage() : card?.onClose());
@@ -662,13 +674,18 @@ export function Drawer({
           ) : (
             children
           )}
-          <AnimatePresence initial={false}>
-            {grooming && (
-              <MoveFooter key="move" footerRef={footer} reduced={!!reduced}>
-                {move}
-              </MoveFooter>
-            )}
-          </AnimatePresence>
+          <motion.div
+            className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col justify-end"
+            style={{ y: onScreen }}
+          >
+            <AnimatePresence initial={false}>
+              {grooming && (
+                <MoveFooter key="move" footerRef={footer} reduced={!!reduced}>
+                  {move}
+                </MoveFooter>
+              )}
+            </AnimatePresence>
+          </motion.div>
         </div>
       </motion.section>
     </>
@@ -700,7 +717,11 @@ function MoveFace({ reduced, children }: { reduced: boolean; children: ReactNode
   );
 }
 
-/** The move target floating at the foot of a groomed backlog, rising in and sinking away. */
+/**
+ * The move target floating at the foot of the open drawer, rising in and sinking away. Its
+ * glass springs to the height of what it shows, as the drawer does for the target in its
+ * header, while a view arriving inside it fades across the one leaving.
+ */
 function MoveFooter({
   footerRef,
   reduced,
@@ -711,26 +732,53 @@ function MoveFooter({
   children: ReactNode;
 }) {
   const present = useIsPresent();
+  const content = useRef<HTMLDivElement>(null);
+  const height = useMotionValue(0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: follows the content once mounted
+  useLayoutEffect(() => {
+    const element = content.current;
+    if (!element) return;
+    height.jump(element.offsetHeight);
+    let measured = element.offsetHeight;
+    const observer = new ResizeObserver(() => {
+      if (element.offsetHeight === measured) return;
+      measured = element.offsetHeight;
+      if (reduced) height.jump(measured);
+      else animate(height, measured, springs.smooth);
+    });
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      height.stop();
+    };
+  }, []);
   return (
     <motion.div
       aria-hidden={!present || undefined}
       inert={!present}
-      className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col justify-end"
       initial={reduced ? false : { y: 24, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       exit={{ y: reduced ? 0 : 24, opacity: 0 }}
       transition={reduced ? { duration: 0 } : springs.snappy}
     >
-      <div
-        ref={present ? footerRef : undefined}
+      <motion.div
         data-drop-expand={present ? '' : undefined}
+        style={{ height }}
         className={cn(
-          'glass-thick rounded-t-[1.75rem] px-3 pt-3 pb-[calc(var(--safe-bottom)+0.5rem)] shadow-[0_-8px_24px_-12px_oklch(0_0_0/0.25)]',
+          'glass-thick overflow-hidden rounded-t-[1.75rem] shadow-[0_-8px_24px_-12px_oklch(0_0_0/0.25)]',
           present && 'pointer-events-auto',
         )}
       >
-        {children}
-      </div>
+        <div
+          ref={(element) => {
+            content.current = element;
+            if (present) footerRef.current = element;
+          }}
+          className="px-3 pt-3 pb-[calc(var(--safe-bottom)+0.5rem)]"
+        >
+          {children}
+        </div>
+      </motion.div>
     </motion.div>
   );
 }
