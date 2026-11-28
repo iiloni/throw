@@ -13,6 +13,9 @@ import {
   cancelBlockerSpotlight,
   SPOTLIGHT_DWELL_MS,
   SPOTLIGHT_HOLD_MS,
+  subtaskBlockers,
+  subtasksBlockedHint,
+  subtasksBlockedLabel,
   syncBlockerSpotlight,
   type TaskBlocker,
   TaskBlockersContext,
@@ -21,7 +24,8 @@ import { type DragState, drag, isPrimed, TOUCH_SLOP } from './drag';
 import type { BoardData, Project, Task } from './model';
 import { railGeometry, SideZone } from './SideZone';
 import { board, initialBoard, receiveBoard, update } from './state';
-import { BLOCKED_BADGE_REACH, TaskCard } from './TaskCard';
+import { TaskCard } from './TaskCard';
+import { BLOCKED_BADGE_REACH } from './useBlockerHold';
 
 function makeProject(id: string, key: string | null, name: string, members?: Project[]): Project {
   return {
@@ -721,5 +725,231 @@ describe('touch press-and-hold on the blocked badge', () => {
     expect(blockedCard).not.toHaveAttribute('data-spotlight');
     fireEvent.pointerCancel(window, mouse);
     expect(drag.get()?.phase).not.toBe('dragging');
+  });
+});
+
+describe('subtaskBlockers and its hint', () => {
+  const app = makeProject('app', 'APP', 'App');
+  const ops = makeBlocker('ops', 'OPS-1', { projectId: 'ops', projectName: 'Operations' });
+  const outside = makeBlocker('outside', 'APP-9');
+  const sibling = makeBlocker('sub-a', 'APP-2', { parentId: 'parent' });
+  const parentItself = makeBlocker('parent', 'APP-1');
+  const open = (id: string) => ({ id, closedAt: null });
+
+  it('is null when no open subtask is blocked, and leaves closed subtasks out', () => {
+    const map = new Map([['sub-b', [outside]]]);
+    expect(subtaskBlockers('parent', [open('sub-a')], (id) => map.get(id) ?? [])).toBeNull();
+    expect(
+      subtaskBlockers(
+        'parent',
+        [{ id: 'sub-b', closedAt: '2026-11-01T00:00:00Z' }],
+        (id) => map.get(id) ?? [],
+      ),
+    ).toBeNull();
+  });
+
+  it('splits blockers outside the parent from its own subtasks, each once', () => {
+    const map = new Map([
+      ['sub-a', [outside]],
+      ['sub-b', [outside, sibling]],
+      ['sub-c', [sibling]],
+    ]);
+    const rollup = subtaskBlockers(
+      'parent',
+      ['sub-a', 'sub-b', 'sub-c', 'sub-d'].map(open),
+      (id) => map.get(id) ?? [],
+    )!;
+    expect(rollup.blockedIds).toEqual(['sub-a', 'sub-b', 'sub-c']);
+    expect(rollup.blockedOutside).toBe(2);
+    expect(rollup.blockedInside).toBe(1);
+    expect(rollup.outside.map((blocker) => blocker.id)).toEqual(['outside']);
+    expect(rollup.inside.map((blocker) => blocker.id)).toEqual(['sub-a']);
+    expect(rollup.all.map((blocker) => blocker.id)).toEqual(['outside', 'sub-a']);
+    expect(subtasksBlockedLabel(rollup)).toBe('3 subtasks blocked');
+    expect(subtasksBlockedHint(rollup, app)).toBe(
+      '2 subtasks blocked by APP-9 · 1 more waits on another subtask',
+    );
+  });
+
+  it('says what blocks the subtasks, never that the parent blocks itself', () => {
+    const hint = (map: Map<string, TaskBlocker[]>, ids = ['sub-a', 'sub-b']) => {
+      const rollup = subtaskBlockers('parent', ids.map(open), (id) => map.get(id) ?? []);
+      return rollup && subtasksBlockedHint(rollup, app);
+    };
+    expect(hint(new Map([['sub-a', [outside]]]))).toBe('1 subtask blocked by APP-9');
+    expect(hint(new Map([['sub-a', [outside, ops]]]))).toBe(
+      '1 subtask blocked by 2 tasks · 1 in Operations',
+    );
+    expect(hint(new Map([['sub-b', [sibling]]]))).toBe('1 subtask waits on another subtask');
+    expect(
+      hint(
+        new Map([
+          ['sub-b', [sibling]],
+          ['sub-c', [sibling]],
+        ]),
+        ['sub-a', 'sub-b', 'sub-c'],
+      ),
+    ).toBe('2 subtasks wait on other subtasks');
+    expect(hint(new Map([['sub-b', [parentItself]]]))).toBe('1 subtask waits on this task');
+    // On the workspace board every project is the board's own.
+    const workspace = makeProject('workspace', null, 'Workspace', [app]);
+    const rollup = subtaskBlockers('parent', [open('sub-a')], () => [ops])!;
+    expect(subtasksBlockedHint(rollup, workspace)).toBe('1 subtask blocked by OPS-1');
+  });
+});
+
+describe('blocked subtasks on a parent card', () => {
+  const app = makeProject('app', 'APP', 'App');
+  const parent = makeTask('parent', 1, 'app-working', { title: 'Launch feature' });
+  const subA = makeTask('sub-a', 2, 'app-working', { title: 'Migrate data', parentId: 'parent' });
+  const subB = makeTask('sub-b', 3, 'app-backlog', { title: 'Flip flag', parentId: 'parent' });
+  const subC = makeTask('sub-c', 4, 'app-backlog', { title: 'Write notes', parentId: 'parent' });
+  const external = makeTask('external', 5, 'app-review', { title: 'Approve schema' });
+  const unrelated = makeTask('unrelated', 6, 'app-working', { title: 'Clean cache' });
+  const tucked = {
+    parentId: 'parent',
+    parentStatusId: 'app-working',
+    parentCategory: 'active' as const,
+  };
+  // Approve schema blocks Migrate data, which blocks its sibling Flip flag.
+  const blockerMap = new Map<string, readonly TaskBlocker[]>([
+    ['sub-a', [makeBlocker('external', 'APP-5', { statusId: 'app-review' })]],
+    ['sub-b', [makeBlocker('sub-a', 'APP-2', tucked)]],
+  ]);
+
+  function renderParent(map = blockerMap, layout = false) {
+    board.set(
+      initialBoard([{ project: app, tasks: [parent, subA, subB, subC, external, unrelated] }]),
+    );
+    const cards = (
+      <>
+        <TaskCard task={parent} />
+        <TaskCard task={external} />
+        <TaskCard task={unrelated} />
+      </>
+    );
+    render(
+      <TooltipProvider>
+        <TaskBlockersContext.Provider value={map}>
+          {layout ? <div data-board-layout="">{cards}</div> : cards}
+        </TaskBlockersContext.Provider>
+      </TooltipProvider>,
+    );
+    return {
+      parentCard: screen.getByRole('article', { name: 'APP-1 Launch feature' }),
+      externalCard: screen.getByRole('article', { name: 'APP-5 Approve schema' }),
+      unrelatedCard: screen.getByRole('article', { name: 'APP-6 Clean cache' }),
+      tab: screen.getByRole('button', { name: /subtasks done/ }),
+      underlay: document.querySelector<HTMLElement>('[data-subtask-underlay]')!,
+      row: (title: string) => screen.getByText(title).closest('li')!,
+    };
+  }
+
+  it('marks the tab, not the parent card, and names the blocked subtasks', () => {
+    const { parentCard, tab, row } = renderParent();
+    expect(parentCard.querySelector('[data-blocked]')).toBeNull();
+    expect(tab).toHaveAccessibleName('0 of 3 subtasks done, 2 subtasks blocked');
+    const mark = tab.querySelector<HTMLElement>('[data-subtasks-blocked]')!;
+    // One of them is held up from outside the parent, so the mark is red; it counts both.
+    expect(mark).toHaveAttribute('data-subtasks-blocked', 'outside');
+    expect(mark).toHaveTextContent('2');
+    // Each blocked row carries its own mark; the unblocked one stays plain.
+    expect(row('Migrate data').querySelector('[data-blocked]')).toHaveAccessibleName(
+      'Blocked by APP-5',
+    );
+    expect(row('Flip flag').querySelector('[data-blocked]')).toHaveAccessibleName(
+      'Blocked by APP-2',
+    );
+    expect(row('Write notes').querySelector('[data-blocked]')).toBeNull();
+  });
+
+  it('keeps the mark quiet while subtasks only wait on one another, and away when none do', () => {
+    renderParent(new Map([['sub-b', blockerMap.get('sub-b')!]]));
+    const mark = document.querySelector<HTMLElement>('[data-subtasks-blocked]')!;
+    expect(mark).toHaveAttribute('data-subtasks-blocked', 'inside');
+    expect(mark.className).not.toContain('text-destructive');
+    expect(mark).not.toHaveTextContent('1');
+    cleanup();
+    renderParent(new Map());
+    expect(document.querySelector('[data-subtasks-blocked]')).toBeNull();
+    expect(screen.getByRole('button', { name: /subtasks done/ })).toHaveAccessibleName(
+      '0 of 3 subtasks done',
+    );
+  });
+
+  it("spotlights every subtask's blockers from the tab, keeping the parent lit", () => {
+    const { parentCard, externalCard, unrelatedCard, tab, underlay, row } = renderParent();
+    const mark = tab.querySelector<HTMLElement>('[data-subtasks-blocked]')!;
+    fireEvent.pointerEnter(mark, { pointerType: 'mouse', buttons: 0 });
+    act(() => vi.advanceTimersByTime(SPOTLIGHT_DWELL_MS));
+
+    expect(mark).toHaveAttribute('data-spotlight-trigger', 'active');
+    expect(externalCard).toHaveAttribute('data-spotlight', 'blocker');
+    expect(parentCard).toHaveAttribute('data-spotlight', 'parent');
+    expect(unrelatedCard).toHaveAttribute('data-spotlight', 'dimmed');
+    // The sibling blocker lights up in the tab, and both blocked rows show theirs are lit.
+    expect(underlay).toHaveAttribute('data-spotlight', 'blocker');
+    expect(document.querySelector('[data-subtask-pip="sub-a"]')).toHaveAttribute(
+      'data-spotlight',
+      'blocker',
+    );
+    expect(row('Migrate data')).toHaveAttribute('data-spotlight', 'blocker');
+    expect(row('Migrate data').querySelector('[data-blocked]')).toHaveAttribute(
+      'data-spotlight-trigger',
+      'active',
+    );
+    expect(row('Flip flag').querySelector('[data-blocked]')).toHaveAttribute(
+      'data-spotlight-trigger',
+      'active',
+    );
+
+    fireEvent.pointerLeave(mark, { pointerType: 'mouse' });
+    expect(blockerSpotlight.get()).toBeNull();
+    expect(parentCard).not.toHaveAttribute('data-spotlight');
+    expect(externalCard).not.toHaveAttribute('data-spotlight');
+  });
+
+  it("spotlights one row's own blockers from its mark", () => {
+    const { parentCard, externalCard, unrelatedCard, row } = renderParent();
+    act(() => update({ expanded: ['parent'] }));
+    const mark = row('Flip flag').querySelector<HTMLElement>('[data-blocked]')!;
+    fireEvent.pointerEnter(mark, { pointerType: 'mouse', buttons: 0 });
+    act(() => vi.advanceTimersByTime(SPOTLIGHT_DWELL_MS));
+
+    // Flip flag waits on Migrate data alone: the external task is not its blocker.
+    expect(row('Migrate data')).toHaveAttribute('data-spotlight', 'blocker');
+    expect(externalCard).toHaveAttribute('data-spotlight', 'dimmed');
+    expect(parentCard).toHaveAttribute('data-spotlight', 'parent');
+    expect(unrelatedCard).toHaveAttribute('data-spotlight', 'dimmed');
+    expect(mark).toHaveAttribute('data-spotlight-trigger', 'active');
+    expect(row('Migrate data').querySelector('[data-blocked]')).not.toHaveAttribute(
+      'data-spotlight-trigger',
+    );
+
+    fireEvent.pointerLeave(mark, { pointerType: 'mouse' });
+    expect(blockerSpotlight.get()).toBeNull();
+  });
+
+  it('holds the spotlight under a finger on a tablet without folding the tab', () => {
+    const { externalCard, tab } = renderParent(blockerMap, true);
+    const mark = tab.querySelector<HTMLElement>('[data-subtasks-blocked]')!;
+    mark.getBoundingClientRect = () => new DOMRect(90, 90, 20, 20);
+    const finger = { pointerType: 'touch', pointerId: 3, button: 0, clientX: 100, clientY: 100 };
+
+    fireEvent.pointerDown(mark, finger);
+    act(() => vi.advanceTimersByTime(SPOTLIGHT_HOLD_MS));
+    expect(externalCard).toHaveAttribute('data-spotlight', 'blocker');
+    fireEvent.pointerUp(mark, finger);
+    expect(blockerSpotlight.get()).toBeNull();
+    // The lift's click is not a tap on the tab.
+    fireEvent.click(mark);
+    expect(board.get().expanded).toEqual([]);
+    act(() => vi.advanceTimersByTime(100));
+
+    // A tap still unfolds it.
+    fireEvent.pointerDown(mark, finger);
+    fireEvent.pointerUp(mark, finger);
+    fireEvent.click(mark);
+    expect(board.get().expanded).toEqual(['parent']);
   });
 });

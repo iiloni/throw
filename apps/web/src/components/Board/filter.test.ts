@@ -218,7 +218,10 @@ describe('filter matching', () => {
     expect(counts.sizes.get(5)).toBe(1);
     expect(counts.sizes.get(1)).toBe(1);
     expect(counts.sizes.get(2)).toBe(0);
-    expect(facetCounts(data(), EMPTY_FILTER, false).untagged).toBe(1);
+    // Tidy desk, and Weed beds for its untagged subtask Order seeds, which Untagged keeps.
+    expect(facetCounts(data(), EMPTY_FILTER, false).untagged).toBe(2);
+    expect(shown({ untagged: true })).toEqual(['order seeds', 'tidy desk', 'weed beds']);
+    expect(facetCounts(data(), EMPTY_FILTER, true).untagged).toBe(2);
   });
 });
 
@@ -312,6 +315,31 @@ describe('relation filters', () => {
       'paint fence',
       'weed beds',
     ]);
+  });
+
+  it('counts a parent card once for its tucked subtasks, as the board keeps it', () => {
+    // Weed beds stands for Order seeds, which blocks Write report.
+    expect(Object.fromEntries(facetCounts(linkedData(), EMPTY_FILTER, false).relations)).toEqual({
+      blocked: 2,
+      blocking: 2,
+      duplicates: 2,
+    });
+    // Order seeds blocked too: Weed beds, blocked itself, is still one card.
+    const both = boardRelations(
+      new Map([
+        ['weed beds', [{ id: 'paint fence' }]],
+        ['order seeds', [{ id: 'tidy desk' }]],
+      ]),
+      [],
+      linkedRows,
+      [project],
+    );
+    const bothData = { ...linkedData(), relations: both };
+    expect(facetCounts(bothData, EMPTY_FILTER, false).relations.get('blocked')).toBe(1);
+    expect(facetCounts(bothData, EMPTY_FILTER, true).relations.get('blocked')).toBe(2);
+    expect(
+      [...(matchingIds(bothData, filter({ relations: ['blocked'] }), false) ?? [])].sort(),
+    ).toEqual(['order seeds', 'weed beds']);
   });
 
   it('finds nothing on a board without relations, as the prototype is', () => {

@@ -101,11 +101,15 @@ export function blockedLabel(blockers: readonly (string | Pick<TaskBlocker, 'ide
  * project holding a blocker so lingering over a card with off-board blockers explains itself.
  */
 export function blockedHint(blockers: readonly TaskBlocker[], project: Project) {
-  const base = blockedLabel(blockers);
+  return `${blockedLabel(blockers)}${projectNote(blockers, project)}`;
+}
+
+/** Where `blockers` sit beyond a single-project board, as `' · Operations'`, or nothing. */
+function projectNote(blockers: readonly TaskBlocker[], project: Project) {
   // The cross-project board gathers every project of the workspace, so every blocker belongs here.
-  if (project.members !== undefined || blockers.length === 0) return base;
+  if (project.members !== undefined || blockers.length === 0) return '';
   const external = blockers.filter((blocker) => blocker.projectId !== project.id);
-  if (external.length === 0) return base;
+  if (external.length === 0) return '';
   const externalProjects = new Set(
     external.map((blocker) => blocker.projectName).filter((name): name is string => Boolean(name)),
   );
@@ -114,15 +118,116 @@ export function blockedHint(blockers: readonly TaskBlocker[], project: Project) 
       ? [...externalProjects][0]!
       : null;
   if (blockers.length === 1) {
-    return `${base} · ${singleExternalProject ?? 'another project'}`;
+    return ` · ${singleExternalProject ?? 'another project'}`;
   }
   if (external.length === blockers.length) {
-    return `${base} · ${singleExternalProject ?? 'other projects'}`;
+    return ` · ${singleExternalProject ?? 'other projects'}`;
   }
   if (singleExternalProject) {
-    return `${base} · ${external.length} in ${singleExternalProject}`;
+    return ` · ${external.length} in ${singleExternalProject}`;
   }
-  return `${base} · ${external.length} in ${external.length === 1 ? 'another project' : 'other projects'}`;
+  return ` · ${external.length} in ${external.length === 1 ? 'another project' : 'other projects'}`;
+}
+
+/**
+ * A parent's open subtasks that are blocked, rolled up for the mark on its subtask tab. Blockers
+ * split by where they are: `outside` the parent, or `inside` it (another of its subtasks, or the
+ * parent itself). A subtask waiting only on a sibling is sequenced work rather than work held up
+ * from elsewhere, so the tab tells the two apart and never reads as the parent blocking itself.
+ */
+export type SubtaskBlockers = {
+  /** The open subtasks with an open blocker, in the order given. */
+  blockedIds: readonly string[];
+  /** How many of them wait on at least one task outside the parent. */
+  blockedOutside: number;
+  /** How many wait only on the parent's own work. */
+  blockedInside: number;
+  /** Whether those wait on the parent itself alone, rather than on any sibling. */
+  waitsOnParent: boolean;
+  /** The distinct open blockers outside the parent, ordered as `blockersByTask` orders them. */
+  outside: readonly TaskBlocker[];
+  /** The distinct open blockers inside it. */
+  inside: readonly TaskBlocker[];
+  /** Every distinct blocker, outside first: what the tab's spotlight lights up. */
+  all: readonly TaskBlocker[];
+};
+
+/** The rollup of `parentId`'s open subtasks' open blockers, or null when none is blocked. */
+export function subtaskBlockers(
+  parentId: string,
+  subtasks: readonly { id: string; closedAt: string | number | null }[],
+  blockersOf: (taskId: string) => readonly TaskBlocker[],
+): SubtaskBlockers | null {
+  const blockedIds: string[] = [];
+  const outside = new Map<string, TaskBlocker>();
+  const inside = new Map<string, TaskBlocker>();
+  let blockedOutside = 0;
+  let siblingInside = false;
+  for (const subtask of subtasks) {
+    if (subtask.closedAt !== null) continue;
+    const open = blockersOf(subtask.id);
+    if (open.length === 0) continue;
+    blockedIds.push(subtask.id);
+    let fromOutside = false;
+    for (const blocker of open) {
+      const within = blocker.id === parentId || blocker.parentId === parentId;
+      (within ? inside : outside).set(blocker.id, blocker);
+      if (!within) fromOutside = true;
+    }
+    if (fromOutside) blockedOutside += 1;
+    else if (open.some((blocker) => blocker.id !== parentId)) siblingInside = true;
+  }
+  if (blockedIds.length === 0) return null;
+  const order = (a: TaskBlocker, b: TaskBlocker) =>
+    a.identifier.localeCompare(b.identifier, undefined, { numeric: true }) ||
+    a.id.localeCompare(b.id);
+  const outsideList = [...outside.values()].sort(order);
+  const insideList = [...inside.values()].sort(order);
+  return {
+    blockedIds,
+    blockedOutside,
+    blockedInside: blockedIds.length - blockedOutside,
+    waitsOnParent: blockedIds.length > blockedOutside && !siblingInside,
+    outside: outsideList,
+    inside: insideList,
+    all: [...outsideList, ...insideList],
+  };
+}
+
+const subtaskCount = (count: number) => `${count} subtask${count === 1 ? '' : 's'}`;
+
+/** What a parent's subtask tab says of its blocked subtasks, to a screen reader and on a phone. */
+export function subtasksBlockedLabel(rollup: SubtaskBlockers) {
+  return `${subtaskCount(rollup.blockedIds.length)} blocked`;
+}
+
+/**
+ * The tooltip on a parent's blocked-subtasks mark: subtasks held up from outside first, named
+ * by their blockers as a card's badge names them, then those that only wait on the parent's own
+ * work, e.g. `2 subtasks blocked by APP-4 · 1 more waits on another subtask`.
+ */
+export function subtasksBlockedHint(rollup: SubtaskBlockers, project: Project) {
+  const parts: string[] = [];
+  if (rollup.blockedOutside > 0) {
+    const by =
+      rollup.outside.length === 1
+        ? rollup.outside[0]!.identifier
+        : `${rollup.outside.length} tasks`;
+    parts.push(
+      `${subtaskCount(rollup.blockedOutside)} blocked by ${by}${projectNote(rollup.outside, project)}`,
+    );
+  }
+  if (rollup.blockedInside > 0) {
+    const count = rollup.blockedInside;
+    const who = rollup.blockedOutside > 0 ? `${count} more` : subtaskCount(count);
+    const what = rollup.waitsOnParent
+      ? 'this task'
+      : count === 1
+        ? 'another subtask'
+        : 'other subtasks';
+    parts.push(`${who} wait${count === 1 ? 's' : ''} on ${what}`);
+  }
+  return parts.join(' · ');
 }
 
 /**
@@ -140,9 +245,25 @@ export const SPOTLIGHT_DWELL_MS = 400;
  */
 export const SPOTLIGHT_HOLD_MS = LONG_PRESS_MS;
 
+/**
+ * Where a spotlight comes from, when not a card's own badge: the card it is drawn on (kept
+ * undimmed, as the parent of a subtask row or tab), and the tasks whose blockers it shows.
+ */
+export type SpotlightScope = {
+  owner: string;
+  blocked: readonly string[];
+};
+
 export type BlockerSpotlight = {
-  /** The blocked task whose badge is being lingered on. */
+  /**
+   * What is being lingered on: a blocked task's badge (its id), or a parent's blocked-subtasks
+   * mark (`subtasksSpotlightKey`).
+   */
   blockedTaskId: string;
+  /** The card the badge sits on, undimmed without being marked blocked. */
+  ownerId: string;
+  /** The tasks whose blockers are shown. */
+  blockedIds: ReadonlySet<string>;
   /** The open blockers of that task. */
   blockers: readonly TaskBlocker[];
   blockerIds: ReadonlySet<string>;
@@ -154,19 +275,34 @@ export type CardSpotlightRole = 'none' | 'blocked' | 'blocker' | 'parent' | 'dim
 
 export const blockerSpotlight = createStore<BlockerSpotlight | null>(null);
 
-function makeSpotlight(blockedTaskId: string, blockers: readonly TaskBlocker[]): BlockerSpotlight {
+/** The spotlight key of a parent's blocked-subtasks mark, which no task id can be. */
+export const subtasksSpotlightKey = (parentId: string) => `subtasks:${parentId}`;
+
+function makeSpotlight(
+  blockedTaskId: string,
+  blockers: readonly TaskBlocker[],
+  scope: SpotlightScope | undefined,
+): BlockerSpotlight {
   const blockerIds = new Set<string>();
   const blockerParentIds = new Set<string>();
   for (const blocker of blockers) {
     blockerIds.add(blocker.id);
     if (blocker.parentId) blockerParentIds.add(blocker.parentId);
   }
-  return { blockedTaskId, blockers, blockerIds, blockerParentIds };
+  return {
+    blockedTaskId,
+    ownerId: scope?.owner ?? blockedTaskId,
+    blockedIds: new Set(scope?.blocked ?? [blockedTaskId]),
+    blockers,
+    blockerIds,
+    blockerParentIds,
+  };
 }
 
 let pending: {
   taskId: string;
   blockers: readonly TaskBlocker[];
+  scope: SpotlightScope | undefined;
   timer: ReturnType<typeof setTimeout>;
 } | null = null;
 let stopWatching: (() => void) | null = null;
@@ -243,24 +379,27 @@ function watchCancellation() {
 
 /**
  * Start the dwell timer for a blocked task's badge on desktop: a lingering mouse by default, or
- * a held finger with `SPOTLIGHT_HOLD_MS`. `onShow` runs if the spotlight comes on.
+ * a held finger with `SPOTLIGHT_HOLD_MS`. `onShow` runs if the spotlight comes on. A badge that
+ * is not a card's own (a subtask row, a parent's subtask tab) names its `scope`.
  */
 export function armBlockerSpotlight(
   taskId: string,
   blockers: readonly TaskBlocker[],
   delay = SPOTLIGHT_DWELL_MS,
   onShow?: () => void,
+  scope?: SpotlightScope,
 ) {
   if (!isDesktop() || blockers.length === 0 || drag.get() !== null) {
     cancelBlockerSpotlight();
     return;
   }
   if (blockerSpotlight.get()?.blockedTaskId === taskId) {
-    syncBlockerSpotlight(taskId, blockers);
+    syncBlockerSpotlight(taskId, blockers, scope);
     return;
   }
   if (pending?.taskId === taskId) {
     pending.blockers = blockers;
+    pending.scope = scope;
     return;
   }
   if (pending) {
@@ -271,16 +410,16 @@ export function armBlockerSpotlight(
   watchCancellation();
   const timer = setTimeout(() => {
     if (pending?.taskId !== taskId) return;
-    const latest = pending.blockers;
+    const { blockers: latest, scope: latestScope } = pending;
     pending = null;
     if (!isDesktop() || drag.get() !== null || latest.length === 0) {
       stopWatchingCancellation();
       return;
     }
-    blockerSpotlight.set(makeSpotlight(taskId, latest));
+    blockerSpotlight.set(makeSpotlight(taskId, latest, latestScope));
     onShow?.();
   }, delay);
-  pending = { taskId, blockers, timer };
+  pending = { taskId, blockers, scope, timer };
 }
 
 let swallowClick = false;
@@ -312,17 +451,27 @@ export function blockerSpotlightShown(taskId: string) {
 }
 
 /** Keeps an active or pending spotlight in sync when synced relations or statuses change. */
-export function syncBlockerSpotlight(taskId: string, blockers: readonly TaskBlocker[]) {
+export function syncBlockerSpotlight(
+  taskId: string,
+  blockers: readonly TaskBlocker[],
+  scope?: SpotlightScope,
+) {
   if (blockers.length === 0) {
     cancelBlockerSpotlight(taskId);
     return;
   }
   if (pending?.taskId === taskId) {
     pending.blockers = blockers;
+    pending.scope = scope;
   }
   const active = blockerSpotlight.get();
-  if (active?.blockedTaskId === taskId && active.blockers !== blockers) {
-    blockerSpotlight.set(makeSpotlight(taskId, blockers));
+  if (
+    active?.blockedTaskId === taskId &&
+    (active.blockers !== blockers ||
+      active.ownerId !== (scope?.owner ?? taskId) ||
+      !sameIds([...active.blockedIds], [...(scope?.blocked ?? [taskId])]))
+  ) {
+    blockerSpotlight.set(makeSpotlight(taskId, blockers, scope));
   }
 }
 
@@ -428,7 +577,9 @@ export function useCardSpotlightRole(
     // When a task's tucked subtask is the blocker (including a task blocked by its own subtask),
     // keep the parent card undimmed without bordering it; the subtask underlay carries the highlight.
     if (tuckedBlockerChild) return 'parent';
-    if (active.blockedTaskId === taskId) return 'blocked';
+    if (active.blockedIds.has(taskId)) return 'blocked';
+    // The card under a lingered subtask row or subtask tab: the light is on its subtasks.
+    if (active.ownerId === taskId) return 'parent';
     return 'dimmed';
   });
 }
@@ -447,6 +598,44 @@ export function useSpotlightActiveFor(taskId: string, enabled: boolean) {
     blockerSpotlight.subscribe,
     () => enabled && blockerSpotlight.get()?.blockedTaskId === taskId,
   );
+}
+
+/** True while the active spotlight shows `taskId`'s blockers, from its own badge or its parent's tab. */
+export function useSpotlightShowsBlocked(taskId: string, enabled: boolean) {
+  return useSyncExternalStore(
+    blockerSpotlight.subscribe,
+    () => enabled && (blockerSpotlight.get()?.blockedIds.has(taskId) ?? false),
+  );
+}
+
+/**
+ * Keeps a badge's pending or active spotlight in step with synced blockers, and ends it when
+ * the badge goes: its blockers clear, it is disabled, or it unmounts.
+ */
+export function useSpotlightSync(
+  key: string,
+  blockers: readonly TaskBlocker[],
+  enabled: boolean,
+  scope?: SpotlightScope,
+) {
+  const owner = scope?.owner;
+  const blocked = scope?.blocked;
+  useEffect(() => {
+    if (!enabled) return;
+    if (blockers.length === 0) {
+      cancelBlockerSpotlight(key);
+      return;
+    }
+    syncBlockerSpotlight(
+      key,
+      blockers,
+      owner === undefined ? undefined : { owner, blocked: blocked ?? [key] },
+    );
+  }, [enabled, key, blockers, owner, blocked]);
+  useEffect(() => {
+    if (!enabled) return;
+    return () => cancelBlockerSpotlight(key);
+  }, [enabled, key]);
 }
 
 /** True while `taskId` is one of the active spotlight's blocking tasks (used by tucked subtask rows). */
