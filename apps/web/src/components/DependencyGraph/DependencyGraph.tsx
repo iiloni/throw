@@ -226,7 +226,6 @@ export function DependencyGraph({
             data-graph-overlay=""
             className="pointer-events-auto flex min-w-0 flex-1 items-center gap-2"
           >
-            <ViewSwitch onBoard={() => shell.showView('board')} />
             {summary}
           </div>
           <div
@@ -267,30 +266,6 @@ const glassGroup =
 const groupButton =
   'flex h-8 items-center gap-1.5 rounded-xl px-2.5 text-xs outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/60';
 
-function ViewSwitch({ onBoard }: { onBoard: () => void }) {
-  return (
-    <fieldset aria-label="View" className={glassGroup}>
-      <button
-        type="button"
-        aria-pressed={false}
-        onClick={onBoard}
-        className={cn(groupButton, 'text-muted-foreground hover:text-foreground')}
-      >
-        <Columns3 aria-hidden className="size-4" />
-        Board
-      </button>
-      <button
-        type="button"
-        aria-pressed
-        className={cn(groupButton, 'bg-card font-medium text-foreground shadow-sm')}
-      >
-        <Network aria-hidden className="size-4" />
-        Graph
-      </button>
-    </fieldset>
-  );
-}
-
 /** The open work in sight, how it stands, and how long its longest chain runs. */
 function GraphSummary({
   nodes,
@@ -304,14 +279,18 @@ function GraphSummary({
   /** Shares its row with the desktop's controls. */
   compact?: boolean;
 }) {
-  const extra = compact ? 'hidden @6xl/graph:inline' : undefined;
+  const extra = compact ? 'hidden @5xl/graph:inline' : undefined;
   const ready = nodes.filter((node) => node.state === 'ready').length;
   const blocked = nodes.filter((node) => node.state === 'blocked').length;
   if (nodes.length === 0) return null;
   return (
     <p
       aria-live="polite"
-      className="flex min-w-0 items-center gap-3 overflow-hidden whitespace-nowrap px-1 text-muted-foreground text-xs tabular-nums"
+      className={cn(
+        compact && cn(glassGroup, 'h-10 px-3.5'),
+        'flex min-w-0 items-center gap-3 overflow-hidden whitespace-nowrap text-muted-foreground text-xs tabular-nums',
+        !compact && 'px-1',
+      )}
     >
       <span className="flex items-center gap-1">
         <span aria-hidden className="size-1.5 rounded-full bg-brand" />
@@ -386,8 +365,8 @@ function GraphToggles({
               className={cn(
                 groupButton,
                 on
-                  ? 'bg-card font-medium text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground',
+                  ? 'bg-brand/20 font-medium text-brand-link'
+                  : 'text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground',
               )}
             >
               <Icon aria-hidden className="size-4" />

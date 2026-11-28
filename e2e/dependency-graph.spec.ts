@@ -51,6 +51,7 @@ async function seed(request: APIRequestContext, headers: Headers) {
   const spike = await task(app.id, 'Research spike', app.status('Done'));
   await task(app.id, 'Tidy the docs', app.status('Working'));
   const keys = await task(ops.id, 'Rotate keys', ops.status('Working'));
+  const hardware = await task(ops.id, 'Order hardware', ops.status('Working'));
   const blocks = async (sourceTaskId: string, targetTaskId: string) => {
     const response = await request.post('/api/task-relations', {
       headers,
@@ -62,6 +63,8 @@ async function seed(request: APIRequestContext, headers: Headers) {
   await blocks(api, ship);
   await blocks(spike, ship);
   await blocks(keys, ship);
+  // Off the project board on both ends: drawn upstream of OPS-1, which it blocks.
+  await blocks(hardware, keys);
   return { workspaceId, app, ops, design, api, ship, spike, keys };
 }
 
@@ -80,16 +83,18 @@ test('the dependency graph draws blocking work, opens tasks in place and keeps i
   const apiNode = node(page, /^APP-2 Build the API/);
   const shipNode = node(page, /^APP-3 Ship the release/);
   const keysNode = node(page, /^OPS-1 Rotate keys/);
+  const hardwareNode = node(page, /^OPS-2 Order hardware/);
   await expect(designNode).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
   await expect(designNode).toHaveAttribute('data-state', 'ready');
   await expect(apiNode).toHaveAttribute('data-state', 'blocked');
   await expect(shipNode).toHaveAttribute('data-state', 'blocked');
-  // Another project's blocker stands at the end of its edge; closed and unlinked work waits
-  // behind its toggles.
-  await expect(keysNode).toBeVisible();
+  // Another project's blocker stands at the end of its edge, with what blocks it in turn;
+  // closed and unlinked work waits behind its toggles.
+  await expect(keysNode).toHaveAttribute('data-state', 'blocked');
+  await expect(hardwareNode).toHaveAttribute('data-state', 'ready');
   await expect(node(page, /Research spike/)).toHaveCount(0);
   await expect(node(page, /Tidy the docs/)).toHaveCount(0);
-  await expect(page.locator('[data-graph-edge]')).toHaveCount(3);
+  await expect(page.locator('[data-graph-edge]')).toHaveCount(4);
   // Blockers stand to the left of what they block.
   const x = async (locator: ReturnType<typeof node>) => (await locator.boundingBox())!.x;
   await expect.poll(async () => (await x(apiNode)) > (await x(designNode))).toBe(true);
@@ -108,7 +113,12 @@ test('the dependency graph draws blocking work, opens tasks in place and keeps i
       .click();
   }
   await expect(node(page, /Research spike/)).toHaveAttribute('data-state', 'done');
-  await expect(page.locator('[data-graph-edge]')).toHaveCount(4);
+  await expect(page.locator('[data-graph-edge]')).toHaveCount(5);
+  await page.emulateMedia({ colorScheme: 'dark' });
+  // Settled: the nodes spring to their new places and the theme fades over.
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: test.info().outputPath('graph-dark.png') });
+  await page.emulateMedia({ colorScheme: 'light' });
 
   // Hovering a task (or focusing it) lights its chain and fades the rest.
   if (!isMobile) {
@@ -136,12 +146,12 @@ test('the dependency graph draws blocking work, opens tasks in place and keeps i
   await expect(designNode).toBeVisible();
 
   // Back to the board, which keeps the choice in the URL.
+  const toggle = page.getByRole('button', { name: 'Dependency graph' });
   if (isMobile) await page.getByRole('button', { name: 'Show the board' }).click();
-  else
-    await page
-      .getByRole('group', { name: 'View' })
-      .getByRole('button', { name: 'Board', exact: true })
-      .click();
+  else {
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await toggle.click();
+  }
   await expect(page).toHaveURL(/view=board/);
   await expect(
     page.getByRole('article', { name: 'APP-1 Design the schema', exact: true }),
@@ -150,7 +160,6 @@ test('the dependency graph draws blocking work, opens tasks in place and keeps i
 
   if (!isMobile) {
     // The rail's toggle opens the graph again, and the graph goes with the board across projects.
-    const toggle = page.getByRole('button', { name: 'Dependency graph' });
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');
     await toggle.click();
     await expect(page).toHaveURL(/view=graph/);
@@ -177,7 +186,7 @@ test('the workspace board has a graph across its projects', async ({ page, isMob
   await expect(keysNode).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
   // On the workspace board every project is on the board, so none of its tasks is external.
   await expect(keysNode).not.toHaveClass(/border-dashed/);
-  await expect(page.locator('[data-graph-edge]')).toHaveCount(3);
+  await expect(page.locator('[data-graph-edge]')).toHaveCount(4);
   await page
     .getByRole('toolbar', { name: 'Graph display' })
     .getByRole('button', { name: 'Critical path' })

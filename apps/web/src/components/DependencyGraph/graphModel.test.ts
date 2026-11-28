@@ -147,36 +147,53 @@ describe('dependencyGraph', () => {
     expect(graph.edges).toEqual([{ from: 'a', to: 'c', settled: false }]);
   });
 
-  it('brings in another project’s task at the end of an edge, but not edges between two others', () => {
-    const external = (id: string) =>
-      id === 'ops'
-        ? {
-            id,
-            identifier: 'OPS-7',
-            title: 'Provision',
-            statusName: 'Working',
-            category: 'active' as const,
-            statusColor: null,
-            color: 'orange' as const,
-            priority: 3 as const,
-            priorityName: 'Normal',
-            projectId: 'ops-project',
-            projectName: 'Operations',
-            parentTitle: null,
-          }
-        : undefined;
+  const opsTask = (id: string, number: number) => ({
+    id,
+    identifier: `OPS-${number}`,
+    title: 'Provision',
+    statusName: 'Working',
+    category: 'active' as const,
+    statusColor: null,
+    color: 'orange' as const,
+    priority: 3 as const,
+    priorityName: 'Normal',
+    projectId: 'ops-project',
+    projectName: 'Operations',
+    parentTitle: null,
+  });
+  const ops = (id: string) =>
+    id === 'ops' ? opsTask(id, 7) : id === 'ops-root' ? opsTask(id, 2) : undefined;
+
+  it('brings in another project’s task at the end of an edge, but not what it blocks elsewhere', () => {
     const graph = dependencyGraph({
       data: board,
-      relations: [...relations, blocks('ops', 'a'), blocks('ops', 'elsewhere')],
+      relations: [...relations, blocks('ops', 'a'), blocks('ops', 'ops-root')],
       blockers: new Map([...blockers, ['a', [{ id: 'ops' }]]]),
       visible: null,
-      external,
+      external: ops,
       toggles: { showClosed: false, showIsolated: false },
     });
     expect(graph.nodes.at(-1)).toMatchObject({ id: 'ops', external: true, state: 'ready' });
     expect(graph.nodes.find((node) => node.id === 'a')?.state).toBe('blocked');
     expect(graph.edges).toContainEqual({ from: 'ops', to: 'a', settled: false });
-    expect(graph.edges.some((edge) => edge.to === 'elsewhere')).toBe(false);
+    expect(graph.edges.some((edge) => edge.to === 'ops-root')).toBe(false);
+  });
+
+  it('draws what blocks another project’s task, all the way up', () => {
+    const graph = dependencyGraph({
+      data: board,
+      relations: [...relations, blocks('ops', 'a'), blocks('ops-root', 'ops')],
+      blockers: new Map([...blockers, ['a', [{ id: 'ops' }]], ['ops', [{ id: 'ops-root' }]]]),
+      visible: null,
+      external: ops,
+      toggles: { showClosed: false, showIsolated: false },
+    });
+    expect(graph.edges).toContainEqual({ from: 'ops-root', to: 'ops', settled: false });
+    expect(graph.nodes.find((node) => node.id === 'ops')).toMatchObject({
+      state: 'blocked',
+      blockedBy: 1,
+    });
+    expect(graph.nodes.find((node) => node.id === 'ops-root')).toMatchObject({ external: true });
   });
 
   it('ignores other kinds of relation and repeats', () => {

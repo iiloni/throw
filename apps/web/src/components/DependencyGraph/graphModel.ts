@@ -129,7 +129,8 @@ export function externalTasks(
  * The graph a board draws: its tasks as nodes and `blocks` relations as edges from blocker to
  * blocked. `visible` is what the board's filter leaves (null for everything), matched task by
  * task, so a subtask stands on its own. Tasks of other projects joined to one of this board's
- * by an edge come in as external nodes; the filter is the board's, so it leaves them alone.
+ * by an edge come in as external nodes, with their own blockers upstream of them; the filter
+ * is the board's, so it leaves them alone.
  */
 export function dependencyGraph({
   data,
@@ -222,6 +223,30 @@ export function dependencyGraph({
     linked.add(from);
     linked.add(to);
     edges.push({ from, to, settled: isClosed(source.category) });
+  }
+  // Another project's task is drawn with what blocks it, all the way up, so its blocked mark
+  // is explained in the graph as a board task's is; what it blocks off the board stays out.
+  const offBoardBlockers = new Map<string, string[]>();
+  for (const relation of relations) {
+    if (relation.kind !== 'blocks' || onBoard.has(relation.sourceTaskId)) continue;
+    const list = offBoardBlockers.get(relation.targetTaskId);
+    if (list) list.push(relation.sourceTaskId);
+    else offBoardBlockers.set(relation.targetTaskId, [relation.sourceTaskId]);
+  }
+  const pending = [...externals.keys()].filter((id) => linked.has(id));
+  while (pending.length > 0) {
+    const to = pending.shift()!;
+    const target = externals.get(to)!;
+    for (const from of offBoardBlockers.get(to) ?? []) {
+      const key = `${from}\n${to}`;
+      if (from === to || seen.has(key)) continue;
+      const source = endOf(from);
+      if (!source || !included(source) || !included(target)) continue;
+      seen.add(key);
+      if (!linked.has(from)) pending.push(from);
+      linked.add(from);
+      edges.push({ from, to, settled: isClosed(source.category) });
+    }
   }
 
   let hiddenClosed = 0;

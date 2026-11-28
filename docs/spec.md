@@ -651,7 +651,8 @@ projects, so it works offline.
   exactly: a task is blocked while any open, untrashed task blocks it, in any project. Done
   and Cancelled work steps back, and an arrow from closed work is drawn dashed as settled.
 - A task of another project joined to the board by an arrow comes in as a dashed node named
-  by its project; opening it goes to its own board, keeping the graph.
+  by its project, with what blocks it in turn, however far up, so its blocked mark is
+  explained there too; opening it goes to its own board, keeping the graph.
 - The layout is layered and deterministic: weakly connected groups are stacked largest
   first, layers are ordered to cut crossings, and an arrow that would close a cycle is drawn
   in red against the flow rather than hidden.
@@ -667,8 +668,7 @@ projects, so it works offline.
 - It fits itself to the space until moved. A wheel zooms about the pointer (Shift or a
   sideways swipe pans), a drag pans, two fingers pinch; buttons zoom, reset to 100% and fit,
   and `+`, `-` and `0` do the same from the keyboard.
-- The desktop rail's Dependency graph button toggles it, and the graph has a Board | Graph
-  switch. On a phone the project switcher's footer switches, and the graph's dock goes back
+- The desktop rail's Dependency graph button toggles it. On a phone the project switcher's footer switches, and the graph's dock goes back
   to the board, opens the graph's settings as a drawer page and fits the graph. Moving
   between boards keeps the graph, and switching cross-fades as between boards.
 
