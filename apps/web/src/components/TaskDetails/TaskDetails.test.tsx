@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { Project, Status, Task } from '@throw/shared';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { TaskPaneExpandContext } from '@/components/Board/taskMotionContext';
 import { TaskDetails } from './TaskDetails';
 
 vi.stubGlobal(
@@ -29,7 +30,7 @@ vi.mock('@/lib/tasks', () => ({
   trashTask: fake.trashTask,
 }));
 vi.mock('@/lib/haptics', () => ({
-  haptics: { warning: fake.hapticsWarning, success: fake.hapticsSuccess },
+  haptics: { warning: fake.hapticsWarning, success: fake.hapticsSuccess, toggle: vi.fn() },
 }));
 vi.mock('@/lib/collections', () => ({
   useTags: () => ({ tags: [], isLoading: false }),
@@ -207,4 +208,47 @@ it('keeps the desktop pane’s toolbars above its card, with no edge blurs', () 
   expect(container.querySelector('[data-task-header]')).not.toHaveClass('absolute');
   expect(container.querySelector('[data-task-top-blur]')).toBeNull();
   expect(container.querySelector('[data-task-bottom-blur]')).toBeNull();
+});
+
+it('expands the desktop task from beside Back, and from its shortcut', () => {
+  const toggle = vi.fn();
+  const { rerender } = render(
+    <TaskPaneExpandContext value={{ expanded: false, toggle }}>
+      <TaskDetails task={baseTask} project={project} statuses={statuses} tasks={[baseTask]} />
+    </TaskPaneExpandContext>,
+  );
+  const navigation = screen.getByRole('toolbar', { name: 'Task navigation' });
+  const expand = screen.getByRole('button', { name: 'Expand task' });
+  expect(navigation).toContainElement(expand);
+  // Beside Back, before the breadcrumb.
+  expect(navigation.querySelector('button')).toHaveAccessibleName('Back to the board');
+  expect(expand.previousElementSibling).toHaveAccessibleName('Back to the board');
+  fireEvent.click(expand);
+  expect(toggle).toHaveBeenCalledTimes(1);
+  fireEvent.keyDown(window, { key: 'f' });
+  expect(toggle).toHaveBeenCalledTimes(2);
+
+  // Expanded, it names what it gives back.
+  rerender(
+    <TaskPaneExpandContext value={{ expanded: true, toggle }}>
+      <TaskDetails task={baseTask} project={project} statuses={statuses} tasks={[baseTask]} />
+    </TaskPaneExpandContext>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Show the board' }));
+  expect(toggle).toHaveBeenCalledTimes(3);
+});
+
+it('offers no expansion on a phone, or with no board to expand over', () => {
+  const toggle = vi.fn();
+  const { unmount } = render(
+    <TaskPaneExpandContext value={{ expanded: false, toggle }}>
+      <TaskDetails task={baseTask} project={project} statuses={statuses} tasks={[baseTask]} phone />
+    </TaskPaneExpandContext>,
+  );
+  expect(screen.queryByRole('button', { name: 'Expand task' })).toBeNull();
+  fireEvent.keyDown(window, { key: 'f' });
+  expect(toggle).not.toHaveBeenCalled();
+  unmount();
+  render(<TaskDetails task={baseTask} project={project} statuses={statuses} tasks={[baseTask]} />);
+  expect(screen.queryByRole('button', { name: 'Expand task' })).toBeNull();
 });

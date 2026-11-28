@@ -245,6 +245,22 @@ export function clampTaskPaneWidth(width: number, frameWidth: number, min: numbe
 }
 
 /**
+ * Whether the desktop task pane takes the whole board's width, as Catch's “Expand note”
+ * does. Kept on the device, so the next task opens the same way, until it is collapsed again.
+ */
+const TASK_PANE_EXPANDED_KEY = 'throw-task-pane-expanded';
+const taskPaneExpandedSchema = z.boolean();
+
+export function useTaskPaneExpanded() {
+  return usePersistentState(TASK_PANE_EXPANDED_KEY, taskPaneExpandedSchema, false);
+}
+
+export function setTaskPaneExpanded(expanded: boolean) {
+  if (readPreference(TASK_PANE_EXPANDED_KEY, taskPaneExpandedSchema, false) !== expanded)
+    writePreference(TASK_PANE_EXPANDED_KEY, expanded);
+}
+
+/**
  * The task pane's width while its split handle is held, or null at rest. Kept in a store so
  * the board beside it tracks the drag without writing to storage on every frame.
  */

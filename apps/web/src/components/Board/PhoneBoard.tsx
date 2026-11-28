@@ -312,7 +312,7 @@ export function FlowTrack({
                   label={`Collapse ${status.name} column`}
                   aria-expanded
                   tooltip={false}
-                  className="size-9 bg-foreground/[0.06] text-muted-foreground"
+                  className="size-9 text-muted-foreground active:bg-foreground/[0.06]"
                   onClick={() => {
                     setFocusing(status.id);
                     folding.onCollapse(status.id);

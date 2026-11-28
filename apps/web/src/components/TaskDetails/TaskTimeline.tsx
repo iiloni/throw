@@ -18,6 +18,7 @@ import { Hint } from '@/components/Hint/Hint';
 import { SegmentedTabs } from '@/components/SegmentedTabs/SegmentedTabs';
 import { useTabSwipe } from '@/components/SegmentedTabs/useTabSwipe';
 import { Button } from '@/components/ui/button';
+import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { signedInUserId, useTaskTimeline } from '@/lib/collections';
 import { useHasCommentDraft } from '@/lib/commentDrafts';
 import { addComment } from '@/lib/comments';
@@ -283,11 +284,26 @@ export function TaskTimeline({
   context,
   onRecoverDescription,
   links,
+  variant = 'inline',
+  active = true,
+  composer,
 }: {
   task: Task;
   project: Project;
   context: HistoryContext;
   onRecoverDescription: (entry: ActivityEntry) => void;
+  /**
+   * Below the description in the card, or as the workspace's activity pane (ADR 0012): there
+   * its tabs stand above its own scroller, and one of its panels is always open.
+   */
+  variant?: 'inline' | 'pane';
+  /**
+   * The copy that can be reached while both are drawn: only it takes the task's keys and
+   * turns to a panel asked for.
+   */
+  active?: boolean;
+  /** Which task a comment is being written for, kept by the caller so both copies share it. */
+  composer?: { taskId: string | null; set: (taskId: string | null) => void };
   /**
    * Relations as a 3rd tab on narrow panes and phones; wide desktop panes move them to the
    * side column (ADR 0012) and animate the 3rd tab out.
@@ -302,8 +318,11 @@ export function TaskTimeline({
   };
 }) {
   const { timeline, isLoading } = useTaskTimeline(task.id);
+  const pane = variant === 'pane';
   // Which task the composer is open for: the timeline stays mounted as the pane switches tasks.
-  const [composingFor, setComposingFor] = useState<string | null>(null);
+  const [ownComposingFor, setOwnComposingFor] = useState<string | null>(null);
+  const composingFor = composer ? composer.taskId : ownComposingFor;
+  const setComposingFor = composer ? composer.set : setOwnComposingFor;
   const composing = composingFor === task.id;
   const hasDraft = useHasCommentDraft(task.id);
   const [stored, setTab] = usePersistentState('throw-task-timeline-tab', tabSchema, 'comments');
@@ -322,14 +341,22 @@ export function TaskTimeline({
     (next: (typeof allPanels)[number] | null) => {
       stopReveal.current?.();
       stopReveal.current = null;
-      // Measured before the change, from the panel as it stands.
-      if (next !== null && section.current)
+      // Measured before the change, from the panel as it stands. The pane has its own
+      // scroller, with its tabs above it, so there is nothing to bring into view.
+      if (next !== null && section.current && !pane)
         stopReveal.current = revealPanel(section.current, `${ids}-${next}`, reducedMotion === true);
       setTab(next ?? 'none');
     },
-    [setTab, ids, reducedMotion],
+    [setTab, ids, reducedMotion, pane],
   );
-  const tab = stored === 'none' ? null : !showLinks && stored === 'links' ? lastBase : stored;
+  const tab =
+    stored === 'none'
+      ? pane
+        ? lastBase
+        : null
+      : !showLinks && stored === 'links'
+        ? lastBase
+        : stored;
   // The panel showing, or the one on its way out (and back in) while all are hidden.
   const [panel, setPanel] = useState(tab ?? 'comments');
   if (tab !== null && tab !== panel) setPanel(tab);
@@ -355,16 +382,21 @@ export function TaskTimeline({
     [swipeRef],
   );
   // The open task's keys turn its tabs, and `C` starts a comment (or returns to the one begun).
-  useShortcut('taskComments', () => turnTo('comments'));
-  useShortcut('taskHistory', () => turnTo('history'));
-  useShortcut('taskLinks', () => (showLinks ? turnTo('links') : false));
-  useShortcut('taskComment', () => {
-    if (tab !== 'comments') turnTo('comments');
-    if (!composing) setComposingFor(task.id);
-    if (section.current) focusComposer(section.current);
-  });
+  useShortcut('taskComments', () => turnTo('comments'), active);
+  useShortcut('taskHistory', () => turnTo('history'), active);
+  useShortcut('taskLinks', () => (showLinks ? turnTo('links') : false), active);
+  useShortcut(
+    'taskComment',
+    () => {
+      if (tab !== 'comments') turnTo('comments');
+      if (!composing) setComposingFor(task.id);
+      if (section.current) focusComposer(section.current);
+    },
+    active,
+  );
   const [focusing, setFocusing] = useState<string | null>(null);
   useEffect(() => {
+    if (!active) return;
     const onFocus = (event: Event) => {
       if (!(event instanceof CustomEvent) || typeof event.detail !== 'string') return;
       setTab('history');
@@ -372,13 +404,13 @@ export function TaskTimeline({
     };
     window.addEventListener(FOCUS_EVENT, onFocus);
     return () => window.removeEventListener(FOCUS_EVENT, onFocus);
-  }, [setTab]);
+  }, [setTab, active]);
   useEffect(() => {
-    if (!showLinks) return;
+    if (!showLinks || !active) return;
     const onFocusLinks = () => turnTo('links');
     window.addEventListener(FOCUS_LINKS_EVENT, onFocusLinks);
     return () => window.removeEventListener(FOCUS_LINKS_EVENT, onFocusLinks);
-  }, [showLinks, turnTo]);
+  }, [showLinks, turnTo, active]);
   useEffect(() => {
     if (!focusing || shown !== 'history' || !laidOut) return;
     const element = document.getElementById(`history-${focusing}`);
@@ -434,8 +466,114 @@ export function TaskTimeline({
         ]
       : []),
   ];
+  const tabs = (
+    <SegmentedTabs
+      label={showLinks ? 'Comments, history and links' : 'Comments and history'}
+      value={tab}
+      onValueChange={turnTo}
+      collapsible={!pane}
+      drag={swipe.drag}
+      options={tabOptions}
+    />
+  );
+  // Panels stay mounted, so a comment being written survives switching tabs or hiding them.
+  const panels = (
+    <motion.div style={{ x: swipe.x, opacity: swipe.opacity }}>
+      <div
+        role="tabpanel"
+        id={`${ids}-comments`}
+        aria-labelledby={`${ids}-comments-tab`}
+        hidden={shown !== 'comments'}
+        className="pt-2"
+      >
+        {!comments.length && !composing && empty('No comments yet.')}
+        <CommentList comments={comments} loading={isLoading} />
+        <CommentPrompt
+          composing={composing}
+          hasDraft={hasDraft}
+          onCompose={() => setComposingFor(task.id)}
+          composer={
+            <CommentComposer
+              key={task.id}
+              bare
+              draftFor={task.id}
+              onSave={(body) => {
+                addComment(task.id, body);
+                haptics.success();
+                setComposingFor(null);
+              }}
+              onCancel={() => setComposingFor(null)}
+            />
+          }
+        />
+      </div>
+      <div
+        role="tabpanel"
+        id={`${ids}-history`}
+        aria-labelledby={`${ids}-history-tab`}
+        hidden={shown !== 'history'}
+        className="pt-2"
+      >
+        {!entries.length && empty('No history yet.')}
+        <ol>
+          {entries.map((item) => (
+            <li
+              key={item.id}
+              id={`history-${item.id}`}
+              tabIndex={-1}
+              className="scroll-m-6 rounded-2xl outline-none [overflow-wrap:anywhere] focus:ring-2 focus:ring-ring/60"
+            >
+              <HistoryRow
+                entry={item.entry}
+                context={historyContext}
+                onRecoverDescription={onRecoverDescription}
+              />
+            </li>
+          ))}
+        </ol>
+      </div>
+      {links && (
+        <div
+          role="tabpanel"
+          id={`${ids}-links`}
+          aria-labelledby={`${ids}-links-tab`}
+          hidden={shown !== 'links'}
+          className="pt-2"
+        >
+          {links.mounted && (
+            <div className="flex flex-col gap-3">
+              {links.count > 0 ? (
+                links.content
+              ) : (
+                <p className="px-1 pt-2 pb-1 text-muted-foreground text-sm">No linked tasks yet.</p>
+              )}
+              {links.add}
+            </div>
+          )}
+        </div>
+      )}
+    </motion.div>
+  );
+  // Swiping sideways over the tabs or a panel turns between them; scrolling stays the pane's.
+  if (pane)
+    return (
+      <section
+        aria-label="Task history"
+        data-task-timeline="pane"
+        className="flex min-h-0 flex-1 touch-pan-y flex-col"
+        ref={sectionRef}
+        {...swipe.handlers}
+      >
+        <div className="shrink-0 px-4 pt-4 pb-1">{tabs}</div>
+        <ScrollArea className="min-h-0 flex-1 [--scrollbar-inset:0.75rem]">
+          <ScrollAreaViewport>
+            <div className="px-4 pb-6">{panels}</div>
+          </ScrollAreaViewport>
+          <ScrollBar />
+        </ScrollArea>
+      </section>
+    );
   return (
-    // Swiping sideways over the tabs or a panel turns between them; scrolling stays the pane's.
     <section
       aria-label="Task history"
       data-task-timeline=""
@@ -443,93 +581,9 @@ export function TaskTimeline({
       ref={sectionRef}
       {...swipe.handlers}
     >
-      <SegmentedTabs
-        label={showLinks ? 'Comments, history and links' : 'Comments and history'}
-        value={tab}
-        onValueChange={turnTo}
-        collapsible
-        drag={swipe.drag}
-        options={tabOptions}
-      />
-      {/* Panels stay mounted, so a comment being written survives switching tabs or hiding them. */}
+      {tabs}
       <Collapse open={tab !== null} contentKey={shown} onRest={setLaidOut}>
-        <motion.div style={{ x: swipe.x, opacity: swipe.opacity }}>
-          <div
-            role="tabpanel"
-            id={`${ids}-comments`}
-            aria-labelledby={`${ids}-comments-tab`}
-            hidden={shown !== 'comments'}
-            className="pt-2"
-          >
-            {!comments.length && !composing && empty('No comments yet.')}
-            <CommentList comments={comments} loading={isLoading} />
-            <CommentPrompt
-              composing={composing}
-              hasDraft={hasDraft}
-              onCompose={() => setComposingFor(task.id)}
-              composer={
-                <CommentComposer
-                  key={task.id}
-                  bare
-                  draftFor={task.id}
-                  onSave={(body) => {
-                    addComment(task.id, body);
-                    haptics.success();
-                    setComposingFor(null);
-                  }}
-                  onCancel={() => setComposingFor(null)}
-                />
-              }
-            />
-          </div>
-          <div
-            role="tabpanel"
-            id={`${ids}-history`}
-            aria-labelledby={`${ids}-history-tab`}
-            hidden={shown !== 'history'}
-            className="pt-2"
-          >
-            {!entries.length && empty('No history yet.')}
-            <ol>
-              {entries.map((item) => (
-                <li
-                  key={item.id}
-                  id={`history-${item.id}`}
-                  tabIndex={-1}
-                  className="scroll-m-6 rounded-2xl outline-none [overflow-wrap:anywhere] focus:ring-2 focus:ring-ring/60"
-                >
-                  <HistoryRow
-                    entry={item.entry}
-                    context={historyContext}
-                    onRecoverDescription={onRecoverDescription}
-                  />
-                </li>
-              ))}
-            </ol>
-          </div>
-          {links && (
-            <div
-              role="tabpanel"
-              id={`${ids}-links`}
-              aria-labelledby={`${ids}-links-tab`}
-              hidden={shown !== 'links'}
-              className="pt-2"
-            >
-              {links.mounted && (
-                <div className="flex flex-col gap-3">
-                  {links.count > 0 ? (
-                    links.content
-                  ) : (
-                    <p className="px-1 pt-2 pb-1 text-muted-foreground text-sm">
-                      No linked tasks yet.
-                    </p>
-                  )}
-                  {links.add}
-                </div>
-              )}
-            </div>
-          )}
-        </motion.div>
+        {panels}
       </Collapse>
     </section>
   );

@@ -8,7 +8,16 @@ import {
   taskIdentifier,
   taskTagColor,
 } from '@throw/shared';
-import { ChevronLeft, ChevronRight, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Maximize2,
+  Minimize2,
+  Plus,
+  RotateCcw,
+  Trash2,
+} from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ShellContext } from '@/components/AppShell/shell';
@@ -26,7 +35,11 @@ import {
 } from '@/components/Board/state';
 import { CARD_STATUS_CONTROL, TaskCard } from '@/components/Board/TaskCard';
 import { cardSurface, TaskTitle } from '@/components/Board/TaskView';
-import { TaskPaneWidthContext, TaskScrollContext } from '@/components/Board/taskMotionContext';
+import {
+  TaskPaneExpandContext,
+  TaskPaneWidthContext,
+  TaskScrollContext,
+} from '@/components/Board/taskMotionContext';
 import type { EditorControls } from '@/components/DescriptionEditor/editorControls';
 import { HistoryToolbar, useHasHistory } from '@/components/HistoryToolbar/HistoryToolbar';
 import { IconButton } from '@/components/IconButton/IconButton';
@@ -49,9 +62,11 @@ import {
 import { sortGithubLinks, useGithubRepository, useShownGithubLinks } from '@/lib/githubLinks';
 import { taskReleases } from '@/lib/githubReleases';
 import { haptics } from '@/lib/haptics';
+import { springs } from '@/lib/motion';
+import { useShortcut } from '@/lib/shortcuts';
 import { createTask, restoreTask, sendTask, trashTask } from '@/lib/tasks';
 import { cn } from '@/lib/utils';
-import { Fold, TaskColumnFrame, useTaskColumn } from './TaskColumn';
+import { Fold, TaskColumnFrame, useTaskColumn, useTaskWorkspace } from './TaskColumn';
 import { openTaskPanel } from './TaskControls';
 import { TaskDescription } from './TaskDescription';
 import { TaskDrawer } from './TaskDrawer';
@@ -188,6 +203,20 @@ export function TaskDetails({
       !releasesLoading &&
       !bindingsLoading,
   });
+  const workspace = useTaskWorkspace({ paneWidth: phone ? null : paneWidth, column });
+  const expand = useContext(TaskPaneExpandContext);
+  const reduced = useReducedMotion();
+  useShortcut(
+    'expandTask',
+    () => {
+      if (phone || !expand) return false;
+      haptics.toggle();
+      expand.toggle();
+    },
+    !phone && expand !== null,
+  );
+  // Shared by the timeline's two copies while it moves between the card and its own pane.
+  const [composingFor, setComposingFor] = useState<string | null>(null);
   const tagRow = (
     <TaskTags tags={tags} primaryTagId={task.primaryTagId} secondaryTagIds={secondaryTagIds} />
   );
@@ -229,6 +258,32 @@ export function TaskDetails({
       <Plus className="size-4" aria-hidden />
       {githubRepository ? 'Link a task, PR or issue' : 'Link a task'}
     </button>
+  );
+  const timeline = (variant: 'inline' | 'pane', active: boolean) => (
+    <TaskTimeline
+      key={`timeline:${task.id}`}
+      task={task}
+      project={project}
+      context={{
+        priorityNames: project.priorityNames,
+        parentName: (id) => {
+          const parent = tasks.find((row) => row.id === id);
+          return parent ? (taskIdentifier(project, parent) ?? undefined) : undefined;
+        },
+      }}
+      onRecoverDescription={(entry) => setRecovery({ ...entry })}
+      links={{
+        inTabs: !column.fits,
+        mounted: column.inlineMounted,
+        count: linkCount,
+        blocked: hasOpenBlocker,
+        content: relations(),
+        add: addLinkButton,
+      }}
+      variant={variant}
+      active={active}
+      composer={{ taskId: composingFor, set: setComposingFor }}
+    />
   );
   /** The subtasks with their slot to add one, inline below the description or in the column. */
   const subtasks = (
@@ -371,34 +426,28 @@ export function TaskDetails({
               ))}
             </Fold>
           )}
-          <TaskTimeline
-            key={`timeline:${task.id}`}
-            task={task}
-            project={project}
-            context={{
-              priorityNames: project.priorityNames,
-              parentName: (id) => {
-                const parent = tasks.find((row) => row.id === id);
-                return parent ? (taskIdentifier(project, parent) ?? undefined) : undefined;
-              },
-            }}
-            onRecoverDescription={(entry) => setRecovery({ ...entry })}
-            links={{
-              inTabs: !column.fits,
-              mounted: column.inlineMounted,
-              count: linkCount,
-              blocked: hasOpenBlocker,
-              content: relations(),
-              add: addLinkButton,
-            }}
-          />
+          {phone ? (
+            timeline('inline', true)
+          ) : (
+            // In a workspace the comments and history have a pane of their own (ADR 0012).
+            <Fold data-fold="timeline" amount={workspace.inline} hidden={workspace.fits}>
+              {workspace.inlineMounted && timeline('inline', !workspace.fits)}
+            </Fold>
+          )}
         </div>
       </ScrollAreaViewport>
       <ScrollBar />
     </ScrollArea>
   );
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col pb-[var(--keyboard)]">
+    <motion.div
+      className={cn(
+        'relative flex min-h-0 flex-1 flex-col pb-[var(--keyboard)]',
+        // A workspace stops at its widest and stands centred in the pane.
+        !phone && 'mx-auto w-full',
+      )}
+      style={phone ? undefined : { maxWidth: workspace.maxWidth }}
+    >
       {phone && (
         // Catch's full-screen note: the task scrolls the whole height of the screen, under its
         // toolbars and its dock, and blurs away beneath them while there is more that way.
@@ -447,6 +496,36 @@ export function TaskDetails({
             >
               <ChevronLeft />
             </IconButton>
+            {!phone && expand && (
+              // Catch's “Expand note”: the task takes the board's width, and gives it back.
+              <IconButton
+                label={expand.expanded ? 'Show the board' : 'Expand task'}
+                shortcut="expandTask"
+                data-task-expand=""
+                // Keeps the caret where it was, as undo and redo do.
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  haptics.toggle();
+                  expand.toggle();
+                }}
+                className="size-10 shrink-0 [&_svg]:size-5"
+              >
+                <span className="relative size-5">
+                  <AnimatePresence initial={false}>
+                    <motion.span
+                      key={expand.expanded ? 'restore' : 'expand'}
+                      className="absolute inset-0 flex items-center justify-center"
+                      initial={{ opacity: 0, scale: 0.7 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.7 }}
+                      transition={reduced ? { duration: 0 } : springs.snappy}
+                    >
+                      {expand.expanded ? <Minimize2 /> : <Maximize2 />}
+                    </motion.span>
+                  </AnimatePresence>
+                </span>
+              </IconButton>
+            )}
             <nav
               aria-label="Task breadcrumb"
               className="flex min-w-0 items-center gap-1 pr-4 text-muted-foreground text-sm tabular-nums"
@@ -517,7 +596,12 @@ export function TaskDetails({
       {phone ? (
         card
       ) : (
-        <TaskColumnFrame layout={column} card={card}>
+        <TaskColumnFrame
+          layout={column}
+          workspace={workspace}
+          activity={workspace.paneMounted && timeline('pane', workspace.fits)}
+          card={card}
+        >
           {tagRow}
           {task.parentId === null && subtasks('column')}
           <div className="flex flex-col gap-2">
@@ -548,6 +632,6 @@ export function TaskDetails({
           />
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }
