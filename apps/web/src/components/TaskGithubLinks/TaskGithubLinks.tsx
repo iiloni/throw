@@ -1,4 +1,4 @@
-import type { TaskGithubLink } from '@throw/shared';
+import type { GithubRelease, TaskGithubLink } from '@throw/shared';
 import {
   Check,
   CircleCheck,
@@ -9,6 +9,7 @@ import {
   GitPullRequest,
   GitPullRequestClosed,
   GitPullRequestDraft,
+  Rocket,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -24,6 +25,7 @@ import {
   githubTone,
   unlinkGithub,
 } from '@/lib/githubLinks';
+import { releaseQualifier, releaseShipped } from '@/lib/githubReleases';
 import { haptics } from '@/lib/haptics';
 import { cn } from '@/lib/utils';
 
@@ -159,24 +161,107 @@ export function GithubLinkSummary({
   );
 }
 
+const pill =
+  'flex h-7 min-w-0 max-w-full items-center gap-1.5 rounded-full bg-foreground/[0.05] px-2.5 text-xs font-medium';
+
+/**
+ * Where the task's work shipped, as quiet pills: each release or tag it is bound to, newest
+ * first, opening it on GitHub, and Merged · unreleased while a merged pull request waits for a
+ * shipped release. A release that is a draft, a pre-release, a bare tag or no longer published
+ * says so beside its tag; only a shipped one takes the green mark.
+ */
+export function TaskReleases({
+  releases,
+  unreleased,
+  className,
+}: {
+  releases: readonly GithubRelease[];
+  unreleased: boolean;
+  className?: string;
+}) {
+  if (releases.length === 0 && !unreleased) return null;
+  return (
+    <ul aria-label="Releases" className={cn('flex flex-wrap gap-1.5', className)}>
+      {releases.map((release) => {
+        const qualifier = releaseQualifier(release);
+        const shipped = releaseShipped(release);
+        return (
+          <li key={release.id} data-release={release.tagName} className="flex min-w-0 max-w-full">
+            <a
+              href={release.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={[
+                `Release ${release.tagName}`,
+                release.name && release.name !== release.tagName && release.name,
+                qualifier,
+                'Open on GitHub',
+              ]
+                .filter(Boolean)
+                .join('. ')}
+              className={cn(
+                pill,
+                'text-foreground/85 outline-none transition-colors hover:bg-foreground/[0.09] focus-visible:ring-[3px] focus-visible:ring-ring/60',
+              )}
+            >
+              <span
+                data-color={shipped ? 'green' : 'gray'}
+                className="flex shrink-0 text-tint-accent"
+              >
+                <Rocket aria-hidden className="size-3.5" />
+              </span>
+              <span className="min-w-0 truncate tabular-nums">{release.tagName}</span>
+              {qualifier && (
+                <span className="shrink-0 font-normal text-muted-foreground">{qualifier}</span>
+              )}
+            </a>
+          </li>
+        );
+      })}
+      {unreleased && (
+        <li data-release="unreleased" className="flex min-w-0">
+          <span className={cn(pill, 'text-muted-foreground')}>
+            <span data-color="violet" className="flex shrink-0 text-tint-accent">
+              <GitMerge aria-hidden className="size-3.5" />
+            </span>
+            Merged · unreleased
+          </span>
+        </li>
+      )}
+    </ul>
+  );
+}
+
 /**
  * A task's pull requests and issues, as its relations are listed: one row per item that opens
  * it on GitHub, kept current as webhooks arrive, with a remove button that is always shown,
- * since a touch screen has no hover. Removing works after the project disconnects, too.
+ * since a touch screen has no hover. Removing works after the project disconnects, too. The
+ * releases that shipped the work lead, above its pull requests.
  */
 export function TaskGithubLinks({
   links,
+  releases = [],
+  unreleased = false,
   className,
 }: {
   links: readonly TaskGithubLink[];
+  releases?: readonly GithubRelease[];
+  unreleased?: boolean;
   className?: string;
 }) {
-  if (links.length === 0) return null;
+  const released = releases.length > 0 || unreleased;
+  if (links.length === 0 && !released) return null;
   const groups = (['pr', 'issue'] as const)
     .map((kind) => ({ kind, items: links.filter((link) => link.kind === kind) }))
     .filter((group) => group.items.length > 0);
   return (
     <section aria-label="GitHub" className={cn('flex flex-col gap-3', className)}>
+      {released && (
+        <div className="flex flex-col gap-1.5">
+          <h2 className="px-1 font-medium text-muted-foreground text-xs">Release</h2>
+          <TaskReleases releases={releases} unreleased={unreleased} />
+        </div>
+      )}
       {groups.map((group) => (
         <div key={group.kind} className="flex flex-col gap-1">
           <h2 className="px-1 font-medium text-muted-foreground text-xs">

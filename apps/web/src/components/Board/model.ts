@@ -11,6 +11,7 @@ import {
 export { DEFAULT_PRIORITY, DEFAULT_PRIORITY_NAMES, PRIORITIES, type Priority } from '@throw/shared';
 
 import { DEFAULT_PRIORITY_NAMES, PRIORITIES, type Priority } from '@throw/shared';
+import type { BoardReleases } from '@/lib/githubReleases';
 
 /**
  * Presentation data shared by the synced board and the development prototype. Ranks and
@@ -343,6 +344,8 @@ export type BoardData = {
   tasks: Task[];
   hiddenTasks?: Task[];
   relations?: BoardRelations;
+  /** The GitHub releases its filter can choose, where the board has any (ADR 0017). */
+  releases?: BoardReleases;
 };
 
 /** Statuses in their board groups, closed ones together, keeping the order they come in. */

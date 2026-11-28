@@ -82,6 +82,10 @@ change share one history entry and one webhook (`recordGithubChange` in `github/
 The app reads and saves them through `statusRules` on the connection (`saveGithubStatusRules`).
 GitHub releases and task bindings sync as read-only collections (ADR 0017). Webhook binding
 lives in `github/releaseEvents.ts`, with manual REST and MCP actions in `github/releases.ts`.
+The task pane leads its GitHub links with release pills (`TaskReleases`), or Merged · unreleased
+while a merged pull request waits for a shipped release; both boards filter by Unreleased or a
+release through `BoardData.releases` (`boardReleases` in `lib/githubReleases.ts`, matching MCP's
+`unreleased`), which the prototype leaves out to hide the Release filter.
 Descriptions and comments draw `#KEY-N` task references as links over their plain stored
 text, so Markdown and MCP keep `#KEY-N` (`lib/taskReferences.ts`; the server's
 `mcp/markdown.ts` leaves `#` unescaped before one). The app route's `TaskReferencesProvider` indexes

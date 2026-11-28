@@ -11,14 +11,17 @@ import {
   useActivity,
   useAllTags,
   useAllTaskTags,
+  useGithubReleases,
   useLocalRowsReady,
   useProjects,
   useStatuses,
   useTaskGithubLinks,
+  useTaskGithubReleases,
   useTaskRelations,
   useTasks,
 } from '@/lib/collections';
 import { pullRequestsByTask, useShownGithubLinks } from '@/lib/githubLinks';
+import { boardReleases } from '@/lib/githubReleases';
 import { useLaunchScreenReady } from '@/lib/launchScreen';
 import { useDesktop } from '@/lib/media';
 import { useAwaitingSync } from '@/lib/syncStatus';
@@ -79,6 +82,8 @@ export function WorkspaceBoard({
   const { links: githubLinks } = useTaskGithubLinks();
   const shownGithub = useShownGithubLinks(githubLinks);
   const pulls = useMemo(() => pullRequestsByTask(shownGithub), [shownGithub]);
+  const { releases } = useGithubReleases();
+  const { bindings } = useTaskGithubReleases();
   const { projects: allProjects } = useProjects();
   const linked = useMemo(
     () => boardRelations(blockers, relations, tasks, allProjects),
@@ -86,13 +91,39 @@ export function WorkspaceBoard({
   );
   const selectionContent = useSelectionContent();
   const state = board.use();
-  const data = useMemo(
-    () => ({
-      ...workspaceBoardData(workspaceId, projects, statuses, tasks, tags, secondaryTags, updates),
+  const data = useMemo(() => {
+    const own = workspaceBoardData(
+      workspaceId,
+      projects,
+      statuses,
+      tasks,
+      tags,
+      secondaryTags,
+      updates,
+    );
+    return {
+      ...own,
       relations: linked,
-    }),
-    [workspaceId, projects, statuses, tasks, tags, secondaryTags, updates, linked],
-  );
+      releases: boardReleases(
+        own.tasks.map((row) => row.id),
+        releases,
+        bindings,
+        shownGithub,
+      ),
+    };
+  }, [
+    workspaceId,
+    projects,
+    statuses,
+    tasks,
+    tags,
+    secondaryTags,
+    updates,
+    linked,
+    releases,
+    bindings,
+    shownGithub,
+  ]);
   const awaiting = useAwaitingSync(loadingStatuses, data.project.statuses.length);
   const awaitingTasks = useAwaitingSync(loadingTasks, data.tasks.length);
   const [taskPage, setTaskPage] = useState<{ taskId: string; panel: TaskPanel } | null>(null);

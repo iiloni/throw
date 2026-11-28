@@ -281,3 +281,6 @@ records a manual release. PUT or DELETE at `/:releaseId/tasks/:taskId` binds or 
 of that project. Manual records work without a connection. MCP exposes `list_github_releases`,
 `bind_task_release`, `unbind_task_release` and `get_task.githubReleases`. Use `list_tasks`
 with `release` (tag name or UUID) or `unreleased: true` for merged tasks awaiting publication.
+The app reads the same rule: a task pane leads its GitHub links with its release pills, or
+Merged · unreleased, and the boards' Release filter chooses Unreleased or any listed release
+(THR-146).

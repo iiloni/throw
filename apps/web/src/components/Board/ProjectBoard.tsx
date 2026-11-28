@@ -10,16 +10,19 @@ import { TaskDetails } from '@/components/TaskDetails/TaskDetails';
 import { useBlockersByTask } from '@/components/TaskRelations/TaskRelations';
 import {
   useActivity,
+  useGithubReleases,
   useLocalRowsReady,
   useProjects,
   useProjectTaskTags,
   useStatuses,
   useTags,
   useTaskGithubLinks,
+  useTaskGithubReleases,
   useTaskRelations,
   useTasks,
 } from '@/lib/collections';
 import { pullRequestsByTask, useShownGithubLinks } from '@/lib/githubLinks';
+import { boardReleases } from '@/lib/githubReleases';
 import { useLaunchScreenReady } from '@/lib/launchScreen';
 import { useDesktop } from '@/lib/media';
 import { useAwaitingSync } from '@/lib/syncStatus';
@@ -60,6 +63,8 @@ export function ProjectBoard({
   const { links: githubLinks } = useTaskGithubLinks();
   const shownGithub = useShownGithubLinks(githubLinks);
   const pulls = useMemo(() => pullRequestsByTask(shownGithub), [shownGithub]);
+  const { releases } = useGithubReleases();
+  const { bindings } = useTaskGithubReleases();
   const { projects: allProjects } = useProjects();
   const linked = useMemo(
     () => boardRelations(blockers, relations, tasks, allProjects),
@@ -67,13 +72,30 @@ export function ProjectBoard({
   );
   const selectionContent = useSelectionContent();
   const state = board.use();
-  const data = useMemo(
-    () => ({
-      ...projectBoardData(project, statuses, tasks, tags, secondaryTags, updates),
+  const data = useMemo(() => {
+    const own = projectBoardData(project, statuses, tasks, tags, secondaryTags, updates);
+    return {
+      ...own,
       relations: linked,
-    }),
-    [project, statuses, tasks, tags, secondaryTags, updates, linked],
-  );
+      releases: boardReleases(
+        own.tasks.map((row) => row.id),
+        releases,
+        bindings,
+        shownGithub,
+      ),
+    };
+  }, [
+    project,
+    statuses,
+    tasks,
+    tags,
+    secondaryTags,
+    updates,
+    linked,
+    releases,
+    bindings,
+    shownGithub,
+  ]);
   const awaiting = useAwaitingSync(loadingStatuses, data.project.statuses.length);
   const awaitingTasks = useAwaitingSync(loadingTasks, data.tasks.length);
   // The open task's page in the phone drawer belongs to that task alone.

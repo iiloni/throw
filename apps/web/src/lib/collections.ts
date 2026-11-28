@@ -26,6 +26,7 @@ import {
   commentSchema,
   createStatusSchema,
   createWorkspaceSchema,
+  type GithubRelease,
   githubReleaseSchema,
   type Project,
   parseTimestamptz,
@@ -36,6 +37,7 @@ import {
   type TagWriteResponse,
   type Task,
   type TaskGithubLink,
+  type TaskGithubRelease,
   type TaskRelation,
   type TaskTag,
   tagSchema,
@@ -309,6 +311,33 @@ export const taskGithubReleasesCollection = createCollection(
     1,
   ),
 );
+const emptyReleases: GithubRelease[] = [];
+/** Every GitHub release and tag in the user's workspaces, for the task pane and board filter. */
+export function useGithubReleases() {
+  const { data = emptyReleases, isLoading } = useLiveQuery((q) =>
+    q.from({ release: githubReleasesCollection }),
+  );
+  return { releases: useSteadyRows(data), isLoading };
+}
+const emptyReleaseBindings: TaskGithubRelease[] = [];
+/** Which tasks each release shipped. */
+export function useTaskGithubReleases() {
+  const { data = emptyReleaseBindings, isLoading } = useLiveQuery((q) =>
+    q.from({ binding: taskGithubReleasesCollection }),
+  );
+  return { bindings: useSteadyRows(data), isLoading };
+}
+/** One task's release bindings, for its pane. */
+export function useTaskGithubReleasesOf(taskId: string) {
+  const { data = emptyReleaseBindings, isLoading } = useLiveQuery(
+    (q) =>
+      q
+        .from({ binding: taskGithubReleasesCollection })
+        .where(({ binding }) => eq(binding.taskId, taskId)),
+    [taskId],
+  );
+  return { bindings: useSteadyRows(data), isLoading };
+}
 const emptyGithubLinks: TaskGithubLink[] = [];
 export function useTaskGithubLinks() {
   const { data = emptyGithubLinks, isLoading } = useLiveQuery((q) =>
