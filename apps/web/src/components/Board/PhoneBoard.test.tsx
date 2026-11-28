@@ -79,16 +79,7 @@ describe('FlowTrack', () => {
     expect(onTurn).toHaveBeenCalledWith(1);
   });
 
-  it('names the next open column, past a folded one', () => {
-    const { onTurn, nav } = track();
-    const next = screen
-      .getAllByRole('button', { name: 'Review' })
-      .find((button) => !nav.contains(button));
-    fireEvent.click(next!);
-    expect(onTurn).toHaveBeenCalledWith(1);
-  });
-
-  it('folds the current column from the end of the track, and focuses the handle it became', () => {
+  it('folds the current column from the end of its name’s row, and focuses the handle it became', () => {
     const { onCollapse } = track({}, all, 1);
     const fold = screen.getByRole('button', { name: 'Collapse Implementation column' });
     expect(fold).toHaveAttribute('aria-expanded', 'true');

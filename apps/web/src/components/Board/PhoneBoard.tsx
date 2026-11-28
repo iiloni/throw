@@ -2,7 +2,6 @@ import {
   Check,
   CheckCheck,
   ChevronDown,
-  ChevronRight,
   ChevronsRightLeft,
   Plus,
   Search,
@@ -219,9 +218,9 @@ export const pageClass = 'flex w-full shrink-0 snap-center flex-col px-[var(--pa
 /**
  * The current column by name, and the active columns as one track in the order work moves
  * through them: the ones behind are filled in, so the header says how far along the board
- * the page is. The next column is named at the end, a step further along. On a board whose
- * columns fold, the current one folds from beside its name, and a folded one is a short handle
- * on the track that the pager skips; tapping the handle opens the column and turns to it.
+ * the page is, and each carries its column's count. On a board whose columns fold, the current
+ * one folds from the end of its name's row, and a folded one is a short handle on the track
+ * that the pager skips; tapping the handle opens the column and turns to it.
  */
 export function FlowTrack({
   statuses,
@@ -240,7 +239,6 @@ export function FlowTrack({
   const reduced = useReducedMotion();
   const navRef = useRef<HTMLElement>(null);
   const status = statuses[page];
-  const next = statuses[page + 1];
   const track = folding?.statuses ?? statuses;
   const at = track.findIndex(({ id }) => id === status?.id);
   // Which way the name slides: the way the board turned.
@@ -290,108 +288,93 @@ export function FlowTrack({
           </motion.div>
         </AnimatePresence>
         <span className="flex-1" />
-        {next && (
-          <button
-            type="button"
-            onClick={() => onTurn(page + 1)}
-            className="flex h-9 shrink-0 items-center gap-0.5 rounded-full pr-1.5 pl-3 text-muted-foreground text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
-          >
-            {next.name}
-            <ChevronRight aria-hidden className="size-4" />
-          </button>
+        {folding && (
+          <AnimatePresence initial={false}>
+            {statuses.length > 1 && !holding && (
+              <motion.span
+                key="fold"
+                className="flex shrink-0"
+                initial={{ opacity: 0, scale: 0.6 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.6 }}
+                transition={reduced ? { duration: 0 } : springs.snappy}
+              >
+                <IconButton
+                  label={`Collapse ${status.name} column`}
+                  aria-expanded
+                  tooltip={false}
+                  className="size-9 bg-foreground/[0.06] text-muted-foreground"
+                  onClick={() => {
+                    setFocusing(status.id);
+                    folding.onCollapse(status.id);
+                  }}
+                >
+                  <ChevronsRightLeft />
+                </IconButton>
+              </motion.span>
+            )}
+          </AnimatePresence>
         )}
       </div>
-      <div className="flex items-center gap-2">
-        <nav ref={navRef} aria-label="Columns" className="flex min-w-0 flex-1 gap-1">
-          {track.map((item, order) => {
-            const index = statuses.findIndex(({ id }) => id === item.id);
-            const folded = index === -1;
-            const count = countIn(state, item.id);
-            const tasks = `${count} ${count === 1 ? 'task' : 'tasks'}`;
-            return (
-              <motion.button
-                key={item.id}
-                type="button"
-                aria-label={
-                  folded ? `Expand ${item.name} column, ${tasks}` : `${item.name}, ${tasks}`
-                }
-                aria-expanded={folding ? !folded : undefined}
-                data-column-id={item.id}
-                data-folded={folded ? '' : undefined}
-                data-column-color={item.color ?? undefined}
-                aria-current={index === page ? 'page' : undefined}
-                onClick={() => (folded ? folding?.onExpand(item.id) : onTurn(index))}
-                // A folded column is a short handle, kept mounted so it grows back into its segment.
-                initial={false}
-                animate={{
-                  flexGrow: folded ? 0 : 1,
-                  marginLeft: folded ? 4 : 0,
-                  marginRight: folded ? 4 : 0,
-                }}
-                transition={reduced ? { duration: 0 } : folded ? curves.fold : springs.smooth}
+      <nav ref={navRef} aria-label="Columns" className="flex gap-1">
+        {track.map((item, order) => {
+          const index = statuses.findIndex(({ id }) => id === item.id);
+          const folded = index === -1;
+          const count = countIn(state, item.id);
+          const tasks = `${count} ${count === 1 ? 'task' : 'tasks'}`;
+          return (
+            <motion.button
+              key={item.id}
+              type="button"
+              aria-label={
+                folded ? `Expand ${item.name} column, ${tasks}` : `${item.name}, ${tasks}`
+              }
+              aria-expanded={folding ? !folded : undefined}
+              data-column-id={item.id}
+              data-folded={folded ? '' : undefined}
+              data-column-color={item.color ?? undefined}
+              aria-current={index === page ? 'page' : undefined}
+              onClick={() => (folded ? folding?.onExpand(item.id) : onTurn(index))}
+              // A folded column is a short handle, kept mounted so it grows back into its segment.
+              initial={false}
+              animate={{
+                flexGrow: folded ? 0 : 1,
+                marginLeft: folded ? 4 : 0,
+                marginRight: folded ? 4 : 0,
+              }}
+              transition={reduced ? { duration: 0 } : folded ? curves.fold : springs.smooth}
+              className={cn(
+                'relative flex h-6 min-w-11 basis-11 items-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60',
+                // The handle takes a finger's width around it.
+                folded && 'z-10 before:absolute before:-inset-x-1.5 before:-inset-y-2',
+              )}
+            >
+              <span
                 className={cn(
-                  'relative flex h-6 min-w-8 basis-8 items-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60',
-                  // The handle takes a finger's width around it.
-                  folded && 'z-10 before:absolute before:-inset-x-1.5 before:-inset-y-2',
+                  'relative h-1.5 w-full overflow-hidden rounded-full transition-colors duration-300',
+                  folded ? 'bg-foreground/25' : 'bg-foreground/10',
                 )}
               >
                 <span
                   className={cn(
-                    'relative h-1.5 w-full overflow-hidden rounded-full transition-colors duration-300',
-                    folded ? 'bg-foreground/25' : 'bg-foreground/10',
+                    'absolute inset-0 rounded-full bg-[color:var(--column-accent,color-mix(in_oklab,var(--foreground)_25%,transparent))] transition-opacity duration-300',
+                    order < at ? 'opacity-100' : 'opacity-0',
                   )}
-                >
-                  <span
-                    className={cn(
-                      'absolute inset-0 rounded-full bg-[color:var(--column-accent,color-mix(in_oklab,var(--foreground)_25%,transparent))] transition-opacity duration-300',
-                      order < at ? 'opacity-100' : 'opacity-0',
-                    )}
+                />
+                {index === page && (
+                  <motion.span
+                    layoutId="phone-flow"
+                    data-column-stripe={item.color ? '' : undefined}
+                    className="absolute inset-0 rounded-full bg-[color:var(--column-accent,var(--foreground))]"
+                    transition={springs.snappy}
                   />
-                  {index === page && (
-                    <motion.span
-                      layoutId="phone-flow"
-                      data-column-stripe={item.color ? '' : undefined}
-                      className="absolute inset-0 rounded-full bg-[color:var(--column-accent,var(--foreground))]"
-                      transition={springs.snappy}
-                    />
-                  )}
-                </span>
-                <FlowCount count={count} current={index === page} />
-              </motion.button>
-            );
-          })}
-        </nav>
-        {folding && (
-          // The fold sits at the track's end, where the columns it folds go to wait as handles.
-          <span className="flex size-7 shrink-0 items-center justify-center">
-            <AnimatePresence initial={false}>
-              {statuses.length > 1 && !holding && (
-                <motion.span
-                  key="fold"
-                  className="flex"
-                  initial={{ opacity: 0, scale: 0.6 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.6 }}
-                  transition={reduced ? { duration: 0 } : springs.snappy}
-                >
-                  <IconButton
-                    label={`Collapse ${status.name} column`}
-                    aria-expanded
-                    tooltip={false}
-                    className="relative size-7 rounded-full bg-foreground/[0.06] text-muted-foreground before:absolute before:-inset-2 [&_svg]:size-3.5"
-                    onClick={() => {
-                      setFocusing(status.id);
-                      folding.onCollapse(status.id);
-                    }}
-                  >
-                    <ChevronsRightLeft />
-                  </IconButton>
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </span>
-        )}
-      </div>
+                )}
+              </span>
+              <FlowCount count={count} current={index === page} />
+            </motion.button>
+          );
+        })}
+      </nav>
     </div>
   );
 }

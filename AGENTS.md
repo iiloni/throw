@@ -121,7 +121,7 @@ Desktop columns on both boards fold to a strip, as Catch's deck does
 A phone's project board reads the same folds: its pager skips folded columns, which stay as
 short handles on `FlowTrack` that open them again (`phoneColumns` in `Board/PhoneBoard.tsx`).
 Every segment and handle on the track carries its column's count as the filter leaves it
-(`countIn`), and the column on screen folds from the track's end.
+(`countIn`), and the column on screen folds from the end of the row naming it.
 Both boards narrow in place: the board store holds a filter and a temporary sort
 (`Board/filter.ts`, applied by `listTasks` and `countIn`), set from the desktop boards'
 search bar (`components/BoardSearch`, docked as a sidebar on wide boards) or the phone drawer's

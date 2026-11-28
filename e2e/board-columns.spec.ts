@@ -197,7 +197,7 @@ test.describe('phone', () => {
     await expect(expand(page, 'Testing')).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
     await expect(current(page)).toHaveAccessibleName(segment('Build'));
     // Build is followed by Review: one swipe turns straight to it.
-    await expect(page.getByRole('button', { name: 'Review', exact: true }).last()).toBeVisible();
+    await expect(page.locator('[data-pager] > [data-page]')).toHaveCount(2);
     if (browserName === 'chromium') {
       const touch = await finger(page);
       const box = (await (await settled(card(page, 'Low priority'))).boundingBox())!;
