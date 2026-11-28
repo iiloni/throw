@@ -87,14 +87,30 @@ export function StatusOptions({
   value,
   statuses,
   onChange,
+  none,
 }: {
   value: string;
   statuses: Status[];
   onChange(statusId: string): void;
+  /** Offers no status first, picked as an empty value, for a setting that can be off. */
+  none?: string;
 }) {
   const name = useId();
   return (
     <div role="radiogroup" aria-label="Status" className="space-y-2.5 px-3 pt-1 pb-3">
+      {none !== undefined && (
+        <label className="relative flex h-12 min-w-0 cursor-pointer select-none items-center gap-2 rounded-2xl border border-transparent bg-foreground/[0.06] px-3 text-foreground/75 outline-none transition-colors duration-150 has-[:checked]:border-brand has-[:checked]:bg-accent has-[:checked]:text-foreground has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/60">
+          <input
+            className="absolute inset-0 cursor-pointer appearance-none rounded-2xl opacity-0"
+            type="radio"
+            name={name}
+            checked={value === ''}
+            onChange={() => onChange('')}
+            onClick={() => value === '' && onChange('')}
+          />
+          <span className="min-w-0 flex-1 truncate font-medium text-[0.8125rem]">{none}</span>
+        </label>
+      )}
       {byCategory([...statuses].sort(compareStatuses))
         .filter((group) => group.statuses.length > 0)
         .map((group) => (

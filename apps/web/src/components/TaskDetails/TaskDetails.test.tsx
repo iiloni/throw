@@ -34,6 +34,11 @@ vi.mock('@/lib/haptics', () => ({
 vi.mock('@/lib/collections', () => ({
   useTags: () => ({ tags: [], isLoading: false }),
   useTaskTags: () => ({ taskTags: [], isLoading: false }),
+  useTaskGithubLinksOf: () => ({ links: [], isLoading: false }),
+}));
+vi.mock('@/lib/githubLinks', async (original) => ({
+  ...(await original<typeof import('@/lib/githubLinks')>()),
+  useGithubRepository: () => null,
 }));
 vi.mock('@/components/Board/state', () => ({
   board: { use: () => ({ taskTrail: [], openTaskId: 'task-1' }) },

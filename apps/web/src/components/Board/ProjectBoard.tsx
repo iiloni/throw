@@ -16,9 +16,11 @@ import {
   useProjectTaskTags,
   useStatuses,
   useTags,
+  useTaskGithubLinks,
   useTaskRelations,
   useTasks,
 } from '@/lib/collections';
+import { pullRequestsByTask, useShownGithubLinks } from '@/lib/githubLinks';
 import { useLaunchScreenReady } from '@/lib/launchScreen';
 import { useDesktop } from '@/lib/media';
 import { useAwaitingSync } from '@/lib/syncStatus';
@@ -28,6 +30,7 @@ import { boardRelations, TaskBlockersContext } from './blockers';
 import { taskScreens, taskWrites, useBoardBoundary } from './boundary';
 import { DesktopBoard } from './DesktopBoard';
 import { DragOverlay } from './DragOverlay';
+import { TaskPullRequestsContext } from './githubLinks';
 import { PhoneBoard } from './PhoneBoard';
 import { projectBoardData, secondaryTagsByTask, updatedAtByTask } from './selection';
 import { board, canOpenTask } from './state';
@@ -55,6 +58,9 @@ export function ProjectBoard({
   const phone = !useDesktop();
   const blockers = useBlockersByTask();
   const { relations } = useTaskRelations();
+  const { links: githubLinks } = useTaskGithubLinks();
+  const shownGithub = useShownGithubLinks(githubLinks);
+  const pulls = useMemo(() => pullRequestsByTask(shownGithub), [shownGithub]);
   const { projects: allProjects } = useProjects();
   const linked = useMemo(
     () => boardRelations(blockers, relations, tasks, allProjects),
@@ -146,51 +152,53 @@ export function ProjectBoard({
   return (
     <TaskContentContext.Provider value={taskContent}>
       <TaskBlockersContext.Provider value={blockers}>
-        <SelectionContentContext.Provider value={selectionContent}>
-          <div className="relative h-full" aria-busy={awaitingTasks}>
-            {!phone && <h1 className="sr-only">{project.name}</h1>}
-            {shell.view === 'graph' ? (
-              <DependencyGraph
-                phone={phone}
-                title={
-                  <h1 aria-label={project.name} className="min-w-0">
-                    <ShellMenu phone titleClassName="text-[1.75rem]" />
-                  </h1>
-                }
-                syncIndicator={<SyncIndicator />}
-              />
-            ) : phone ? (
-              <PhoneBoard
-                projectMenu={
-                  <h1 aria-label={project.name} className="min-w-0">
-                    <ShellMenu phone titleClassName="text-[1.75rem]" />
-                  </h1>
-                }
-                syncIndicator={<SyncIndicator />}
-                onBacklogChange={(open) =>
-                  shell.selectProject(
-                    project.workspaceId,
-                    project.id,
-                    open ? 'backlog' : 'board',
-                    true,
-                  )
-                }
-                initialBacklog={shell.view === 'backlog'}
-                palette
-              />
-            ) : (
-              <DesktopBoard />
-            )}
-            <AnimatePresence>
-              {phone &&
-                screens.map((task) => (
-                  <TaskScreen key={task.id} task={task} covered={task !== openTask} />
-                ))}
-            </AnimatePresence>
-            <DragOverlay />
-            <BoardAnnouncer />
-          </div>
-        </SelectionContentContext.Provider>
+        <TaskPullRequestsContext.Provider value={pulls}>
+          <SelectionContentContext.Provider value={selectionContent}>
+            <div className="relative h-full" aria-busy={awaitingTasks}>
+              {!phone && <h1 className="sr-only">{project.name}</h1>}
+              {shell.view === 'graph' ? (
+                <DependencyGraph
+                  phone={phone}
+                  title={
+                    <h1 aria-label={project.name} className="min-w-0">
+                      <ShellMenu phone titleClassName="text-[1.75rem]" />
+                    </h1>
+                  }
+                  syncIndicator={<SyncIndicator />}
+                />
+              ) : phone ? (
+                <PhoneBoard
+                  projectMenu={
+                    <h1 aria-label={project.name} className="min-w-0">
+                      <ShellMenu phone titleClassName="text-[1.75rem]" />
+                    </h1>
+                  }
+                  syncIndicator={<SyncIndicator />}
+                  onBacklogChange={(open) =>
+                    shell.selectProject(
+                      project.workspaceId,
+                      project.id,
+                      open ? 'backlog' : 'board',
+                      true,
+                    )
+                  }
+                  initialBacklog={shell.view === 'backlog'}
+                  palette
+                />
+              ) : (
+                <DesktopBoard />
+              )}
+              <AnimatePresence>
+                {phone &&
+                  screens.map((task) => (
+                    <TaskScreen key={task.id} task={task} covered={task !== openTask} />
+                  ))}
+              </AnimatePresence>
+              <DragOverlay />
+              <BoardAnnouncer />
+            </div>
+          </SelectionContentContext.Provider>
+        </TaskPullRequestsContext.Provider>
       </TaskBlockersContext.Provider>
     </TaskContentContext.Provider>
   );

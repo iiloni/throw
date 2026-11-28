@@ -237,7 +237,7 @@ test('the phone remembers folding and reopening both closed categories', async (
   await workspaceFixture(page);
   const columns = page.getByRole('navigation', { name: 'Columns' });
   const turn = async (name: string) => {
-    const tab = columns.getByRole('button', { name, exact: true });
+    const tab = columns.getByRole('button', { name: new RegExp(`^${name}, \\d+ tasks?$`) });
     await tab.click();
     await expect(tab).toHaveAttribute('aria-current', 'page');
   };

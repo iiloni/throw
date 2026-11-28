@@ -145,13 +145,15 @@ test('real tasks occupy their ordered columns, mixed backlog and closed rail or 
   if (isMobile) {
     await page
       .getByRole('navigation', { name: 'Columns' })
-      .getByRole('button', { name: 'Review', exact: true })
+      .getByRole('button', { name: 'Review, 1 task', exact: true })
       .click();
-    await expect(page.getByRole('heading', { level: 2, name: 'Review 1' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { level: 2, name: 'Review', exact: true }),
+    ).toBeVisible();
     await expect(page.getByRole('article', { name: /Review this$/ })).toBeInViewport();
     await page
       .getByRole('navigation', { name: 'Columns' })
-      .getByRole('button', { name: 'Build', exact: true })
+      .getByRole('button', { name: /^Build, \d+ tasks?$/ })
       .click();
   }
   await openBacklog(page, isMobile);

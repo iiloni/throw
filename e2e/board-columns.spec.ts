@@ -4,8 +4,11 @@ import { card, carry, finger, fixture, settled, taskRow, workspaceFixture } from
 import { APP_LOAD_TIMEOUT } from './helpers';
 
 const region = (page: Page, name: string) => page.getByRole('region', { name, exact: true });
+// A phone's folded handle also says how many tasks the column holds.
 const expand = (page: Page, name: string) =>
-  page.getByRole('button', { name: `Expand ${name} column`, exact: true });
+  page.getByRole('button', { name: new RegExp(`^Expand ${name} column(, \\d+ tasks?)?$`) });
+/** A column's segment on a phone's flow track, named with its count. */
+const segment = (name: string) => new RegExp(`^${name}, \\d+ tasks?$`);
 const collapse = (page: Page, name: string) =>
   page.getByRole('button', { name: `Collapse ${name} column`, exact: true });
 
@@ -173,11 +176,11 @@ test.describe('phone', () => {
     browserName,
   }) => {
     const board = await threeColumns(page);
-    await board.columns.getByRole('button', { name: 'Testing', exact: true }).click();
-    await expect(current(page)).toHaveAccessibleName('Testing');
+    await board.columns.getByRole('button', { name: segment('Testing') }).click();
+    await expect(current(page)).toHaveAccessibleName(segment('Testing'));
     await collapse(page, 'Testing').click();
     // The next column takes its place, and the folded one is a handle that has focus.
-    await expect(current(page)).toHaveAccessibleName('Review');
+    await expect(current(page)).toHaveAccessibleName(segment('Review'));
     await expect(card(page, 'Review this')).toBeInViewport();
     await expect(expand(page, 'Testing')).toHaveAttribute('aria-expanded', 'false');
     await expect(expand(page, 'Testing')).toBeFocused();
@@ -185,16 +188,16 @@ test.describe('phone', () => {
     // The last column left open does not fold.
     await collapse(page, 'Review').click();
     await expect(collapse(page, 'Build')).toHaveCount(0);
-    await expect(current(page)).toHaveAccessibleName('Build');
+    await expect(current(page)).toHaveAccessibleName(segment('Build'));
     await expand(page, 'Review').click();
-    await expect(current(page)).toHaveAccessibleName('Review');
+    await expect(current(page)).toHaveAccessibleName(segment('Review'));
     await expect(card(page, 'Review this')).toBeInViewport();
 
     await page.reload();
     await expect(expand(page, 'Testing')).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
-    await expect(current(page)).toHaveAccessibleName('Build');
+    await expect(current(page)).toHaveAccessibleName(segment('Build'));
     // Build is followed by Review: one swipe turns straight to it.
-    await expect(page.getByRole('button', { name: 'Review', exact: true }).last()).toBeVisible();
+    await expect(page.locator('[data-pager] > [data-page]')).toHaveCount(2);
     if (browserName === 'chromium') {
       const touch = await finger(page);
       const box = (await (await settled(card(page, 'Low priority'))).boundingBox())!;
@@ -203,18 +206,18 @@ test.describe('phone', () => {
       await touch.move({ x: box.x + 24, y: from.y }, 250);
       await touch.lift();
     } else {
-      await board.columns.getByRole('button', { name: 'Review', exact: true }).click();
+      await board.columns.getByRole('button', { name: segment('Review') }).click();
     }
-    await expect(current(page)).toHaveAccessibleName('Review');
+    await expect(current(page)).toHaveAccessibleName(segment('Review'));
     await expect(card(page, 'Review this')).toBeInViewport();
 
     // The handle opens the column and turns back to it.
     await expand(page, 'Testing').click();
-    await expect(current(page)).toHaveAccessibleName('Testing');
+    await expect(current(page)).toHaveAccessibleName(segment('Testing'));
     await expect(page.locator('[data-pager] > [data-page]')).toHaveCount(3);
     await expect(collapse(page, 'Testing')).toBeVisible();
     await page.reload();
-    await expect(board.columns.getByRole('button', { name: 'Testing', exact: true })).toBeVisible({
+    await expect(board.columns.getByRole('button', { name: segment('Testing') })).toBeVisible({
       timeout: APP_LOAD_TIMEOUT,
     });
     await expect(expand(page, 'Testing')).toHaveCount(0);
