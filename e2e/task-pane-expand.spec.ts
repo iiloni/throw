@@ -150,10 +150,12 @@ test.describe('the expanded task pane', () => {
         );
       })
       .toBe(true);
-    // The card keeps a reading measure, and the workspace stands centred on the screen.
-    const cardWidth = await width(page, '[aria-label="Task"] [data-task-card]');
-    expect(cardWidth).toBeLessThanOrEqual(841);
-    expect(cardWidth).toBeGreaterThan(600);
+    // The card keeps a reading measure, and the workspace stands centred on the screen. The
+    // order above holds while the pane still springs open, so the width is read once it rests.
+    await expect
+      .poll(() => width(page, '[aria-label="Task"] [data-task-card]'))
+      .toBeGreaterThan(600);
+    expect(await width(page, '[aria-label="Task"] [data-task-card]')).toBeLessThanOrEqual(841);
 
     // A comment is written in the pane, beside the description.
     await page.locator('body').press('c');
