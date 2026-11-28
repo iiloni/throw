@@ -88,8 +88,9 @@ export type DrawerCard = {
  * returns it to the height it was at. A docked page keeps the dock above it. A held card
  * sinks it out of the way, unless it is full and its own list is being reordered. Raised, it
  * sits above a full-screen view such as an open task, and its dock rides above the keyboard as
- * a note's dock does in Catch, as does a short page; a full page ends above the keyboard
- * instead, so its input stays in view. Otherwise an open page ends above the keyboard too. A
+ * a note's dock does in Catch. A page that fits its content rides above the keyboard too, raised
+ * or not, so it follows the keyboard frame by frame even while it is still sliding open; a full
+ * or half page ends above the keyboard instead, so its input stays in view. A
  * card floats above the dock, which rides above the keyboard with it. A page opened over the card
  * takes the keyboard's place rather than stacking on it, so the card glides between the two
  * instead of bouncing as one leaves and the other arrives.
@@ -173,7 +174,9 @@ export function Drawer({
     ((detent === 'full' && !paged) || (floatMove && (paged ? halfPage : detent !== 'closed')));
   const moveInHead = moving && !grooming;
   const carded = card !== null;
-  const pageAboveKeyboard = paged && !carded && (!raised || !page.fit);
+  // A fitted page is lifted by the keyboard instead: shortening the surface would move every
+  // offset it rests at, and a slide under way could only chase the keyboard there.
+  const pageAboveKeyboard = paged && !carded && !page.fit;
   const modal = paged || carded;
   // Read by effects that run once per opening, after the props that opened them.
   const latest = useRef({ page, card, onSettle });
@@ -400,29 +403,6 @@ export function Drawer({
     return () => observer.disconnect();
   }, [moveInHead, reduced, y]);
 
-  // An open page ends above the keyboard, so the keyboard rising shortens the surface every
-  // offset is measured from; a fitted page left where it was would sit behind the keyboard.
-  // The Android app overlays the keyboard rather than resizing the window, so this, not the
-  // window's resize, is what follows it, frame by frame as `--keyboard` moves. A slide under
-  // way whose target moved is re-aimed instead, keeping its velocity.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: offsets reads refs
-  useLayoutEffect(() => {
-    const element = surface.current;
-    if (!element) return;
-    let measured = element.offsetHeight;
-    const observer = new ResizeObserver(() => {
-      if (element.offsetHeight === measured) return;
-      measured = element.offsetHeight;
-      if (pulled.current) return;
-      const to = resting.current();
-      if (sliding.current) {
-        if (Math.abs(to - rest.current) > 0.5) void slide(to, springs.pane);
-      } else if (Math.abs(to - y.get()) > 0.5) place(to);
-    });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [reduced, y]);
-
   // The move target floating over a groomed backlog covers its foot, so the list keeps that
   // much room clear at its end too.
   const footer = useRef<HTMLDivElement>(null);
@@ -608,7 +588,7 @@ export function Drawer({
             : // A full page ends above the keyboard even when raised so its top stays in view.
               pageAboveKeyboard
               ? 'bottom-[var(--keyboard)]'
-              : raised || carded
+              : raised || carded || paged
                 ? 'bottom-0 [translate:0_calc(var(--keyboard)*-1)]'
                 : 'bottom-0',
         )}
@@ -724,7 +704,11 @@ export function Drawer({
                 onFocus={(event) => {
                   if (carded && page && typing(event.target)) setTypingInPage(true);
                 }}
-                className={cn('flex min-h-0 flex-col', shown.fit ? 'max-h-full' : 'flex-1')}
+                className={cn(
+                  'flex min-h-0 flex-col',
+                  // A fitted page lifted by the keyboard keeps to the room above it.
+                  shown.fit ? 'max-h-[calc(100%-var(--keyboard))]' : 'flex-1',
+                )}
               >
                 {shown.content}
               </PageBody>
