@@ -158,11 +158,32 @@ export function holdsBlockerSpotlight(badge: Element) {
 }
 
 /**
- * A finger held on a card's blocked badge: it lights up the task's blockers after the board's
- * long press, for as long as it stays down, in place of the card's own press. The card is not
- * picked up, selected or opened by it, and a finger that sets off scrolling lets it go.
+ * How far beyond the blocked badge a finger still lands on it, each way. The badge is a 20 px
+ * square on a 12 px icon, smaller than a fingertip, and a finger that just misses it would hold
+ * the card instead and select it; this makes the target a finger's 44 px. The badge's box stays
+ * as it is, so a mouse still lingers on the icon itself.
+ */
+export const BLOCKED_BADGE_REACH = 12;
+
+function withinReach(badge: Element, x: number, y: number) {
+  const box = badge.getBoundingClientRect();
+  return (
+    x >= box.left - BLOCKED_BADGE_REACH &&
+    x <= box.right + BLOCKED_BADGE_REACH &&
+    y >= box.top - BLOCKED_BADGE_REACH &&
+    y <= box.bottom + BLOCKED_BADGE_REACH
+  );
+}
+
+/**
+ * A finger held on a card's blocked badge, or close enough to it: it lights up the task's
+ * blockers after the board's long press, for as long as it stays down, in place of the card's
+ * own press. The card is not picked up, selected or opened by it, and a finger that sets off
+ * scrolling lets it go. Its handlers go on the card's face, which holds the badge and the room
+ * around it, so a press just beside the badge reaches them.
  */
 function useBlockerHold(taskId: string, blockers: readonly TaskBlocker[]) {
+  const badge = useRef<HTMLSpanElement>(null);
   const hold = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   const latest = useRef(blockers);
   latest.current = blockers;
@@ -174,14 +195,24 @@ function useBlockerHold(taskId: string, blockers: readonly TaskBlocker[]) {
   }
 
   return {
+    badge,
     onPointerDown(event: PointerEvent<HTMLElement>) {
-      if (event.pointerType !== 'touch' || event.button !== 0 || hold.current) return;
-      if (!holdsBlockerSpotlight(event.currentTarget)) return;
+      const target = badge.current;
+      if (!target || event.pointerType !== 'touch' || event.button !== 0 || hold.current) return;
+      // Another control in reach keeps its own press.
+      if (
+        event.target instanceof Element &&
+        !target.contains(event.target) &&
+        event.target.closest('a, button, input, [data-no-drag]')
+      )
+        return;
+      if (!withinReach(target, event.clientX, event.clientY)) return;
+      if (!holdsBlockerSpotlight(target)) return;
       // The card's press would pick it up or select it after the same wait.
       event.stopPropagation();
       hold.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
       try {
-        event.currentTarget.setPointerCapture(event.pointerId);
+        target.setPointerCapture(event.pointerId);
       } catch {
         // A pointer already gone has nothing to capture.
       }
@@ -258,7 +289,19 @@ export function TaskCardFace({
   const hintLabel = blocked ? blockedHint(blockers, project) : '';
 
   return (
-    <div className="px-4 pt-3.5 pb-3">
+    <div
+      className="px-4 pt-3.5 pb-3"
+      {...(spotlight && blocked
+        ? {
+            onPointerDown: hold.onPointerDown,
+            onPointerMove: hold.onPointerMove,
+            onPointerUp: hold.onPointerUp,
+            onPointerCancel: hold.onPointerCancel,
+            onLostPointerCapture: hold.onLostPointerCapture,
+            onContextMenu: hold.onContextMenu,
+          }
+        : {})}
+    >
       {parent && !state.actions && (
         <p className="mb-1.5 flex items-center gap-1 text-foreground/55 text-xs">
           <CornerDownRight className="size-3 shrink-0" aria-hidden />
@@ -287,6 +330,7 @@ export function TaskCardFace({
         {blocked && (
           <Hint label={hintLabel}>
             <span
+              ref={hold.badge}
               role="img"
               data-blocked=""
               data-spotlight-trigger={spotlightActive ? 'active' : undefined}
@@ -300,19 +344,7 @@ export function TaskCardFace({
                   : undefined
               }
               onPointerLeave={spotlight ? () => cancelBlockerSpotlight(task.id) : undefined}
-              onPointerDown={spotlight ? hold.onPointerDown : undefined}
-              onPointerMove={spotlight ? hold.onPointerMove : undefined}
-              onPointerUp={spotlight ? hold.onPointerUp : undefined}
-              onPointerCancel={
-                spotlight
-                  ? (event) => {
-                      hold.onPointerCancel(event);
-                      cancelBlockerSpotlight(task.id);
-                    }
-                  : undefined
-              }
-              onLostPointerCapture={spotlight ? hold.onLostPointerCapture : undefined}
-              onContextMenu={spotlight ? hold.onContextMenu : undefined}
+              onPointerCancel={spotlight ? () => cancelBlockerSpotlight(task.id) : undefined}
               className={cn(
                 '-m-1 flex shrink-0 items-center rounded-md p-1 text-destructive/80 transition-colors',
                 spotlightActive && 'bg-destructive/15 text-destructive',

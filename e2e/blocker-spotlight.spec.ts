@@ -387,9 +387,25 @@ test.describe('on a touch tablet', () => {
     await expect(pane).toBeHidden();
     await expect(page.getByRole('button', { name: 'Clear selection' })).toHaveCount(0);
 
+    // A finger that lands just beside the badge, on the card's number, still reaches it.
+    const box = (await badge.boundingBox())!;
+    await touch.press({ x: box.x - 8, y: box.y + box.height + 6 }, 700);
+    await expect(blockedCard).toHaveAttribute('data-spotlight', 'blocked');
+    await expect(page.getByRole('button', { name: 'Clear selection' })).toHaveCount(0);
+    await touch.lift();
+    await expect(blockedCard).not.toHaveAttribute('data-spotlight');
+    await page.waitForTimeout(300);
+    await expect(pane).toBeHidden();
+
+    // Further off, the press is the card's own, and its long press selects it.
+    await touch.press({ x: box.x - 30, y: box.y + box.height / 2 }, 700);
+    await expect(blockedCard).not.toHaveAttribute('data-spotlight');
+    await touch.lift();
+    await expect(page.getByRole('button', { name: 'Clear selection' })).toBeVisible();
+    await page.getByRole('button', { name: 'Clear selection' }).click();
+
     // A finger that sets off scrolling from the badge never lights the board.
     await touch.press(badge, 40);
-    const box = (await badge.boundingBox())!;
     await touch.move({ x: box.x + box.width / 2, y: box.y + box.height / 2 + 60 }, 120);
     await touch.hold(500);
     await expect(blockedCard).not.toHaveAttribute('data-spotlight');

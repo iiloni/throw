@@ -21,7 +21,7 @@ import { type DragState, drag, isPrimed, TOUCH_SLOP } from './drag';
 import type { BoardData, Project, Task } from './model';
 import { railGeometry, SideZone } from './SideZone';
 import { board, initialBoard, receiveBoard, update } from './state';
-import { TaskCard } from './TaskCard';
+import { BLOCKED_BADGE_REACH, TaskCard } from './TaskCard';
 
 function makeProject(id: string, key: string | null, name: string, members?: Project[]): Project {
   return {
@@ -578,7 +578,10 @@ describe('touch press-and-hold on the blocked badge', () => {
     const blockedCard = screen.getByRole('article', { name: 'APP-1 Ship release' });
     const blockerCard = screen.getByRole('article', { name: 'APP-2 Finish API' });
     const badge = blockedCard.querySelector<HTMLElement>('[data-blocked]')!;
-    return { blockedCard, blockerCard, badge };
+    // jsdom lays nothing out: the badge is a 20 px square centred on the finger's (100, 100).
+    badge.getBoundingClientRect = () => new DOMRect(90, 90, 20, 20);
+    const number = screen.getByText('APP-1');
+    return { blockedCard, blockerCard, badge, number };
   }
 
   it('spotlights the blockers once the finger has held, and hides them the moment it lifts', () => {
@@ -663,6 +666,31 @@ describe('touch press-and-hold on the blocked badge', () => {
     fireEvent.click(badge);
     expect(blockedCard).not.toHaveAttribute('data-spotlight');
     expect(board.get().openTaskId).toBe('blocked-task');
+  });
+
+  it('reaches a finger that just misses the badge, and leaves a press further off to the card', () => {
+    const { blockedCard, number } = renderBoard('full');
+
+    // On the card's number, inside the badge's reach.
+    const near = { ...finger, clientX: 90 - BLOCKED_BADGE_REACH + 2, clientY: 110 + 8 };
+    fireEvent.pointerDown(number, near);
+    act(() => vi.advanceTimersByTime(SPOTLIGHT_HOLD_MS));
+    expect(blockedCard).toHaveAttribute('data-spotlight', 'blocked');
+    expect(isPrimed()).toBe(false);
+    fireEvent.pointerUp(number, near);
+    expect(blockedCard).not.toHaveAttribute('data-spotlight');
+    fireEvent.click(number);
+    expect(board.get().openTaskId).toBeNull();
+    act(() => vi.advanceTimersByTime(100));
+
+    // Beyond it, the press is the card's: its long press selects it.
+    const far = { ...finger, clientX: 90 - BLOCKED_BADGE_REACH - 4 };
+    fireEvent.pointerDown(number, far);
+    act(() => vi.advanceTimersByTime(SPOTLIGHT_HOLD_MS));
+    expect(blockedCard).not.toHaveAttribute('data-spotlight');
+    expect(isPrimed()).toBe(true);
+    expect(board.get().selection).toEqual(['blocked-task']);
+    fireEvent.pointerUp(number, far);
   });
 
   it('leaves the badge to the card on paged boards: the compact board and a phone', () => {
