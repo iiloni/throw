@@ -2,6 +2,8 @@ import { ListTree, X } from 'lucide-react';
 import {
   AnimatePresence,
   animate,
+  type MotionStyle,
+  type MotionValue,
   motion,
   frame as motionFrame,
   PresenceContext,
@@ -20,6 +22,7 @@ import {
   useEffect,
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -35,7 +38,8 @@ import { IconButton } from '@/components/IconButton/IconButton';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { animateSteadySpring, springs, stopSteady } from '@/lib/motion';
+import { afterPaint, animateSteadySpring, springs, stopSteady } from '@/lib/motion';
+import { useMotionCheck } from '@/lib/useMotionCheck';
 import { cn } from '@/lib/utils';
 import { BoardColumn, ColumnHeader } from './BoardColumn';
 import { BoardSettingsPanel } from './BoardSettingsPanel';
@@ -68,17 +72,23 @@ import {
   railResize,
   selectProject,
   setSubtasksAsCards,
+  setTaskPaneExpanded,
   setTaskPaneWidth,
   taskPaneResize,
   update,
   useBoardSettings,
   useCollapsedColumns,
   useRailWidths,
+  useTaskPaneExpanded,
   useTaskPaneWidth,
 } from './state';
 import { PANE_MIN, SplitHandle, TaskPane } from './TaskView';
-import { SelectionContentContext } from './taskContent';
-import { TaskEditorReadyContext, TaskPaneWidthContext } from './taskMotionContext';
+import { SelectionContentContext, TaskContentContext } from './taskContent';
+import {
+  TaskEditorReadyContext,
+  TaskPaneExpandContext,
+  TaskPaneWidthContext,
+} from './taskMotionContext';
 
 const HANDLE_WIDTH = 24;
 /** The pane's `pr-6`: the closed rail reaches the window's edge, the pane does not. */
@@ -214,6 +224,7 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
   // the whole board on every frame of it for nothing.
   useLayoutEffect(() => holdRow(compact || widening !== null), [compact, widening, holdRow]);
   const reduced = useReducedMotion() ?? false;
+  const paneCover = usePaneCover(state);
   const rails = railGeometry({
     rowWidth: widening ?? rowWidth,
     restWidth,
@@ -325,68 +336,70 @@ export function DesktopBoard({ onReset }: { onReset?: () => void }) {
       <div ref={frame} className="flex min-w-0 flex-1 flex-col">
         {/* No title row: the rail names the project, and the board keeps the height. */}
         <div className="flex min-h-0 flex-1">
-          {docked && <BoardSearchSidebar />}
-          <div
-            ref={row}
-            className={cn(
-              'relative flex min-w-0 flex-1',
-              (compact || widening !== null) && 'overflow-hidden',
-            )}
-          >
-            {compact ? (
-              <CompactSplitBoard handoff={handoff} restWidth={restWidth} searchDocked={docked} />
-            ) : (
-              <>
-                {!backlogBound && backlogRail}
-                <div
-                  data-board-layout=""
-                  className="absolute inset-0 flex"
-                  style={widening === null ? undefined : { width: widening, right: 'auto' }}
-                >
-                  {/* The columns carry the top and bottom margin, so a rail in here runs full height. */}
-                  <ScrollArea sides data-seam="" className="flex-1">
-                    <ScrollAreaViewport
-                      data-origin="active"
-                      data-autoscroll-x=""
-                      data-inset-start={backlogBound ? 0 : rails.backlog.drawn}
-                      data-inset-end={closedBound ? 0 : rails.closed.drawn}
-                      className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3"
-                    >
-                      {backlogBound ? (
-                        <>
-                          {backlogRail}
-                          <RailGap />
-                        </>
-                      ) : (
-                        <ColumnsEdge geometry={rails.backlog} />
-                      )}
-                      {!covered &&
-                        active.map((status, index) => (
-                          <StatusColumn key={status.id} status={status} index={index} />
-                        ))}
-                      {closedBound ? (
-                        <>
-                          <RailGap />
-                          {closedRail}
-                        </>
-                      ) : (
-                        <ColumnsEdge geometry={rails.closed} trailing />
-                      )}
-                    </ScrollAreaViewport>
-                    <ScrollBar orientation="horizontal" />
-                  </ScrollArea>
-                </div>
-                {/* Keeps a sticky closed rail at the far edge when the backlog is not beside it. */}
-                <span aria-hidden className="pointer-events-none flex-1" />
-                {!closedBound && closedRail}
-              </>
-            )}
-            {!docked && <BoardSearch />}
-            <SelectionBar />
-            <LayoutMorph root={row} compact={compact} reduced={reduced} />
-          </div>
+          <BoardUnderPane {...paneCover}>
+            {docked && <BoardSearchSidebar />}
+            <div
+              ref={row}
+              className={cn(
+                'relative flex min-w-0 flex-1',
+                (compact || widening !== null) && 'overflow-hidden',
+              )}
+            >
+              {compact ? (
+                <CompactSplitBoard handoff={handoff} restWidth={restWidth} searchDocked={docked} />
+              ) : (
+                <>
+                  {!backlogBound && backlogRail}
+                  <div
+                    data-board-layout=""
+                    className="absolute inset-0 flex"
+                    style={widening === null ? undefined : { width: widening, right: 'auto' }}
+                  >
+                    {/* The columns carry the top and bottom margin, so a rail in here runs full height. */}
+                    <ScrollArea sides data-seam="" className="flex-1">
+                      <ScrollAreaViewport
+                        data-origin="active"
+                        data-autoscroll-x=""
+                        data-inset-start={backlogBound ? 0 : rails.backlog.drawn}
+                        data-inset-end={closedBound ? 0 : rails.closed.drawn}
+                        className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3"
+                      >
+                        {backlogBound ? (
+                          <>
+                            {backlogRail}
+                            <RailGap />
+                          </>
+                        ) : (
+                          <ColumnsEdge geometry={rails.backlog} />
+                        )}
+                        {!covered &&
+                          active.map((status, index) => (
+                            <StatusColumn key={status.id} status={status} index={index} />
+                          ))}
+                        {closedBound ? (
+                          <>
+                            <RailGap />
+                            {closedRail}
+                          </>
+                        ) : (
+                          <ColumnsEdge geometry={rails.closed} trailing />
+                        )}
+                      </ScrollAreaViewport>
+                      <ScrollBar orientation="horizontal" />
+                    </ScrollArea>
+                  </div>
+                  {/* Keeps a sticky closed rail at the far edge when the backlog is not beside it. */}
+                  <span aria-hidden className="pointer-events-none flex-1" />
+                  {!closedBound && closedRail}
+                </>
+              )}
+              {!docked && <BoardSearch />}
+              <SelectionBar />
+              <LayoutMorph root={row} compact={compact} reduced={reduced} />
+            </div>
+          </BoardUnderPane>
 
-          <OpenTaskPane frameWidth={frameWidth} />
+          <OpenTaskPane frameWidth={frameWidth} cover={paneCover.cover} />
         </div>
       </div>
     </div>
@@ -474,14 +487,71 @@ export function usePaneSpace(state: BoardState, frameWidth: number) {
 }
 
 /**
- * The open task beside the board, taking width from it, with a handle to adjust the split.
+ * Whether the open task is expanded over the whole board, as Catch's “Expand note” takes the
+ * Gallery's width. Only a real task can be: the prototype's has no control to collapse it.
  */
-export const OpenTaskPane = memo(function OpenTaskPane({ frameWidth }: { frameWidth: number }) {
+function useExpandedPane(state: BoardState) {
+  const [stored] = useTaskPaneExpanded();
+  const expandable = useContext(TaskContentContext) !== null;
+  return { expandable, expanded: expandable && stored && openTaskOf(state) !== undefined };
+}
+
+/**
+ * How far an expanded task covers the board (0 to 1), which the open pane drives, and whether
+ * it is expanded over it now.
+ */
+export function usePaneCover(state: BoardState) {
+  const cover = useMotionValue(0);
+  return { cover, covering: useExpandedPane(state).expanded };
+}
+
+/**
+ * The board, and its docked search, beside an open task. An expanding task grows over it as
+ * it fades, and it stays mounted and laid out for the split beneath, so collapsing finds it as
+ * it was: its columns, scroll and compact layout (`CompactSplitBoard`) never change for it.
+ * Out of reach while covered, and not drawn once it is wholly hidden.
+ */
+export function BoardUnderPane({
+  cover,
+  covering,
+  children,
+}: {
+  cover: MotionValue<number>;
+  covering: boolean;
+  children: ReactNode;
+}) {
+  const opacity = useTransform(() => 1 - cover.get());
+  const hidden = useMotionCheck(cover, (value) => value >= 1);
+  return (
+    <motion.div
+      data-board-under-pane=""
+      inert={covering}
+      aria-hidden={covering || undefined}
+      className="flex min-w-0 flex-1"
+      style={{ opacity, visibility: hidden ? 'hidden' : undefined }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/**
+ * The open task beside the board, taking width from it, with a handle to adjust the split.
+ * Expanded, it also grows over the board (`cover`) to the frame's full width.
+ */
+export const OpenTaskPane = memo(function OpenTaskPane({
+  frameWidth,
+  cover,
+}: {
+  frameWidth: number;
+  cover?: MotionValue<number>;
+}) {
   const state = board.use();
   const paneWidth = useEffectivePaneWidth(frameWidth);
   const [resizing, setResizing] = useState(false);
   const reduced = useReducedMotion();
   const openTask = openTaskOf(state);
+  const { expandable, expanded } = useExpandedPane(state);
 
   useEffect(() => {
     if (!openTask) {
@@ -519,7 +589,11 @@ export const OpenTaskPane = memo(function OpenTaskPane({ frameWidth }: { frameWi
           key="pane"
           task={openTask}
           paneWidth={paneWidth}
+          frameWidth={frameWidth}
           maxWidth={Math.max(PANE_MIN, frameWidth * 0.62)}
+          expandable={expandable}
+          expanded={expanded}
+          cover={cover}
           resizing={resizing}
           reduced={!!reduced}
           onResize={resize}
@@ -539,7 +613,11 @@ export const OpenTaskPane = memo(function OpenTaskPane({ frameWidth }: { frameWi
 function OpenTaskPaneFrame({
   task,
   paneWidth,
+  frameWidth,
   maxWidth,
+  expandable,
+  expanded,
+  cover,
   resizing,
   reduced,
   onResize,
@@ -547,7 +625,11 @@ function OpenTaskPaneFrame({
 }: {
   task: Task;
   paneWidth: number;
+  frameWidth: number;
   maxWidth: number;
+  expandable: boolean;
+  expanded: boolean;
+  cover?: MotionValue<number>;
   resizing: boolean;
   reduced: boolean;
   onResize: (width: number, keyboard: boolean) => void;
@@ -568,7 +650,63 @@ function OpenTaskPaneFrame({
   // loading and laying it out took frames from the middle of the slide.
   const [settled, setSettled] = useState(arrived || reduced);
   const target = useMotionValue(totalWidth);
-  const width = useTransform(() => open.get() * target.get());
+  // Expanding grows the pane over the board to the frame's width, from 0 (beside the board) to
+  // 1 (over all of it). The pane's place in the row stays its split width, so the board keeps
+  // its layout beneath; the rest reaches over it by a negative margin. Opened or closed while
+  // expanded, the pane slides at its expanded width, as rigidly as at its split one.
+  const expansion = useMotionValue(expanded ? 1 : 0);
+  const room = Math.max(0, frameWidth - totalWidth);
+  const gained = useTransform(() => expansion.get() * room);
+  const width = useTransform(() => open.get() * (target.get() + gained.get()));
+  const marginLeft = useTransform(() => -open.get() * gained.get());
+  // The task lays out at the width it is going to, so only expanding reflows it, as Catch's.
+  // Its split width as React renders it (a handle resize lands at once), and what expanding
+  // gains on top as a variable the expansion drives.
+  const gainedLength = useTransform(() => `${gained.get()}px`);
+  // Over the board's own layers (a floating search, the selection's dock) only while over it.
+  const zIndex = useTransform(() => (gained.get() > 0 ? 40 : 'auto'));
+  const handleOpacity = useTransform(() => 1 - expansion.get());
+  useLayoutEffect(() => {
+    if (!cover) return;
+    const update = () => cover.set(expansion.get() * open.get());
+    update();
+    const stopExpansion = expansion.on('change', update);
+    const stopOpen = open.on('change', update);
+    return () => {
+      stopExpansion();
+      stopOpen();
+      cover.set(0);
+    };
+  }, [cover, expansion, open]);
+  useLayoutEffect(() => {
+    const goal = expanded ? 1 : 0;
+    // Opening (or opened) already at its width: no expansion to see. A closing pane keeps it.
+    if (!present) return;
+    if (reduced || open.get() === 0) {
+      stopSteady(expansion);
+      expansion.jump(goal);
+      return;
+    }
+    if (expansion.get() === goal) return;
+    // Reflowing the task for its new width takes the first frame: keep that out of the
+    // spring's time, as Catch does. A reversal continues from where it is.
+    const cancel = afterPaint(() => {
+      void animateSteadySpring(expansion, goal, springs.pane);
+    });
+    return () => {
+      cancel();
+      stopSteady(expansion);
+    };
+  }, [expanded, expansion, open, present, reduced]);
+  const expand = useMemo(
+    () => (expandable ? { expanded, toggle: () => setTaskPaneExpanded(!expanded) } : null),
+    [expandable, expanded],
+  );
+  // The task lays out for the width it rests at: its column and workspace (ADR 0012) spring
+  // across their breakpoints on the same spring as the pane.
+  const layoutWidth = expanded
+    ? Math.max(paneWidth, frameWidth - HANDLE_WIDTH - PANE_MARGIN)
+    : paneWidth;
   useEffect(() => {
     if (resizing || reduced) {
       target.jump(totalWidth);
@@ -611,22 +749,39 @@ function OpenTaskPaneFrame({
     <motion.div
       inert={!present}
       data-task-pane-frame=""
-      className="h-full shrink-0 overflow-hidden"
-      style={{ width, opacity: open }}
+      data-expanded={expanded ? '' : undefined}
+      className="relative h-full shrink-0 overflow-hidden"
+      style={{ width, marginLeft, opacity: open, zIndex }}
     >
-      <div
+      <motion.div
         className="flex h-full w-full pt-[calc(var(--safe-top)+1.25rem)] pr-6 pb-[max(1.5rem,calc(var(--safe-bottom)+0.75rem))]"
-        style={{ minWidth: totalWidth }}
+        style={
+          {
+            '--pane-gained': gainedLength,
+            minWidth: `calc(${totalWidth}px + var(--pane-gained, 0px))`,
+          } as MotionStyle
+        }
       >
-        <SplitHandle width={paneWidth} max={maxWidth} onResize={onResize} onActive={onActive} />
+        {/* Expanded, there is nothing beside the task to share the width with: the grip
+            fades and is out of reach, and its place is the task's margin. */}
+        <motion.div
+          className="flex shrink-0"
+          inert={expanded}
+          aria-hidden={expanded || undefined}
+          style={{ opacity: handleOpacity }}
+        >
+          <SplitHandle width={paneWidth} max={maxWidth} onResize={onResize} onActive={onActive} />
+        </motion.div>
         <div className="h-full min-w-0 flex-1">
-          <TaskPaneWidthContext value={paneWidth}>
-            <TaskEditorReadyContext value={settled}>
-              <TaskPane task={task} />
-            </TaskEditorReadyContext>
+          <TaskPaneWidthContext value={layoutWidth}>
+            <TaskPaneExpandContext value={expand}>
+              <TaskEditorReadyContext value={settled}>
+                <TaskPane task={task} />
+              </TaskEditorReadyContext>
+            </TaskPaneExpandContext>
           </TaskPaneWidthContext>
         </div>
-      </div>
+      </motion.div>
     </motion.div>
   );
 }

@@ -14,3 +14,12 @@ export const TaskEditorReadyContext = createContext(true);
  * phone, where the task has the whole screen and keeps its stacked layout.
  */
 export const TaskPaneWidthContext = createContext<number | null>(null);
+
+/**
+ * The desktop pane's expansion over the board (Catch's “Expand note”): whether it is expanded,
+ * and the way to toggle it. Null where there is no board to expand over: a phone, the prototype.
+ */
+export const TaskPaneExpandContext = createContext<{
+  expanded: boolean;
+  toggle(): void;
+} | null>(null);

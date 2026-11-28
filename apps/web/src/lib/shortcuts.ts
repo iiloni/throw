@@ -114,6 +114,12 @@ export const SHORTCUTS = [
   { id: 'taskHistory', group: 'task', label: 'Show history', defaults: ['2'] },
   { id: 'taskLinks', group: 'task', label: 'Show links', defaults: ['3'] },
   {
+    id: 'expandTask',
+    group: 'task',
+    label: 'Expand the task over the board, or collapse it',
+    defaults: ['F'],
+  },
+  {
     id: 'postComment',
     group: 'task',
     label: 'Post or save a comment',

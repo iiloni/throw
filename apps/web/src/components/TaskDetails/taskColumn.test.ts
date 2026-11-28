@@ -2,6 +2,12 @@ import { motionValue } from 'motion/react';
 import { expect, it } from 'vitest';
 import { animateSteadySpring, springs, stopSteady } from '@/lib/motion';
 import {
+  ACTIVITY_GAP,
+  ACTIVITY_MAX,
+  ACTIVITY_MIN,
+  activitySpace,
+  activityWidth,
+  CARD_MAX,
   COLUMN_GAP,
   COLUMN_MIN,
   COLUMN_WIDTH,
@@ -10,6 +16,9 @@ import {
   columnProgress,
   columnSpace,
   foldHeight,
+  WORKSPACE_MIN,
+  workspaceFits,
+  workspaceMaxWidth,
 } from './taskColumn';
 
 it('gives a pane the column from the breakpoint, and never a phone', () => {
@@ -70,4 +79,38 @@ it('springs by frames, and a reversal continues from where the value is', async 
     true,
   );
   stopSteady(value);
+});
+
+it('makes a workspace of a pane from its breakpoint, keeping a card worth reading beside it', () => {
+  expect(workspaceFits(null)).toBe(false);
+  expect(workspaceFits(WORKSPACE_MIN - 1)).toBe(false);
+  expect(workspaceFits(WORKSPACE_MIN)).toBe(true);
+  // A workspace has room for the column too, so the links leave the tabs for it.
+  expect(columnFits(WORKSPACE_MIN)).toBe(true);
+  const beside = activityWidth(WORKSPACE_MIN) + ACTIVITY_GAP + COLUMN_WIDTH + COLUMN_GAP;
+  expect(WORKSPACE_MIN - beside).toBeGreaterThanOrEqual(560);
+});
+
+it('sizes the activity pane by the width, between its narrowest and widest', () => {
+  expect(activityWidth(WORKSPACE_MIN)).toBe(ACTIVITY_MIN);
+  expect(activityWidth(1600)).toBe(480);
+  expect(activityWidth(2600)).toBe(ACTIVITY_MAX);
+  expect(activitySpace(0, 400)).toBe(0);
+  expect(activitySpace(1, 400)).toBe(400 + ACTIVITY_GAP);
+  expect(activitySpace(0.5, 400)).toBe((400 + ACTIVITY_GAP) / 2);
+});
+
+it('caps a settled workspace at the card’s measure and what stands beside it, reaching it smoothly', () => {
+  const beside = activitySpace(1, ACTIVITY_MAX) + COLUMN_WIDTH + COLUMN_GAP;
+  expect(workspaceMaxWidth({ progress: 0, paneWidth: 2400, beside: 0 })).toBe('none');
+  expect(workspaceMaxWidth({ progress: 1, paneWidth: 2400, beside })).toBe(CARD_MAX + beside);
+  // Part way, the cap stands a share of the pane further out, and only comes in as it settles.
+  let last = Number.POSITIVE_INFINITY;
+  for (let step = 1; step <= 10; step++) {
+    const progress = step / 10;
+    const cap = workspaceMaxWidth({ progress, paneWidth: 2400, beside: beside * progress });
+    expect(typeof cap).toBe('number');
+    expect(cap as number).toBeLessThanOrEqual(last);
+    last = cap as number;
+  }
 });

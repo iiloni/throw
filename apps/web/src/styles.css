@@ -1156,6 +1156,16 @@ body:has(section.board-column[data-column-color]) .column-strip {
 :root[data-hide-scrollbars] [data-slot="scroll-area-scrollbar"] {
   display: none;
 }
+/*
+ * A list that keeps a lane of its own for the overlay bar wherever one is drawn (a fine pointer,
+ * scrollbars on), so the bar never runs over its cards. Kept while the list fits too, so its
+ * cards don't change width as it comes to scroll.
+ */
+@media not (pointer: coarse) {
+  :root:not([data-hide-scrollbars], [data-platform="android"]) [data-scrollbar-gutter] {
+    padding-right: 1rem;
+  }
+}
 
 /*
  * How far an open page lifts the dock over quick capture's card (Drawer). It changes on every

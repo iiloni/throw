@@ -49,6 +49,12 @@ On a phone the same boundary hands the shell's drawer the open task's dock and p
 Catch's split view does (`TaskDrawer`). A desktop pane at least 620 px wide moves the task's
 tags and subtasks to a side column beside the card while it has any (ADR 0012,
 `TaskDetails/TaskColumn.tsx`); later extras such as link previews join it there.
+Beside Back, Catch's expand button (and `F`) grows the desktop pane over the whole board, which
+stays mounted, inert and laid out for the split beneath (`BoardUnderPane`, `OpenTaskPaneFrame`),
+so collapsing never re-lays it out or starts a `LayoutMorph`. A pane 1200 px wide or more (an
+expanded one on most monitors) is a workspace: comments and history move to their own scrolling
+activity pane beyond the column, the card keeps an 840 px measure and the whole task stands
+centred past that (`useTaskWorkspace`, ADR 0012).
 When the board beside an open desktop pane would rest narrower than `COMPACT_BELOW` (an
 unfolded foldable or a narrow window), both desktop boards take a phone's layout in that half
 (`Board/CompactSplitBoard.tsx`): columns page one at a time under the `FlowTrack` (the pager is
