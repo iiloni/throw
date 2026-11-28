@@ -10,7 +10,15 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
-import { type ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import {
+  type ReactNode,
+  type Ref,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { NarrowedBar } from '@/components/BoardSearch/BoardFilters';
 import { type PhoneCapture, usePhonePalette } from '@/components/CommandPalette/PhonePalette';
 import { type Detent, Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
@@ -703,6 +711,8 @@ function BoardDrawer({
       detents={task || capturing ? ['closed'] : undefined}
       onDetent={goTo}
       move={!task && !capturing && (makingWay(held) || pick) ? <MovePanel pick={pick} /> : null}
+      // Cards chosen from the open backlog or closed tasks leave that list in view to choose more.
+      floatMove={pick}
       // An open task's drawer moves only while one of its panels is open.
       gesturesDisabled={
         held !== null || fingerDown || (!!task && !task.page) || (capturing && !capture.page)
@@ -781,9 +791,15 @@ function CardStack({ count }: { count: number }) {
  * With cards selected it holds the selection's controls, as an open task's dock does: Status
  * opens the grid, where tapping a status moves them (ADR 0009), and the others their pickers.
  */
-export function MovePanel({ pick }: { pick: boolean }) {
-  const state = board.use();
-  const held = drag.use();
+export function MovePanel({ pick: picking }: { pick: boolean }) {
+  const present = useIsPresent();
+  const reduced = !!useReducedMotion();
+  const live = { state: board.use(), held: drag.use(), pick: picking };
+  // Leaving, it keeps showing what it showed: a sent or cleared selection would otherwise
+  // count none selected, and a dropped card's grid would close, while it fades.
+  const kept = useRef(live);
+  if (present) kept.current = live;
+  const { state, held, pick } = kept.current;
   const content = useContext(SelectionContentContext);
   const { project, tasks } = current(state);
   const [chosen, setChosen] = useState<SelectionTab | null>(null);
@@ -807,59 +823,123 @@ export function MovePanel({ pick }: { pick: boolean }) {
         ? chosen
         : null;
   const open = pick || (held?.phase === 'dragging' && held.over);
+  const view = open ? tab : 'hint';
   return (
-    <motion.div
-      key="move"
+    <div
       // The drawer springs to a new view and follows a view's own height changes (Drawer).
       data-move-view={pick ? (tab ?? 'controls') : undefined}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.16 }}
+      className="relative"
     >
-      {pick && (
-        <div className="flex h-11 items-center pr-0.5 pl-2">
-          <span className="flex-1 font-medium text-sm tabular-nums">
-            {state.selection.length} selected
-          </span>
-          <IconButton label="Clear selection" onClick={() => update({ selection: [] })}>
-            <X />
-          </IconButton>
-        </div>
-      )}
-      {pick && content && (
-        <div role="toolbar" aria-label="Selected tasks" className="-mx-1 h-[var(--dock-height)]">
-          <SelectionControls
-            tabs={tabs}
-            onOpen={(next) => setChosen(next === tab ? null : next)}
-            controlProps={(name) => ({ 'aria-expanded': name === tab })}
-            tooltips={false}
-          />
-        </div>
-      )}
-      {!open ? (
-        <p className="flex h-10 items-center justify-center font-medium text-muted-foreground text-xs">
-          Move to a status
-        </p>
-      ) : tab === 'status' ? (
-        <div className={cn(pick && content && 'mt-1.5')}>
-          <StatusTargets
-            statuses={statuses}
-            onPick={pick ? (statusId) => sendSelection(statusId) : undefined}
-          />
-        </div>
-      ) : tab ? (
-        <section
-          aria-label={selectionTabTitle[tab]}
-          className={cn(
-            '-mx-2 mt-1.5 [--tags-max:min(24rem,48dvh)]',
-            tab === 'tags'
-              ? 'flex max-h-[min(24rem,48dvh)] flex-col overflow-hidden'
-              : 'max-h-[min(24rem,48dvh)] overflow-y-auto overscroll-contain',
-          )}
+      {/* Holding a selected card trades the selection's controls for the hint, and back. */}
+      <AnimatePresence initial={false} mode="popLayout">
+        <MoveView
+          key={pick ? 'selection' : 'held'}
+          name={pick ? 'selection' : 'held'}
+          reduced={reduced}
         >
-          <SelectionTabContent tab={tab} onDone={() => setChosen(null)} />
-        </section>
-      ) : null}
+          {pick && (
+            <div className="flex h-11 items-center pr-0.5 pl-2">
+              <span className="flex-1 font-medium text-sm tabular-nums">
+                {state.selection.length} selected
+              </span>
+              <IconButton label="Clear selection" onClick={() => update({ selection: [] })}>
+                <X />
+              </IconButton>
+            </div>
+          )}
+          {pick && content && (
+            <div
+              role="toolbar"
+              aria-label="Selected tasks"
+              className="-mx-1 h-[var(--dock-height)]"
+            >
+              <SelectionControls
+                tabs={tabs}
+                onOpen={(next) => setChosen(next === tab ? null : next)}
+                controlProps={(name) => ({ 'aria-expanded': name === tab })}
+                tooltips={false}
+              />
+            </div>
+          )}
+          {/* One view fades across another on the drawer's own spring, as its pages do, while
+              the drawer moves to the new view's height. */}
+          <div className="relative">
+            <AnimatePresence initial={false} mode="popLayout">
+              {view && (
+                <MoveView key={view} name={view} reduced={reduced}>
+                  {view === 'hint' ? (
+                    <p className="flex h-10 items-center justify-center font-medium text-muted-foreground text-xs">
+                      Move to a status
+                    </p>
+                  ) : view === 'status' ? (
+                    <div className={cn(pick && content && 'pt-1.5')}>
+                      <StatusTargets
+                        statuses={statuses}
+                        onPick={pick ? (statusId) => sendSelection(statusId) : undefined}
+                      />
+                    </div>
+                  ) : (
+                    <section
+                      aria-label={selectionTabTitle[view]}
+                      className={cn(
+                        '-mx-2 mt-1.5 [--tags-max:min(24rem,48dvh)]',
+                        view === 'tags'
+                          ? 'flex max-h-[min(24rem,48dvh)] flex-col overflow-hidden'
+                          : 'max-h-[min(24rem,48dvh)] overflow-y-auto overscroll-contain',
+                      )}
+                    >
+                      <SelectionTabContent
+                        tab={view}
+                        state={state}
+                        onDone={() => setChosen(null)}
+                      />
+                    </section>
+                  )}
+                </MoveView>
+              )}
+            </AnimatePresence>
+          </div>
+        </MoveView>
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/**
+ * One of the move target's views. A leaving one lifts out of the flow, so the drawer measures
+ * only the view arriving, and is inert: a quick second tap goes to what replaced it, and a
+ * held card neither drops on its tiles nor lands in them.
+ */
+function MoveView({
+  ref,
+  name,
+  reduced,
+  children,
+}: {
+  ref?: Ref<HTMLDivElement>;
+  name: string;
+  reduced: boolean;
+  children: ReactNode;
+}) {
+  const present = useIsPresent();
+  return (
+    <motion.div
+      ref={ref}
+      data-move-panel={name}
+      aria-hidden={!present || undefined}
+      inert={!present}
+      className={cn(!present && 'pointer-events-none')}
+      // With reduced motion it arrives whole, not a frame later than the view it replaces.
+      initial={reduced ? false : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      // Gone quickly, as the drawer's pages leave, so the two never read as one muddle.
+      exit={{
+        opacity: 0,
+        transition: reduced ? { duration: 0 } : { duration: 0.16, ease: 'easeIn' },
+      }}
+      transition={reduced ? { duration: 0 } : springs.smooth}
+    >
+      {children}
     </motion.div>
   );
 }

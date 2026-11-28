@@ -196,8 +196,18 @@ const selectionControlLabel: Record<SelectionTab, string> = {
 };
 
 /** One tab's content: the move grid here, the rest from the boundary. */
-export function SelectionTabContent({ tab, onDone }: { tab: SelectionTab; onDone: () => void }) {
-  const state = board.use();
+export function SelectionTabContent({
+  tab,
+  onDone,
+  state: given,
+}: {
+  tab: SelectionTab;
+  onDone: () => void;
+  /** The board as a leaving panel last showed it, in place of the board as it is. */
+  state?: BoardState;
+}) {
+  const live = board.use();
+  const state = given ?? live;
   const content = useContext(SelectionContentContext);
   const { project } = current(state);
   if (tab === 'status')
