@@ -45,10 +45,18 @@ export const clientMetadata = z.object({
   redirect_uris: z.array(redirect).min(1).max(16),
   token_endpoint_auth_method: z.literal('none').optional(),
 });
-const document = clientMetadata.extend({
-  client_id: z.string(),
-  client_name: clientMetadata.shape.client_name.unwrap(),
-});
+const document = clientMetadata
+  .extend({
+    client_id: z.string(),
+    token_endpoint_auth_method: z.string().optional(),
+    token_endpoint_auth_methods_supported: z.array(z.string()).min(1).optional(),
+    client_name: clientMetadata.shape.client_name.unwrap(),
+  })
+  .refine((meta) =>
+    meta.token_endpoint_auth_methods_supported
+      ? meta.token_endpoint_auth_methods_supported.includes('none')
+      : (meta.token_endpoint_auth_method ?? 'none') === 'none',
+  );
 const cache = new Map<string, { expires: number; data: z.infer<typeof document> }>();
 let active = 0;
 

@@ -59,7 +59,9 @@ A client presents its HTTPS Client ID Metadata Document URL. Throw verifies its 
 name and registered redirect URI (native loopback IP callbacks may vary the port), resolves every DNS answer under the webhook public-address
 policy and pins the connection to those answers. Operator webhook exceptions do not apply.
 Redirects are refused, responses are size-limited and the cache holds at most 256 documents.
-Clients without CIMD register public redirect URIs at `POST /api/oauth/register`. Registration
+Throw selects `none` when the CIMD document lists it among the client's supported methods,
+including when the legacy preference names another method. A client requiring signed
+assertions must use a provider that implements them. Clients without CIMD register public redirect URIs at `POST /api/oauth/register`. Registration
 is rate-limited and serialized against a 4,096-client cap. Registrations expire after 90 days.
 Additional requested grant types are ignored. Registration does not verify ownership of a
 client name. The consent view should show the callback host beside it.

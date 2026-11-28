@@ -168,6 +168,8 @@ export function publicOauth(clientAddress: (c: Context) => string | null) {
     if (c.req.header('content-type')?.split(';')[0] !== 'application/x-www-form-urlencoded')
       return c.json({ error: 'invalid_request' }, 400);
     const p = new URLSearchParams(await c.req.text());
+    if (c.req.header('authorization') || p.has('client_assertion') || p.has('client_secret'))
+      return c.json({ error: 'invalid_client' }, 400);
     if (hasRepeatedParameter(p)) return c.json({ error: 'invalid_request' }, 400);
     if (!grants.includes(p.get('grant_type') ?? ''))
       return c.json({ error: 'unsupported_grant_type' }, 400);
