@@ -1,5 +1,5 @@
-import { expect, type Page, test } from '@playwright/test';
-import { card, finger, fixture, taskRow, workspaceFixture } from './board-helpers';
+import { expect, type Locator, type Page, test } from '@playwright/test';
+import { card, centre, finger, fixture, settled, taskRow, workspaceFixture } from './board-helpers';
 import { shapeRows } from './helpers';
 import { newTag } from './tag-helpers';
 
@@ -174,8 +174,110 @@ test.describe('desktop', () => {
   });
 });
 
+/**
+ * What the move target shows over the next frames: the drawer's top, the views still arriving
+ * or shown (by name, with their opacity), the ones leaving, and whether the target has gone.
+ */
+function watchMoveTarget(page: Page, frames = 45) {
+  return page.evaluate(async (count) => {
+    const seen: { top: number; shown: Record<string, number>; leaving: number; gone: boolean }[] =
+      [];
+    for (let frame = 0; frame < count; frame++) {
+      await new Promise(requestAnimationFrame);
+      const views = [...document.querySelectorAll<HTMLElement>('[data-move-panel]')];
+      const shown: Record<string, number> = {};
+      for (const view of views)
+        if (!view.closest('[inert]'))
+          shown[view.dataset.movePanel!] = Number(getComputedStyle(view).opacity);
+      seen.push({
+        top: Math.round(document.querySelector('[data-drawer]')!.getBoundingClientRect().top),
+        shown,
+        leaving: views.filter((view) => view.closest('[inert]')).length,
+        gone: document.querySelector('[data-move-view]') === null,
+      });
+    }
+    return seen;
+  }, frames);
+}
+
+/** Taps `target` once it is still, watching the move target from the frame before. */
+async function watchTap(
+  page: Page,
+  touch: Awaited<ReturnType<typeof finger>>,
+  target: Locator,
+  frames?: number,
+) {
+  const at = await centre(await settled(target));
+  const watching = watchMoveTarget(page, frames);
+  await touch.tap(at);
+  return watching;
+}
+
 test.describe('phone', () => {
   test.skip(({ isMobile, browserName }) => !isMobile || browserName !== 'chromium', 'Touch input');
+
+  test('the selection drawer fades between its pickers and lets each go', async ({ page }) => {
+    await fixture(page);
+    const touch = await finger(page);
+    await touch.press(card(page, 'Earlier position'));
+    await touch.lift();
+    await touch.tap(card(page, 'Later position'));
+    await expect(page.getByText('2 selected')).toBeVisible();
+    const bar = toolbar(page);
+
+    // Opening a picker fades it in as the drawer rises to it.
+    let seen = await watchTap(page, touch, bar.getByRole('button', { name: 'Change status' }));
+    expect(seen.some(({ shown }) => shown.status! > 0 && shown.status! < 1)).toBe(true);
+    expect(new Set(seen.map(({ top }) => top)).size).toBeGreaterThan(2);
+    expect(seen.at(-1)!.leaving).toBe(0);
+
+    // Switching fades the next across the last, which is out of reach until it has gone.
+    seen = await watchTap(page, touch, bar.getByRole('button', { name: 'Change priority' }));
+    expect(seen.some(({ leaving }) => leaving > 0)).toBe(true);
+    expect(seen.at(-1)!.leaving).toBe(0);
+    await expect(page.getByRole('region', { name: 'Priority' })).toBeVisible();
+    await expect(page.locator('[data-move-panel="status"]')).toHaveCount(0);
+
+    // Closing it leaves the controls, with nothing left behind.
+    seen = await watchTap(page, touch, bar.getByRole('button', { name: 'Change priority' }));
+    expect(seen.some(({ leaving }) => leaving > 0)).toBe(true);
+    expect(seen.at(-1)!.leaving).toBe(0);
+    await expect(page.getByRole('region', { name: 'Priority' })).toHaveCount(0);
+
+    // Letting the selection go fades the target into the dock, still showing what it held.
+    await touch.tap(bar.getByRole('button', { name: 'Change status' }));
+    await expect(page.locator('[data-move-panel="status"]')).toBeVisible();
+    seen = await watchTap(page, touch, page.getByRole('button', { name: 'Clear selection' }));
+    expect(seen.some(({ leaving }) => leaving > 0)).toBe(true);
+    expect(seen.at(-1)!.gone).toBe(true);
+    await expect(page.getByText('0 selected')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'New task' })).toBeVisible();
+  });
+
+  test('with reduced motion the selection drawer switches its pickers in place', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await fixture(page);
+    const touch = await finger(page);
+    await touch.press(card(page, 'Earlier position'));
+    await touch.lift();
+    const bar = toolbar(page);
+    await touch.tap(bar.getByRole('button', { name: 'Change status' }));
+    await expect(page.locator('[data-move-panel="status"]')).toBeVisible();
+    const seen = await watchTap(
+      page,
+      touch,
+      bar.getByRole('button', { name: 'Change priority' }),
+      20,
+    );
+    // Every frame that shows the new picker shows it whole, and the last one has gone with it.
+    const priority = seen.filter(({ shown }) => 'priority' in shown);
+    expect(priority.length).toBeGreaterThan(0);
+    for (const { shown } of priority) expect(shown.priority).toBe(1);
+    expect(seen.filter(({ leaving }) => leaving > 0).length).toBeLessThanOrEqual(2);
+    expect(seen.at(-1)!.leaving).toBe(0);
+  });
 
   test('the drawer’s selection controls change priority, size and tags, and trash with undo', async ({
     page,

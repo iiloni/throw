@@ -497,9 +497,14 @@ test.describe('phone', () => {
     await touch.move({ x: width / 2, y: height - 40 });
     const ideas = tile(page, board.status('Ideas')).last();
     await expect(ideas).toBeVisible();
+    // The hint fades out under the grid and goes, rather than staying behind it.
+    await expect(page.locator('[data-move-panel="hint"]')).toHaveCount(0);
     await touch.move(ideas);
     await touch.hold(300);
     await touch.lift();
+    // The target fades into the dock and goes with all its views.
+    await expect(page.locator('[data-move-panel]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'New task' })).toBeVisible();
     await expect
       .poll(() => statusOf(page, board.headers, board.ids['Later position']!))
       .toBe(board.status('Ideas'));

@@ -293,6 +293,43 @@ describe('Drawer motion', () => {
     expect(screen.getByText('Edit form').closest('[aria-hidden]')).toBeNull();
   });
 
+  it('trades the move target for the dock, the leaving target inert until it has faded', async () => {
+    motionPreference.reduced = false;
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const view = (move: boolean) => (
+      <Drawer
+        label="Backlog"
+        dock={<p>Dock</p>}
+        detent="closed"
+        onDetent={() => {}}
+        page={null}
+        onClosePage={() => {}}
+        move={move ? <button type="button">Send</button> : null}
+      >
+        <p>Backlog list</p>
+      </Drawer>
+    );
+    const { rerender } = render(view(true));
+    expect(screen.getByText('Dock').closest('[hidden]')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Send' }).closest('[inert]')).toBeNull();
+    rerender(view(false));
+    // The dock is back at once while the target fades, out of reach of a second tap.
+    expect(screen.getByText('Dock').closest('[hidden]')).toBeNull();
+    expect(screen.getByText('Send').closest('[inert]')).not.toBeNull();
+    for (let frame = 0; frame < 60 && screen.queryByText('Send'); frame++) {
+      now += 16;
+      await settled();
+    }
+    expect(screen.queryByText('Send')).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
   it('slides by frames, so a long frame does not carry it most of the way at once', async () => {
     motionPreference.reduced = false;
     const onSettle = vi.fn();

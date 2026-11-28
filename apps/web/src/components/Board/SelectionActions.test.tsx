@@ -1,5 +1,13 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const motionPreference = vi.hoisted(() => ({ reduced: false }));
+vi.mock('motion/react', async (original) => ({
+  ...(await original<typeof import('motion/react')>()),
+  useReducedMotion: () => motionPreference.reduced,
+}));
+
 import { mockBoards } from './mockData';
 import type { Project, Task } from './model';
 import { MovePanel } from './PhoneBoard';
@@ -54,6 +62,7 @@ const garden = project('garden');
 const workspace: Project = { ...project('all'), members: [kitchen, garden] };
 
 beforeEach(() => {
+  motionPreference.reduced = false;
   localStorage.clear();
   board.set(initialBoard(mockBoards()));
   vi.stubGlobal(
@@ -172,6 +181,85 @@ describe('the phone’s selection panel', () => {
     showing([tag]);
     expect(screen.getByRole('button', { name: 'Change tags' })).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Tags' })).toBeNull();
+  });
+});
+
+describe('the phone’s selection panel moving between views', () => {
+  const content: SelectionContent = {
+    sizes: true,
+    panel: (panel) => <p>{`${panel} picker`}</p>,
+    trash: vi.fn(),
+  };
+  function selecting() {
+    const tasks = [task('a', 'kitchen'), task('b', 'kitchen')];
+    act(() => board.set({ ...initialBoard([{ project: kitchen, tasks }]), selection: ['a', 'b'] }));
+  }
+  const leaving = (text: string) => screen.getByText(text).closest('[inert]');
+
+  it('fades one picker across the next, the leaving one inert until it has gone', async () => {
+    selecting();
+    render(
+      <SelectionContentContext.Provider value={content}>
+        <MovePanel pick />
+      </SelectionContentContext.Provider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Change priority' }));
+    expect(leaving('priority picker')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Change size' }));
+    // Both drawn while they cross, but only the new one can be reached or tapped.
+    expect(screen.getByRole('region', { name: 'Size' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Priority' })).toBeNull();
+    expect(leaving('priority picker')).not.toBeNull();
+    expect(leaving('size picker')).toBeNull();
+    await waitFor(() => expect(screen.queryByText('priority picker')).toBeNull());
+    // Tapping the open one closes it the same way, leaving the controls alone.
+    fireEvent.click(screen.getByRole('button', { name: 'Change size' }));
+    expect(leaving('size picker')).not.toBeNull();
+    await waitFor(() => expect(screen.queryByText('size picker')).toBeNull());
+    expect(screen.getByRole('toolbar', { name: 'Selected tasks' })).toBeInTheDocument();
+  });
+
+  it('switches in place with reduced motion', async () => {
+    motionPreference.reduced = true;
+    selecting();
+    render(
+      <SelectionContentContext.Provider value={content}>
+        <MovePanel pick />
+      </SelectionContentContext.Provider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Change priority' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Change tags' }));
+    for (let frame = 0; frame < 3; frame++)
+      await act(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+    expect(screen.queryByText('priority picker')).toBeNull();
+    expect(screen.getByText('tags picker')).toBeInTheDocument();
+  });
+
+  it('keeps showing the selection it was given while it leaves', () => {
+    selecting();
+    // As the phone board does: the panel shows while cards are selected.
+    function Host() {
+      const shown = board.use().selection.length > 0;
+      return (
+        <AnimatePresence>
+          {shown && (
+            <motion.div key="move" exit={{ opacity: 0, transition: { duration: 1 } }}>
+              <MovePanel pick />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      );
+    }
+    render(
+      <SelectionContentContext.Provider value={content}>
+        <Host />
+      </SelectionContentContext.Provider>,
+    );
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
+    // Sent or cleared, the selection is gone before the panel has faded.
+    act(() => update({ selection: [] }));
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
+    expect(screen.queryByText('0 selected')).toBeNull();
   });
 });
 

@@ -146,7 +146,9 @@ its folded column or fade. A held card settles it all at once, and reduced motio
 click on desktop, long press on a phone) is edited together through `Board/SelectionActions.tsx`:
 the desktop `SelectionBar` and the phone `MovePanel` share its controls, and the boundaries
 supply the priority, size and tag panels and the trash action (`components/BulkActions`) through
-`SelectionContentContext`, so the prototype only moves.
+`SelectionContentContext`, so the prototype only moves. On a phone the move target trades places
+with the dock (the Drawer's `MoveFace`) and `MovePanel`'s views fade across on the drawer's spring;
+a leaving one is inert and frozen at what it last showed.
 Settings (`/settings/*`) and project settings (`/w/:workspaceId/p/:projectId/settings`,
 with project trash beside it at `/trash`) share Catch's `SettingsLayout`: pages listed
 beside the open one on wide screens, and a dock page picker on phones

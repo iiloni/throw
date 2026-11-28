@@ -597,12 +597,19 @@ export function Drawer({
         <div
           ref={head}
           className={cn(
-            'shrink-0 touch-none select-none px-3 pt-3',
+            'relative shrink-0 touch-none select-none px-3 pt-3',
             // The dock sits a little higher off the bottom edge than the header of an open drawer.
             detent === 'closed' && !paged ? 'pb-4' : 'pb-2',
           )}
         >
-          {moveInHead && move}
+          {/* The move target and the dock trade places, as the board's dock and a task's do. */}
+          <AnimatePresence initial={false}>
+            {moveInHead && (
+              <MoveFace key="move" reduced={!!reduced}>
+                {move}
+              </MoveFace>
+            )}
+          </AnimatePresence>
           {page && !docked && !moveInHead && (
             <div className="flex h-[var(--dock-height)] items-center gap-2 pl-2">
               <h2 className="flex-1 truncate font-bold font-display text-xl tracking-[-0.01em]">
@@ -614,9 +621,16 @@ export function Drawer({
             </div>
           )}
           {/* Kept mounted under a page, so focus can return to the dock button that opened it. */}
-          <div hidden={(paged && !docked) || moveInHead} className="relative">
+          <motion.div
+            hidden={(paged && !docked) || moveInHead}
+            className="relative origin-top"
+            initial={false}
+            // Gone at once under the move target, which takes its place, and back as it leaves.
+            animate={moveInHead ? { opacity: 0, scale: 0.92 } : { opacity: 1, scale: 1 }}
+            transition={reduced || moveInHead ? { duration: 0 } : springs.smooth}
+          >
             {dock}
-          </div>
+          </motion.div>
         </div>
         <div
           className={cn(
@@ -648,20 +662,76 @@ export function Drawer({
           ) : (
             children
           )}
-          {grooming && (
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col justify-end">
-              <div
-                ref={footer}
-                data-drop-expand=""
-                className="glass-thick pointer-events-auto rounded-t-[1.75rem] px-3 pt-3 pb-[calc(var(--safe-bottom)+0.5rem)] shadow-[0_-8px_24px_-12px_oklch(0_0_0/0.25)]"
-              >
+          <AnimatePresence initial={false}>
+            {grooming && (
+              <MoveFooter key="move" footerRef={footer} reduced={!!reduced}>
                 {move}
-              </div>
-            </div>
-          )}
+              </MoveFooter>
+            )}
+          </AnimatePresence>
         </div>
       </motion.section>
     </>
+  );
+}
+
+/**
+ * The move target in the drawer's header. A leaving one lifts out of the flow, so the drawer
+ * measures only the dock coming back, and is inert, so a quick second tap cannot land on it.
+ */
+function MoveFace({ reduced, children }: { reduced: boolean; children: ReactNode }) {
+  const present = useIsPresent();
+  return (
+    <motion.div
+      aria-hidden={!present || undefined}
+      inert={!present}
+      className={cn('origin-top', !present && 'pointer-events-none absolute inset-x-3 top-3')}
+      initial={reduced ? false : { opacity: 0, scale: 0.92 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{
+        opacity: 0,
+        scale: reduced ? 1 : 0.92,
+        transition: { duration: reduced ? 0 : 0.16 },
+      }}
+      transition={reduced ? { duration: 0 } : springs.smooth}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/** The move target floating at the foot of a groomed backlog, rising in and sinking away. */
+function MoveFooter({
+  footerRef,
+  reduced,
+  children,
+}: {
+  footerRef: RefObject<HTMLDivElement | null>;
+  reduced: boolean;
+  children: ReactNode;
+}) {
+  const present = useIsPresent();
+  return (
+    <motion.div
+      aria-hidden={!present || undefined}
+      inert={!present}
+      className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col justify-end"
+      initial={reduced ? false : { y: 24, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      exit={{ y: reduced ? 0 : 24, opacity: 0 }}
+      transition={reduced ? { duration: 0 } : springs.snappy}
+    >
+      <div
+        ref={present ? footerRef : undefined}
+        data-drop-expand={present ? '' : undefined}
+        className={cn(
+          'glass-thick rounded-t-[1.75rem] px-3 pt-3 pb-[calc(var(--safe-bottom)+0.5rem)] shadow-[0_-8px_24px_-12px_oklch(0_0_0/0.25)]',
+          present && 'pointer-events-auto',
+        )}
+      >
+        {children}
+      </div>
+    </motion.div>
   );
 }
 

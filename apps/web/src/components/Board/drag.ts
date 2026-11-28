@@ -802,7 +802,10 @@ function land(taskId: string, statusId: string | null) {
     const home =
       card || !statusId
         ? null
-        : (document.querySelector<HTMLElement>(`[data-drop-status="${CSS.escape(statusId)}"]`) ??
+        : // Not into a tile of a move target fading out (inert) as the drag ends.
+          (document.querySelector<HTMLElement>(
+            `[data-drop-status="${CSS.escape(statusId)}"]:not([inert] *)`,
+          ) ??
           document.querySelector<HTMLElement>(`[data-status-home~="${CSS.escape(statusId)}"]`));
     if (!card && !state.swallowed) drag.set({ ...state, swallowed: true });
     let x = overlayPosition.x.get();
