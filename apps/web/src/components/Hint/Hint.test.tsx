@@ -108,3 +108,20 @@ it('can be the child of another trigger, such as a menu’s', async () => {
   act(() => button.focus());
   expect(await screen.findByRole('tooltip')).toHaveTextContent('Work');
 });
+
+it('follows the label with a shortcut’s keys, as this device has them', async () => {
+  const { setBindings, resetBindings } = await import('@/lib/shortcuts');
+  render(
+    <Hint label="Search" shortcut="search">
+      <button type="button" aria-label="Search" />
+    </Hint>,
+  );
+  const button = screen.getByRole('button', { name: 'Search' });
+  expect(button).toHaveAttribute('aria-keyshortcuts', 'Control+K /');
+  act(() => button.focus());
+  const tooltip = await screen.findByRole('tooltip');
+  expect(tooltip).toHaveTextContent('SearchCtrlK');
+  act(() => setBindings('search', ['Mod+J']));
+  expect(document.querySelector('[data-slot="tooltip-content"]')).toHaveTextContent('CtrlJ');
+  act(() => resetBindings());
+});

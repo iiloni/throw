@@ -16,9 +16,11 @@ import {
   useLayoutEffect,
   useRef,
 } from 'react';
+import { Hint } from '@/components/Hint/Hint';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
+import { useShortcut } from '@/lib/shortcuts';
 import { cn } from '@/lib/utils';
 import { useBacklogSpotlightBlocker, useStatusSpotlightBlocker } from './blockers';
 import { drag, makingWay } from './drag';
@@ -441,6 +443,17 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [canEscape, zone]);
 
+  // `[` and `]` open a rail as a column or close it, from whatever it shows.
+  useShortcut(zone === 'backlog' ? 'toggleBacklog' : 'toggleClosed', () => {
+    const now = board.get();
+    if (drag.get() || now.carrying) return false;
+    const next = now[zone] === 'strip' ? 'panel' : 'strip';
+    // Focus inside the rail would be lost with it, so it goes to the strip left in its place.
+    if (next === 'strip' && railRef.current?.contains(document.activeElement))
+      restoreFocusTo.current = 'strip';
+    setView(next);
+  });
+
   useLayoutEffect(() => {
     if (restoreFocusTo.current === null) return;
     if (restoreFocusTo.current !== view) {
@@ -534,26 +547,32 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
               ))}
             </motion.div>
           ) : view === 'strip' && !geometry.tracking ? (
-            <motion.button
+            <Hint
               key="strip"
-              ref={stripButton}
-              type="button"
-              aria-label={`Open ${title.toLowerCase()}, ${count} tasks`}
-              data-spotlight={hasBlocker ? 'blocker' : undefined}
-              data-spotlight-instant={reduced ? '' : undefined}
-              {...stripPress}
-              className="spotlight-strip group absolute inset-0 flex select-none flex-col items-center gap-4 pt-[calc(var(--safe-top)+2.375rem)] text-muted-foreground outline-none [-webkit-touch-callout:none] hover:bg-foreground/[0.04] hover:text-foreground active:bg-foreground/[0.07] focus-visible:ring-[3px] focus-visible:ring-ring/60 focus-visible:ring-inset"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.16 }}
+              label={`Open ${title.toLowerCase()}`}
+              side={start ? 'right' : 'left'}
+              shortcut={zone === 'backlog' ? 'toggleBacklog' : 'toggleClosed'}
             >
-              <Icon className="size-5" aria-hidden />
-              <span className="font-display font-semibold text-sm [writing-mode:vertical-rl]">
-                {title}
-              </span>
-              <span className="text-xs tabular-nums">{count}</span>
-            </motion.button>
+              <motion.button
+                ref={stripButton}
+                type="button"
+                aria-label={`Open ${title.toLowerCase()}, ${count} tasks`}
+                data-spotlight={hasBlocker ? 'blocker' : undefined}
+                data-spotlight-instant={reduced ? '' : undefined}
+                {...stripPress}
+                className="spotlight-strip group absolute inset-0 flex select-none flex-col items-center gap-4 pt-[calc(var(--safe-top)+2.375rem)] text-muted-foreground outline-none [-webkit-touch-callout:none] hover:bg-foreground/[0.04] hover:text-foreground active:bg-foreground/[0.07] focus-visible:ring-[3px] focus-visible:ring-ring/60 focus-visible:ring-inset"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.16 }}
+              >
+                <Icon className="size-5" aria-hidden />
+                <span className="font-display font-semibold text-sm [writing-mode:vertical-rl]">
+                  {title}
+                </span>
+                <span className="text-xs tabular-nums">{count}</span>
+              </motion.button>
+            </Hint>
           ) : (
             <motion.div
               key="open"
@@ -581,7 +600,11 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
                 >
                   {view === 'full' ? <Minimize2 /> : <Maximize2 />}
                 </IconButton>
-                <IconButton label={`Close ${title.toLowerCase()}`} onClick={() => setView('strip')}>
+                <IconButton
+                  label={`Close ${title.toLowerCase()}`}
+                  shortcut={zone === 'backlog' ? 'toggleBacklog' : 'toggleClosed'}
+                  onClick={() => setView('strip')}
+                >
                   {start ? <PanelLeftClose /> : <PanelRightClose />}
                 </IconButton>
               </div>

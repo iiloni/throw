@@ -139,6 +139,13 @@ click on desktop, long press on a phone) is edited together through `Board/Selec
 the desktop `SelectionBar` and the phone `MovePanel` share its controls, and the boundaries
 supply the priority, size and tag panels and the trash action (`components/BulkActions`) through
 `SelectionContentContext`, so the prototype only moves.
+Keyboard shortcuts live in `lib/shortcuts.ts`: their definitions and default chords, the
+device's overrides (local storage) and one window listener. A component runs one with
+`useShortcut(id, handler)`; plain keys never run while typing or while a dialog, menu or list
+has the keys, and a handler returning false leaves the key to the page. `Hint`, `IconButton`
+and `DockControl` take a `shortcut` to show its keycaps (`components/KeyboardShortcuts/Keys.tsx`);
+the shell hosts the `?` list (`ShortcutsHelp`), and `/settings/shortcuts` rebinds them. Escape,
+Enter, Space and the card arrows stay in their components and are listed as built in.
 Settings (`/settings/*`) and project settings (`/w/:workspaceId/p/:projectId/settings`,
 with project trash beside it at `/trash`) share Catch's `SettingsLayout`: pages listed
 beside the open one on wide screens, and a dock page picker on phones
