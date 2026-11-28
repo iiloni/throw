@@ -7,6 +7,7 @@ import {
   Columns3,
   Layers,
   type LucideIcon,
+  Network,
   Pencil,
   Plus,
   Settings,
@@ -189,6 +190,16 @@ export function ProjectSwitcher({ open, onClose }: { open: boolean; onClose: () 
                     </nav>
                   )}
                   <div className="grid auto-cols-fr grid-flow-col gap-1.5 border-t pt-3">
+                    {shell.board && (
+                      <FooterAction
+                        icon={shell.view === 'graph' ? Columns3 : Network}
+                        label={shell.view === 'graph' ? 'Show the board' : 'Dependency graph'}
+                        short={shell.view === 'graph' ? 'Board' : 'Graph'}
+                        onSelect={then(() =>
+                          shell.showView(shell.view === 'graph' ? 'board' : 'graph'),
+                        )}
+                      />
+                    )}
                     {project && !shell.crossBoard && (
                       <FooterAction
                         icon={SlidersHorizontal}

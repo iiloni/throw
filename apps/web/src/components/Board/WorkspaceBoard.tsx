@@ -2,7 +2,9 @@ import type { Project as ProjectRow } from '@throw/shared';
 import { AnimatePresence } from 'motion/react';
 import { useMemo, useRef, useState } from 'react';
 import { ShellMenu } from '@/components/AppShell/ShellMenu';
+import { useShell } from '@/components/AppShell/shell';
 import { useSelectionContent } from '@/components/BulkActions/BulkActions';
+import { DependencyGraph } from '@/components/DependencyGraph/DependencyGraph';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { type TaskPanel, taskDrawerContent } from '@/components/TaskDetails/TaskControls';
 import { TaskDetails } from '@/components/TaskDetails/TaskDetails';
@@ -63,6 +65,7 @@ export function WorkspaceBoard({
   onSearch: () => void;
 }) {
   const projects = useSameRows(given);
+  const graph = useShell().view === 'graph';
   const { statuses, isLoading: loadingStatuses } = useStatuses();
   const { tasks, isLoading: loadingTasks } = useTasks();
   const { tags } = useAllTags();
@@ -167,7 +170,17 @@ export function WorkspaceBoard({
         <SelectionContentContext.Provider value={selectionContent}>
           <div className="relative h-full" aria-busy={awaitingTasks}>
             {!phone && <h1 className="sr-only">All projects</h1>}
-            {phone ? (
+            {graph ? (
+              <DependencyGraph
+                phone={phone}
+                title={
+                  <h1 aria-label="All projects" className="min-w-0">
+                    <ShellMenu phone titleClassName="text-[1.75rem]" />
+                  </h1>
+                }
+                syncIndicator={<SyncIndicator />}
+              />
+            ) : phone ? (
               <WorkspacePhoneBoard
                 title={
                   <h1 aria-label="All projects" className="min-w-0">

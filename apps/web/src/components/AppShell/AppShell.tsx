@@ -3,6 +3,7 @@ import { comparePositions } from '@throw/shared';
 import {
   Columns3,
   MoreHorizontal,
+  Network,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -204,10 +205,12 @@ export function AppShell() {
     });
   }, [navigating, workspace, project, params.workspaceId, remembered, remember]);
 
+  // The graph is a way of looking at any board: moving between boards keeps it.
+  const boardView = view === 'graph' ? 'graph' : 'board';
   function selectProject(
     workspaceId: string,
     projectId: string,
-    nextView: ProjectView = 'board',
+    nextView: ProjectView = boardView,
     replace = false,
     viewTransition?: false,
   ) {
@@ -234,7 +237,24 @@ export function AppShell() {
       void navigate({
         to: '/w/$workspaceId/board',
         params: { workspaceId: workspace.id },
-        search: { view: 'board' },
+        search: { view: boardView },
+      });
+  }
+  function showView(next: 'board' | 'graph') {
+    if (!workspace || next === boardView) return;
+    if (crossBoard)
+      void navigate({
+        to: '/w/$workspaceId/board',
+        params: { workspaceId: workspace.id },
+        search: (prev) => ({ ...prev, view: next }),
+        replace: true,
+      });
+    else if (project)
+      void navigate({
+        to: '/w/$workspaceId/p/$projectId',
+        params: { workspaceId: workspace.id, projectId: project.id },
+        search: (prev) => ({ ...prev, view: next }),
+        replace: true,
       });
   }
   useEffect(() => {
@@ -322,6 +342,7 @@ export function AppShell() {
     openForm: setForm,
     switcher: desktop ? null : { open: switcherOpen, show: openSwitcher },
     goBoard,
+    showView,
     openPalette,
     search,
     openTask: (projectId, taskId, created) => {
@@ -331,7 +352,7 @@ export function AppShell() {
       // loads, the board still on screen is leaving, so the task goes to its own board.
       const inPlace = !navigating && (crossBoard || (project?.id === projectId && projectBoard));
       // The task's own opening is the motion here; a cross-fade would run under it.
-      if (!inPlace) selectProject(workspace.id, projectId, 'board', false, false);
+      if (!inPlace) selectProject(workspace.id, projectId, boardView, false, false);
     },
     goProjectSettings: (project, section) => {
       void navigate({
@@ -421,6 +442,19 @@ export function AppShell() {
                         />
                       )}
                     </span>
+                  </RailButton>
+                </div>
+              )}
+              {fullBoard && (
+                <div className="mt-1 px-3">
+                  <RailButton
+                    label="Dependency graph"
+                    expanded={expanded}
+                    pressed={view === 'graph'}
+                    active={view === 'graph'}
+                    onClick={() => showView(view === 'graph' ? 'board' : 'graph')}
+                  >
+                    <Network aria-hidden className="size-5" />
                   </RailButton>
                 </div>
               )}
@@ -587,6 +621,7 @@ function RailButton({
   expanded,
   active,
   expandedControl,
+  pressed,
   connected,
   badge,
   children,
@@ -606,6 +641,8 @@ function RailButton({
   active?: boolean;
   /** Panel toggle state (e.g. Search): sets `aria-expanded` instead of `aria-current="page"`. */
   expandedControl?: boolean;
+  /** A view toggle (e.g. the dependency graph): sets `aria-pressed` instead of `aria-current`. */
+  pressed?: boolean;
   /** Extends flush into the docked search sidebar at the same elevation with concave fillets. */
   connected?: boolean;
   badge?: ReactNode;
@@ -618,8 +655,12 @@ function RailButton({
 }) {
   const props = {
     'aria-label': label,
-    'aria-current': active && expandedControl === undefined ? ('page' as const) : undefined,
+    'aria-current':
+      active && expandedControl === undefined && pressed === undefined
+        ? ('page' as const)
+        : undefined,
     'aria-expanded': expandedControl,
+    'aria-pressed': pressed,
     'data-connected': connected ? '' : undefined,
     'data-color': tint ?? undefined,
     className: cn(

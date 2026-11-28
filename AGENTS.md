@@ -156,6 +156,15 @@ keyboard carry. The collection hooks hold
 their last rows through a reconnect's full snapshot (`lib/steadyRows.ts`), so the board
 does not unmount while a shape reloads.
 
+The dependency graph (`components/DependencyGraph`) is either board seen as its blocking
+relations, at `view=graph` (`ShellState.showView`; the rail's Dependency graph button and the
+phone switcher's footer switch, and `pageAt` cross-fades between the two). The boundaries
+render it in place of the board, so the task pane, task screens, search and filters are the
+board's own. `graphModel.ts` turns the board's data, relations and `TaskBlockersContext` into
+nodes and edges (states match the cards' blocked mark), `layout.ts` is the pure layered
+layout and `analysis.ts` the critical path, reachability and bottleneck counts, all unit
+tested. `viewport.ts` pans and zooms by motion values; the canvas fits itself until moved.
+
 Several accounts can be signed in on one device (ADR 0016): `lib/auth.ts` keeps the list,
 the tab's account (`sessionStorage`) and the `/u/<n>` address prefix the router strips and
 adds (`routerRewrite`); `lib/accounts.ts` switches (a full load) and signs one account out.

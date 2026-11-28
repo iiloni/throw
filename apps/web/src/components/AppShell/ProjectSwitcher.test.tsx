@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -78,6 +78,7 @@ function setup(overrides: Record<string, unknown> = {}) {
     selectWorkspace: vi.fn(),
     openForm: vi.fn(),
     goBoard: vi.fn(),
+    showView: vi.fn(),
     goSettings: vi.fn(),
     goProjectSettings: vi.fn(),
     goTrash: vi.fn(),
@@ -166,6 +167,22 @@ describe('project switcher', () => {
     fireEvent.click(button('Settings'));
     expect(goSettings).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledTimes(5);
+  });
+
+  it('switches a board to its dependency graph and back from the footer', () => {
+    const { showView, onClose } = setup({ board: true, view: 'board' });
+    fireEvent.click(button('Dependency graph'));
+    expect(showView).toHaveBeenCalledWith('graph');
+    expect(onClose).toHaveBeenCalledOnce();
+    cleanup();
+    const shown = setup({ board: true, view: 'graph' });
+    fireEvent.click(button('Show the board'));
+    expect(shown.showView).toHaveBeenCalledWith('board');
+  });
+
+  it('offers no graph away from a board', () => {
+    setup({ board: false });
+    expect(screen.queryByRole('button', { name: 'Dependency graph' })).toBeNull();
   });
 
   it('marks All projects on the cross-project board, without project settings', () => {
