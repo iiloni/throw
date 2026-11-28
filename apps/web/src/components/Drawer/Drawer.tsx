@@ -706,8 +706,13 @@ export function Drawer({
                 }}
                 className={cn(
                   'flex min-h-0 flex-col',
-                  // A fitted page lifted by the keyboard keeps to the room above it.
-                  shown.fit ? 'max-h-[calc(100%-var(--keyboard))]' : 'flex-1',
+                  // A fitted page lifted by the keyboard keeps to the room above it. Over a card
+                  // a page takes the keyboard's place instead, unless it is typed in.
+                  !shown.fit
+                    ? 'flex-1'
+                    : carded && !typingInPage
+                      ? 'max-h-full'
+                      : 'max-h-[calc(100%-var(--keyboard))]',
                 )}
               >
                 {shown.content}
