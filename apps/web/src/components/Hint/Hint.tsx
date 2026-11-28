@@ -3,7 +3,9 @@ import { Slot } from 'radix-ui';
 import type { HTMLAttributes, ReactElement, Ref } from 'react';
 import { useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { ariaShortcut, ShortcutKeys } from '@/components/KeyboardShortcuts/Keys';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import type { ShortcutId } from '@/lib/shortcuts';
 
 export type HintSide = 'top' | 'right' | 'bottom' | 'left';
 
@@ -22,6 +24,7 @@ export function Hint({
   disabled = false,
   whenTruncated = false,
   describe = false,
+  shortcut,
   ref,
   onPointerMove,
   onFocus,
@@ -41,6 +44,8 @@ export function Hint({
    * the element's name and visible text.
    */
   describe?: boolean;
+  /** A keyboard shortcut for the same action: its keys follow the label, as this device has them. */
+  shortcut?: ShortcutId;
 }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLElement | null>(null);
@@ -102,11 +107,14 @@ export function Hint({
           if (!event.currentTarget.matches(':focus-visible')) event.preventDefault();
         }}
         {...description}
+        aria-keyshortcuts={ariaShortcut(shortcut)}
       >
         {children}
       </TooltipTrigger>
       <TooltipContent side={side}>
         <span className="min-w-0">{label}</span>
+        {/* The trigger names its keys in `aria-keyshortcuts`; these are for the eye. */}
+        {shortcut && <ShortcutKeys id={shortcut} spoken={false} />}
       </TooltipContent>
       {hidden}
     </Tooltip>

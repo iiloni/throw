@@ -2,7 +2,6 @@ import {
   Check,
   CheckCheck,
   ChevronDown,
-  ChevronRight,
   ChevronsRightLeft,
   Plus,
   Search,
@@ -11,12 +10,21 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { DropdownMenu } from 'radix-ui';
-import { type ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import {
+  type ReactNode,
+  type Ref,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { NarrowedBar } from '@/components/BoardSearch/BoardFilters';
 import { type PhoneCapture, usePhonePalette } from '@/components/CommandPalette/PhonePalette';
-import { type Detent, Drawer, type DrawerPage } from '@/components/Drawer/Drawer';
+import { DockFace } from '@/components/Drawer/DockFace';
+import type { Detent, DrawerPage } from '@/components/Drawer/Drawer';
+import { useDrawerSlot } from '@/components/Drawer/DrawerHost';
 import { IconButton } from '@/components/IconButton/IconButton';
-import { boardDrawerPage } from '@/components/ManagementSurface/ManagementSurface';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
@@ -169,7 +177,7 @@ export function PhoneBoard({
         <NarrowedBar />
       </header>
 
-      <div className="relative flex min-h-0 flex-1" inert={covered}>
+      <div className="relative flex min-h-0 flex-1" data-board-cover="" inert={covered}>
         <div
           ref={pagerRef}
           data-pager=""
@@ -219,9 +227,9 @@ export const pageClass = 'flex w-full shrink-0 snap-center flex-col px-[var(--pa
 /**
  * The current column by name, and the active columns as one track in the order work moves
  * through them: the ones behind are filled in, so the header says how far along the board
- * the page is. The next column is named at the end, a step further along. On a board whose
- * columns fold, the current one folds from beside its name, and a folded one is a short handle
- * on the track that the pager skips; tapping the handle opens the column and turns to it.
+ * the page is, and each carries its column's count. On a board whose columns fold, the current
+ * one folds from the end of its name's row, and a folded one is a short handle on the track
+ * that the pager skips; tapping the handle opens the column and turns to it.
  */
 export function FlowTrack({
   statuses,
@@ -240,7 +248,6 @@ export function FlowTrack({
   const reduced = useReducedMotion();
   const navRef = useRef<HTMLElement>(null);
   const status = statuses[page];
-  const next = statuses[page + 1];
   const track = folding?.statuses ?? statuses;
   const at = track.findIndex(({ id }) => id === status?.id);
   // Which way the name slides: the way the board turned.
@@ -286,47 +293,51 @@ export function FlowTrack({
               <span className="truncate font-bold font-display text-xl text-[color:var(--column-label,currentColor)] tracking-[-0.01em]">
                 {status.name}
               </span>
-              <span className="text-muted-foreground text-sm tabular-nums">
-                {countIn(state, status.id)}
-              </span>
             </h2>
-            {folding && statuses.length > 1 && !holding && (
-              <IconButton
-                label={`Collapse ${status.name} column`}
-                aria-expanded
-                tooltip={false}
-                className="size-9 shrink-0 text-muted-foreground"
-                onClick={() => {
-                  setFocusing(status.id);
-                  folding.onCollapse(status.id);
-                }}
-              >
-                <ChevronsRightLeft />
-              </IconButton>
-            )}
           </motion.div>
         </AnimatePresence>
         <span className="flex-1" />
-        {next && (
-          <button
-            type="button"
-            onClick={() => onTurn(page + 1)}
-            className="flex h-9 shrink-0 items-center gap-0.5 rounded-full pr-1.5 pl-3 text-muted-foreground text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
-          >
-            {next.name}
-            <ChevronRight aria-hidden className="size-4" />
-          </button>
+        {folding && (
+          <AnimatePresence initial={false}>
+            {statuses.length > 1 && !holding && (
+              <motion.span
+                key="fold"
+                className="flex shrink-0"
+                initial={{ opacity: 0, scale: 0.6 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.6 }}
+                transition={reduced ? { duration: 0 } : springs.snappy}
+              >
+                <IconButton
+                  label={`Collapse ${status.name} column`}
+                  aria-expanded
+                  tooltip={false}
+                  className="size-9 bg-foreground/[0.06] text-muted-foreground"
+                  onClick={() => {
+                    setFocusing(status.id);
+                    folding.onCollapse(status.id);
+                  }}
+                >
+                  <ChevronsRightLeft />
+                </IconButton>
+              </motion.span>
+            )}
+          </AnimatePresence>
         )}
       </div>
       <nav ref={navRef} aria-label="Columns" className="flex gap-1">
         {track.map((item, order) => {
           const index = statuses.findIndex(({ id }) => id === item.id);
           const folded = index === -1;
+          const count = countIn(state, item.id);
+          const tasks = `${count} ${count === 1 ? 'task' : 'tasks'}`;
           return (
             <motion.button
               key={item.id}
               type="button"
-              aria-label={folded ? `Expand ${item.name} column` : item.name}
+              aria-label={
+                folded ? `Expand ${item.name} column, ${tasks}` : `${item.name}, ${tasks}`
+              }
               aria-expanded={folding ? !folded : undefined}
               data-column-id={item.id}
               data-folded={folded ? '' : undefined}
@@ -342,7 +353,7 @@ export function FlowTrack({
               }}
               transition={reduced ? { duration: 0 } : folded ? curves.fold : springs.smooth}
               className={cn(
-                'relative flex h-6 min-w-8 basis-8 items-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60',
+                'relative flex h-6 min-w-11 basis-11 items-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60',
                 // The handle takes a finger's width around it.
                 folded && 'z-10 before:absolute before:-inset-x-1.5 before:-inset-y-2',
               )}
@@ -368,11 +379,46 @@ export function FlowTrack({
                   />
                 )}
               </span>
+              <FlowCount count={count} current={index === page} />
             </motion.button>
           );
         })}
       </nav>
     </div>
+  );
+}
+
+/**
+ * A column's count, a bead on its segment of the track: filled in the column's colour on the
+ * current one. It bumps when the count changes, as the done count does, but not as it mounts.
+ */
+function FlowCount({ count, current }: { count: number; current: boolean }) {
+  const reduced = useReducedMotion();
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+  }, []);
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute inset-0 flex items-center justify-center"
+    >
+      <motion.span
+        key={count}
+        initial={mounted.current && !reduced ? { scale: 1.35 } : false}
+        animate={{ scale: 1 }}
+        transition={springs.snappy}
+        className={cn(
+          'flex h-4 min-w-4 items-center justify-center rounded-full px-1 font-semibold text-[0.6875rem] tabular-nums leading-none shadow-[0_0_0_2px_var(--background)] transition-colors duration-300',
+          current
+            ? 'bg-[color:var(--column-accent,var(--foreground))] text-background'
+            : 'bg-background text-muted-foreground ring-1 ring-foreground/15 ring-inset',
+          count === 0 && !current && 'text-muted-foreground/60',
+        )}
+      >
+        {count > 99 ? '99+' : count}
+      </motion.span>
+    </span>
   );
 }
 
@@ -476,11 +522,12 @@ export const dockButton =
   'relative flex size-[var(--dock-height)] shrink-0 items-center justify-center rounded-[var(--dock-radius)] outline-none focus-visible:ring-2 focus-visible:ring-ring/70';
 
 /**
- * The backlog in the drawer (ADR 0009). Collapsed, its header is the dock: the backlog's
+ * The backlog in the shell's drawer (ADR 0009). Collapsed, its header is the dock: the backlog's
  * handle beside search and the create button. Half open, it is a supply to take work from,
  * with the board still above: a card carried off sinks it out of the way so the whole screen
  * is board to place it on. Full, it is the backlog to groom, and its cards are reordered in
- * place. The closed tasks and board settings open in it as pages.
+ * place. The closed tasks and board settings open in it as pages. It draws nothing here: it
+ * hands the drawer what to show.
  */
 function BoardDrawer({
   page,
@@ -505,7 +552,6 @@ function BoardDrawer({
 }) {
   const state = board.use();
   const held = drag.use();
-  const lent = boardDrawerPage.use();
   const fingerDown = holding.use();
   const { project } = current(state);
   const statuses = zoneStatuses('backlog', project.statuses);
@@ -653,33 +699,30 @@ function BoardDrawer({
     },
   };
 
-  return (
-    <Drawer
-      label={task ? 'Task drawer' : 'Backlog'}
-      origin="backlog"
-      dock={
-        <AnimatePresence initial={false}>
-          <DockFace key={task ? 'task' : 'board'}>{task ? task.dock : dock}</DockFace>
-        </AnimatePresence>
-      }
-      detent={task || capturing ? 'closed' : detent}
-      detents={task || capturing ? ['closed'] : undefined}
-      onDetent={goTo}
-      move={!task && !capturing && (makingWay(held) || pick) ? <MovePanel pick={pick} /> : null}
-      // An open task's drawer moves only while one of its panels is open.
-      gesturesDisabled={
-        held !== null || fingerDown || (!!task && !task.page) || (capturing && !capture.page)
-      }
-      page={
-        lent ? lent.page : task ? task.page : capturing ? capture.page : page ? pages[page] : null
-      }
-      onClosePage={
-        lent ? lent.close : task ? task.closePage : capturing ? capture.closePage : onClosePage
-      }
-      card={task ? null : capture.card}
-      raised={!!task || raised}
-      onSettle={saveDetent}
-    >
+  useDrawerSlot({
+    label: task ? 'Task drawer' : 'Backlog',
+    face: 'project-board',
+    origin: 'backlog',
+    dock: (
+      <AnimatePresence initial={false}>
+        <DockFace key={task ? 'task' : 'board'}>{task ? task.dock : dock}</DockFace>
+      </AnimatePresence>
+    ),
+    detent: task || capturing ? 'closed' : detent,
+    detents: task || capturing ? ['closed'] : undefined,
+    onDetent: goTo,
+    move: !task && !capturing && (makingWay(held) || pick) ? <MovePanel pick={pick} /> : null,
+    // Cards chosen from the open backlog or closed tasks leave that list in view to choose more.
+    floatMove: pick,
+    // An open task's drawer moves only while one of its panels is open.
+    gesturesDisabled:
+      held !== null || fingerDown || (!!task && !task.page) || (capturing && !capture.page),
+    page: task ? task.page : capturing ? capture.page : page ? pages[page] : null,
+    onClosePage: task ? task.closePage : capturing ? capture.closePage : onClosePage,
+    card: task ? null : capture.card,
+    raised: !!task || raised,
+    onSettle: saveDetent,
+    children: (
       <div
         className="flex min-h-0 flex-1 flex-col"
         inert={!!task || capturing || (detent === 'closed' && !held)}
@@ -692,28 +735,9 @@ function BoardDrawer({
           className="flex-1"
         />
       </div>
-    </Drawer>
-  );
-}
-
-/** The board's dock and an open task's trade places, as Catch's dock does for a note. */
-export function DockFace({ children }: { children: ReactNode }) {
-  const present = useIsPresent();
-  const reduced = useReducedMotion();
-  return (
-    <motion.div
-      aria-hidden={!present || undefined}
-      inert={!present}
-      // Leaving, it stops taking up room so the new face sits where it will rest.
-      className={cn(!present && 'absolute inset-x-0 top-0')}
-      initial={{ opacity: 0, scale: 0.92 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.92, transition: { duration: reduced ? 0 : 0.16 } }}
-      transition={reduced ? { duration: 0 } : springs.smooth}
-    >
-      {children}
-    </motion.div>
-  );
+    ),
+  });
+  return null;
 }
 
 /** The backlog's handle shows a stack of cards, as deep as the backlog, up to three. */
@@ -744,9 +768,15 @@ function CardStack({ count }: { count: number }) {
  * With cards selected it holds the selection's controls, as an open task's dock does: Status
  * opens the grid, where tapping a status moves them (ADR 0009), and the others their pickers.
  */
-export function MovePanel({ pick }: { pick: boolean }) {
-  const state = board.use();
-  const held = drag.use();
+export function MovePanel({ pick: picking }: { pick: boolean }) {
+  const present = useIsPresent();
+  const reduced = !!useReducedMotion();
+  const live = { state: board.use(), held: drag.use(), pick: picking };
+  // Leaving, it keeps showing what it showed: a sent or cleared selection would otherwise
+  // count none selected, and a dropped card's grid would close, while it fades.
+  const kept = useRef(live);
+  if (present) kept.current = live;
+  const { state, held, pick } = kept.current;
   const content = useContext(SelectionContentContext);
   const { project, tasks } = current(state);
   const [chosen, setChosen] = useState<SelectionTab | null>(null);
@@ -770,59 +800,123 @@ export function MovePanel({ pick }: { pick: boolean }) {
         ? chosen
         : null;
   const open = pick || (held?.phase === 'dragging' && held.over);
+  const view = open ? tab : 'hint';
   return (
-    <motion.div
-      key="move"
+    <div
       // The drawer springs to a new view and follows a view's own height changes (Drawer).
       data-move-view={pick ? (tab ?? 'controls') : undefined}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.16 }}
+      className="relative"
     >
-      {pick && (
-        <div className="flex h-11 items-center pr-0.5 pl-2">
-          <span className="flex-1 font-medium text-sm tabular-nums">
-            {state.selection.length} selected
-          </span>
-          <IconButton label="Clear selection" onClick={() => update({ selection: [] })}>
-            <X />
-          </IconButton>
-        </div>
-      )}
-      {pick && content && (
-        <div role="toolbar" aria-label="Selected tasks" className="-mx-1 h-[var(--dock-height)]">
-          <SelectionControls
-            tabs={tabs}
-            onOpen={(next) => setChosen(next === tab ? null : next)}
-            controlProps={(name) => ({ 'aria-expanded': name === tab })}
-            tooltips={false}
-          />
-        </div>
-      )}
-      {!open ? (
-        <p className="flex h-10 items-center justify-center font-medium text-muted-foreground text-xs">
-          Move to a status
-        </p>
-      ) : tab === 'status' ? (
-        <div className={cn(pick && content && 'mt-1.5')}>
-          <StatusTargets
-            statuses={statuses}
-            onPick={pick ? (statusId) => sendSelection(statusId) : undefined}
-          />
-        </div>
-      ) : tab ? (
-        <section
-          aria-label={selectionTabTitle[tab]}
-          className={cn(
-            '-mx-2 mt-1.5 [--tags-max:min(24rem,48dvh)]',
-            tab === 'tags'
-              ? 'flex max-h-[min(24rem,48dvh)] flex-col overflow-hidden'
-              : 'max-h-[min(24rem,48dvh)] overflow-y-auto overscroll-contain',
-          )}
+      {/* Holding a selected card trades the selection's controls for the hint, and back. */}
+      <AnimatePresence initial={false} mode="popLayout">
+        <MoveView
+          key={pick ? 'selection' : 'held'}
+          name={pick ? 'selection' : 'held'}
+          reduced={reduced}
         >
-          <SelectionTabContent tab={tab} onDone={() => setChosen(null)} />
-        </section>
-      ) : null}
+          {pick && (
+            <div className="flex h-11 items-center pr-0.5 pl-2">
+              <span className="flex-1 font-medium text-sm tabular-nums">
+                {state.selection.length} selected
+              </span>
+              <IconButton label="Clear selection" onClick={() => update({ selection: [] })}>
+                <X />
+              </IconButton>
+            </div>
+          )}
+          {pick && content && (
+            <div
+              role="toolbar"
+              aria-label="Selected tasks"
+              className="-mx-1 h-[var(--dock-height)]"
+            >
+              <SelectionControls
+                tabs={tabs}
+                onOpen={(next) => setChosen(next === tab ? null : next)}
+                controlProps={(name) => ({ 'aria-expanded': name === tab })}
+                tooltips={false}
+              />
+            </div>
+          )}
+          {/* One view fades across another on the drawer's own spring, as its pages do, while
+              the drawer moves to the new view's height. */}
+          <div className="relative">
+            <AnimatePresence initial={false} mode="popLayout">
+              {view && (
+                <MoveView key={view} name={view} reduced={reduced}>
+                  {view === 'hint' ? (
+                    <p className="flex h-10 items-center justify-center font-medium text-muted-foreground text-xs">
+                      Move to a status
+                    </p>
+                  ) : view === 'status' ? (
+                    <div className={cn(pick && content && 'pt-1.5')}>
+                      <StatusTargets
+                        statuses={statuses}
+                        onPick={pick ? (statusId) => sendSelection(statusId) : undefined}
+                      />
+                    </div>
+                  ) : (
+                    <section
+                      aria-label={selectionTabTitle[view]}
+                      className={cn(
+                        '-mx-2 mt-1.5 [--tags-max:min(24rem,48dvh)]',
+                        view === 'tags'
+                          ? 'flex max-h-[min(24rem,48dvh)] flex-col overflow-hidden'
+                          : 'max-h-[min(24rem,48dvh)] overflow-y-auto overscroll-contain',
+                      )}
+                    >
+                      <SelectionTabContent
+                        tab={view}
+                        state={state}
+                        onDone={() => setChosen(null)}
+                      />
+                    </section>
+                  )}
+                </MoveView>
+              )}
+            </AnimatePresence>
+          </div>
+        </MoveView>
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/**
+ * One of the move target's views. A leaving one lifts out of the flow, so the drawer measures
+ * only the view arriving, and is inert: a quick second tap goes to what replaced it, and a
+ * held card neither drops on its tiles nor lands in them.
+ */
+function MoveView({
+  ref,
+  name,
+  reduced,
+  children,
+}: {
+  ref?: Ref<HTMLDivElement>;
+  name: string;
+  reduced: boolean;
+  children: ReactNode;
+}) {
+  const present = useIsPresent();
+  return (
+    <motion.div
+      ref={ref}
+      data-move-panel={name}
+      aria-hidden={!present || undefined}
+      inert={!present}
+      className={cn(!present && 'pointer-events-none')}
+      // With reduced motion it arrives whole, not a frame later than the view it replaces.
+      initial={reduced ? false : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      // Gone quickly, as the drawer's pages leave, so the two never read as one muddle.
+      exit={{
+        opacity: 0,
+        transition: reduced ? { duration: 0 } : { duration: 0.16, ease: 'easeIn' },
+      }}
+      transition={reduced ? { duration: 0 } : springs.smooth}
+    >
+      {children}
     </motion.div>
   );
 }

@@ -450,7 +450,8 @@ test.describe('desktop', () => {
     await expect(railSearch.locator('[data-search-filter-dot]')).toBeVisible();
     await expect(railSearch).toHaveAccessibleDescription('Search (3 active filters)');
     await railSearch.hover();
-    await expect(page.getByRole('tooltip')).toHaveText('Search (3 active filters)');
+    // The label, then the shortcut's keycaps.
+    await expect(page.getByRole('tooltip')).toHaveText(/^Search \(3 active filters\)(Ctrl|⌘)K$/);
     await page.getByRole('button', { name: 'Expand navigation', exact: true }).click();
     await expect(railSearch.locator('[data-search-filter-badge]')).toHaveText('3');
     // Reopening from the rail restores the sidebar with active filters and focuses the input.
@@ -799,6 +800,12 @@ test.describe('phone', () => {
     await expect(page.getByText('1 task on the board', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Close', exact: true }).click();
     await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Earlier position']]);
+    // The flow track counts what the filter leaves.
+    const build = page
+      .getByRole('navigation', { name: 'Columns' })
+      .getByRole('button', { name: /^Build,/ });
+    await expect(build).toHaveAccessibleName('Build, 1 task');
+    await expect(build).toHaveText('1');
     const bar = chips(page);
     await expect(
       bar.getByRole('button', { name: 'Remove Blocked filter', exact: true }),
@@ -808,6 +815,7 @@ test.describe('phone', () => {
     await expect(
       page.getByRole('region', { name: 'Build', exact: true }).getByRole('article'),
     ).toHaveCount(4);
+    await expect(build).toHaveAccessibleName('Build, 4 tasks');
   });
 
   test('the drawer’s search filters and sorts the board, which says so with one-tap clear', async ({

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { type APIRequestContext, expect, test } from '@playwright/test';
+import { finger } from './board-helpers';
 import { APP_LOAD_TIMEOUT, shapeRows, signUp } from './helpers';
 
 type Headers = Record<string, string>;
@@ -315,4 +316,105 @@ test('a task blocked by its own subtask highlights the subtask underlay and pip 
   await expect(underlay).not.toHaveAttribute('data-spotlight');
   await expect(blockerPip).not.toHaveAttribute('data-spotlight');
   await expect(unrelatedCard).not.toHaveAttribute('data-spotlight');
+});
+
+test.describe('on a touch tablet', () => {
+  // A tablet in landscape: wide enough for the desktop board's columns, with only a finger.
+  test.use({ viewport: { width: 1180, height: 820 }, hasTouch: true });
+
+  test('holding a blocked card badge spotlights its blockers until the finger lifts', async ({
+    page,
+    isMobile,
+    browserName,
+  }) => {
+    test.skip(isMobile, 'A phone pages its columns, and leaves the badge to the card');
+    test.skip(browserName !== 'chromium', 'Real touches come through Chromium’s input domain');
+
+    const { headers } = await signUp(page);
+    const [ws] = await shapeRows(page.request, 'workspaces', headers);
+    const workspaceId = String(ws?.id);
+    const app = await makeProject(page.request, headers, workspaceId, 'APP', 'App', [
+      { name: 'Backlog', category: 'backlog', isDefault: true },
+      { name: 'Working', category: 'active', isDefault: true },
+      { name: 'Review', category: 'active', isDefault: false },
+      { name: 'Done', category: 'done', isDefault: true },
+      { name: 'Cancelled', category: 'cancelled', isDefault: true },
+    ]);
+    const blocked = await makeTask(
+      page.request,
+      headers,
+      app.id,
+      'Ship the release',
+      app.statusId('Working'),
+      'a0',
+    );
+    const blocker = await makeTask(
+      page.request,
+      headers,
+      app.id,
+      'Sign off QA',
+      app.statusId('Review'),
+      'a0',
+    );
+    await makeTask(page.request, headers, app.id, 'Write changelog', app.statusId('Working'), 'a1');
+    await addBlocksRelation(page.request, headers, blocker, blocked);
+
+    await page.goto(`/w/${workspaceId}/p/${app.id}?view=board`);
+    const blockedCard = page.getByRole('article', { name: 'APP-1 Ship the release', exact: true });
+    const blockerCard = page.getByRole('article', { name: 'APP-2 Sign off QA', exact: true });
+    const unrelatedCard = page.getByRole('article', { name: 'APP-3 Write changelog', exact: true });
+    await expect(blockedCard).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
+    await expect(blockerCard).toBeVisible();
+    const badge = blockedCard.locator('[data-blocked]');
+    const pane = page.getByLabel('Task', { exact: true });
+    const touch = await finger(page);
+
+    // Held past the board's long press: the blockers light up, and the card stays put.
+    await touch.press(badge, 700);
+    await expect(blockedCard).toHaveAttribute('data-spotlight', 'blocked');
+    await expect(blockerCard).toHaveAttribute('data-spotlight', 'blocker');
+    await expect(unrelatedCard).toHaveAttribute('data-spotlight', 'dimmed');
+    await expect(badge).toHaveAttribute('data-spotlight-trigger', 'active');
+    await expect(page.locator('article[data-overlay]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Clear selection' })).toHaveCount(0);
+
+    // Lifting hides it at once, and opens nothing.
+    await touch.lift();
+    await expect(blockedCard).not.toHaveAttribute('data-spotlight');
+    await expect(blockerCard).not.toHaveAttribute('data-spotlight');
+    await expect(unrelatedCard).not.toHaveAttribute('data-spotlight');
+    await page.waitForTimeout(300);
+    await expect(pane).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Clear selection' })).toHaveCount(0);
+
+    // A finger that lands just beside the badge, on the card's number, still reaches it.
+    const box = (await badge.boundingBox())!;
+    await touch.press({ x: box.x - 8, y: box.y + box.height + 6 }, 700);
+    await expect(blockedCard).toHaveAttribute('data-spotlight', 'blocked');
+    await expect(page.getByRole('button', { name: 'Clear selection' })).toHaveCount(0);
+    await touch.lift();
+    await expect(blockedCard).not.toHaveAttribute('data-spotlight');
+    await page.waitForTimeout(300);
+    await expect(pane).toBeHidden();
+
+    // Further off, the press is the card's own, and its long press selects it.
+    await touch.press({ x: box.x - 30, y: box.y + box.height / 2 }, 700);
+    await expect(blockedCard).not.toHaveAttribute('data-spotlight');
+    await touch.lift();
+    await expect(page.getByRole('button', { name: 'Clear selection' })).toBeVisible();
+    await page.getByRole('button', { name: 'Clear selection' }).click();
+
+    // A finger that sets off scrolling from the badge never lights the board.
+    await touch.press(badge, 40);
+    await touch.move({ x: box.x + box.width / 2, y: box.y + box.height / 2 + 60 }, 120);
+    await touch.hold(500);
+    await expect(blockedCard).not.toHaveAttribute('data-spotlight');
+    await touch.lift();
+
+    // A tap on the badge is still a tap on the card.
+    await page.waitForTimeout(300);
+    await touch.tap(badge);
+    await expect(pane).toBeVisible();
+    await expect(blockedCard).not.toHaveAttribute('data-spotlight');
+  });
 });

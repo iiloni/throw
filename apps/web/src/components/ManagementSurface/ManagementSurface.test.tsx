@@ -30,16 +30,17 @@ vi.mock('@/components/BottomSheet/BottomSheet', () => ({
     ),
 }));
 
-import { ManagementSurface, ManagementSurfaceProvider } from './ManagementSurface';
+import { DrawerHost } from '@/components/Drawer/DrawerHost';
+import { ManagementSurface } from './ManagementSurface';
 
 function Screen({ onClose = () => {} }: { onClose?: () => void }) {
   return (
-    <ManagementSurfaceProvider active>
+    <DrawerHost enabled={!media.wide}>
       <button type="button">Behind</button>
       <ManagementSurface open title="Rename" onClose={onClose}>
         <p>Form</p>
       </ManagementSurface>
-    </ManagementSurfaceProvider>
+    </DrawerHost>
   );
 }
 

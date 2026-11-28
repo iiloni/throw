@@ -18,6 +18,17 @@ describe('pageTransition', () => {
     expect(pageTransition(at('/w/a/board'), at('/w/a/board', { task: 'x' }), false)).toBe(false);
   });
 
+  it('cross-fades between a board and its dependency graph, and opens tasks in it in place', () => {
+    const graph = at('/w/a/p/one', { view: 'graph' });
+    expect(pageTransition(board, graph, true)).toEqual(['fade']);
+    expect(pageTransition(graph, board, false)).toEqual(['fade', 'docked']);
+    expect(pageTransition(at('/w/a/board'), at('/w/a/board', { view: 'graph' }), true)).toEqual([
+      'fade',
+    ]);
+    expect(pageTransition(graph, at('/w/a/p/one', { view: 'graph', task: 'x' }), true)).toBe(false);
+    expect(pageTransition(graph, at('/w/a/p/two', { view: 'graph' }), true)).toEqual(['fade']);
+  });
+
   it('changes redirects and first loads in place', () => {
     expect(pageTransition(undefined, board, true)).toBe(false);
     expect(pageTransition(at('/'), at('/w/a'), true)).toBe(false);

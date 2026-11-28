@@ -339,7 +339,7 @@ test('the collapsed rail names its icons in Throw tooltips, and a tap shows none
   await rail.getByRole('button', { name: 'Search', exact: true }).focus();
   await page.keyboard.press('Shift+Tab');
   await page.keyboard.press('Tab');
-  await expect(tooltip).toHaveText('Search');
+  await expect(tooltip).toHaveText(/^Search(Ctrl|⌘)K$/);
   await rail.getByRole('button', { name: 'Expand navigation' }).click();
   await expect(rail).toHaveAttribute('data-expanded', 'true');
   await project.hover();

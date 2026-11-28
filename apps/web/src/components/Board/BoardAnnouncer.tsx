@@ -8,7 +8,7 @@ export function BoardAnnouncer() {
   return (
     <>
       <p id={CARD_HELP_ID} hidden>
-        Enter opens it. Space picks it up to move it.
+        Enter opens it. Space picks it up to move it. Arrows go to the next card.
       </p>
       <p aria-live="assertive" className="sr-only">
         {announcement}

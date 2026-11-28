@@ -115,8 +115,10 @@ export function configureDrag(next: Config) {
   config = next;
 }
 
-const LONG_PRESS_MS = 260;
-const TOUCH_SLOP = 10;
+/** How long a finger rests on a card before it is held. */
+export const LONG_PRESS_MS = 260;
+/** How far a finger may wander before its press is a scroll. */
+export const TOUCH_SLOP = 10;
 const MOUSE_SLOP = 6;
 /**
  * How far a held card goes from where it lifted before the board makes way for it, unless it
@@ -802,7 +804,10 @@ function land(taskId: string, statusId: string | null) {
     const home =
       card || !statusId
         ? null
-        : (document.querySelector<HTMLElement>(`[data-drop-status="${CSS.escape(statusId)}"]`) ??
+        : // Not into a tile of a move target fading out (inert) as the drag ends.
+          (document.querySelector<HTMLElement>(
+            `[data-drop-status="${CSS.escape(statusId)}"]:not([inert] *)`,
+          ) ??
           document.querySelector<HTMLElement>(`[data-status-home~="${CSS.escape(statusId)}"]`));
     if (!card && !state.swallowed) drag.set({ ...state, swallowed: true });
     let x = overlayPosition.x.get();

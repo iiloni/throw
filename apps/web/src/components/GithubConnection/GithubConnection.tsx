@@ -1,38 +1,31 @@
-import {
-  createGithubConnectionSchema,
-  type GithubAuthMode,
-  type GithubConnection,
-  type GithubDelivery,
-  githubTokenSchema,
-  parseGithubRepository,
-  type UpdateGithubConnection,
-} from '@throw/shared';
-import { Copy, GitPullRequest, RefreshCw } from 'lucide-react';
-import {
-  type FormEvent,
-  type ReactNode,
-  useContext,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-} from 'react';
+import type { GithubConnection, GithubDelivery, Status } from '@throw/shared';
+import { ArrowUpRight, FolderGit2, RefreshCw, Unplug } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
+import { useContext, useEffect, useState } from 'react';
 import { ManagementSurface } from '@/components/ManagementSurface/ManagementSurface';
 import { SettingsRow, SettingsSection } from '@/components/SettingsSection/SettingsSection';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { api } from '@/lib/api';
 import { GithubConnectionContext } from '@/lib/githubSettings';
 import { haptics } from '@/lib/haptics';
-import { webhookErrorMessage } from '@/lib/webhookSettings';
+import { springs } from '@/lib/motion';
+import { cn } from '@/lib/utils';
+import { Connect, EditConnection } from './ConnectionForms';
+import { GithubStatusRules } from './StatusRules';
+import { CONTENT_TYPE, CopyField, NewSecret, WebhookSetup } from './WebhookSetup';
 
 const when = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
-const REPOSITORY_HINT = 'Enter the repository as owner/name, or paste its GitHub address.';
-
 /** A project's GitHub repository, its inbound webhook and what GitHub last sent (ADR 0017). */
-export function GithubConnectionSettings({ projectId }: { projectId: string }) {
+export function GithubConnectionSettings({
+  projectId,
+  statuses,
+}: {
+  projectId: string;
+  /** The project's statuses, for its status rules, or null while they first load. */
+  statuses: readonly Status[] | null;
+}) {
   const settings = useContext(GithubConnectionContext);
   if (!settings) return null;
   const { state, retry, dismissSecret } = settings;
@@ -40,7 +33,7 @@ export function GithubConnectionSettings({ projectId }: { projectId: string }) {
     if (!state.connection) return <Connect projectId={projectId} />;
     return (
       <>
-        <Connected connection={state.connection} />
+        <Connected connection={state.connection} statuses={statuses} />
         {state.setup && (
           <ManagementSurface
             open
@@ -49,17 +42,11 @@ export function GithubConnectionSettings({ projectId }: { projectId: string }) {
             fit
           >
             {state.setup.rotated ? (
-              <div className="flex flex-col gap-4 px-4 pb-4">
-                <p className="text-muted-foreground text-sm">
-                  Paste it into the webhook’s Secret field on GitHub. Throw only shows it once.
-                </p>
-                <CopyField label="Secret" value={state.setup.secret} />
-                <div className="flex justify-end">
-                  <Button type="button" onClick={dismissSecret}>
-                    Done
-                  </Button>
-                </div>
-              </div>
+              <NewSecret
+                connection={state.connection}
+                secret={state.setup.secret}
+                onDone={dismissSecret}
+              />
             ) : (
               <WebhookSetup
                 connection={state.connection}
@@ -94,298 +81,103 @@ export function GithubConnectionSettings({ projectId }: { projectId: string }) {
   );
 }
 
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: ReactNode;
-  children: (id: string, hintId: string | undefined) => ReactNode;
-}) {
-  const id = useId();
-  const hintId = useId();
+const OUTCOMES = {
+  ok: { label: 'Received', color: 'green' },
+  ignored: { label: 'Ignored', color: undefined },
+  error: { label: 'Refused', color: 'red' },
+} as const;
+
+/** What GitHub last sent: a quiet pill for how it went, the event, when, and why. */
+function LastDelivery({ delivery }: { delivery: GithubDelivery | null }) {
+  if (!delivery)
+    return (
+      <div className="flex flex-col gap-0.5 px-4 py-3.5" data-testid="github-last-delivery">
+        <p role="status" className="font-medium">
+          No deliveries yet
+        </p>
+        <p className="text-muted-foreground text-sm">
+          GitHub sends a ping as soon as the webhook is saved.
+        </p>
+      </div>
+    );
+  const outcome = OUTCOMES[delivery.status];
+  const at = new Date(delivery.at);
   return (
-    <div className="flex flex-col gap-2">
-      <label htmlFor={id} className="font-medium text-sm">
-        {label}
-      </label>
-      {children(id, hint ? hintId : undefined)}
-      {hint && (
-        <p id={hintId} className="text-muted-foreground text-sm">
-          {hint}
+    <div className="flex flex-col gap-1.5 px-4 py-3.5" data-testid="github-last-delivery">
+      <p role="status" className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+        <span
+          data-color={outcome.color}
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-medium text-xs',
+            outcome.color
+              ? 'bg-tint text-tint-accent'
+              : 'bg-foreground/[0.08] text-muted-foreground',
+          )}
+        >
+          <span aria-hidden className="size-1.5 rounded-full bg-current" />
+          {outcome.label}
+        </span>{' '}
+        <span className="font-medium font-mono text-sm">{delivery.event ?? 'delivery'}</span>
+        <span className="sr-only"> · </span>
+        <time dateTime={delivery.at} className="text-muted-foreground text-sm">
+          {when.format(at)}
+        </time>
+      </p>
+      {delivery.detail && (
+        <p
+          className={cn(
+            'break-words text-sm',
+            delivery.status === 'error' ? 'text-destructive' : 'text-muted-foreground',
+          )}
+        >
+          {delivery.detail}
+        </p>
+      )}
+      {delivery.id && (
+        <p className="break-all font-mono text-[0.6875rem] text-muted-foreground/80">
+          {delivery.id}
         </p>
       )}
     </div>
   );
 }
 
-const MODES: { value: GithubAuthMode; label: string; description: string }[] = [
-  {
-    value: 'webhook',
-    label: 'Webhook only',
-    description: 'GitHub tells Throw what happens. Throw never calls GitHub.',
-  },
-  {
-    value: 'token',
-    label: 'Webhook and access token',
-    description:
-      'Also keeps a personal access token, encrypted on this server, for features that read from GitHub.',
-  },
-];
-
-function AuthMode({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: GithubAuthMode;
-  onChange: (mode: GithubAuthMode) => void;
-  disabled: boolean;
-}) {
-  const name = useId();
+function RefreshButton({ onRefresh }: { onRefresh: () => void }) {
+  const [turns, setTurns] = useState(0);
+  const reduced = useReducedMotion();
   return (
-    <fieldset className="flex flex-col gap-2" disabled={disabled}>
-      <legend className="mb-2 font-medium text-sm">Access</legend>
-      {MODES.map((mode) => (
-        <label
-          key={mode.value}
-          className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl bg-foreground/[0.04] px-3 py-2.5 has-[:checked]:bg-tint has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/60"
-          data-color="blue"
-        >
-          <input
-            type="radio"
-            name={name}
-            value={mode.value}
-            checked={value === mode.value}
-            onChange={() => onChange(mode.value)}
-            className="mt-1 size-4 accent-[var(--tint-accent)]"
-          />
-          <span className="min-w-0">
-            <span className="block font-medium text-sm">{mode.label}</span>
-            <span className="block text-muted-foreground text-sm">{mode.description}</span>
-          </span>
-        </label>
-      ))}
-    </fieldset>
-  );
-}
-
-function TokenField({
-  value,
-  onChange,
-  disabled,
-  stored,
-}: {
-  value: string;
-  onChange: (token: string) => void;
-  disabled: boolean;
-  stored: boolean;
-}) {
-  return (
-    <Field
-      label={stored ? 'Replace access token' : 'Personal access token'}
-      hint={
-        stored
-          ? 'A token is stored. Leave this empty to keep it; Throw never shows it again.'
-          : 'A fine-grained token limited to this repository. Throw stores it encrypted and never shows it again.'
-      }
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className="-my-2 size-11 shrink-0 rounded-full"
+      aria-label="Check for new deliveries"
+      onClick={() => {
+        haptics.toggle();
+        setTurns((count) => count + 1);
+        onRefresh();
+      }}
     >
-      {(id, hintId) => (
-        <Input
-          id={id}
-          type="password"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          autoComplete="off"
-          spellCheck={false}
-          placeholder={stored ? 'Stored' : 'github_pat_…'}
-          aria-describedby={hintId}
-          required={!stored}
-          disabled={disabled}
-        />
-      )}
-    </Field>
-  );
-}
-
-function Connect({ projectId }: { projectId: string }) {
-  const settings = useContext(GithubConnectionContext)!;
-  const [repository, setRepository] = useState('');
-  const [authMode, setAuthMode] = useState<GithubAuthMode>('webhook');
-  const [token, setToken] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (busy) return;
-    const body = createGithubConnectionSchema.safeParse({
-      repository,
-      authMode,
-      ...(authMode === 'token' ? { token } : {}),
-    });
-    if (!body.success) {
-      setError(
-        parseGithubRepository(repository) ? 'Paste the whole access token.' : REPOSITORY_HINT,
-      );
-      return;
-    }
-    setBusy(true);
-    setError('');
-    try {
-      const result = await api.createGithubConnection(projectId, {
-        repository: body.data.repository,
-        authMode: body.data.authMode,
-        ...(body.data.token === undefined ? {} : { token: body.data.token }),
-      });
-      haptics.success();
-      settings.showSecret(result, false);
-    } catch (failure) {
-      setError(webhookErrorMessage(failure, 'Could not connect the repository. Try again.'));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-6">
-      <SettingsSection
-        title="Connect a repository"
-        description="GitHub sends this project signed webhooks. Throw checks each one against its secret and the repository before using it."
+      <motion.span
+        className="flex"
+        animate={{ rotate: reduced ? 0 : turns * 360 }}
+        transition={springs.smooth}
       >
-        <form onSubmit={submit} className="flex flex-col gap-4 p-4">
-          <Field label="Repository" hint="For example, octo-org/website.">
-            {(id, hintId) => (
-              <Input
-                id={id}
-                value={repository}
-                onChange={(event) => setRepository(event.target.value)}
-                autoComplete="off"
-                autoCapitalize="none"
-                spellCheck={false}
-                placeholder="owner/name"
-                aria-describedby={hintId}
-                required
-                disabled={busy}
-              />
-            )}
-          </Field>
-          <AuthMode value={authMode} onChange={setAuthMode} disabled={busy} />
-          {authMode === 'token' && (
-            <TokenField value={token} onChange={setToken} disabled={busy} stored={false} />
-          )}
-          {error && (
-            <p role="alert" className="text-destructive text-sm">
-              {error}
-            </p>
-          )}
-          <div className="flex justify-end">
-            <Button type="submit" disabled={busy || !repository.trim()}>
-              {busy ? 'Connecting…' : 'Connect repository'}
-            </Button>
-          </div>
-        </form>
-      </SettingsSection>
-    </div>
+        <RefreshCw aria-hidden />
+      </motion.span>
+    </Button>
   );
-}
-
-function CopyField({
-  label,
-  value,
-  mono = true,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  const [copied, setCopied] = useState(false);
-  const field = useRef<HTMLInputElement>(null);
-  const id = useId();
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-    } catch {
-      field.current?.focus();
-      field.current?.select();
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-2">
-      <label htmlFor={id} className="font-medium text-sm">
-        {label}
-      </label>
-      <div className="flex gap-2">
-        <Input
-          id={id}
-          ref={field}
-          readOnly
-          value={value}
-          className={mono ? 'font-mono' : undefined}
-          spellCheck={false}
-          autoComplete="off"
-          onFocus={(event) => event.currentTarget.select()}
-        />
-        <Button
-          type="button"
-          variant="secondary"
-          className="min-h-11 shrink-0"
-          aria-label={`Copy ${label.toLowerCase()}`}
-          onClick={() => void copy()}
-        >
-          <Copy aria-hidden /> {copied ? 'Copied' : 'Copy'}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-/** What to enter in the repository's Settings → Webhooks → Add webhook. */
-function WebhookSetup({
-  connection,
-  secret,
-  onDone,
-}: {
-  connection: GithubConnection;
-  secret: string;
-  onDone: () => void;
-}) {
-  return (
-    <div className="flex flex-col gap-4 px-4 pb-4">
-      <p className="text-muted-foreground text-sm">
-        In {connection.repository} on GitHub, open Settings, then Webhooks, and add a webhook with
-        these values. Choose <span className="font-medium text-foreground">application/json</span>{' '}
-        as the content type. Throw only shows this secret once.
-      </p>
-      <CopyField label="Payload URL" value={connection.webhookUrl} />
-      <CopyField label="Secret" value={secret} />
-      <p className="text-muted-foreground text-sm">
-        GitHub sends a ping when the webhook is saved. It shows here as the last delivery.
-      </p>
-      <div className="flex justify-end">
-        <Button type="button" onClick={onDone}>
-          Done
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function deliveryLabel(delivery: GithubDelivery | null) {
-  if (!delivery) return 'No deliveries yet';
-  const at = when.format(new Date(delivery.at));
-  const event = delivery.event ?? 'delivery';
-  if (delivery.status === 'ok') return `Received ${event} · ${at}`;
-  if (delivery.status === 'ignored') return `Ignored ${event} · ${at}`;
-  return `Refused ${event} · ${at}`;
 }
 
 type Surface = 'edit' | 'secret' | 'url' | 'disconnect';
 
-function Connected({ connection }: { connection: GithubConnection }) {
+function Connected({
+  connection,
+  statuses,
+}: {
+  connection: GithubConnection;
+  statuses: readonly Status[] | null;
+}) {
   const settings = useContext(GithubConnectionContext)!;
   const [surface, setSurface] = useState<Surface | null>(null);
   const [toggling, setToggling] = useState(false);
@@ -414,7 +206,6 @@ function Connected({ connection }: { connection: GithubConnection }) {
     }
   }
 
-  const delivery = connection.lastDelivery;
   return (
     <div className="flex flex-col gap-6">
       <SettingsSection
@@ -426,8 +217,18 @@ function Connected({ connection }: { connection: GithubConnection }) {
         }
       >
         <SettingsRow
-          icon={GitPullRequest}
-          label={<span className="break-all">{connection.repository}</span>}
+          icon={FolderGit2}
+          label={
+            <a
+              href={`https://github.com/${connection.repository}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex max-w-full items-center gap-1 rounded-sm outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/60"
+            >
+              <span className="break-all">{connection.repository}</span>
+              <ArrowUpRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            </a>
+          }
           description={
             connection.authMode === 'token' ? 'Webhook and access token' : 'Webhook only'
           }
@@ -444,7 +245,9 @@ function Connected({ connection }: { connection: GithubConnection }) {
         <SettingsRow
           label="Receive deliveries"
           description={
-            connection.enabled ? 'On' : 'Off: GitHub’s deliveries are recorded and ignored'
+            connection.enabled
+              ? 'Tasks follow GitHub’s changes'
+              : 'Deliveries are recorded and ignored'
           }
         >
           <Switch
@@ -456,65 +259,45 @@ function Connected({ connection }: { connection: GithubConnection }) {
         </SettingsRow>
       </SettingsSection>
       {error && (
-        <p role="alert" className="px-4 text-destructive text-sm">
+        <p role="alert" className="-mt-3 px-4 text-destructive text-sm">
           {error}
         </p>
       )}
 
+      <SettingsSection title="Last delivery" action={<RefreshButton onRefresh={refresh} />}>
+        <LastDelivery delivery={connection.lastDelivery} />
+      </SettingsSection>
+
+      <GithubStatusRules connection={connection} statuses={statuses} />
+
       <SettingsSection
         title="Webhook"
-        description="Use application/json as the content type. Throw ignores events it does not use yet."
+        description="The values of the webhook on GitHub. Throw ignores events it does not use."
       >
         <div className="flex flex-col gap-4 p-4">
           <CopyField label="Payload URL" value={connection.webhookUrl} />
-          <p className="text-muted-foreground text-sm">
-            The secret was shown when it was made. Make a new one if it is lost.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="secondary" onClick={() => setSurface('secret')}>
-              New secret
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setSurface('url')}>
-              New URL
-            </Button>
-          </div>
+          <CopyField label="Content type" value={CONTENT_TYPE} />
         </div>
-      </SettingsSection>
-
-      <SettingsSection
-        title="Last delivery"
-        action={
+        <SettingsRow label="Secret" description="Shown once, when it was made">
           <Button
             type="button"
             variant="ghost"
-            size="icon"
-            className="size-11 shrink-0"
-            aria-label="Check for new deliveries"
-            onClick={refresh}
+            className="min-h-11 shrink-0"
+            onClick={() => setSurface('secret')}
           >
-            <RefreshCw aria-hidden />
+            New secret
           </Button>
-        }
-      >
-        <div className="flex flex-col gap-1 px-4 py-3 text-sm" data-testid="github-last-delivery">
-          <p className="font-medium" role="status">
-            {deliveryLabel(delivery)}
-          </p>
-          {delivery?.detail && (
-            <p
-              className={
-                delivery.status === 'error'
-                  ? 'break-words text-destructive'
-                  : 'break-words text-muted-foreground'
-              }
-            >
-              {delivery.detail}
-            </p>
-          )}
-          {delivery?.id && (
-            <p className="break-all font-mono text-muted-foreground text-xs">{delivery.id}</p>
-          )}
-        </div>
+        </SettingsRow>
+        <SettingsRow label="Address" description="Retires the URL above">
+          <Button
+            type="button"
+            variant="ghost"
+            className="min-h-11 shrink-0"
+            onClick={() => setSurface('url')}
+          >
+            New URL
+          </Button>
+        </SettingsRow>
       </SettingsSection>
 
       <div className="rounded-2xl bg-foreground/[0.05]">
@@ -523,16 +306,18 @@ function Connected({ connection }: { connection: GithubConnection }) {
           onClick={() => setSurface('disconnect')}
           className="flex w-full items-center justify-center gap-2 rounded-2xl p-3.5 font-medium text-destructive outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
         >
+          <Unplug className="size-4" aria-hidden />
           Disconnect GitHub
         </button>
       </div>
 
       {surface === 'edit' && <EditConnection connection={connection} onClose={close} />}
       {surface === 'secret' && (
-        <Rotate
+        <Confirm
           title="Make a new secret?"
           body="GitHub’s deliveries are refused until you paste the new secret into the webhook on GitHub."
           action="Make new secret"
+          busyAction="Making…"
           onConfirm={async () => {
             const rotated = await api.rotateGithubSecret(connection.projectId);
             close();
@@ -542,32 +327,52 @@ function Connected({ connection }: { connection: GithubConnection }) {
         />
       )}
       {surface === 'url' && (
-        <Rotate
+        <Confirm
           title="Move the webhook to a new URL?"
           body="The current URL stops answering at once. Paste the new one into the webhook on GitHub."
           action="Make new URL"
+          busyAction="Making…"
           onConfirm={async () => {
             settings.changed((await api.rotateGithubUrl(connection.projectId)).connection);
+            haptics.success();
             close();
           }}
           onClose={close}
         />
       )}
-      {surface === 'disconnect' && <Disconnect connection={connection} onClose={close} />}
+      {surface === 'disconnect' && (
+        <Confirm
+          title={`Disconnect ${connection.repository}?`}
+          body={`Throw forgets the secret${connection.hasToken ? ' and the access token' : ''}${connection.statusRules ? ' and the status rules' : ''}, and the webhook URL stops answering. Delete the webhook on GitHub as well.`}
+          action="Disconnect"
+          busyAction="Disconnecting…"
+          destructive
+          onConfirm={async () => {
+            await api.deleteGithubConnection(connection.projectId);
+            haptics.warning();
+            settings.removed();
+          }}
+          onClose={close}
+        />
+      )}
     </div>
   );
 }
 
-function Rotate({
+function Confirm({
   title,
   body,
   action,
+  busyAction,
+  destructive = false,
   onConfirm,
   onClose,
 }: {
   title: string;
   body: string;
   action: string;
+  busyAction: string;
+  destructive?: boolean;
   onConfirm: () => Promise<void>;
   onClose: () => void;
 }) {
@@ -578,7 +383,7 @@ function Rotate({
   };
   return (
     <ManagementSurface open title={title} onClose={close} fit>
-      <div className="flex flex-col gap-4 px-4 pb-4">
+      <div className="flex flex-col gap-5 pb-1">
         <p className="text-muted-foreground text-sm">{body}</p>
         {error && (
           <p role="alert" className="text-destructive text-sm">
@@ -586,11 +391,12 @@ function Rotate({
           </p>
         )}
         <div className="flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="secondary" disabled={busy} onClick={close}>
+          <Button type="button" variant="ghost" disabled={busy} onClick={close}>
             Cancel
           </Button>
           <Button
             type="button"
+            variant={destructive ? 'destructive' : 'default'}
             disabled={busy}
             onClick={async () => {
               setBusy(true);
@@ -603,158 +409,7 @@ function Rotate({
               }
             }}
           >
-            {busy ? 'Making…' : action}
-          </Button>
-        </div>
-      </div>
-    </ManagementSurface>
-  );
-}
-
-function EditConnection({
-  connection,
-  onClose,
-}: {
-  connection: GithubConnection;
-  onClose: () => void;
-}) {
-  const settings = useContext(GithubConnectionContext)!;
-  const [repository, setRepository] = useState(connection.repository);
-  const [authMode, setAuthMode] = useState(connection.authMode);
-  const [token, setToken] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const close = () => {
-    if (!busy) onClose();
-  };
-  const parsed = parseGithubRepository(repository);
-  const changes: UpdateGithubConnection = {
-    ...(parsed !== connection.repository ? { repository } : {}),
-    ...(authMode !== connection.authMode ? { authMode } : {}),
-    ...(authMode === 'token' && token.trim() ? { token } : {}),
-  };
-  const dirty = Object.keys(changes).length > 0;
-
-  async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (busy || !dirty) return;
-    if (!parsed) return setError(REPOSITORY_HINT);
-    if (changes.token !== undefined && !githubTokenSchema.safeParse(changes.token).success)
-      return setError('Paste the whole access token.');
-    if (authMode === 'token' && !connection.hasToken && !token.trim())
-      return setError('Paste an access token to use it.');
-    setBusy(true);
-    setError('');
-    try {
-      settings.changed(
-        (await api.updateGithubConnection(connection.projectId, changes)).connection,
-      );
-      onClose();
-    } catch (failure) {
-      setError(webhookErrorMessage(failure, 'Could not save the connection. Try again.'));
-      setBusy(false);
-    }
-  }
-
-  return (
-    <ManagementSurface open title="Edit GitHub connection" onClose={close} fit>
-      <form onSubmit={save} className="flex flex-col gap-4 px-4 pb-4">
-        <Field
-          label="Repository"
-          hint="Deliveries for any other repository are refused, so update the webhook on GitHub too."
-        >
-          {(id, hintId) => (
-            <Input
-              id={id}
-              value={repository}
-              onChange={(event) => setRepository(event.target.value)}
-              autoComplete="off"
-              autoCapitalize="none"
-              spellCheck={false}
-              aria-describedby={hintId}
-              required
-              disabled={busy}
-            />
-          )}
-        </Field>
-        <AuthMode value={authMode} onChange={setAuthMode} disabled={busy} />
-        {authMode === 'token' && (
-          <TokenField
-            value={token}
-            onChange={setToken}
-            disabled={busy}
-            stored={connection.hasToken}
-          />
-        )}
-        {authMode === 'webhook' && connection.hasToken && (
-          <p className="text-muted-foreground text-sm">Saving deletes the stored access token.</p>
-        )}
-        {error && (
-          <p role="alert" className="text-destructive text-sm">
-            {error}
-          </p>
-        )}
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="secondary" disabled={busy} onClick={close}>
-            {dirty ? 'Cancel' : 'Done'}
-          </Button>
-          {dirty && (
-            <Button type="submit" disabled={busy}>
-              {busy ? 'Saving…' : 'Save'}
-            </Button>
-          )}
-        </div>
-      </form>
-    </ManagementSurface>
-  );
-}
-
-function Disconnect({
-  connection,
-  onClose,
-}: {
-  connection: GithubConnection;
-  onClose: () => void;
-}) {
-  const settings = useContext(GithubConnectionContext)!;
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const close = () => {
-    if (!busy) onClose();
-  };
-
-  async function remove() {
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      await api.deleteGithubConnection(connection.projectId);
-      haptics.warning();
-      settings.removed();
-    } catch {
-      setError('Could not disconnect. Try again.');
-      setBusy(false);
-    }
-  }
-
-  return (
-    <ManagementSurface open title={`Disconnect ${connection.repository}?`} onClose={close} fit>
-      <div className="flex flex-col gap-4 px-4 pb-4">
-        <p className="text-muted-foreground text-sm">
-          Throw forgets the secret{connection.hasToken ? ' and the access token' : ''}, and the
-          webhook URL stops answering. Delete the webhook on GitHub as well.
-        </p>
-        {error && (
-          <p role="alert" className="text-destructive text-sm">
-            {error}
-          </p>
-        )}
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="secondary" disabled={busy} onClick={close}>
-            Cancel
-          </Button>
-          <Button type="button" variant="destructive" disabled={busy} onClick={() => void remove()}>
-            {busy ? 'Disconnecting…' : 'Disconnect'}
+            {busy ? busyAction : action}
           </Button>
         </div>
       </div>

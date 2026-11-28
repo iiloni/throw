@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { GithubConnection } from '@throw/shared';
+import { type GithubConnection, NO_GITHUB_STATUS_RULES, type Status } from '@throw/shared';
 import type { ContextType, ReactNode } from 'react';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { GithubConnectionContext, useGithubConnection } from '@/lib/githubSettings';
@@ -13,8 +13,20 @@ const api = vi.hoisted(() => ({
   rotateGithubSecret: vi.fn(),
   rotateGithubUrl: vi.fn(),
 }));
-vi.mock('@/lib/api', () => ({ api, ApiError: class extends Error {} }));
-vi.mock('@/lib/haptics', () => ({ haptics: { success: vi.fn(), warning: vi.fn() } }));
+vi.mock('@/lib/api', () => ({
+  api,
+  ApiError: class extends Error {
+    constructor(
+      readonly status: number,
+      message = '',
+    ) {
+      super(message);
+    }
+  },
+}));
+vi.mock('@/lib/haptics', () => ({
+  haptics: { success: vi.fn(), warning: vi.fn(), selection: vi.fn(), toggle: vi.fn() },
+}));
 vi.mock('@/components/ManagementSurface/ManagementSurface', () => ({
   ManagementSurface: ({
     open,
@@ -35,6 +47,7 @@ vi.mock('@/components/ManagementSurface/ManagementSurface', () => ({
 beforeEach(() => {
   for (const mock of Object.values(api)) mock.mockReset();
   for (const mock of Object.values(handlers)) mock.mockReset();
+  layout({ desktop: true });
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -44,6 +57,15 @@ beforeEach(() => {
     },
   );
 });
+
+function layout({ desktop }: { desktop: boolean }) {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query.includes('width') ? desktop : false,
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
+}
 
 const handlers = {
   dismissSecret: vi.fn(),
@@ -66,10 +88,36 @@ const connection: GithubConnection = {
   lastDelivery: null,
 };
 
+const status = (
+  id: string,
+  name: string,
+  category: Status['category'],
+  position = 'a0',
+): Status => ({
+  id: `019a0000-0000-7000-8000-0000000000${id}`,
+  workspaceId: connection.workspaceId,
+  projectId,
+  name,
+  category,
+  position,
+  isDefault: true,
+});
+const statuses: Status[] = [
+  status('c1', 'Backlog', 'backlog'),
+  status('c2', 'In progress', 'active'),
+  status('c3', 'In review', 'active', 'a1'),
+  status('c4', 'Done', 'done'),
+];
+const [, inProgress, inReview, done] = statuses as [Status, Status, Status, Status];
+const withRules = (rules: Partial<typeof NO_GITHUB_STATUS_RULES> = {}): GithubConnection => ({
+  ...connection,
+  statusRules: { ...NO_GITHUB_STATUS_RULES, ...rules },
+});
+
 function renderWith(state: NonNullable<ContextType<typeof GithubConnectionContext>>) {
   return render(
     <GithubConnectionContext value={state}>
-      <GithubConnectionSettings projectId={projectId} />
+      <GithubConnectionSettings projectId={projectId} statuses={statuses} />
     </GithubConnectionContext>,
   );
 }
@@ -78,7 +126,7 @@ function Settings({ visible = true }: { visible?: boolean }) {
   const settings = useGithubConnection(projectId);
   return (
     <GithubConnectionContext value={settings}>
-      {visible && <GithubConnectionSettings projectId={projectId} />}
+      {visible && <GithubConnectionSettings projectId={projectId} statuses={statuses} />}
     </GithubConnectionContext>
   );
 }
@@ -117,7 +165,11 @@ test('connects a pasted repository address and shows the URL and secret once', a
   });
   expect(screen.getByLabelText('Secret')).toHaveValue('throw_ghsec_once');
   expect(within(dialog).getByLabelText('Payload URL')).toHaveValue(connection.webhookUrl);
-  expect(dialog).toHaveTextContent('application/json');
+  expect(within(dialog).getByLabelText('Content type')).toHaveValue('application/json');
+  expect(within(dialog).getByRole('link', { name: /Add webhook on GitHub/ })).toHaveAttribute(
+    'href',
+    'https://github.com/iiloni/throw/settings/hooks/new',
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Done' }));
   expect(screen.queryByLabelText('Secret')).not.toBeInTheDocument();
   expect(screen.getByText(connection.repository)).toBeInTheDocument();
@@ -221,4 +273,128 @@ test('keeps the confirmed new URL when an earlier refresh finishes', async () =>
   expect(api.rotateGithubUrl).toHaveBeenCalledWith(projectId);
   await act(async () => finish());
   expect(screen.getByLabelText('Payload URL')).toHaveValue(webhookUrl);
+});
+
+const ruleButton = (name: RegExp) => screen.getByRole('button', { name });
+
+test('offers no status rules on a server older than them', () => {
+  renderWith(ready(connection));
+  expect(screen.queryByRole('heading', { name: 'Status rules' })).not.toBeInTheDocument();
+  expect(screen.queryByText('Pull request merged')).not.toBeInTheDocument();
+});
+
+test('shows each rule’s status, and a rule naming a missing status as off', () => {
+  renderWith(
+    ready(
+      withRules({
+        prReadyForReview: inReview.id,
+        prMerged: '019a0000-0000-7000-8000-0000000000ff',
+      }),
+    ),
+  );
+  expect(screen.getByRole('heading', { name: 'Status rules' })).toBeInTheDocument();
+  expect(ruleButton(/^Ready for review/)).toHaveAccessibleName('Ready for review In review');
+  expect(ruleButton(/^Pull request merged/)).toHaveAccessibleName('Pull request merged Off');
+  expect(ruleButton(/^Issue closed/)).toHaveAccessibleName('Issue closed Off');
+});
+
+test('saves a picked status at once, then what the server answers', async () => {
+  let finish!: () => void;
+  api.updateGithubConnection.mockReturnValue(
+    new Promise((resolve) => {
+      finish = () => resolve({ connection: withRules({ prMerged: done.id }) });
+    }),
+  );
+  renderWith(ready(withRules()));
+  fireEvent.keyDown(ruleButton(/^Pull request merged/), { key: 'Enter' });
+  const menu = await screen.findByRole('menu');
+  expect(within(menu).getByRole('menuitemradio', { name: 'Off' })).toBeChecked();
+  fireEvent.click(within(menu).getByRole('menuitemradio', { name: 'Done' }));
+  await waitFor(() =>
+    expect(api.updateGithubConnection).toHaveBeenCalledWith(projectId, {
+      statusRules: { prMerged: done.id },
+    }),
+  );
+  expect(ruleButton(/^Pull request merged/)).toHaveAccessibleName('Pull request merged Done');
+  await act(async () => finish());
+  expect(handlers.changed).toHaveBeenCalledWith(withRules({ prMerged: done.id }));
+});
+
+test('turns a rule off', async () => {
+  api.updateGithubConnection.mockResolvedValue({ connection: withRules() });
+  renderWith(ready(withRules({ prDraftOpened: inProgress.id })));
+  fireEvent.keyDown(ruleButton(/^Draft pull request opened/), { key: 'Enter' });
+  const menu = await screen.findByRole('menu');
+  expect(within(menu).getByRole('menuitemradio', { name: 'In progress' })).toBeChecked();
+  fireEvent.click(within(menu).getByRole('menuitemradio', { name: 'Off' }));
+  await waitFor(() =>
+    expect(api.updateGithubConnection).toHaveBeenCalledWith(projectId, {
+      statusRules: { prDraftOpened: null },
+    }),
+  );
+});
+
+test('returns a rule that failed to save, says why and reloads the connection', async () => {
+  const { ApiError } = await import('@/lib/api');
+  api.updateGithubConnection.mockRejectedValue(new ApiError(400, 'Not a status of the project'));
+  renderWith(ready(withRules()));
+  fireEvent.keyDown(ruleButton(/^Issue closed/), { key: 'Enter' });
+  fireEvent.click(await screen.findByRole('menuitemradio', { name: 'Done' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('no longer in this project');
+  expect(ruleButton(/^Issue closed/)).toHaveAccessibleName('Issue closed Off');
+  expect(handlers.refresh).toHaveBeenCalled();
+  expect(handlers.changed).not.toHaveBeenCalled();
+});
+
+test('saves picks one after another, each on the answer before it', async () => {
+  const answers: (() => void)[] = [];
+  api.updateGithubConnection.mockImplementation(
+    (_project: string, body: { statusRules: object }) =>
+      new Promise((resolve) => {
+        answers.push(() => resolve({ connection: withRules(body.statusRules) }));
+      }),
+  );
+  renderWith(ready(withRules()));
+  fireEvent.keyDown(ruleButton(/^Pull request merged/), { key: 'Enter' });
+  fireEvent.click(await screen.findByRole('menuitemradio', { name: 'Done' }));
+  fireEvent.keyDown(ruleButton(/^Issue closed/), { key: 'Enter' });
+  fireEvent.click(await screen.findByRole('menuitemradio', { name: 'Done' }));
+  await waitFor(() => expect(answers).toHaveLength(1));
+  await act(async () => answers[0]!());
+  await waitFor(() => expect(answers).toHaveLength(2));
+  expect(api.updateGithubConnection).toHaveBeenLastCalledWith(projectId, {
+    statusRules: { issueClosed: done.id },
+  });
+});
+
+test('a phone picks a rule’s status in the drawer, off included', async () => {
+  layout({ desktop: false });
+  api.updateGithubConnection.mockResolvedValue({ connection: withRules({ prClosed: done.id }) });
+  renderWith(ready(withRules({ prClosed: inReview.id })));
+  fireEvent.click(ruleButton(/^Pull request closed/));
+  const picker = within(await screen.findByRole('dialog', { name: 'Pull request closed' }));
+  expect(picker.getByRole('radio', { name: 'In review' })).toBeChecked();
+  fireEvent.click(picker.getByRole('radio', { name: 'Off' }));
+  await waitFor(() =>
+    expect(api.updateGithubConnection).toHaveBeenCalledWith(projectId, {
+      statusRules: { prClosed: null },
+    }),
+  );
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+test('says the rules wait while deliveries are off', () => {
+  renderWith(ready({ ...withRules(), enabled: false }));
+  expect(
+    screen.getByText(/no rule moves a task until they are turned back on/),
+  ).toBeInTheDocument();
+});
+
+test('says statuses are loading before offering any', () => {
+  render(
+    <GithubConnectionContext value={ready(withRules())}>
+      <GithubConnectionSettings projectId={projectId} statuses={null} />
+    </GithubConnectionContext>,
+  );
+  expect(screen.getByText('Loading statuses…')).toBeInTheDocument();
 });

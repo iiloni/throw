@@ -3,6 +3,7 @@ import { comparePositions } from '@throw/shared';
 import {
   Columns3,
   MoreHorizontal,
+  Network,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -54,8 +55,9 @@ import {
 import { searchSidebarOpen } from '@/components/BoardSearch/BoardSearch';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { CommandPalette, type PaletteMode } from '@/components/CommandPalette/CommandPalette';
+import { DrawerHost } from '@/components/Drawer/DrawerHost';
 import { Hint } from '@/components/Hint/Hint';
-import { ManagementSurfaceProvider } from '@/components/ManagementSurface/ManagementSurface';
+import { ShortcutsHelp } from '@/components/KeyboardShortcuts/ShortcutsHelp';
 import { NewTagHost } from '@/components/NewTag/NewTagHost';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
@@ -71,6 +73,7 @@ import { useDesktop, useMedia } from '@/lib/media';
 import { springs } from '@/lib/motion';
 import { projectsIn } from '@/lib/projects';
 import { pageBounceY } from '@/lib/scrollBounce';
+import { type ShortcutId, useShortcut } from '@/lib/shortcuts';
 import { usePersistentState } from '@/lib/storage';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { UPDATE_READY_DESCRIPTION, useUpdateReady } from '@/lib/updateReady';
@@ -92,7 +95,9 @@ export function AppShell() {
   // loads, and reading it would swap the shell's layout before its page.
   const routeId = useRouterState({ select: (state) => state.matches.at(-1)?.routeId });
   const params = paramsSchema.parse(rawParams ?? {});
-  const location = useRouterState({ select: (state) => state.location });
+  // The view too: the board and its dependency graph cross-fade, and a view read from the
+  // location would swap them before the transition captures the page it leaves.
+  const routeSearch = useRouterState({ select: (state) => state.matches.at(-1)?.search });
   const navigating = useRouterState({ select: (state) => state.isLoading });
   const { workspaces: allWorkspaces, isLoading: loadingWorkspaces } = useWorkspaces();
   const { projects: allProjects, isLoading: loadingProjects } = useProjects();
@@ -135,7 +140,9 @@ export function AppShell() {
       ? Number(projects.some((item) => item.id === preferredProjectId))
       : allProjects.length,
   );
-  const view = viewSchema.catch('board').parse((location.search as { view?: unknown }).view);
+  const view = viewSchema
+    .catch('board')
+    .parse((routeSearch as { view?: unknown } | undefined)?.view);
   const crossBoard = routeId === '/_app/w/$workspaceId/board';
   const projectBoard = !!project && routeId === '/_app/w/$workspaceId/p/$projectId';
   // Both boards fill the window under their own header and dock.
@@ -204,10 +211,12 @@ export function AppShell() {
     });
   }, [navigating, workspace, project, params.workspaceId, remembered, remember]);
 
+  // The graph is a way of looking at any board: moving between boards keeps it.
+  const boardView = view === 'graph' ? 'graph' : 'board';
   function selectProject(
     workspaceId: string,
     projectId: string,
-    nextView: ProjectView = 'board',
+    nextView: ProjectView = boardView,
     replace = false,
     viewTransition?: false,
   ) {
@@ -234,36 +243,47 @@ export function AppShell() {
       void navigate({
         to: '/w/$workspaceId/board',
         params: { workspaceId: workspace.id },
-        search: { view: 'board' },
+        search: { view: boardView },
       });
   }
-  useEffect(() => {
-    function shortcut(event: KeyboardEvent) {
-      if (
-        event.key.toLowerCase() !== 'k' ||
-        !(event.metaKey || event.ctrlKey) ||
-        event.altKey ||
-        event.isComposing
-      )
-        return;
-      event.preventDefault();
-      if (!workspace || form) return;
-      if (palette) return setPalette(null);
-      if (document.querySelector('[role="dialog"]')) return;
-      if (!boardSearch) return setPalette({ mode: 'search', seed: '' });
-      // Search on a board: open it, or take the caret back to it; from inside its field,
-      // collapse it without clearing active filters.
-      const state = board.get();
-      const input = document.querySelector('[data-board-search-input]');
-      if (!state.searching) openSearch();
-      else if (document.activeElement === input) {
-        collapseSearch();
-        document.querySelector<HTMLElement>('#main-content')?.focus({ preventScroll: true });
-      } else focusSearch();
-    }
-    window.addEventListener('keydown', shortcut);
-    return () => window.removeEventListener('keydown', shortcut);
-  }, [workspace, form, palette, boardSearch]);
+  function showView(next: 'board' | 'graph') {
+    if (!workspace || next === boardView) return;
+    if (crossBoard)
+      void navigate({
+        to: '/w/$workspaceId/board',
+        params: { workspaceId: workspace.id },
+        search: (prev) => ({ ...prev, view: next }),
+        replace: true,
+      });
+    else if (project)
+      void navigate({
+        to: '/w/$workspaceId/p/$projectId',
+        params: { workspaceId: workspace.id, projectId: project.id },
+        search: (prev) => ({ ...prev, view: next }),
+        replace: true,
+      });
+  }
+  useShortcut('search', () => {
+    if (!workspace || form) return;
+    if (palette) return setPalette(null);
+    if (document.querySelector('[role="dialog"]')) return;
+    if (!boardSearch) return setPalette({ mode: 'search', seed: '' });
+    // Search on a board: open it, or take the caret back to it; from inside its field,
+    // collapse it without clearing active filters.
+    const state = board.get();
+    const input = document.querySelector('[data-board-search-input]');
+    if (!state.searching) openSearch();
+    else if (document.activeElement === input) {
+      collapseSearch();
+      document.querySelector<HTMLElement>('#main-content')?.focus({ preventScroll: true });
+    } else focusSearch();
+  });
+  // Quick capture: the palette's, which takes the board's project when there is one.
+  useShortcut('newTask', () => {
+    if (!workspace || projects.length === 0 || form || palette) return false;
+    setPalette({ mode: 'capture', seed: '' });
+  });
+  useShortcut('toggleRail', () => setRailChoice(!expanded), desktop);
   // Search, filters and sort belong to the board on screen and clear when navigating away.
   useEffect(() => {
     if (!fullBoard && !navigating && (board.get().searching || narrowed(board.get())))
@@ -322,6 +342,7 @@ export function AppShell() {
     openForm: setForm,
     switcher: desktop ? null : { open: switcherOpen, show: openSwitcher },
     goBoard,
+    showView,
     openPalette,
     search,
     openTask: (projectId, taskId, created) => {
@@ -331,7 +352,7 @@ export function AppShell() {
       // loads, the board still on screen is leaving, so the task goes to its own board.
       const inPlace = !navigating && (crossBoard || (project?.id === projectId && projectBoard));
       // The task's own opening is the motion here; a cross-fade would run under it.
-      if (!inPlace) selectProject(workspace.id, projectId, 'board', false, false);
+      if (!inPlace) selectProject(workspace.id, projectId, boardView, false, false);
     },
     goProjectSettings: (project, section) => {
       void navigate({
@@ -362,7 +383,8 @@ export function AppShell() {
       >
         Skip to content
       </a>
-      <ManagementSurfaceProvider active={!fullBoard}>
+      {/* The phone's one drawer, which every screen shows its dock and pages in (ADR 0009). */}
+      <DrawerHost enabled={!desktop}>
         <div className="flex min-h-dvh">
           {desktop && (
             <motion.aside
@@ -389,6 +411,7 @@ export function AppShell() {
                   <RailButton
                     label="Search"
                     hintLabel={searchHint}
+                    shortcut="search"
                     expanded={expanded}
                     expandedControl={boardSearch ? searchActive : undefined}
                     connected={sidebarConnected}
@@ -421,6 +444,19 @@ export function AppShell() {
                         />
                       )}
                     </span>
+                  </RailButton>
+                </div>
+              )}
+              {fullBoard && (
+                <div className="mt-1 px-3">
+                  <RailButton
+                    label="Dependency graph"
+                    expanded={expanded}
+                    pressed={view === 'graph'}
+                    active={view === 'graph'}
+                    onClick={() => showView(view === 'graph' ? 'board' : 'graph')}
+                  >
+                    <Network aria-hidden className="size-5" />
                   </RailButton>
                 </div>
               )}
@@ -520,6 +556,7 @@ export function AppShell() {
                 </SettingsContextMenu>
                 <RailButton
                   label={expanded ? 'Collapse navigation' : 'Expand navigation'}
+                  shortcut="toggleRail"
                   expanded={expanded}
                   onClick={() => setRailChoice(!expanded)}
                 >
@@ -575,8 +612,9 @@ export function AppShell() {
         <ShellForms form={form} onClose={() => setForm(null)} />
         {!desktop && <ProjectSwitcher open={switcherOpen} onClose={closeSwitcher} />}
         <NewTagHost />
+        <ShortcutsHelp />
         <SignOutAccountHost />
-      </ManagementSurfaceProvider>
+      </DrawerHost>
     </ShellContext.Provider>
   );
 }
@@ -584,9 +622,11 @@ export function AppShell() {
 function RailButton({
   label,
   hintLabel,
+  shortcut,
   expanded,
   active,
   expandedControl,
+  pressed,
   connected,
   badge,
   children,
@@ -602,10 +642,14 @@ function RailButton({
   label: string;
   /** Extra tooltip and accessible description when status adds beyond `label` (e.g. active filters). */
   hintLabel?: string;
+  /** A keyboard shortcut for the same action: the hint shows its keys, in either rail. */
+  shortcut?: ShortcutId;
   expanded: boolean;
   active?: boolean;
   /** Panel toggle state (e.g. Search): sets `aria-expanded` instead of `aria-current="page"`. */
   expandedControl?: boolean;
+  /** A view toggle (e.g. the dependency graph): sets `aria-pressed` instead of `aria-current`. */
+  pressed?: boolean;
   /** Extends flush into the docked search sidebar at the same elevation with concave fillets. */
   connected?: boolean;
   badge?: ReactNode;
@@ -618,8 +662,12 @@ function RailButton({
 }) {
   const props = {
     'aria-label': label,
-    'aria-current': active && expandedControl === undefined ? ('page' as const) : undefined,
+    'aria-current':
+      active && expandedControl === undefined && pressed === undefined
+        ? ('page' as const)
+        : undefined,
     'aria-expanded': expandedControl,
+    'aria-pressed': pressed,
     'data-connected': connected ? '' : undefined,
     'data-color': tint ?? undefined,
     className: cn(
@@ -658,8 +706,9 @@ function RailButton({
       ref={ref}
       label={hintLabel ?? label}
       side="right"
-      disabled={expanded && !hintLabel}
+      disabled={expanded && !hintLabel && !shortcut}
       describe={Boolean(hintLabel)}
+      shortcut={shortcut}
     >
       {control}
     </Hint>

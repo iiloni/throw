@@ -23,6 +23,7 @@ import { useHasCommentDraft } from '@/lib/commentDrafts';
 import { addComment } from '@/lib/comments';
 import { haptics } from '@/lib/haptics';
 import { getServerUrl } from '@/lib/serverUrl';
+import { useShortcut } from '@/lib/shortcuts';
 import { usePersistentState } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 import { CommentComposer } from './CommentComposer';
@@ -200,6 +201,28 @@ function revealPanel(section: HTMLElement, panelId: string, instant: boolean) {
   return stop;
 }
 
+/**
+ * Puts the caret in the comment composer once it is on screen: its editor loads on demand, and
+ * a panel turned to from another shows a frame later, too late for the editor's own autofocus
+ * in some browsers. Gives up after a moment, or if focus has been taken somewhere else.
+ */
+function focusComposer(section: HTMLElement) {
+  const from = document.activeElement;
+  const started = performance.now();
+  function step() {
+    const editor = section.querySelector<HTMLElement>('.comment-composer [contenteditable="true"]');
+    if (editor && document.activeElement === editor) return;
+    if (document.activeElement !== from && !section.contains(document.activeElement)) return;
+    if (editor && !editor.closest('[hidden]')) {
+      editor.focus({ preventScroll: true });
+      editor.scrollIntoView({ block: 'nearest' });
+      if (document.activeElement === editor) return;
+    }
+    if (performance.now() - started < REVEAL_WITHIN) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
 export function TaskRefusalNotice({ taskId }: { taskId: string }) {
   const { timeline } = useTaskTimeline(taskId);
   const storageKey = `throw-refusals:${getServerUrl()}:${signedInUserId}:${taskId}`;
@@ -331,6 +354,15 @@ export function TaskTimeline({
     },
     [swipeRef],
   );
+  // The open task's keys turn its tabs, and `C` starts a comment (or returns to the one begun).
+  useShortcut('taskComments', () => turnTo('comments'));
+  useShortcut('taskHistory', () => turnTo('history'));
+  useShortcut('taskLinks', () => (showLinks ? turnTo('links') : false));
+  useShortcut('taskComment', () => {
+    if (tab !== 'comments') turnTo('comments');
+    if (!composing) setComposingFor(task.id);
+    if (section.current) focusComposer(section.current);
+  });
   const [focusing, setFocusing] = useState<string | null>(null);
   useEffect(() => {
     const onFocus = (event: Event) => {

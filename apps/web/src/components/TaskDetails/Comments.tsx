@@ -19,6 +19,7 @@ import {
 import { LazyDescriptionEditor } from '@/components/DescriptionEditor/LazyDescriptionEditor';
 import { Hint } from '@/components/Hint/Hint';
 import { IconButton } from '@/components/IconButton/IconButton';
+import { ariaShortcut, ShortcutKeys } from '@/components/KeyboardShortcuts/Keys';
 import { Button } from '@/components/ui/button';
 import { signedInUserId } from '@/lib/collections';
 import { deleteComment, editComment } from '@/lib/comments';
@@ -524,6 +525,7 @@ export function CommentPrompt({
       ) : (
         <button
           type="button"
+          aria-keyshortcuts={ariaShortcut('taskComment')}
           className="flex min-h-12 w-full items-center gap-2.5 rounded-2xl px-3.5 text-left text-foreground/80 text-sm outline-none transition-colors hover:bg-foreground/[0.035] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60 focus-visible:ring-inset sm:px-4"
           onClick={onCompose}
         >
@@ -537,6 +539,12 @@ export function CommentPrompt({
             )}
           </span>
           {hasDraft ? 'Resume comment draft' : 'Write a comment…'}
+          {/* The open task's key for this, where there is a keyboard to press it on. */}
+          <ShortcutKeys
+            id="taskComment"
+            spoken={false}
+            className="ml-auto hidden pointer-fine:inline-flex"
+          />
         </button>
       )}
     </Swap>

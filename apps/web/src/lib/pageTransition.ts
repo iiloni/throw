@@ -43,7 +43,13 @@ function sectionOf(search: unknown) {
 export function pageAt({ pathname, search }: Location): Page | null {
   const path = pathname.length > 1 ? pathname.replace(/\/$/, '') : pathname;
   const board = BOARD.exec(path);
-  if (board) return { kind: 'board', key: board[2] ? `p:${board[2]}` : `w:${board[1]}`, order: 0 };
+  if (board) {
+    // The dependency graph is the board seen another way: switching cross-fades, as between boards.
+    const graph =
+      typeof search === 'object' && search !== null && 'view' in search && search.view === 'graph';
+    const key = board[2] ? `p:${board[2]}` : `w:${board[1]}`;
+    return { kind: 'board', key: graph ? `${key}:graph` : key, order: 0 };
+  }
   const project = PROJECT_PAGE.exec(path);
   if (project) {
     const index =
@@ -65,8 +71,9 @@ export function pageAt({ pathname, search }: Location): Page | null {
 }
 
 /**
- * The view transition for a navigation, or false for none. Opening a task, the backlog or a
- * view changes only the search params of the same page and has its own motion. A redirect
+ * The view transition for a navigation, or false for none. Opening a task or the backlog
+ * changes only the search params of the same page and has its own motion; the dependency
+ * graph and the board cross-fade. A redirect
  * (`/`, a workspace's first project) has nothing to show yet, so it changes in place.
  *
  * `wide` is the desktop layout, where settings list their pages beside the open one and

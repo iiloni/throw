@@ -21,6 +21,13 @@ beforeEach(() => {
   now = 0;
   measured = 0;
   motionPreference.reduced = true;
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
   vi.spyOn(performance, 'now').mockImplementation(() => now);
   // jsdom lays nothing out; the drawer is a screen tall and its header has no height.
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
@@ -32,6 +39,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 const closed: DrawerPage = { key: 'closed', title: 'Closed', half: true, content: <p>History</p> };
@@ -291,6 +299,93 @@ describe('Drawer motion', () => {
     rerender(view(edit));
     expect(screen.queryByText('Options')).toBeNull();
     expect(screen.getByText('Edit form').closest('[aria-hidden]')).toBeNull();
+  });
+
+  it('trades the move target for the dock, the leaving target inert until it has faded', async () => {
+    motionPreference.reduced = false;
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const view = (move: boolean) => (
+      <Drawer
+        label="Backlog"
+        dock={<p>Dock</p>}
+        detent="closed"
+        onDetent={() => {}}
+        page={null}
+        onClosePage={() => {}}
+        move={move ? <button type="button">Send</button> : null}
+      >
+        <p>Backlog list</p>
+      </Drawer>
+    );
+    const { rerender } = render(view(true));
+    expect(screen.getByText('Dock').closest('[hidden]')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Send' }).closest('[inert]')).toBeNull();
+    rerender(view(false));
+    // The dock is back at once while the target fades, out of reach of a second tap.
+    expect(screen.getByText('Dock').closest('[hidden]')).toBeNull();
+    expect(screen.getByText('Send').closest('[inert]')).not.toBeNull();
+    for (let frame = 0; frame < 60 && screen.queryByText('Send'); frame++) {
+      now += 16;
+      await settled();
+    }
+    expect(screen.queryByText('Send')).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it('floats a selection over the open list it was chosen from, and a held card in its header', async () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const view = (
+      floatMove: boolean,
+      detent: 'closed' | 'half',
+      page: DrawerPage | null = null,
+    ) => (
+      <Drawer
+        label="Backlog"
+        dock={<p>Dock</p>}
+        detent={detent}
+        onDetent={() => {}}
+        page={page}
+        onClosePage={() => {}}
+        move={<p>Selection</p>}
+        floatMove={floatMove}
+      >
+        <p>Backlog list</p>
+      </Drawer>
+    );
+    // The one shown, not a copy still leaving the place it moved from.
+    const selection = () =>
+      screen.getAllByText('Selection').find((element) => !element.closest('[inert]'))!;
+    const inFooter = () => selection().closest('[data-drawer] [data-drop-expand]') !== null;
+    const { rerender } = render(view(true, 'half'));
+    // The list and its dock stay in view, the selection at their foot.
+    expect(inFooter()).toBe(true);
+    expect(screen.getByText('Dock').closest('[hidden]')).toBeNull();
+    await settled();
+    expect(offset()).toBe(HALF);
+    // A held card sinks the list under the target as before.
+    rerender(view(false, 'half'));
+    expect(inFooter()).toBe(false);
+    expect(screen.getByText('Dock').closest('[hidden]')).not.toBeNull();
+    // A collapsed drawer has no list in view, so the selection is its header.
+    rerender(view(true, 'closed'));
+    expect(screen.getByText('Dock').closest('[hidden]')).not.toBeNull();
+    // A half page, as the closed tasks are, keeps its place too.
+    rerender(view(true, 'closed', closed));
+    expect(inFooter()).toBe(true);
+    expect(screen.getByText('History')).toBeInTheDocument();
+    vi.unstubAllGlobals();
   });
 
   it('slides by frames, so a long frame does not carry it most of the way at once', async () => {

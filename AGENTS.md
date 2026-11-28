@@ -13,7 +13,10 @@ The repository has the stack end to end (auth, sync, the outbox, local persisten
 task model (workspaces, projects, statuses, tasks and subtasks, with keys, numbers, the trash
 and ADR 0005's conflict rule; see `docs/data-model.md`), and the responsive app shell. The
 shell owns workspace and project management, a desktop navigation rail and remembered
-navigation; each phone board brings its own dock. On a phone the title, or a pull down from
+navigation. On a phone the shell also owns the one drawer (`Drawer/DrawerHost.tsx`, ADR 0009),
+which stays mounted as screens change: each board, the dependency graph and settings hand it
+their dock, pages and move target with `useDrawerSlot`, and management forms lend it pages
+through `ManagementSurface`. On a phone the title, or a pull down from
 the top of a board, opens the shell's project switcher as a drawer page
 (`AppShell/ProjectSwitcher.tsx`, `AppShell/SwitcherPull.tsx`). Page changes animate through the router's
 view transitions (`lib/pageTransition.ts`, ADR 0013): boards cross-fade, ordered pages
@@ -41,7 +44,7 @@ page covers the screen's foot. A phone task scrolls the full screen height under
 trash toolbars, and Catch's `page-top-blur` / `page-bottom-blur` scrims blur its edges while
 there is more that way (`useScrollEdges`). Its real content is supplied by
 `TaskContentContext` at the project-board boundary; the prototype keeps its mock content.
-On a phone the same boundary hands the board's drawer the open task's dock and pickers
+On a phone the same boundary hands the shell's drawer the open task's dock and pickers
 (`TaskDetails/TaskControls.tsx`); the desktop pane docks them below the task's card, as
 Catch's split view does (`TaskDrawer`). A desktop pane at least 620 px wide moves the task's
 tags and subtasks to a side column beside the card while it has any (ADR 0012,
@@ -79,15 +82,25 @@ them to `githubHandlers` in `github/dispatch.ts`, where the integration's later 
 Its opt-in status rules (`github/statusRules.ts`) move linked tasks when a pull request or issue
 changes state, in the delivery's transaction and as a board move would; the link and status
 change share one history entry and one webhook (`recordGithubChange` in `github/linkData.ts`).
-The app reads and saves them through `statusRules` on the connection (`saveGithubStatusRules`).
+The app reads and saves them through `statusRules` on the connection (`saveGithubStatusRules`),
+from the GitHub page's Status rules (`GithubConnection/StatusRules.tsx`): a status menu on
+desktop and the drawer's status grid (`StatusOptions`) on a phone.
 GitHub releases and task bindings sync as read-only collections (ADR 0017). Webhook binding
 lives in `github/releaseEvents.ts`, with manual REST and MCP actions in `github/releases.ts`.
+The task pane leads its GitHub links with release pills (`TaskReleases`), or Merged · unreleased
+while a merged pull request waits for a shipped release; both boards filter by Unreleased or a
+release through `BoardData.releases` (`boardReleases` in `lib/githubReleases.ts`, matching MCP's
+`unreleased`), which the prototype leaves out to hide the Release filter.
 Descriptions and comments draw `#KEY-N` task references as links over their plain stored
 text, so Markdown and MCP keep `#KEY-N` (`lib/taskReferences.ts`; the server's
 `mcp/markdown.ts` leaves `#` unescaped before one). The app route's `TaskReferencesProvider` indexes
 the synced tasks (`TaskReferences/referenceIndex.ts`) and `LazyDescriptionEditor`'s `referencesFor` names
 the task whose text it is; the editor decorates with `DescriptionEditor/taskReferencePlugin.ts`, offers
 tasks after `#` (`DescriptionTaskMenu.tsx`) and shows `TaskReferenceCard` on desktop.
+A task's linked pull requests and issues show in its Links tab or side column
+(`components/TaskGithubLinks`), and the relation picker links a pasted address while the
+project is connected (`lib/githubLinks.ts`, online only). Board cards show a pull request mark
+from `TaskPullRequestsContext` (`Board/githubLinks.ts`), previewed on hover with a mouse.
 The activity log syncs to devices and comments are built (`lib/comments.ts`), with a
 timeline query in `collections.ts` and a task history view in `TaskDetails/TaskTimeline.tsx`; its comment cards, list motion and
 composer prompt are `TaskDetails/Comments.tsx`.
@@ -120,6 +133,8 @@ Desktop columns on both boards fold to a strip, as Catch's deck does
 (`Board/BoardColumn.tsx`, remembered per project by `useCollapsedColumns` in `Board/state.ts`).
 A phone's project board reads the same folds: its pager skips folded columns, which stay as
 short handles on `FlowTrack` that open them again (`phoneColumns` in `Board/PhoneBoard.tsx`).
+Every segment and handle on the track carries its column's count as the filter leaves it
+(`countIn`), and the column on screen folds from the end of the row naming it.
 Both boards narrow in place: the board store holds a filter and a temporary sort
 (`Board/filter.ts`, applied by `listTasks` and `countIn`), set from the desktop boards'
 search bar (`components/BoardSearch`, docked as a sidebar on wide boards) or the phone drawer's
@@ -138,12 +153,22 @@ its folded column or fade. A held card settles it all at once, and reduced motio
 click on desktop, long press on a phone) is edited together through `Board/SelectionActions.tsx`:
 the desktop `SelectionBar` and the phone `MovePanel` share its controls, and the boundaries
 supply the priority, size and tag panels and the trash action (`components/BulkActions`) through
-`SelectionContentContext`, so the prototype only moves.
+`SelectionContentContext`, so the prototype only moves. On a phone the move target trades places
+with the dock (the Drawer's `MoveFace`) and `MovePanel`'s views fade across on the drawer's spring;
+a leaving one is inert and frozen at what it last showed. A selection made in the open backlog or
+on the closed tasks' page floats at the screen's foot over that list (the Drawer's `floatMove`).
+Keyboard shortcuts live in `lib/shortcuts.ts`: their definitions and default chords, the
+device's overrides (local storage) and one window listener. A component runs one with
+`useShortcut(id, handler)`; plain keys never run while typing or while a dialog, menu or list
+has the keys, and a handler returning false leaves the key to the page. `Hint`, `IconButton`
+and `DockControl` take a `shortcut` to show its keycaps (`components/KeyboardShortcuts/Keys.tsx`);
+the shell hosts the `?` list (`ShortcutsHelp`), and `/settings/shortcuts` rebinds them. Escape,
+Enter, Space and the card arrows stay in their components and are listed as built in.
 Settings (`/settings/*`) and project settings (`/w/:workspaceId/p/:projectId/settings`,
 with project trash beside it at `/trash`) share Catch's `SettingsLayout`: pages listed
 beside the open one on wide screens, and a dock page picker on phones
-(`useManagementDock`). Workspace trash is `/w/:workspaceId/trash`. Settings and trash
-forms use the shell's `ManagementSurface` host for the shared Drawer on phones and centred
+(`useDrawerSlot`). Workspace trash is `/w/:workspaceId/trash`. Settings and trash
+forms use `ManagementSurface`, a page lent to the shell's drawer on phones and centred
 dialogs on desktop; project appearance is edited in place on project settings' General page.
 
 The board's interaction was worked out in a prototype on mock data: `/prototype/board`, in
@@ -155,6 +180,18 @@ is held and turns drops into `moveTask` and `sendTask` calls; `Board/carry.ts` i
 keyboard carry. The collection hooks hold
 their last rows through a reconnect's full snapshot (`lib/steadyRows.ts`), so the board
 does not unmount while a shape reloads.
+
+The dependency graph (`components/DependencyGraph`) is either board seen as its blocking
+relations, at `view=graph` (`ShellState.showView`; the rail's Dependency graph button and the
+phone switcher's footer switch, and `pageAt` cross-fades between the two; the shell reads
+`view` from the rendered match, not the location, so the transition captures the view it
+leaves). Its nodes, edges and controls settle in on every arrival as a board's cards do
+(`useEntryMotion`, staggered by layer); nodes joining a graph on screen pop in. The boundaries
+render it in place of the board, so the task pane, task screens, search and filters are the
+board's own. `graphModel.ts` turns the board's data, relations and `TaskBlockersContext` into
+nodes and edges (states match the cards' blocked mark), `layout.ts` is the pure layered
+layout and `analysis.ts` the critical path, reachability and bottleneck counts, all unit
+tested. `viewport.ts` pans and zooms by motion values; the canvas fits itself until moved.
 
 Several accounts can be signed in on one device (ADR 0016): `lib/auth.ts` keeps the list,
 the tab's account (`sessionStorage`) and the `/u/<n>` address prefix the router strips and
@@ -519,6 +556,11 @@ ids. Do not add a dependency on Catch's repository; the two release independentl
   collapsed header is the dock. Show content in it rather than adding a sheet, overlay or
   `BottomSheet`. Desktop has no drawer: use the rail, a panel sized to the window or a
   centred dialog.
+- The drawer draws a screen's dock, pages and backlog in the shell (`DrawerHost`), outside
+  the screen's React tree, so they read the shell's contexts. A board boundary's contexts
+  reach them through `Board/drawerBridge.tsx`: a context the boundary adds for its cards or
+  task content joins `BoardDrawerBridge`, or drawer content reads its default. A board
+  covered by a drawer page marks what stops painting with `data-board-cover`.
 - TanStack DB is pre-1.0. Keep its usage inside `src/lib/collections.ts`, `src/lib/localStore.ts`
   and route files so upgrades stay contained.
 - Bump a collection's `schemaVersion` in `collections.ts` whenever the columns its shape syncs

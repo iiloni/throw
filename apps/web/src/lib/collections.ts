@@ -26,6 +26,7 @@ import {
   commentSchema,
   createStatusSchema,
   createWorkspaceSchema,
+  type GithubRelease,
   githubReleaseSchema,
   type Project,
   parseTimestamptz,
@@ -36,6 +37,7 @@ import {
   type TagWriteResponse,
   type Task,
   type TaskGithubLink,
+  type TaskGithubRelease,
   type TaskRelation,
   type TaskTag,
   tagSchema,
@@ -309,12 +311,54 @@ export const taskGithubReleasesCollection = createCollection(
     1,
   ),
 );
+const emptyReleases: GithubRelease[] = [];
+/** Every GitHub release and tag in the user's workspaces, for the task pane and board filter. */
+export function useGithubReleases() {
+  const { data = emptyReleases, isLoading } = useLiveQuery((q) =>
+    q.from({ release: githubReleasesCollection }),
+  );
+  return { releases: useSteadyRows(data), isLoading };
+}
+const emptyReleaseBindings: TaskGithubRelease[] = [];
+/** Which tasks each release shipped. */
+export function useTaskGithubReleases() {
+  const { data = emptyReleaseBindings, isLoading } = useLiveQuery((q) =>
+    q.from({ binding: taskGithubReleasesCollection }),
+  );
+  return { bindings: useSteadyRows(data), isLoading };
+}
+/** One task's release bindings, for its pane. */
+export function useTaskGithubReleasesOf(taskId: string) {
+  const { data = emptyReleaseBindings, isLoading } = useLiveQuery(
+    (q) =>
+      q
+        .from({ binding: taskGithubReleasesCollection })
+        .where(({ binding }) => eq(binding.taskId, taskId)),
+    [taskId],
+  );
+  return { bindings: useSteadyRows(data), isLoading };
+}
 const emptyGithubLinks: TaskGithubLink[] = [];
 export function useTaskGithubLinks() {
   const { data = emptyGithubLinks, isLoading } = useLiveQuery((q) =>
     q.from({ link: taskGithubLinksCollection }),
   );
   return { links: useSteadyRows(data), isLoading };
+}
+/** One task's pull request and issue links, for its pane. */
+export function useTaskGithubLinksOf(taskId: string) {
+  const { data = emptyGithubLinks, isLoading } = useLiveQuery(
+    (q) => q.from({ link: taskGithubLinksCollection }).where(({ link }) => eq(link.taskId, taskId)),
+    [taskId],
+  );
+  return { links: useSteadyRows(data), isLoading };
+}
+/**
+ * Waits for a link write the server made to stream back. GitHub links are written straight
+ * through the API rather than the outbox, so the pane shows the change once it is synced.
+ */
+export function awaitGithubLinksTxid(txid: number) {
+  return taskGithubLinksCollection.utils.awaitTxId(txid, SYNC_WAIT_MS).catch(() => false);
 }
 
 /** Links between tasks, across the projects of a workspace. Always synced for board cards. */
