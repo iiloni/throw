@@ -14,6 +14,7 @@ import { Hint } from '@/components/Hint/Hint';
 import { GithubPullMark } from '@/components/TaskGithubLinks/GithubPullMark';
 import { TaskTags } from '@/components/TaskTags/TaskTags';
 import { haptics } from '@/lib/haptics';
+import { isDesktop } from '@/lib/media';
 import { afterPaint, animateSteadySpring, springs, stopSteady } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { CARD_HELP_ID } from './BoardAnnouncer';
@@ -27,6 +28,7 @@ import {
   useSpotlightActiveFor,
   useTaskBlockers,
 } from './blockers';
+import { ARROW_DIRECTIONS, focusNextCard } from './cardFocus';
 import { carryAcross, carryVertically, pickUp, putBack, setDown } from './carry';
 import { consumeDragClick, drag, isPrimed, pressCard } from './drag';
 import { useTaskPullRequests } from './githubLinks';
@@ -382,6 +384,15 @@ export function TaskCard({
     } else if (carried && event.key in arrows) {
       event.preventDefault();
       arrows[event.key]!();
+    } else if (
+      !carried &&
+      event.key in ARROW_DIRECTIONS &&
+      !(event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) &&
+      // A phone pages its columns, so its arrows stay in the column on screen.
+      (isDesktop() || event.key === 'ArrowUp' || event.key === 'ArrowDown')
+    ) {
+      // Unheld, the arrows walk the board to the card they point at.
+      if (focusNextCard(event.currentTarget, ARROW_DIRECTIONS[event.key]!)) event.preventDefault();
     } else if (carried && event.key === 'Escape') {
       event.preventDefault();
       putBack();

@@ -7,6 +7,7 @@ import {
   DatabaseBackup,
   Download,
   GitPullRequest,
+  Keyboard,
   KeyRound,
   type LucideIcon,
   SlidersHorizontal,
@@ -25,6 +26,7 @@ import { type SettingsSection as ProjectSection, settingsSectionSchema } from '.
 export const SETTINGS_TABS = [
   { path: '/settings/general', label: 'General', icon: SlidersHorizontal, section: 'User' },
   { path: '/settings/account', label: 'Account', icon: CircleUser, section: 'User' },
+  { path: '/settings/shortcuts', label: 'Keyboard shortcuts', icon: Keyboard, section: 'User' },
   { path: '/settings/mcp', label: 'MCP tokens', icon: KeyRound, section: 'User' },
   { path: '/settings/webhooks', label: 'Webhooks', icon: Webhook, section: 'User' },
   { path: '/settings/update', label: 'Update', icon: Download, section: 'User' },

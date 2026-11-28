@@ -3,6 +3,7 @@ import { Check, Copy, Link2, RotateCcw } from 'lucide-react';
 import { Dialog } from 'radix-ui';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { ariaShortcut, ShortcutKeys } from '@/components/KeyboardShortcuts/Keys';
 import { Button } from '@/components/ui/button';
 import { useBackHandler } from '@/lib/backButton';
 import { feelStatusChange } from '@/lib/haptics';
@@ -40,9 +41,19 @@ export function TaskActions({
     <>
       <div className="flex flex-col gap-1.5 px-2 pt-2 pb-1">
         {onLink && (
-          <Button variant="ghost" className={action} onClick={onLink}>
+          <Button
+            variant="ghost"
+            className={action}
+            aria-keyshortcuts={ariaShortcut('taskLink')}
+            onClick={onLink}
+          >
             <Link2 />
             Link a task
+            <ShortcutKeys
+              id="taskLink"
+              spoken={false}
+              className="ml-auto hidden pointer-fine:inline-flex"
+            />
           </Button>
         )}
         {target && (

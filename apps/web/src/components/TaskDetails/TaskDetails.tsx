@@ -442,6 +442,7 @@ export function TaskDetails({
                   : 'Back to the board'
               }
               onClick={leaveTask}
+              shortcut="closeTask"
               className="size-10 shrink-0 [&_svg]:size-5"
             >
               <ChevronLeft />

@@ -56,6 +56,7 @@ import { searchSidebarOpen } from '@/components/BoardSearch/BoardSearch';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { CommandPalette, type PaletteMode } from '@/components/CommandPalette/CommandPalette';
 import { Hint } from '@/components/Hint/Hint';
+import { ShortcutsHelp } from '@/components/KeyboardShortcuts/ShortcutsHelp';
 import { ManagementSurfaceProvider } from '@/components/ManagementSurface/ManagementSurface';
 import { NewTagHost } from '@/components/NewTag/NewTagHost';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
@@ -72,6 +73,7 @@ import { useDesktop, useMedia } from '@/lib/media';
 import { springs } from '@/lib/motion';
 import { projectsIn } from '@/lib/projects';
 import { pageBounceY } from '@/lib/scrollBounce';
+import { type ShortcutId, useShortcut } from '@/lib/shortcuts';
 import { usePersistentState } from '@/lib/storage';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { UPDATE_READY_DESCRIPTION, useUpdateReady } from '@/lib/updateReady';
@@ -261,33 +263,27 @@ export function AppShell() {
         replace: true,
       });
   }
-  useEffect(() => {
-    function shortcut(event: KeyboardEvent) {
-      if (
-        event.key.toLowerCase() !== 'k' ||
-        !(event.metaKey || event.ctrlKey) ||
-        event.altKey ||
-        event.isComposing
-      )
-        return;
-      event.preventDefault();
-      if (!workspace || form) return;
-      if (palette) return setPalette(null);
-      if (document.querySelector('[role="dialog"]')) return;
-      if (!boardSearch) return setPalette({ mode: 'search', seed: '' });
-      // Search on a board: open it, or take the caret back to it; from inside its field,
-      // collapse it without clearing active filters.
-      const state = board.get();
-      const input = document.querySelector('[data-board-search-input]');
-      if (!state.searching) openSearch();
-      else if (document.activeElement === input) {
-        collapseSearch();
-        document.querySelector<HTMLElement>('#main-content')?.focus({ preventScroll: true });
-      } else focusSearch();
-    }
-    window.addEventListener('keydown', shortcut);
-    return () => window.removeEventListener('keydown', shortcut);
-  }, [workspace, form, palette, boardSearch]);
+  useShortcut('search', () => {
+    if (!workspace || form) return;
+    if (palette) return setPalette(null);
+    if (document.querySelector('[role="dialog"]')) return;
+    if (!boardSearch) return setPalette({ mode: 'search', seed: '' });
+    // Search on a board: open it, or take the caret back to it; from inside its field,
+    // collapse it without clearing active filters.
+    const state = board.get();
+    const input = document.querySelector('[data-board-search-input]');
+    if (!state.searching) openSearch();
+    else if (document.activeElement === input) {
+      collapseSearch();
+      document.querySelector<HTMLElement>('#main-content')?.focus({ preventScroll: true });
+    } else focusSearch();
+  });
+  // Quick capture: the palette's, which takes the board's project when there is one.
+  useShortcut('newTask', () => {
+    if (!workspace || projects.length === 0 || form || palette) return false;
+    setPalette({ mode: 'capture', seed: '' });
+  });
+  useShortcut('toggleRail', () => setRailChoice(!expanded), desktop);
   // Search, filters and sort belong to the board on screen and clear when navigating away.
   useEffect(() => {
     if (!fullBoard && !navigating && (board.get().searching || narrowed(board.get())))
@@ -414,6 +410,7 @@ export function AppShell() {
                   <RailButton
                     label="Search"
                     hintLabel={searchHint}
+                    shortcut="search"
                     expanded={expanded}
                     expandedControl={boardSearch ? searchActive : undefined}
                     connected={sidebarConnected}
@@ -558,6 +555,7 @@ export function AppShell() {
                 </SettingsContextMenu>
                 <RailButton
                   label={expanded ? 'Collapse navigation' : 'Expand navigation'}
+                  shortcut="toggleRail"
                   expanded={expanded}
                   onClick={() => setRailChoice(!expanded)}
                 >
@@ -613,6 +611,7 @@ export function AppShell() {
         <ShellForms form={form} onClose={() => setForm(null)} />
         {!desktop && <ProjectSwitcher open={switcherOpen} onClose={closeSwitcher} />}
         <NewTagHost />
+        <ShortcutsHelp />
         <SignOutAccountHost />
       </ManagementSurfaceProvider>
     </ShellContext.Provider>
@@ -622,6 +621,7 @@ export function AppShell() {
 function RailButton({
   label,
   hintLabel,
+  shortcut,
   expanded,
   active,
   expandedControl,
@@ -641,6 +641,8 @@ function RailButton({
   label: string;
   /** Extra tooltip and accessible description when status adds beyond `label` (e.g. active filters). */
   hintLabel?: string;
+  /** A keyboard shortcut for the same action: the hint shows its keys, in either rail. */
+  shortcut?: ShortcutId;
   expanded: boolean;
   active?: boolean;
   /** Panel toggle state (e.g. Search): sets `aria-expanded` instead of `aria-current="page"`. */
@@ -703,8 +705,9 @@ function RailButton({
       ref={ref}
       label={hintLabel ?? label}
       side="right"
-      disabled={expanded && !hintLabel}
+      disabled={expanded && !hintLabel && !shortcut}
       describe={Boolean(hintLabel)}
+      shortcut={shortcut}
     >
       {control}
     </Hint>

@@ -21,6 +21,7 @@ import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/a
 import { Route as AppSettingsAdminRouteImport } from './routes/_app/settings/admin'
 import { Route as AppSettingsGeneralRouteImport } from './routes/_app/settings/general'
 import { Route as AppSettingsMcpRouteImport } from './routes/_app/settings/mcp'
+import { Route as AppSettingsShortcutsRouteImport } from './routes/_app/settings/shortcuts'
 import { Route as AppSettingsUpdateRouteImport } from './routes/_app/settings/update'
 import { Route as AppSettingsWebhooksRouteImport } from './routes/_app/settings/webhooks'
 import { Route as AppSettingsAdminIndexRouteImport } from './routes/_app/settings/admin/index'
@@ -91,6 +92,11 @@ const AppSettingsMcpRoute = AppSettingsMcpRouteImport.update({
   path: '/mcp',
   getParentRoute: () => AppSettingsRoute,
 } as any)
+const AppSettingsShortcutsRoute = AppSettingsShortcutsRouteImport.update({
+  id: '/shortcuts',
+  path: '/shortcuts',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
 const AppSettingsUpdateRoute = AppSettingsUpdateRouteImport.update({
   id: '/update',
   path: '/update',
@@ -156,6 +162,7 @@ export interface FileRoutesByFullPath {
   '/settings/admin': typeof AppSettingsAdminRouteWithChildren
   '/settings/general': typeof AppSettingsGeneralRoute
   '/settings/mcp': typeof AppSettingsMcpRoute
+  '/settings/shortcuts': typeof AppSettingsShortcutsRoute
   '/settings/update': typeof AppSettingsUpdateRoute
   '/settings/webhooks': typeof AppSettingsWebhooksRoute
   '/settings/': typeof AppSettingsIndexRoute
@@ -177,6 +184,7 @@ export interface FileRoutesByTo {
   '/settings/account': typeof AppSettingsAccountRoute
   '/settings/general': typeof AppSettingsGeneralRoute
   '/settings/mcp': typeof AppSettingsMcpRoute
+  '/settings/shortcuts': typeof AppSettingsShortcutsRoute
   '/settings/update': typeof AppSettingsUpdateRoute
   '/settings/webhooks': typeof AppSettingsWebhooksRoute
   '/settings': typeof AppSettingsIndexRoute
@@ -202,6 +210,7 @@ export interface FileRoutesById {
   '/_app/settings/admin': typeof AppSettingsAdminRouteWithChildren
   '/_app/settings/general': typeof AppSettingsGeneralRoute
   '/_app/settings/mcp': typeof AppSettingsMcpRoute
+  '/_app/settings/shortcuts': typeof AppSettingsShortcutsRoute
   '/_app/settings/update': typeof AppSettingsUpdateRoute
   '/_app/settings/webhooks': typeof AppSettingsWebhooksRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
@@ -227,6 +236,7 @@ export interface FileRouteTypes {
     | '/settings/admin'
     | '/settings/general'
     | '/settings/mcp'
+    | '/settings/shortcuts'
     | '/settings/update'
     | '/settings/webhooks'
     | '/settings/'
@@ -248,6 +258,7 @@ export interface FileRouteTypes {
     | '/settings/account'
     | '/settings/general'
     | '/settings/mcp'
+    | '/settings/shortcuts'
     | '/settings/update'
     | '/settings/webhooks'
     | '/settings'
@@ -272,6 +283,7 @@ export interface FileRouteTypes {
     | '/_app/settings/admin'
     | '/_app/settings/general'
     | '/_app/settings/mcp'
+    | '/_app/settings/shortcuts'
     | '/_app/settings/update'
     | '/_app/settings/webhooks'
     | '/_app/settings/'
@@ -379,6 +391,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsMcpRouteImport
       parentRoute: typeof AppSettingsRoute
     }
+    '/_app/settings/shortcuts': {
+      id: '/_app/settings/shortcuts'
+      path: '/shortcuts'
+      fullPath: '/settings/shortcuts'
+      preLoaderRoute: typeof AppSettingsShortcutsRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
     '/_app/settings/update': {
       id: '/_app/settings/update'
       path: '/update'
@@ -470,6 +489,7 @@ interface AppSettingsRouteChildren {
   AppSettingsAdminRoute: typeof AppSettingsAdminRouteWithChildren
   AppSettingsGeneralRoute: typeof AppSettingsGeneralRoute
   AppSettingsMcpRoute: typeof AppSettingsMcpRoute
+  AppSettingsShortcutsRoute: typeof AppSettingsShortcutsRoute
   AppSettingsUpdateRoute: typeof AppSettingsUpdateRoute
   AppSettingsWebhooksRoute: typeof AppSettingsWebhooksRoute
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute
@@ -480,6 +500,7 @@ const AppSettingsRouteChildren: AppSettingsRouteChildren = {
   AppSettingsAdminRoute: AppSettingsAdminRouteWithChildren,
   AppSettingsGeneralRoute: AppSettingsGeneralRoute,
   AppSettingsMcpRoute: AppSettingsMcpRoute,
+  AppSettingsShortcutsRoute: AppSettingsShortcutsRoute,
   AppSettingsUpdateRoute: AppSettingsUpdateRoute,
   AppSettingsWebhooksRoute: AppSettingsWebhooksRoute,
   AppSettingsIndexRoute: AppSettingsIndexRoute,

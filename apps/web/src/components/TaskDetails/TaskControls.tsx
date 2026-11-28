@@ -20,6 +20,7 @@ import { RelationPicker } from '@/components/TaskRelations/TaskRelations';
 import { useTags, useTaskTags } from '@/lib/collections';
 import { useTaskSizeSupport } from '@/lib/compatibility';
 import { springs } from '@/lib/motion';
+import { type ShortcutId, useShortcut } from '@/lib/shortcuts';
 import { TaskActions } from './TaskActions';
 import { PriorityPicker, SizePicker, StatusPicker, TaskTagsPicker } from './TaskPickers';
 
@@ -95,6 +96,12 @@ export function TaskControls({
   tooltips?: boolean;
 }) {
   const sizeSupported = useTaskSizeSupport();
+  // The open task's keys press its own controls, so a panel opens as a tap would open it.
+  useShortcut('taskStatus', () => pressControl(task.id, 'status'));
+  useShortcut('taskPriority', () => pressControl(task.id, 'priority'));
+  useShortcut('taskSize', () => pressControl(task.id, 'size'));
+  useShortcut('taskTags', () => pressControl(task.id, 'tags'));
+  useShortcut('taskLink', () => openTaskPanel(task.id, 'relations'));
   const { tags } = useTags(task.projectId);
   const { taskTags } = useTaskTags(task.id);
   const secondary = new Set(taskTags.map((row) => row.tagId));
@@ -119,9 +126,44 @@ export function TaskControls({
       onOpen={onOpen}
       controlProps={controlProps}
       tooltips={tooltips}
+      shortcutsFor={task.id}
       more
     />
   );
+}
+
+const PANEL_SHORTCUTS = {
+  status: 'taskStatus',
+  priority: 'taskPriority',
+  size: 'taskSize',
+  tags: 'taskTags',
+} as const satisfies Partial<Record<DockPanel, ShortcutId>>;
+
+/**
+ * Presses the open task's control for a panel, as a shortcut does, then takes focus into the
+ * panel it opens: to the option chosen, or its first field. False when it has no such control.
+ */
+function pressControl(taskId: string, panel: DockPanel) {
+  // A subtask's pane can lie over its parent's, which stays to go back to.
+  const button = [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      `[data-task-drawer] [data-task-control="${panel}"][data-task-for="${CSS.escape(taskId)}"]`,
+    ),
+  ].find((item) => !item.closest('[inert]'));
+  if (!button) return false;
+  const opening = button.getAttribute('aria-expanded') !== 'true';
+  button.focus({ preventScroll: true });
+  button.click();
+  const id = button.getAttribute('aria-controls');
+  if (!opening || !id) return;
+  requestAnimationFrame(() => {
+    document
+      .getElementById(id)
+      ?.querySelector<HTMLElement>(
+        'input:checked, [aria-checked="true"], input:not([type="radio"]), button, [tabindex="0"]',
+      )
+      ?.focus({ preventScroll: true });
+  });
 }
 
 /**
@@ -138,6 +180,7 @@ export function ControlButtons({
   onOpen,
   controlProps,
   tooltips = true,
+  shortcutsFor,
   more = false,
 }: {
   status: Status | undefined;
@@ -149,14 +192,25 @@ export function ControlButtons({
   onOpen(panel: DockPanel, element: HTMLButtonElement): void;
   controlProps(panel: DockPanel): ControlProps;
   tooltips?: boolean;
+  /** The open task whose own controls these are: their keys press them and show in tooltips. */
+  shortcutsFor?: string;
   more?: boolean;
 }) {
+  const keys = (panel: keyof typeof PANEL_SHORTCUTS) =>
+    shortcutsFor
+      ? {
+          shortcut: PANEL_SHORTCUTS[panel],
+          'data-task-control': panel,
+          'data-task-for': shortcutsFor,
+        }
+      : {};
   return (
     <div className="grid h-[var(--dock-height)] w-full auto-cols-fr grid-flow-col gap-1 p-1">
       <DockControl
         label={`Status: ${status?.name ?? 'Pending'}. Change`}
         tooltip={tooltips}
         {...controlProps('status')}
+        {...keys('status')}
         onOpen={(element) => onOpen('status', element)}
       >
         <StatusGlyph category={status?.category ?? 'backlog'} color={status?.color} />
@@ -165,6 +219,7 @@ export function ControlButtons({
         label={`Priority: ${priorityName(project, priority)}. Change`}
         tooltip={tooltips}
         {...controlProps('priority')}
+        {...keys('priority')}
         onOpen={(element) => onOpen('priority', element)}
       >
         {priority === 3 ? (
@@ -178,6 +233,7 @@ export function ControlButtons({
           label={`Size: ${size === null ? 'none' : sizeLabel(size)}. Change`}
           tooltip={tooltips}
           {...controlProps('size')}
+          {...keys('size')}
           onOpen={(element) => onOpen('size', element)}
         >
           {size === null ? (
@@ -192,6 +248,7 @@ export function ControlButtons({
           label={`Tags: ${tagSummary(tags)}. Change`}
           tooltip={tooltips}
           {...controlProps('tags')}
+          {...keys('tags')}
           onOpen={(element) => onOpen('tags', element)}
         >
           <Tag
