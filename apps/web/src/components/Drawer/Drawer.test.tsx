@@ -21,6 +21,13 @@ beforeEach(() => {
   now = 0;
   measured = 0;
   motionPreference.reduced = true;
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
   vi.spyOn(performance, 'now').mockImplementation(() => now);
   // jsdom lays nothing out; the drawer is a screen tall and its header has no height.
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
@@ -32,6 +39,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 const closed: DrawerPage = { key: 'closed', title: 'Closed', half: true, content: <p>History</p> };

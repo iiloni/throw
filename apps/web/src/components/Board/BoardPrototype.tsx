@@ -1,5 +1,6 @@
 import { AnimatePresence } from 'motion/react';
 import { useEffect, useLayoutEffect, useState } from 'react';
+import { DrawerHost } from '@/components/Drawer/DrawerHost';
 import { useDesktop } from '@/lib/media';
 import { BoardAnnouncer } from './BoardAnnouncer';
 import { putBack } from './carry';
@@ -20,7 +21,7 @@ import { TaskScreen } from './TaskView';
 
 /**
  * The project board on mock data.
- * It brings its own frame and leaves the app shell alone.
+ * It brings its own frame and leaves the app shell alone, so it hosts the phone's drawer itself.
  */
 export function BoardPrototype() {
   const [ready, setReady] = useState(false);
@@ -54,7 +55,7 @@ export function BoardPrototype() {
 
   if (!ready) return null;
   return (
-    <>
+    <DrawerHost enabled={phone}>
       <div className="h-dvh">
         {phone ? <PhoneBoard onReset={reset} /> : <DesktopBoard onReset={reset} />}
       </div>
@@ -63,6 +64,6 @@ export function BoardPrototype() {
       </AnimatePresence>
       <DragOverlay />
       <BoardAnnouncer />
-    </>
+    </DrawerHost>
   );
 }

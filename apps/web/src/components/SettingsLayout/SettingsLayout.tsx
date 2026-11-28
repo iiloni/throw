@@ -3,9 +3,9 @@ import { ChevronLeft, ChevronUp, type LucideIcon, Settings } from 'lucide-react'
 import { motion } from 'motion/react';
 import { type ReactNode, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { useSwipeToDismiss } from '@/components/Board/useSwipeToDismiss';
+import { useDrawerSlot } from '@/components/Drawer/DrawerHost';
 import {
   ManagementSurface,
-  useManagementDock,
   useManagementSurfaceOpen,
 } from '@/components/ManagementSurface/ManagementSurface';
 import { UpdateDot } from '@/components/UpdateDot/UpdateDot';
@@ -349,7 +349,9 @@ function SettingsDock({
     ),
     [Icon, label, onPickingChange, title, updateReady],
   );
-  useManagementDock(dock);
+  // A pull on the page moves the whole of it, so its dock rides the pull, as Catch's does.
+  const pull = useSettingsSwipeY();
+  useDrawerSlot({ label: title, face: 'settings', dock, pull });
   return (
     <ManagementSurface open={picking} title={title} fit onClose={() => onPickingChange(false)}>
       <nav aria-label={`${title} pages`} className="flex flex-col gap-4 pb-1">

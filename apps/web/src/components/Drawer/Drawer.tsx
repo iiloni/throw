@@ -111,6 +111,7 @@ export function Drawer({
   move = null,
   floatMove = false,
   onSettle,
+  screen = null,
 }: {
   label: string;
   /** The header at rest: the dock when collapsed. */
@@ -143,6 +144,12 @@ export function Drawer({
   floatMove?: boolean;
   /** The drawer has come to rest after sliding: work that would hold up its frames can run. */
   onSettle?: () => void;
+  /**
+   * The screen whose drawer this is, for the shell's drawer that screens share. A screen
+   * arriving with nothing in sight, or leaving with nothing, places the drawer at once rather
+   * than sliding it: it comes and goes with its page, as each screen's own drawer did.
+   */
+  screen?: string | null;
 }) {
   const surface = useRef<HTMLElement>(null);
   const head = useRef<HTMLDivElement>(null);
@@ -334,16 +341,24 @@ export function Drawer({
   useBackHandler(carded && !paged, () => latest.current.card?.onClose());
 
   const placed = useRef(false);
+  const [, redraw] = useState(0);
+  const lastScreen = useRef(screen);
+  const wasSunk = useRef(sunk);
   // biome-ignore lint/correctness/useExhaustiveDependencies: placement follows these inputs
   useLayoutEffect(() => {
     const at = offsets();
     setHidden((detent === 'half' && !paged) || pageHalf ? at.half : 0);
-    const closing = outgoing(last.current);
+    const instant = !placed.current || (screen !== lastScreen.current && (sunk || wasSunk.current));
+    lastScreen.current = screen;
+    wasSunk.current = sunk;
+    const closing = instant ? null : outgoing(last.current);
+    // Placed at once, the closing page goes with the screen; this render drew it, so draw again.
+    if (instant && outgoing(last.current)) redraw((count) => count + 1);
     const opening = paged && !last.current;
     last.current = page;
     setLeaving(closing);
     const run = ++holding.current;
-    if (placed.current) {
+    if (!instant) {
       // A picker opened over the card is already as high as the keyboard it replaces, hidden
       // behind it, so the dock only follows the keyboard down to where the picker ends.
       if (opening && carded && !typingInPage)
@@ -363,7 +378,27 @@ export function Drawer({
       });
     } else place(restingAt(at));
     placed.current = true;
-  }, [sunk, detent, paged, page?.key, pageHalf, y, reduced, moveInHead]);
+  }, [sunk, detent, paged, page?.key, pageHalf, y, reduced, moveInHead, screen]);
+
+  // A dock that changes height at rest, as one screen's taking another's place may, takes the
+  // drawer with it. A slide or a pull under way already aims for the new height.
+  const resting = useRef((): number => 0);
+  resting.current = () => restingAt(offsets());
+  // biome-ignore lint/correctness/useExhaustiveDependencies: slide reads refs
+  useLayoutEffect(() => {
+    const element = head.current;
+    if (moveInHead || !element) return;
+    let measured = element.offsetHeight;
+    const observer = new ResizeObserver(() => {
+      if (element.offsetHeight === measured) return;
+      measured = element.offsetHeight;
+      if (sliding.current || pulled.current) return;
+      const to = resting.current();
+      if (Math.abs(to - y.get()) > 0.5) slide(to);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [moveInHead, reduced, y]);
 
   // The move target floating over a groomed backlog covers its foot, so the list keeps that
   // much room clear at its end too.

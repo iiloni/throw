@@ -54,10 +54,13 @@ vi.mock('@/lib/haptics', () => ({
   },
 }));
 
-vi.mock('@/components/ManagementSurface/ManagementSurface', () => ({
-  useManagementDock: (node: ReactNode) => {
-    mocks.dock = node;
+vi.mock('@/components/Drawer/DrawerHost', () => ({
+  useDrawerSlot: (slot: { dock: ReactNode } | null) => {
+    mocks.dock = slot?.dock ?? null;
   },
+}));
+
+vi.mock('@/components/ManagementSurface/ManagementSurface', () => ({
   useManagementSurfaceOpen: () => mocks.surfaceOpen,
   ManagementSurface: ({
     open,

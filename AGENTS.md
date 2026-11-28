@@ -13,7 +13,10 @@ The repository has the stack end to end (auth, sync, the outbox, local persisten
 task model (workspaces, projects, statuses, tasks and subtasks, with keys, numbers, the trash
 and ADR 0005's conflict rule; see `docs/data-model.md`), and the responsive app shell. The
 shell owns workspace and project management, a desktop navigation rail and remembered
-navigation; each phone board brings its own dock. On a phone the title, or a pull down from
+navigation. On a phone the shell also owns the one drawer (`Drawer/DrawerHost.tsx`, ADR 0009),
+which stays mounted as screens change: each board, the dependency graph and settings hand it
+their dock, pages and move target with `useDrawerSlot`, and management forms lend it pages
+through `ManagementSurface`. On a phone the title, or a pull down from
 the top of a board, opens the shell's project switcher as a drawer page
 (`AppShell/ProjectSwitcher.tsx`, `AppShell/SwitcherPull.tsx`). Page changes animate through the router's
 view transitions (`lib/pageTransition.ts`, ADR 0013): boards cross-fade, ordered pages
@@ -41,7 +44,7 @@ page covers the screen's foot. A phone task scrolls the full screen height under
 trash toolbars, and Catch's `page-top-blur` / `page-bottom-blur` scrims blur its edges while
 there is more that way (`useScrollEdges`). Its real content is supplied by
 `TaskContentContext` at the project-board boundary; the prototype keeps its mock content.
-On a phone the same boundary hands the board's drawer the open task's dock and pickers
+On a phone the same boundary hands the shell's drawer the open task's dock and pickers
 (`TaskDetails/TaskControls.tsx`); the desktop pane docks them below the task's card, as
 Catch's split view does (`TaskDrawer`). A desktop pane at least 620 px wide moves the task's
 tags and subtasks to a side column beside the card while it has any (ADR 0012,
@@ -164,8 +167,8 @@ Enter, Space and the card arrows stay in their components and are listed as buil
 Settings (`/settings/*`) and project settings (`/w/:workspaceId/p/:projectId/settings`,
 with project trash beside it at `/trash`) share Catch's `SettingsLayout`: pages listed
 beside the open one on wide screens, and a dock page picker on phones
-(`useManagementDock`). Workspace trash is `/w/:workspaceId/trash`. Settings and trash
-forms use the shell's `ManagementSurface` host for the shared Drawer on phones and centred
+(`useDrawerSlot`). Workspace trash is `/w/:workspaceId/trash`. Settings and trash
+forms use `ManagementSurface`, a page lent to the shell's drawer on phones and centred
 dialogs on desktop; project appearance is edited in place on project settings' General page.
 
 The board's interaction was worked out in a prototype on mock data: `/prototype/board`, in
@@ -553,6 +556,11 @@ ids. Do not add a dependency on Catch's repository; the two release independentl
   collapsed header is the dock. Show content in it rather than adding a sheet, overlay or
   `BottomSheet`. Desktop has no drawer: use the rail, a panel sized to the window or a
   centred dialog.
+- The drawer draws a screen's dock, pages and backlog in the shell (`DrawerHost`), outside
+  the screen's React tree, so they read the shell's contexts. A board boundary's contexts
+  reach them through `Board/drawerBridge.tsx`: a context the boundary adds for its cards or
+  task content joins `BoardDrawerBridge`, or drawer content reads its default. A board
+  covered by a drawer page marks what stops painting with `data-board-cover`.
 - TanStack DB is pre-1.0. Keep its usage inside `src/lib/collections.ts`, `src/lib/localStore.ts`
   and route files so upgrades stay contained.
 - Bump a collection's `schemaVersion` in `collections.ts` whenever the columns its shape syncs
