@@ -17,7 +17,15 @@ import {
   useCompactBoard,
   useWidening,
 } from './CompactSplitBoard';
-import { boardRestWidth, OpenTaskPane, SelectionBar, usePaneSpace, useWidth } from './DesktopBoard';
+import {
+  BoardUnderPane,
+  boardRestWidth,
+  OpenTaskPane,
+  SelectionBar,
+  usePaneCover,
+  usePaneSpace,
+  useWidth,
+} from './DesktopBoard';
 import { drag, makingWay } from './drag';
 import { PriorityIcon } from './glyphs';
 import { LayoutMorph } from './LayoutMorph';
@@ -80,71 +88,74 @@ export function WorkspaceDesktopBoard() {
   const handoff = useBoardHandoff(row, compact, project.id);
   const widening = useWidening(compact, restWidth, row);
   const reduced = useReducedMotion() ?? false;
+  const paneCover = usePaneCover(state);
   return (
     <div className="flex h-full overflow-hidden">
       <div ref={frame} className="flex min-w-0 flex-1">
-        {docked && <BoardSearchSidebar />}
-        <div
-          ref={row}
-          className={cn(
-            'relative flex min-w-0 flex-1',
-            (compact || widening !== null) && 'overflow-hidden',
-          )}
-        >
-          {compact ? (
-            <CompactFrame width={restWidth}>
-              <CompactPager
-                columns={COLUMNS}
-                handoff={handoff}
-                start={categoryTarget('active')}
-                origin={(column) => column.category}
-                page={(column) => <CategoryColumn category={column.category} />}
-              />
-            </CompactFrame>
-          ) : (
-            <ScrollArea
-              sides
-              data-seam=""
-              data-board-layout=""
-              className="min-w-0 flex-1"
-              style={widening === null ? undefined : { width: widening, flex: 'none' }}
-            >
-              <ScrollAreaViewport
-                data-autoscroll-x=""
-                className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3 [&>div]:px-6"
+        <BoardUnderPane {...paneCover}>
+          {docked && <BoardSearchSidebar />}
+          <div
+            ref={row}
+            className={cn(
+              'relative flex min-w-0 flex-1',
+              (compact || widening !== null) && 'overflow-hidden',
+            )}
+          >
+            {compact ? (
+              <CompactFrame width={restWidth}>
+                <CompactPager
+                  columns={COLUMNS}
+                  handoff={handoff}
+                  start={categoryTarget('active')}
+                  origin={(column) => column.category}
+                  page={(column) => <CategoryColumn category={column.category} />}
+                />
+              </CompactFrame>
+            ) : (
+              <ScrollArea
+                sides
+                data-seam=""
+                data-board-layout=""
+                className="min-w-0 flex-1"
+                style={widening === null ? undefined : { width: widening, flex: 'none' }}
               >
-                {CATEGORIES.map((category, index) => {
-                  const target = categoryTarget(category);
-                  return (
-                    <BoardColumn
-                      key={category}
-                      columnId={target}
-                      name={CATEGORY_NAMES[category]}
-                      category={category}
-                      count={countIn(state, target)}
-                      collapsed={isCollapsed(target)}
-                      onToggle={(value) => setCollapsed(target, value)}
-                      index={index}
-                      className="min-w-[18rem] max-w-[200rem] grow basis-[18rem]"
-                    >
-                      {() => (
-                        <CategoryColumn
-                          category={category}
-                          onCollapse={() => setCollapsed(target, true)}
-                        />
-                      )}
-                    </BoardColumn>
-                  );
-                })}
-              </ScrollAreaViewport>
-              <ScrollBar orientation="horizontal" />
-            </ScrollArea>
-          )}
-          {!docked && <BoardSearch />}
-          <SelectionBar />
-          <LayoutMorph root={row} compact={compact} reduced={reduced} />
-        </div>
-        <OpenTaskPane frameWidth={frameWidth} />
+                <ScrollAreaViewport
+                  data-autoscroll-x=""
+                  className="[&>div]:!flex-row [&>div]:h-full [&>div]:gap-3 [&>div]:px-6"
+                >
+                  {CATEGORIES.map((category, index) => {
+                    const target = categoryTarget(category);
+                    return (
+                      <BoardColumn
+                        key={category}
+                        columnId={target}
+                        name={CATEGORY_NAMES[category]}
+                        category={category}
+                        count={countIn(state, target)}
+                        collapsed={isCollapsed(target)}
+                        onToggle={(value) => setCollapsed(target, value)}
+                        index={index}
+                        className="min-w-[18rem] max-w-[200rem] grow basis-[18rem]"
+                      >
+                        {() => (
+                          <CategoryColumn
+                            category={category}
+                            onCollapse={() => setCollapsed(target, true)}
+                          />
+                        )}
+                      </BoardColumn>
+                    );
+                  })}
+                </ScrollAreaViewport>
+                <ScrollBar orientation="horizontal" />
+              </ScrollArea>
+            )}
+            {!docked && <BoardSearch />}
+            <SelectionBar />
+            <LayoutMorph root={row} compact={compact} reduced={reduced} />
+          </div>
+        </BoardUnderPane>
+        <OpenTaskPane frameWidth={frameWidth} cover={paneCover.cover} />
       </div>
     </div>
   );

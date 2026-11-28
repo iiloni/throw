@@ -6,10 +6,21 @@ import {
   useReducedMotion,
   useTransform,
 } from 'motion/react';
-import { type ReactNode, useCallback, useEffect, useSyncExternalStore } from 'react';
+import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { afterPaint, animateSteadySpring, springs, stopSteady } from '@/lib/motion';
-import { columnFits, columnOpacity, columnProgress, columnSpace, foldHeight } from './taskColumn';
+import { useMotionCheck } from '@/lib/useMotionCheck';
+import {
+  activitySpace,
+  activityWidth,
+  columnFits,
+  columnOpacity,
+  columnProgress,
+  columnSpace,
+  foldHeight,
+  workspaceFits,
+  workspaceMaxWidth,
+} from './taskColumn';
 
 /**
  * Springs `value` to `target` by painted frames, or sets it at once when `animate` is off. A
@@ -42,14 +53,6 @@ function useSteadyTarget(
       stopSteady(value);
     };
   }, [value, target, animate, held]);
-}
-
-/** Re-renders only when `check` of the value changes, not on every frame of its motion. */
-function useMotionCheck(value: MotionValue<number>, check: (value: number) => boolean) {
-  return useSyncExternalStore(
-    useCallback((listener: () => void) => value.on('change', listener), [value]),
-    () => check(value.get()),
-  );
 }
 
 export type TaskColumnLayout = {
@@ -121,6 +124,72 @@ export function useTaskColumn({
   };
 }
 
+export type TaskWorkspaceLayout = {
+  /** The pane is wide enough to be a workspace, with an activity pane beside the card. */
+  fits: boolean;
+  /** How far the comments and history are still in the card: their inline copy folds with it. */
+  inline: MotionValue<number>;
+  /** The activity pane's own width, and the space the card leaves for it as it opens. */
+  width: number;
+  space: MotionValue<number>;
+  opacity: MotionValue<number>;
+  visibility: MotionValue<'hidden' | 'visible'>;
+  /** The widest the task's content (toolbars, card, column, pane and dock) gets. */
+  maxWidth: MotionValue<number | 'none'>;
+  /** Mounted while the activity pane can open, or is still shutting. */
+  paneMounted: boolean;
+  /** Mounted while the inline copy shows, or is about to. */
+  inlineMounted: boolean;
+};
+
+/**
+ * The workspace a very wide pane becomes, an expanded one above all, laid out as the column
+ * is: both endpoint layouts are chosen before anything moves, and crossing the width springs
+ * the comments and history out of the card into a pane of their own, or back. The pane always
+ * has them, so only the width decides.
+ */
+export function useTaskWorkspace({
+  paneWidth,
+  column,
+}: {
+  paneWidth: number | null;
+  column: TaskColumnLayout;
+}): TaskWorkspaceLayout {
+  const fits = workspaceFits(paneWidth);
+  const reduced = useReducedMotion() ?? false;
+  const leaving = !useIsPresent();
+  const layout = useMotionValue(fits ? 1 : 0);
+  useSteadyTarget(layout, fits ? 1 : 0, !reduced, leaving);
+  // The width it was laid out at, kept as it shuts, so the pane folds away from its own size.
+  const [laidOut, setLaidOut] = useState(paneWidth ?? 0);
+  if (fits && paneWidth !== null && paneWidth !== laidOut) setLaidOut(paneWidth);
+  const width = activityWidth(laidOut);
+  const space = useTransform(() => activitySpace(layout.get(), width));
+  const opacity = useTransform(() => columnOpacity(layout.get()));
+  const visibility = useTransform(() => (layout.get() === 0 ? 'hidden' : 'visible'));
+  const inline = useTransform(() => 1 - layout.get());
+  const maxWidth = useTransform(() =>
+    workspaceMaxWidth({
+      progress: layout.get(),
+      paneWidth: laidOut,
+      beside: space.get() + column.space.get(),
+    }),
+  );
+  const paneMounted = useMotionCheck(layout, (value) => value > 0) || fits;
+  const inlineMounted = useMotionCheck(layout, (value) => value < 1) || !fits;
+  return {
+    fits,
+    inline,
+    width,
+    space,
+    opacity,
+    visibility,
+    maxWidth,
+    paneMounted,
+    inlineMounted,
+  };
+}
+
 /**
  * An inline copy that folds away by `amount` (1 shown, 0 gone) while its column copy takes
  * over. It is measured whenever its content changes, so it folds from its real height in
@@ -170,21 +239,30 @@ export function Fold({
 }
 
 /**
- * The card with the column beside it. Both stop above the dock, and only the space the card
- * leaves changes, never its height or its scroller.
+ * The card with the column beside it, and in a workspace the activity pane beyond that. All
+ * stop above the dock, and only the space the card leaves changes, never its height or its
+ * scroller.
  */
 export function TaskColumnFrame({
   layout,
+  workspace,
+  activity,
   card,
   children,
 }: {
   layout: TaskColumnLayout;
+  workspace?: TaskWorkspaceLayout;
+  /** The comments and history, in the workspace's pane. */
+  activity?: ReactNode;
   card: ReactNode;
   /** The extras, in order: tags, then subtasks, then whatever joins them. */
   children: ReactNode;
 }) {
+  const zero = useMotionValue(0);
+  const activitySpace = workspace?.space ?? zero;
+  const reserved = useTransform(() => layout.space.get() + activitySpace.get());
   return (
-    <motion.div className="relative flex min-h-0 flex-1" style={{ paddingRight: layout.space }}>
+    <motion.div className="relative flex min-h-0 flex-1" style={{ paddingRight: reserved }}>
       {card}
       {layout.columnMounted && (
         // Kept mounted while empty, so removing the last extra can spring it shut.
@@ -196,6 +274,7 @@ export function TaskColumnFrame({
           className="absolute inset-y-0 right-0 min-h-0 overflow-hidden"
           style={{
             width: layout.space,
+            right: activitySpace,
             opacity: layout.opacity,
             visibility: layout.visibility,
           }}
@@ -208,6 +287,28 @@ export function TaskColumnFrame({
               </ScrollAreaViewport>
               <ScrollBar />
             </ScrollArea>
+          </div>
+        </motion.aside>
+      )}
+      {workspace?.paneMounted && (
+        <motion.aside
+          aria-label="Task activity"
+          data-task-activity=""
+          inert={!workspace.fits}
+          aria-hidden={!workspace.fits || undefined}
+          className="absolute inset-y-0 right-0 min-h-0 overflow-hidden"
+          style={{
+            width: workspace.space,
+            opacity: workspace.opacity,
+            visibility: workspace.visibility,
+          }}
+        >
+          {/* At its full width throughout, as the column is, so it never reflows opening. */}
+          <div
+            className="absolute inset-y-0 right-0 flex flex-col overflow-hidden rounded-3xl bg-card shadow-[0_1px_2px_oklch(0_0_0/0.06),0_12px_32px_-16px_oklch(0_0_0/0.18)]"
+            style={{ width: workspace.width }}
+          >
+            {activity}
           </div>
         </motion.aside>
       )}
