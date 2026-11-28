@@ -450,7 +450,8 @@ test.describe('desktop', () => {
     await expect(railSearch.locator('[data-search-filter-dot]')).toBeVisible();
     await expect(railSearch).toHaveAccessibleDescription('Search (3 active filters)');
     await railSearch.hover();
-    await expect(page.getByRole('tooltip')).toHaveText('Search (3 active filters)');
+    // The label, then the shortcut's keycaps.
+    await expect(page.getByRole('tooltip')).toHaveText(/^Search \(3 active filters\)(Ctrl|⌘)K$/);
     await page.getByRole('button', { name: 'Expand navigation', exact: true }).click();
     await expect(railSearch.locator('[data-search-filter-badge]')).toHaveText('3');
     // Reopening from the rail restores the sidebar with active filters and focuses the input.
