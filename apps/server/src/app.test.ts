@@ -65,6 +65,7 @@ describe('protocol gate', () => {
       githubTaskLinks: true,
       githubReleases: true,
       adminUsers: true,
+      mcpOauth: true,
     });
   });
 

@@ -4,7 +4,7 @@ import {
   createMcpTokenSchema,
   mcpTokensResponseSchema,
 } from '@throw/shared';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { uuidv7 } from 'uuidv7';
 import { z } from 'zod';
@@ -34,7 +34,7 @@ export const mcpTokenRoutes = new Hono<AppEnv>()
       db
         .select(metadata)
         .from(mcpTokens)
-        .where(eq(mcpTokens.userId, userId))
+        .where(and(eq(mcpTokens.userId, userId), isNull(mcpTokens.clientId)))
         .orderBy(mcpTokens.createdAt, mcpTokens.id),
       db
         .select({ id: workspaces.id, name: workspaces.name })
@@ -76,6 +76,12 @@ export const mcpTokenRoutes = new Hono<AppEnv>()
     const { id } = c.req.valid('param');
     await db
       .delete(mcpTokens)
-      .where(and(eq(mcpTokens.id, id), eq(mcpTokens.userId, c.get('user')!.id)));
+      .where(
+        and(
+          isNull(mcpTokens.clientId),
+          eq(mcpTokens.id, id),
+          eq(mcpTokens.userId, c.get('user')!.id),
+        ),
+      );
     return c.body(null, 204);
   });

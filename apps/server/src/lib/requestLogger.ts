@@ -8,6 +8,7 @@ const SECRET_PARAMS = ['access'];
 export function loggedPath(url: string) {
   const { pathname, searchParams } = new URL(url);
   // MCP has no query parameters. A misplaced bearer credential must stay out of logs.
+  if (pathname.startsWith('/api/oauth/') || pathname === '/oauth/consent') return pathname;
   if (/^\/api\/mcp\/*$/.test(pathname)) return pathname;
   // A GitHub webhook's URL token finds its connection, so it is kept out of logs too.
   if (pathname.startsWith(`${GITHUB_WEBHOOK_PATH}/`)) return `${GITHUB_WEBHOOK_PATH}/redacted`;

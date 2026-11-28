@@ -68,7 +68,7 @@ export const boundedError = (message: string) =>
  * Hands the connection only addresses that passed the policy, so the address checked is
  * the address connected to.
  */
-function pinnedLookup(addresses: LookupAddress[]): LookupFunction {
+export function pinnedLookup(addresses: LookupAddress[]): LookupFunction {
   return (_hostname, options, callback) => {
     const wanted = options.family === 4 || options.family === 6 ? options.family : 0;
     const usable = addresses.filter((entry) => !wanted || entry.family === wanted);

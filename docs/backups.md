@@ -17,9 +17,10 @@ and `manifest.json` (format/version, creating release, newest migration, display
 secret fingerprint and SHA-256/size of every file). ZIP64 and streaming avoid memory/4 GiB
 limits. Verification rejects unexpected members, damaged checksums, and Catch archives.
 Any unzip tool can read it; `pg_restore` can read the dump independently of Throw.
-Sessions, MCP tokens, MCP structure replay records, webhooks and their delivery queue, and
+Sessions, MCP tokens, OAuth grants, codes, access and refresh tokens, pending consent requests,
+registered OAuth clients, MCP structure replay records, webhooks and their delivery queue, and
 GitHub connections and their delivery IDs are excluded, including when restoring a dump that
-contains them. After a restore, issue fresh MCP tokens, recreate webhooks for the clients you
+contains them. After a restore, reconnect OAuth clients, issue fresh MCP tokens, recreate webhooks for the clients you
 want to reconnect, and connect projects to GitHub again (updating the webhook's URL and secret
 on GitHub).
 Invite hashes and claim history are restored as of backup time. An unexpired link used or
