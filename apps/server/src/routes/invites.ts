@@ -38,7 +38,7 @@ const describe = (row: Row): Invite => ({
   usedBy: row.usedByEmail === null ? null : { name: row.usedByName ?? '', email: row.usedByEmail },
 });
 
-const usable = sql<boolean>`(${invites.usedAt} IS NULL AND ${invites.expiresAt} > now())`;
+const usable = sql<boolean>`(${invites.usedAt} IS NULL AND ${invites.expiresAt} > statement_timestamp())`;
 const LISTED = 200;
 const MAX_USABLE = 100;
 

@@ -57,6 +57,15 @@ describe.skipIf(!testPostgres)('admin API against Postgres', { timeout: 30_000 }
   }
   const act = (path: string, method = 'GET', body?: unknown) =>
     request(`admin/${path}`, method, body, admin.token);
+  async function waitForBlockedRequest(pid: number) {
+    await expect
+      .poll(async () => {
+        const [row] =
+          await sql`SELECT EXISTS(SELECT FROM pg_stat_activity WHERE ${pid} = ANY(pg_blocking_pids(pid))) AS waiting`;
+        return row!.waiting;
+      })
+      .toBe(true);
+  }
   async function issue() {
     const response = await act('invites', 'POST', { label: 'Guest' });
     expect(response.status).toBe(201);
@@ -120,18 +129,37 @@ describe.skipIf(!testPostgres)('admin API against Postgres', { timeout: 30_000 }
       pending = Promise.resolve(
         request(`admin/users/${target.id}/role`, 'PATCH', { role: 'admin' }, actor.token),
       );
-      await expect
-        .poll(async () => {
-          const [row] =
-            await sql`SELECT EXISTS(SELECT FROM pg_stat_activity WHERE ${lock!.pid} = ANY(pg_blocking_pids(pid))) AS waiting`;
-          return row!.waiting;
-        })
-        .toBe(true);
+      await waitForBlockedRequest(lock!.pid);
     });
     expect((await pending!).status).toBe(403);
     expect(await sql`SELECT role FROM "user" WHERE id=${target.id}`).toMatchObject([
       { role: 'user' },
     ]);
+  });
+
+  it('keeps a reset effective when sign-in is already verifying the credential', async () => {
+    const target = await account('Concurrent reset');
+    const [row] = await sql`SELECT email FROM "user" WHERE id=${target.id}`;
+    const { auth } = await import('../auth');
+    const { password } = await auth.$context;
+    const verify = password.verify;
+    const verifier = vi.spyOn(password, 'verify').mockImplementationOnce(async (input) => {
+      const valid = await verify(input);
+      expect(valid).toBe(true);
+      expect((await act(`users/${target.id}/reset-password`, 'POST')).status).toBe(200);
+      return valid;
+    });
+    try {
+      const login = await request('auth/sign-in/email', 'POST', {
+        email: row!.email,
+        password: 'password123',
+      });
+      expect(login.status).toBe(401);
+      expect(login.headers.has('set-auth-token')).toBe(false);
+      expect(await sql`SELECT id FROM session WHERE user_id=${target.id}`).toHaveLength(0);
+    } finally {
+      verifier.mockRestore();
+    }
   });
 
   it('resets credentials, revokes sessions and deletes only last-member workspaces', async () => {
@@ -220,6 +248,21 @@ describe.skipIf(!testPostgres)('admin API against Postgres', { timeout: 30_000 }
     ]);
     expect(await sql`SELECT id FROM "user" WHERE name='Retry'`).toHaveLength(0);
     expect((await signup('Retry', token)).status).toBe(200);
+  });
+
+  it('counts unexpired invites after acquiring the admin lock', async () => {
+    await sql`DELETE FROM invites`;
+    await sql`INSERT INTO invites(token_hash,created_by,expires_at)
+      SELECT gen_random_uuid()::text, ${admin.id}, now()+interval '1 day' FROM generate_series(1,100)`;
+    let pending: Promise<Response> | undefined;
+    await sql.begin(async (tx) => {
+      const [lock] =
+        await tx`SELECT pg_backend_pid() AS pid, pg_advisory_xact_lock(hashtext('throw-admin-roles'))`;
+      pending = Promise.resolve(act('invites', 'POST', {}));
+      await waitForBlockedRequest(lock!.pid);
+      await tx`UPDATE invites SET expires_at=statement_timestamp()`;
+    });
+    expect((await pending!).status).toBe(201);
   });
 
   it('enforces the usable limit across concurrent creators', async () => {

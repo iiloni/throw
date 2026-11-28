@@ -148,6 +148,13 @@
       "when": 1795822249536,
       "tag": "0020_admin_invites",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1795823612180,
+      "tag": "0021_invite_user_indexes",
+      "breakpoints": true
     }
   ]
 }

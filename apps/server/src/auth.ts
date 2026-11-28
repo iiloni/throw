@@ -1,16 +1,21 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { defineRequestState } from '@better-auth/core/context';
 import { INVITE_HEADER } from '@throw/shared';
 import { type BetterAuthOptions, betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError } from 'better-auth/api';
+import { hashPassword, verifyPassword } from 'better-auth/crypto';
 import { bearer } from 'better-auth/plugins/bearer';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db, type Transaction } from './db/client';
 import * as schema from './db/schema';
 import { env, NATIVE_APP_ORIGINS } from './env';
 import { CLIENT_IP_HEADER } from './lib/clientIp';
 import { claimInvite, recordInvitedUser } from './lib/invites';
 import { createDefaultWorkspace } from './lib/workspaces';
+
+// The digest Better Auth actually verified for this request, kept until session creation.
+const verifiedCredential = defineRequestState<string | null>(() => null);
 
 // Share Better Auth's transaction with signup hooks, including direct API calls from the seed.
 const authTransaction = new AsyncLocalStorage<Transaction>();
@@ -53,6 +58,14 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false,
+    password: {
+      hash: hashPassword,
+      verify: async (credentials) => {
+        const valid = await verifyPassword(credentials);
+        if (valid) await verifiedCredential.set(credentials.hash);
+        return valid;
+      },
+    },
   },
   user: {
     additionalFields: {
@@ -68,6 +81,24 @@ export const auth = betterAuth({
         },
         after: async (session, context) => {
           if (context?.path === '/sign-up/email' || context?.path === '/change-password') return;
+          if (context?.path === '/sign-in/email') {
+            // The session row now exists, but its token has not been issued. A reset that
+            // committed before insertion changed the digest. A later reset deletes the row.
+            const [credential] = await db
+              .select({ hash: schema.account.password })
+              .from(schema.account)
+              .where(
+                and(
+                  eq(schema.account.userId, session.userId),
+                  eq(schema.account.accountId, session.userId),
+                  eq(schema.account.providerId, 'credential'),
+                ),
+              );
+            if (!credential?.hash || credential.hash !== (await verifiedCredential.get())) {
+              await db.delete(schema.session).where(eq(schema.session.id, session.id));
+              throw new APIError('UNAUTHORIZED', { message: 'Invalid email or password' });
+            }
+          }
           await recordLogin(db, session);
         },
       },

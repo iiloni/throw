@@ -10,8 +10,9 @@ invite, creates the credential, session and personal workspace and records the n
 in one database transaction. A failed signup leaves the invite available.
 
 Admins issue and revoke invites under `/api/admin/invites`. Creation returns a random
-token once. The login link puts it in the fragment and clients send it in
-`X-Throw-Invite` at signup. The database stores its SHA-256 hash. A label is for the
+token once. The shared login-link format puts the token in the fragment. The signup
+API accepts the token in `X-Throw-Invite`. A companion web client change will read
+the fragment and forward it at signup. The database stores its SHA-256 hash. A label is for the
 admin's reference. At most 100 invites are usable at once. Deleting an invite revokes
 the link and preserves the account it made. Backups retain invite hashes, expiry times
 and claim history. Restoring an archive can therefore reactivate a link revoked or used

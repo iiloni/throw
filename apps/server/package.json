@@ -14,6 +14,7 @@
     "backup": "tsx --env-file-if-exists=../../.env src/backups/cli.ts"
   },
   "dependencies": {
+    "@better-auth/core": "1.7.6",
     "@electric-sql/client": "^1.5.28",
     "@hono/node-server": "^2.1.1",
     "@hono/zod-validator": "^0.9.1",
