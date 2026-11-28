@@ -5,6 +5,7 @@ export * from './comments';
 export * from './github';
 export * from './invites';
 export * from './mcp';
+export * from './mcpOauth';
 export * from './mcpTokens';
 export * from './position';
 export * from './priorities';

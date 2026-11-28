@@ -14,6 +14,7 @@ export const compatibilitySchema = protocolRangeSchema.safeExtend({
   statusColor: z.boolean().default(false),
   githubTaskLinks: z.boolean().default(false),
   adminUsers: z.boolean().default(false),
+  mcpOauth: z.boolean().default(false),
   githubReleases: z.boolean().default(false),
 });
 

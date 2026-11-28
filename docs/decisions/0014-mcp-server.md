@@ -34,8 +34,7 @@ authorized can finish. Deleting the account or workspace removes its credentials
 **Own a small server-only table.** Store the owner, workspace, display name, creation time,
 token ID and a unique SHA-256 digest. Generate a token with the `throw_mcp_` prefix followed by
 32 cryptographically random bytes encoded as base64url. A request presents the secret
-only in `Authorization: Bearer …`. The MCP verifier only handles this token format and
-checks the table on each request. Never return the digest or sync token rows. The Settings
+only in `Authorization: Bearer …`. The static-token verifier checks this digest on each request. Never return the digest or sync token rows. The Settings
 API reads metadata and returns the raw token only in the uncached creation response.
 
 Better Auth's API-key plugin has hashed keys and rate limiting, and can verify keys with
@@ -44,9 +43,56 @@ lifecycle owned by Settings and the backup code. A dedicated table and verifier 
 those rules and the key-management surface together. Better Auth continues to handle app
 sessions with `bearer({ requireSignature: true })`. App sessions and cookies do not
 authenticate to `/api/mcp`, and MCP tokens cannot open an app session or authorize REST,
-shapes or token management. OAuth discovery and consent through Better Auth's MCP and
-OAuth/OIDC provider are a possible follow-up. Version one requires a client that can
-send a configured bearer token. [API-key plugin reference](https://better-auth.com/docs/plugins/api-key/reference),
+shapes or token management.
+
+## OAuth clients and workspace consent
+
+The server advertises its canonical `BETTER_AUTH_URL` origin as issuer. Both
+`/.well-known/oauth-protected-resource` and its `/api/mcp` suffix serve RFC 9728 metadata.
+An unauthenticated MCP request challenges with the path-specific metadata URL. RFC 8414
+metadata at `/.well-known/oauth-authorization-server` advertises the public-client
+authorization code flow and refresh. These public routes allow cross-origin discovery and
+preflight after checking Host. The signed-in management routes use the app's protocol and
+session middleware. The compatibility response advertises their availability with `mcpOauth: true`.
+
+A client presents its HTTPS Client ID Metadata Document URL. Throw verifies its self-ID,
+name and registered redirect URI (native loopback IP callbacks may vary the port), resolves every DNS answer under the webhook public-address
+policy and pins the connection to those answers. Operator webhook exceptions do not apply.
+Redirects are refused, responses are size-limited and the cache holds at most 256 documents.
+Throw selects `none` when the CIMD document lists it among the client's supported methods,
+including when the legacy preference names another method. A client requiring signed
+assertions must use a provider that implements them. Clients without CIMD register public redirect URIs at `POST /api/oauth/register`. Registration
+is rate-limited and serialized against a 4,096-client cap. Registrations expire after 90 days.
+Additional requested grant types are ignored. Registration does not verify ownership of a
+client name. The consent view should show the callback host beside it.
+
+1. `GET /api/oauth/authorize` validates the registered redirect URI, S256 challenge and
+   exact RFC 8707 resource (the canonical absolute URL of `/api/mcp`). It redirects to
+   `/oauth/consent?requestId=…` with a ten-minute, browser-bound request.
+2. With the app session, `GET /api/mcp-oauth/requests/:id` returns the client name and CIMD
+   domain (null for DCR), redirect host, scope and available workspaces. POST to its
+   `/approve` child with `{workspaceId, name}`, or POST to `/deny`. Either decision consumes
+   the request. Navigate to the returned `callbackUrl` to deliver the code or denial and
+   the client's state. The UI can use navigation under the existing CSP.
+3. `POST /api/oauth/token` takes a form-encoded code, client ID, original redirect URI,
+   verifier and resource. Codes expire after two minutes. Access tokens last up to 15
+   minutes. Refresh requires the client ID and resource and rotates the refresh token
+   under a grant-row lock. Reuse revokes the entire family. The family expires 30 days
+   after exchange. Only secret digests are stored.
+4. Signed-in owners list connected apps at `GET /api/mcp-oauth/grants` and revoke them
+   with `DELETE /api/mcp-oauth/grants/:id`, including after membership ends.
+
+A Throw-owned grant shares the static credential's parent table, workspace membership
+check, structure-operation foreign key and stable actor ID. Its display name supplies
+`viaTokenName`. Rotating tokens preserves replay and the `list_changes` own-write filter.
+Deleting the grant cascades to its tickets and replay rows. Backups exclude and restores
+clear grants, pending requests, registered clients and every code, access and refresh ticket.
+
+Better Auth's MCP and CIMD plugins provide general OAuth onboarding. Using them would
+still require mapping their provider credentials and consent records to Throw's one-workspace
+actor, replay lifetime and backup exclusions. Throw keeps this flow with its MCP actor
+and uses Better Auth for the resource owner's login. Opaque credentials need no signing
+key or JWKS endpoint. [MCP authorization](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization),
 [Better Auth MCP provider](https://better-auth.com/docs/plugins/mcp).
 
 ## Transport and compatibility

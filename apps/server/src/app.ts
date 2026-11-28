@@ -19,6 +19,8 @@ import { CLIENT_IP_HEADER, clientIp, proxyList } from './lib/clientIp';
 import { requireCompatibleProtocol } from './lib/protocol';
 import { requestLogger } from './lib/requestLogger';
 import { mcpEndpoint } from './mcp/http';
+import { oauthManagement } from './mcpOauth/management';
+import { publicOauth } from './mcpOauth/public';
 import { adminRoutes } from './routes/admin';
 import { backupDownloadRoutes } from './routes/backups';
 import { commentRoutes } from './routes/comments';
@@ -81,7 +83,9 @@ export function createApp() {
       'electric-up-to-date',
     ],
   });
-  app.use('/api/*', (c, next) => (c.req.path === '/api/mcp' ? next() : appCors(c, next)));
+  app.use('/api/*', (c, next) =>
+    c.req.path === '/api/mcp' || c.req.path.startsWith('/api/oauth/') ? next() : appCors(c, next),
+  );
 
   app.use('/api/*', async (c, next) => {
     if (isRestoring() && c.req.path !== '/api/health') {
@@ -90,6 +94,7 @@ export function createApp() {
     }
     await next();
   });
+  app.route('/', publicOauth(clientAddress));
   app.all('/api/mcp', mcpEndpoint(clientAddress, jsonBodyLimit));
   // GitHub sends no session or protocol header, and signs a body it may make up to 25 MB.
   app.route(
@@ -111,6 +116,7 @@ export function createApp() {
       githubTaskLinks: true,
       githubReleases: true,
       adminUsers: true,
+      mcpOauth: true,
     });
   });
 
@@ -128,6 +134,7 @@ export function createApp() {
     .get('/health', (c) => c.json({ ok: true }))
     .route('/updates', updateRoutes)
     .route('/admin', adminRoutes)
+    .route('/mcp-oauth', oauthManagement)
     .route('/mcp-tokens', mcpTokenRoutes)
     .route('/webhooks', webhookRoutes)
     .route('/integrations/github', githubRoutes)

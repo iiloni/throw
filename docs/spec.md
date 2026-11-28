@@ -73,8 +73,8 @@ integrations.
 - Trash with restore.
 - Offline-first web app and Android app.
 - An MCP server for reading workspace data, managing tasks and their relations, and
-  creating, editing and reordering projects, statuses and tags. The account holder creates a named token for one
-  workspace in Settings and can revoke it there. Agent writes sync to the board. Task
+  creating, editing and reordering projects, statuses and tags. The account holder grants access
+  to one workspace through a named token or OAuth consent and can revoke either credential. Agent writes sync to the board. Task
   changes show their source in the task's history or comments. Agents can follow workspace
   changes with a cursor-based feed.
 - Outbound webhooks that wake an external agent when a workspace or project changes. Each

@@ -45,5 +45,6 @@ the color picker while the capability is absent and keeps any queued color write
 - Backup downloads are a data exception: plain browser links use an expiring
   signed ticket and a current server-admin check instead of protocol/auth headers (ADR 0011).
 - `/api/mcp` is an external protocol endpoint. The MCP transport handles MCP protocol
-  versions, and requests use a separate credential. The app's token management routes
+  versions, and requests use a separate credential. Its public OAuth and discovery endpoints
+  also use their external protocol. Signed-in consent and grant management use the app gate. The app's token management routes
   follow the Throw data gate as usual. See [ADR 0014](0014-mcp-server.md).

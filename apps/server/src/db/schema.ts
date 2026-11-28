@@ -156,10 +156,48 @@ export const mcpTokens = pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: 'cascade' }),
     name: text().notNull(),
-    digest: text().notNull().unique(),
+    digest: text().unique(),
+    clientId: text(),
+    clientName: text(),
+    resource: text(),
     createdAt: createdAt(),
   },
   (table) => [index().on(table.userId), index().on(table.workspaceId)],
+);
+
+export const oauthClients = pgTable('oauth_clients', {
+  id: text().primaryKey(),
+  name: text().notNull(),
+  redirects: jsonb().$type<string[]>().notNull(),
+  expiresAt: timestamp({ withTimezone: true }).notNull(),
+});
+
+export const oauthRequests = pgTable('oauth_requests', {
+  browserDigest: text().notNull(),
+  id: uuid().primaryKey(),
+  clientId: text().notNull(),
+  clientName: text().notNull(),
+  redirect: text().notNull(),
+  resource: text().notNull(),
+  challenge: text().notNull(),
+  state: text(),
+  expiresAt: timestamp({ withTimezone: true }).notNull(),
+});
+
+export const oauthTickets = pgTable(
+  'oauth_tickets',
+  {
+    digest: text().primaryKey(),
+    grantId: uuid()
+      .notNull()
+      .references(() => mcpTokens.id, { onDelete: 'cascade' }),
+    kind: text().notNull(),
+    redirect: text(),
+    challenge: text(),
+    used: boolean().notNull().default(false),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+  },
+  (table) => [index().on(table.grantId), index().on(table.expiresAt)],
 );
 
 /** Replay outcomes live only as long as the credential that can retry them. */

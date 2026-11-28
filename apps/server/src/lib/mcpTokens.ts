@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/client';
 import { mcpTokens } from '../db/schema';
+import { verifyAccess } from '../mcpOauth/tokens';
 import { memberWorkspaces } from './workspaces';
 import type { WriteActor } from './writeActor';
 
@@ -15,6 +16,8 @@ export function newMcpCredential() {
 export type McpActor = Extract<WriteActor, { workspaceId: string }>;
 
 export async function verifyMcpToken(authorization: string | undefined): Promise<McpActor | null> {
+  const access = /^Bearer (throw_access_[A-Za-z0-9_-]{43})$/i.exec(authorization ?? '');
+  if (access) return verifyAccess(access[1]!);
   const match = /^Bearer (throw_mcp_[A-Za-z0-9_-]{43})$/i.exec(authorization ?? '');
   if (!match) return null;
   const [credential] = await db

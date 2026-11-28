@@ -49,6 +49,9 @@ function withDatabase(url: string, name: string, login?: { user: string; passwor
 export const CREDENTIAL_TABLES = [
   'session',
   'mcp_tokens',
+  'oauth_clients',
+  'oauth_requests',
+  'oauth_tickets',
   'mcp_structure_operations',
   'webhooks',
   'webhook_deliveries',

@@ -155,6 +155,13 @@
       "when": 1795823612180,
       "tag": "0021_invite_user_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1795883320825,
+      "tag": "0022_mcp_oauth",
+      "breakpoints": true
     }
   ]
 }

@@ -1,38 +1,8 @@
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import type { Context, MiddlewareHandler } from 'hono';
-import { env } from '../env';
 import { verifyMcpToken } from '../lib/mcpTokens';
+import { allowed, publicUrl, requestLimiter } from './boundary';
 import { throwMcpServer } from './server';
-
-const publicUrl = new URL(env.BETTER_AUTH_URL);
-const allowed = new Map([[publicUrl.host, publicUrl.origin]]);
-if (env.NODE_ENV === 'development') {
-  // dev.sh advertises both its public hostname and localhost on the mapped port.
-  const local = new URL(publicUrl);
-  local.hostname = 'localhost';
-  allowed.set(local.host, local.origin);
-}
-
-const WINDOW_MS = 60_000;
-
-/** Bounds the counter memory and gives every key the same expiry. */
-function requestLimiter(maxRequests: number, maxKeys: number) {
-  let window = -1;
-  const counts = new Map<string, number>();
-  return (key: string, now = Date.now()) => {
-    const current = Math.floor(now / WINDOW_MS);
-    if (current !== window) {
-      window = current;
-      counts.clear();
-    }
-    const count = counts.get(key);
-    if ((count ?? 0) >= maxRequests || (count === undefined && counts.size >= maxKeys)) {
-      return Math.ceil(((window + 1) * WINDOW_MS - now) / 1000);
-    }
-    counts.set(key, (count ?? 0) + 1);
-    return null;
-  };
-}
 
 export function mcpEndpoint(
   clientAddress: (context: Context) => string | null,
@@ -64,7 +34,10 @@ export function mcpEndpoint(
       return c.json({ error: 'Throw could not verify the credential.' }, 500);
     }
     if (!actor) {
-      c.header('WWW-Authenticate', 'Bearer realm="Throw MCP"');
+      c.header(
+        'WWW-Authenticate',
+        `Bearer resource_metadata="${publicUrl.origin}/.well-known/oauth-protected-resource/api/mcp"`,
+      );
       return c.json({ error: 'A valid Throw MCP token is required.' }, 401);
     }
     const tokenWait = limitToken(actor.tokenId);
