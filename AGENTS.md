@@ -158,7 +158,10 @@ does not unmount while a shape reloads.
 
 The dependency graph (`components/DependencyGraph`) is either board seen as its blocking
 relations, at `view=graph` (`ShellState.showView`; the rail's Dependency graph button and the
-phone switcher's footer switch, and `pageAt` cross-fades between the two). The boundaries
+phone switcher's footer switch, and `pageAt` cross-fades between the two; the shell reads
+`view` from the rendered match, not the location, so the transition captures the view it
+leaves). Its nodes, edges and controls settle in on every arrival as a board's cards do
+(`useEntryMotion`, staggered by layer); nodes joining a graph on screen pop in. The boundaries
 render it in place of the board, so the task pane, task screens, search and filters are the
 board's own. `graphModel.ts` turns the board's data, relations and `TaskBlockersContext` into
 nodes and edges (states match the cards' blocked mark), `layout.ts` is the pure layered

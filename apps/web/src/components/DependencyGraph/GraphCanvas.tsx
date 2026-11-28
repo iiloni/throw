@@ -11,6 +11,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { entryDelay, useEntryMotion } from '@/lib/entryMotion';
 import { springs } from '@/lib/motion';
 import { reachable } from './analysis';
 import { GraphNodeCard, NODE_HEIGHT, NODE_WIDTH, type NodeEmphasis } from './GraphNodeCard';
@@ -42,6 +43,51 @@ function useSize(ref: RefObject<HTMLElement | null>) {
     return () => observer.disconnect();
   }, [ref]);
   return size;
+}
+
+/**
+ * A node's arrival, as a board's cards settle in: once per document, and again each time the
+ * graph is switched to through the board cross-fade, sweeping from the first blockers to what
+ * they hold up. A node that joins a graph already on screen (a toggle, the filter, sync) pops in
+ * on its own instead.
+ */
+function NodeEntry({
+  id,
+  layer,
+  late,
+  children,
+}: {
+  id: string;
+  layer: number;
+  late: boolean;
+  children: ReactNode;
+}) {
+  const entry = useEntryMotion(`graph-node:${id}`, true, entryDelay(layer), late);
+  return (
+    <motion.div className="absolute top-0 left-0" style={entry}>
+      {children}
+    </motion.div>
+  );
+}
+
+/** The edges and what floats over the canvas settle in with the nodes. */
+function Entry({
+  scope,
+  delay,
+  className,
+  children,
+}: {
+  scope: string;
+  delay: number;
+  className?: string;
+  children: ReactNode;
+}) {
+  const entry = useEntryMotion(scope, true, delay);
+  return (
+    <motion.div className={className} style={entry}>
+      {children}
+    </motion.div>
+  );
 }
 
 export type GraphAnalysis = {
@@ -93,6 +139,10 @@ export function GraphCanvas({
     [edges],
   );
   const content = { width: layout.width + PAD * 2, height: layout.height + PAD * 2 };
+  // The nodes there as the graph first draws make its entry; later ones pop in on their own.
+  // An empty first draw (still loading, or filtered to nothing) leaves the entry to the next.
+  const arrived = useRef<ReadonlySet<string>>(new Set());
+  if (arrived.current.size === 0) arrived.current = new Set(nodes.map((node) => node.id));
 
   const rectOf = useCallback(
     (id: string) => {
@@ -287,89 +337,107 @@ export function GraphCanvas({
           height: content.height,
         }}
       >
-        <svg
-          aria-hidden
-          width={content.width}
-          height={content.height}
-          className="pointer-events-none absolute inset-0 overflow-visible"
+        <Entry
+          scope={`graph-edges:${label}`}
+          delay={entryDelay(1)}
+          className="absolute top-0 left-0"
         >
-          <defs>
-            {(['normal', 'chain', 'critical', 'cycle'] as const).map((kind) => (
-              <marker
-                key={kind}
-                id={`${markers}-${kind}`}
-                viewBox="0 0 10 10"
-                refX="9"
-                refY="5"
-                markerWidth="9"
-                markerHeight="9"
-                markerUnits="userSpaceOnUse"
-                orient="auto-start-reverse"
-              >
-                <path
-                  d="M1,1 L9,5 L1,9 z"
-                  fill={
-                    kind === 'cycle'
-                      ? 'var(--destructive)'
-                      : strokes[kind === 'normal' ? 'normal' : kind]
-                  }
-                />
-              </marker>
-            ))}
-          </defs>
-          <g transform={`translate(${PAD} ${PAD})`}>
-            {layout.edges.map((routed) => {
-              const edge = edgeByKey.get(`${routed.from}\n${routed.to}`);
-              if (!edge) return null;
-              const look = edgeLook(edge);
-              const marker = routed.reversed ? 'cycle' : look === 'dimmed' ? 'normal' : look;
-              return (
-                <motion.path
-                  key={`${routed.from}-${routed.to}`}
-                  data-graph-edge={`${routed.from}>${routed.to}`}
-                  data-look={look}
-                  initial={false}
-                  animate={{
-                    d: edgePath(routed.points),
-                    opacity: look === 'dimmed' ? 0.18 : look === 'normal' ? 0.6 : 0.95,
-                  }}
-                  transition={reduced ? { duration: 0 } : springs.smooth}
-                  fill="none"
-                  stroke={routed.reversed ? 'var(--destructive)' : strokes[look]}
-                  strokeWidth={look === 'critical' ? 2.5 : look === 'chain' ? 2 : 1.5}
-                  strokeDasharray={routed.reversed ? '6 4' : edge.settled ? '3 4' : undefined}
-                  strokeLinecap="round"
-                  markerEnd={`url(#${markers}-${marker})`}
-                />
-              );
-            })}
-          </g>
-        </svg>
+          <svg
+            aria-hidden
+            width={content.width}
+            height={content.height}
+            className="pointer-events-none absolute inset-0 overflow-visible"
+          >
+            <defs>
+              {(['normal', 'chain', 'critical', 'cycle'] as const).map((kind) => (
+                <marker
+                  key={kind}
+                  id={`${markers}-${kind}`}
+                  viewBox="0 0 10 10"
+                  refX="9"
+                  refY="5"
+                  markerWidth="9"
+                  markerHeight="9"
+                  markerUnits="userSpaceOnUse"
+                  orient="auto-start-reverse"
+                >
+                  <path
+                    d="M1,1 L9,5 L1,9 z"
+                    fill={
+                      kind === 'cycle'
+                        ? 'var(--destructive)'
+                        : strokes[kind === 'normal' ? 'normal' : kind]
+                    }
+                  />
+                </marker>
+              ))}
+            </defs>
+            <g transform={`translate(${PAD} ${PAD})`}>
+              {layout.edges.map((routed) => {
+                const edge = edgeByKey.get(`${routed.from}\n${routed.to}`);
+                if (!edge) return null;
+                const look = edgeLook(edge);
+                const marker = routed.reversed ? 'cycle' : look === 'dimmed' ? 'normal' : look;
+                return (
+                  <motion.path
+                    key={`${routed.from}-${routed.to}`}
+                    data-graph-edge={`${routed.from}>${routed.to}`}
+                    data-look={look}
+                    initial={false}
+                    animate={{
+                      d: edgePath(routed.points),
+                      opacity: look === 'dimmed' ? 0.18 : look === 'normal' ? 0.6 : 0.95,
+                    }}
+                    transition={reduced ? { duration: 0 } : springs.smooth}
+                    fill="none"
+                    stroke={routed.reversed ? 'var(--destructive)' : strokes[look]}
+                    strokeWidth={look === 'critical' ? 2.5 : look === 'chain' ? 2 : 1.5}
+                    strokeDasharray={routed.reversed ? '6 4' : edge.settled ? '3 4' : undefined}
+                    strokeLinecap="round"
+                    markerEnd={`url(#${markers}-${marker})`}
+                  />
+                );
+              })}
+            </g>
+          </svg>
+        </Entry>
         <AnimatePresence initial={false}>
           {ordered.map((node) => {
             const place = layout.nodes.get(node.id);
             if (!place) return null;
             return (
-              <GraphNodeCard
+              <NodeEntry
                 key={node.id}
-                node={node}
-                x={place.x + PAD}
-                y={place.y + PAD}
-                open={node.id === openTaskId}
-                emphasis={emphasisOf(node)}
-                critical={highlight === 'critical' && critical.has(node.id)}
-                waiting={analysis.waiting.get(node.id) ?? 0}
-                reduced={reduced}
-                onOpen={onOpen}
-                onPoint={setPointed}
-                onFocusNode={setFocused}
-                onKeyDown={onNodeKey}
-              />
+                id={node.id}
+                layer={place.layer}
+                late={!arrived.current.has(node.id)}
+              >
+                <GraphNodeCard
+                  node={node}
+                  x={place.x + PAD}
+                  y={place.y + PAD}
+                  open={node.id === openTaskId}
+                  emphasis={emphasisOf(node)}
+                  critical={highlight === 'critical' && critical.has(node.id)}
+                  waiting={analysis.waiting.get(node.id) ?? 0}
+                  reduced={reduced}
+                  onOpen={onOpen}
+                  onPoint={setPointed}
+                  onFocusNode={setFocused}
+                  onKeyDown={onNodeKey}
+                />
+              </NodeEntry>
             );
           })}
         </AnimatePresence>
       </motion.div>
-      <div className="pointer-events-none absolute inset-0">{children}</div>
+      <Entry
+        scope={`graph-controls:${label}`}
+        delay={0}
+        className="pointer-events-none absolute inset-0"
+      >
+        {children}
+      </Entry>
     </div>
   );
 }

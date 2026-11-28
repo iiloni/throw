@@ -93,7 +93,9 @@ export function AppShell() {
   // loads, and reading it would swap the shell's layout before its page.
   const routeId = useRouterState({ select: (state) => state.matches.at(-1)?.routeId });
   const params = paramsSchema.parse(rawParams ?? {});
-  const location = useRouterState({ select: (state) => state.location });
+  // The view too: the board and its dependency graph cross-fade, and a view read from the
+  // location would swap them before the transition captures the page it leaves.
+  const routeSearch = useRouterState({ select: (state) => state.matches.at(-1)?.search });
   const navigating = useRouterState({ select: (state) => state.isLoading });
   const { workspaces: allWorkspaces, isLoading: loadingWorkspaces } = useWorkspaces();
   const { projects: allProjects, isLoading: loadingProjects } = useProjects();
@@ -136,7 +138,9 @@ export function AppShell() {
       ? Number(projects.some((item) => item.id === preferredProjectId))
       : allProjects.length,
   );
-  const view = viewSchema.catch('board').parse((location.search as { view?: unknown }).view);
+  const view = viewSchema
+    .catch('board')
+    .parse((routeSearch as { view?: unknown } | undefined)?.view);
   const crossBoard = routeId === '/_app/w/$workspaceId/board';
   const projectBoard = !!project && routeId === '/_app/w/$workspaceId/p/$projectId';
   // Both boards fill the window under their own header and dock.

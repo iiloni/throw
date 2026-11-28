@@ -211,3 +211,86 @@ test('an empty graph says how to fill it, and its search narrows the graph', asy
   await page.getByRole('button', { name: /Show 1 unlinked task/ }).click();
   await expect(node(page, /Tidy the docs/)).toBeVisible();
 });
+
+test('switching between the board and its graph cross-fades and settles the new view in', async ({
+  page,
+  isMobile,
+  browserName,
+}) => {
+  test.skip(isMobile, 'The phone switches through the same shell view; this checks the motion');
+  test.skip(
+    browserName === 'firefox' &&
+      !(await page.evaluate(() => CSS.supports('selector(:active-view-transition-type(a))'))),
+    'This Firefox has no view transition types, so it runs no page transitions',
+  );
+  // For each switch: which view the transition captured as the page it leaves, and how the
+  // arriving view's first card or node shows as the cross-fade starts.
+  await page.addInitScript(() => {
+    type Switch = { types: string[]; leftGraph: boolean; arriving: number };
+    const log: Switch[] = [];
+    Object.assign(window, { viewSwitches: log });
+    const start = document.startViewTransition?.bind(document);
+    if (!start) return;
+    const opacity = (element: Element | null) => {
+      let value = 1;
+      for (let at = element; at; at = at.parentElement)
+        value *= Number(getComputedStyle(at).opacity);
+      return element ? value : -1;
+    };
+    document.startViewTransition = ((
+      update?: ViewTransitionUpdateCallback | StartViewTransitionOptions,
+    ) => {
+      const types = update && typeof update === 'object' && update.types ? [...update.types] : [];
+      const entry: Switch = {
+        types,
+        leftGraph: Boolean(document.querySelector('[data-graph-canvas]')),
+        arriving: -1,
+      };
+      log.push(entry);
+      const transition = start(update);
+      transition.ready.then(
+        () => {
+          entry.arriving = opacity(
+            document.querySelector('[data-graph-node]') ?? document.querySelector('[data-card-id]'),
+          );
+        },
+        () => {},
+      );
+      return transition;
+    }) as typeof document.startViewTransition;
+  });
+  const { headers } = await signUp(page);
+  const { workspaceId, app } = await seed(page.request, headers);
+  await page.goto(`/w/${workspaceId}/p/${app.id}?view=board`);
+  const designCard = page.getByRole('article', { name: 'APP-1 Design the schema', exact: true });
+  await expect(designCard).toBeVisible({ timeout: APP_LOAD_TIMEOUT });
+  type Switch = { types: string[]; leftGraph: boolean; arriving: number };
+  const switches = () =>
+    page.evaluate(() => (window as unknown as { viewSwitches: Switch[] }).viewSwitches);
+  const toggle = page.getByRole('button', { name: 'Dependency graph' });
+  async function flip() {
+    const count = (await switches()).length;
+    await toggle.click();
+    await expect.poll(async () => (await switches())[count]?.arriving ?? -1).toBeGreaterThan(-1);
+    return (await switches())[count]!;
+  }
+
+  // The transition captures the board before the graph replaces it, and the graph settles in.
+  const toGraph = await flip();
+  expect(toGraph).toMatchObject({ types: ['fade'], leftGraph: false });
+  expect(toGraph.arriving).toBeLessThan(0.5);
+  const designNode = node(page, /^APP-1 Design the schema/);
+  await expect(designNode).toBeVisible();
+  await expect(designNode).toHaveCSS('opacity', '1');
+
+  // Back again: the graph is what fades out, and the board's cards settle in as on a switch.
+  const toBoard = await flip();
+  expect(toBoard).toMatchObject({ types: ['fade'], leftGraph: true });
+  expect(toBoard.arriving).toBeLessThan(0.5);
+  await expect(designCard).toBeVisible();
+
+  // A graph seen before still settles in rather than snapping into place.
+  const again = await flip();
+  expect(again.leftGraph).toBe(false);
+  expect(again.arriving).toBeLessThan(0.5);
+});

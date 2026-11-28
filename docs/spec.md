@@ -670,7 +670,8 @@ projects, so it works offline.
   and `+`, `-` and `0` do the same from the keyboard.
 - The desktop rail's Dependency graph button toggles it. On a phone the project switcher's footer switches, and the graph's dock goes back
   to the board, opens the graph's settings as a drawer page and fits the graph. Moving
-  between boards keeps the graph, and switching cross-fades as between boards.
+  between boards keeps the graph, and switching cross-fades as between boards: the graph's
+  tasks settle in from the first blockers onwards, and the board's cards settle in on the way back.
 
 ## The task view
 
