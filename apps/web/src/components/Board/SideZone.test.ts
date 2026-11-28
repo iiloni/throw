@@ -685,6 +685,19 @@ describe('SideZone peek', () => {
     expect(strip()).toBeInTheDocument();
   });
 
+  it('shows how long is left of the dwell around the strip’s icon', () => {
+    const view = renderZone();
+    expect(view.container.querySelector('[data-dwell-ring]')).toBeNull();
+    fireEvent.pointerEnter(strip(), { pointerType: 'mouse' });
+    expect(strip()).toHaveAttribute('data-dwelling');
+    expect(view.container.querySelector('[data-dwell-ring]')).not.toBeNull();
+    fireEvent.pointerDown(strip(), { pointerType: 'mouse', button: 0 });
+    // Pressed, the strip keeps to its own press: the ring goes and nothing peeks.
+    expect(strip()).not.toHaveAttribute('data-dwelling');
+    act(() => vi.advanceTimersByTime(PEEK_DWELL_MS));
+    expect(board.get().railPeek).toBeNull();
+  });
+
   it('does not open for a touch, or for a mouse that leaves first', () => {
     renderZone();
     fireEvent.pointerEnter(strip(), { pointerType: 'touch' });
@@ -726,18 +739,37 @@ describe('SideZone peek', () => {
     expect(board.get()).toMatchObject({ backlog: 'panel', railPeek: null });
   });
 
-  it('stays open while a card held from it is dragged, and closes after the drop', () => {
+  it('keeps a card held from it while it is over it, and lets go once it is dragged out', () => {
+    renderZone();
+    dwell();
+    const taskId = mockBoards()[0]!.tasks[0]!.id;
+    act(() => drag.set(heldFrom('backlog', taskId)));
+    // Moved about inside it, the peek stays for the card to be placed there.
+    act(() => vi.advanceTimersByTime(PEEK_GRACE_MS * 4));
+    expect(board.get().railPeek).toBe('backlog');
+    expect(rail()).toHaveAttribute('data-peek');
+
+    // Dragged out, it goes back to its strip with the card still held, uncovering the columns.
+    fireEvent.pointerLeave(rail(), { pointerType: 'mouse' });
+    act(() => vi.advanceTimersByTime(PEEK_GRACE_MS));
+    expect(board.get().railPeek).toBeNull();
+    expect(drag.get()).not.toBeNull();
+    // Nor does it open again under the held card.
+    fireEvent.pointerEnter(strip(), { pointerType: 'mouse' });
+    act(() => vi.advanceTimersByTime(PEEK_DWELL_MS));
+    expect(board.get().railPeek).toBeNull();
+  });
+
+  it('keeps a card dragged back in before the grace runs out', () => {
     renderZone();
     dwell();
     const taskId = mockBoards()[0]!.tasks[0]!.id;
     act(() => drag.set(heldFrom('backlog', taskId)));
     fireEvent.pointerLeave(rail(), { pointerType: 'mouse' });
-    act(() => vi.advanceTimersByTime(PEEK_GRACE_MS * 4));
+    act(() => vi.advanceTimersByTime(PEEK_GRACE_MS - 50));
+    fireEvent.pointerEnter(rail(), { pointerType: 'mouse' });
+    act(() => vi.advanceTimersByTime(PEEK_GRACE_MS * 2));
     expect(board.get().railPeek).toBe('backlog');
-
-    act(() => drag.set(null));
-    act(() => vi.advanceTimersByTime(PEEK_GRACE_MS));
-    expect(board.get().railPeek).toBeNull();
   });
 
   it('gives way to a card held from elsewhere', () => {

@@ -670,4 +670,35 @@ test.describe('desktop rails', () => {
     await page.waitForTimeout(800);
     await expect(backlog.getByRole('button', { name: 'Close backlog' })).toBeVisible();
   });
+
+  test('a card dragged out of a peeked backlog lets it go back to its strip before the drop', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const board = await fixture(page, true);
+    await board.add('Peeked idea', 'Ideas');
+    await board.add('Under review', 'Review');
+    const backlog = rail(page, 'Backlog');
+    await backlog.getByRole('button', { name: 'Close backlog' }).click();
+    const strip = page.getByRole('button', { name: /^Open backlog,/ });
+    await expect.poll(() => widthOf(backlog)).toBe(64);
+    const box = (await settled(strip).then((target) => target.boundingBox()))!;
+    await page.mouse.move(box.x + box.width / 2, box.y + 240);
+    await expect(backlog).toHaveAttribute('data-peek', '');
+    await settled(card(page, 'Peeked idea'));
+
+    const review = page.getByRole('region', { name: 'Review', exact: true });
+    await carry(page, card(page, 'Peeked idea'), [review], { drop: false });
+    // Still held, the card has left the peek, which goes back to its strip.
+    await expect(page.locator('[data-overlay]')).toHaveCount(1);
+    await expect(backlog).not.toHaveAttribute('data-peek');
+    await expect.poll(() => widthOf(backlog)).toBe(64);
+    await page.mouse.up();
+
+    await expect(review.getByRole('article', { name: /Peeked idea$/ })).toBeVisible();
+    await expect
+      .poll(async () => (await taskRow(page, board.headers, board.ids['Peeked idea']!))?.status_id)
+      .toBe(board.status('Review'));
+    await expect(strip).toBeVisible();
+  });
 });

@@ -21,7 +21,7 @@ import {
 import { Hint } from '@/components/Hint/Hint';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { haptics } from '@/lib/haptics';
-import { springs } from '@/lib/motion';
+import { curves, springs } from '@/lib/motion';
 import { useShortcut } from '@/lib/shortcuts';
 import { cn } from '@/lib/utils';
 import { useBacklogSpotlightBlocker, useStatusSpotlightBlocker } from './blockers';
@@ -29,7 +29,7 @@ import { drag, makingWay } from './drag';
 import { GALLERY_INSET, ZoneGallery } from './Gallery';
 import { StatusGlyph } from './glyphs';
 import type { Category, Project, Status } from './model';
-import { createRailPeek } from './railPeek';
+import { createRailPeek, PEEK_DWELL_MS } from './railPeek';
 import { StatusTile } from './StatusTile';
 import {
   type BoardState,
@@ -384,13 +384,15 @@ export function canCollapseGalleryOnEscape(
 
 /**
  * The timing of a strip opened for a glance (`railPeek.ts`), against the board: it opens only
- * while nothing is held, carried or open over the board, and stays while a card held from it,
- * its own edge or a menu still needs it.
+ * while nothing is held, carried or open over the board, and stays while its own edge or a menu
+ * still needs it. A card dragged out of it lets it go as the pointer does, uncovering the
+ * columns beneath for the drop.
  */
 function useRailPeek(
   zone: Zone,
   rail: RefObject<HTMLElement | null>,
   restoreFocus: (to: CollapsedZoneState) => void,
+  dwelling: (active: boolean) => void,
 ) {
   const [peek] = useState(() =>
     createRailPeek({
@@ -406,12 +408,13 @@ function useRailPeek(
       },
       open: () => peekRail(zone),
       isOpen: () => isPeeking(board.get(), zone),
-      isHeld: () => drag.get() !== null || railResize.get()?.zone === zone || hasBlockingOverlay(),
+      isHeld: () => railResize.get()?.zone === zone || hasBlockingOverlay(),
       close: () => {
         // Focus inside the rail would be lost with it, so it goes to the strip left in its place.
         if (rail.current?.contains(document.activeElement)) restoreFocus('strip');
         endRailPeek(zone);
       },
+      dwelling,
     }),
   );
   // A peek is never kept: a rail leaving the board takes its peek with it.
@@ -423,6 +426,55 @@ function useRailPeek(
     [peek, zone],
   );
   return peek;
+}
+
+/**
+ * How much longer a mouse has to rest on a strip before it opens: a ring filling around its
+ * icon at the dwell's own steady pace, so the moment it closes is the moment the rail opens.
+ * With reduced motion it does not sweep, and shows whole for the wait.
+ */
+function DwellRing({ active }: { active: boolean }) {
+  const reduced = useReducedMotion();
+  return (
+    <AnimatePresence>
+      {active && (
+        <motion.svg
+          key="dwell"
+          aria-hidden
+          viewBox="0 0 36 36"
+          className="-top-2 -left-2 -rotate-90 pointer-events-none absolute size-9 text-brand"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={curves.fade}
+        >
+          <circle
+            cx="18"
+            cy="18"
+            r="16"
+            fill="none"
+            stroke="currentColor"
+            strokeOpacity={0.18}
+            strokeWidth="2"
+          />
+          <motion.circle
+            cx="18"
+            cy="18"
+            r="16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            data-dwell-ring=""
+            initial={{ pathLength: reduced ? 1 : 0 }}
+            animate={{ pathLength: 1 }}
+            // A timer's progress, so it keeps the timer's pace rather than easing.
+            transition={{ duration: PEEK_DWELL_MS / 1000, ease: 'linear' }}
+          />
+        </motion.svg>
+      )}
+    </AnimatePresence>
+  );
 }
 
 /**
@@ -484,9 +536,15 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
     onPress: () => setView('panel'),
     onHold: () => setView('full'),
   });
-  const peek = useRailPeek(zone, railRef, (to) => {
-    restoreFocusTo.current = to;
-  });
+  const [dwelling, setDwelling] = useState(false);
+  const peek = useRailPeek(
+    zone,
+    railRef,
+    (to) => {
+      restoreFocusTo.current = to;
+    },
+    setDwelling,
+  );
   // Only the backlog opens for a glance: it is where tasks are picked from.
   const peekable = zone === 'backlog';
   // Used, a peeked rail stays open, as if its strip had been pressed.
@@ -665,6 +723,7 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
                 ref={stripButton}
                 type="button"
                 aria-label={`Open ${title.toLowerCase()}, ${count} tasks`}
+                data-dwelling={dwelling ? '' : undefined}
                 data-spotlight={hasBlocker ? 'blocker' : undefined}
                 data-spotlight-instant={reduced ? '' : undefined}
                 {...stripPress}
@@ -674,6 +733,10 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
                 onPointerDown={(event) => {
                   peek.cancelDwell();
                   stripPress.onPointerDown(event);
+                }}
+                onPointerMove={(event) => {
+                  if (peekable) peek.moveOnStrip(event.pointerType, event.buttons !== 0);
+                  stripPress.onPointerMove(event);
                 }}
                 onPointerLeave={() => {
                   peek.cancelDwell();
@@ -685,7 +748,10 @@ export function SideZone({ zone, geometry }: { zone: Zone; geometry: RailGeometr
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.16 }}
               >
-                <Icon className="size-5" aria-hidden />
+                <span className="relative flex">
+                  <Icon className="size-5" aria-hidden />
+                  <DwellRing active={dwelling} />
+                </span>
                 <span className="font-display font-semibold text-sm [writing-mode:vertical-rl]">
                   {title}
                 </span>

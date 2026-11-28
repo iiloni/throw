@@ -130,6 +130,45 @@ describe('createRailPeek', () => {
     expect(host.close).not.toHaveBeenCalled();
   });
 
+  it('tells the strip while a dwell runs, so it can show how long is left', () => {
+    const dwelling = vi.fn();
+    const { peek } = setup({ dwelling });
+    peek.enterStrip('touch');
+    expect(dwelling).not.toHaveBeenCalled();
+
+    peek.enterStrip('mouse');
+    expect(dwelling).toHaveBeenLastCalledWith(true);
+    peek.cancelDwell();
+    expect(dwelling).toHaveBeenLastCalledWith(false);
+    // Nothing pending, nothing to tell.
+    peek.cancelDwell();
+    expect(dwelling).toHaveBeenCalledTimes(2);
+
+    peek.enterStrip('mouse');
+    vi.advanceTimersByTime(PEEK_DWELL_MS);
+    expect(dwelling).toHaveBeenLastCalledWith(false);
+    expect(dwelling).toHaveBeenCalledTimes(4);
+  });
+
+  it('starts a dwell for a mouse moving on a strip that appeared under it', () => {
+    const { peek, host } = setup();
+    peek.moveOnStrip('mouse', true);
+    peek.moveOnStrip('touch', false);
+    vi.advanceTimersByTime(PEEK_DWELL_MS);
+    expect(host.open).not.toHaveBeenCalled();
+
+    peek.moveOnStrip('mouse', false);
+    vi.advanceTimersByTime(PEEK_DWELL_MS / 2);
+    // Moving on does not start the dwell over.
+    peek.moveOnStrip('mouse', false);
+    vi.advanceTimersByTime(PEEK_DWELL_MS / 2);
+    expect(host.open).toHaveBeenCalledTimes(1);
+    // Nor once it is open.
+    peek.moveOnStrip('mouse', false);
+    vi.advanceTimersByTime(PEEK_DWELL_MS);
+    expect(host.open).toHaveBeenCalledTimes(1);
+  });
+
   it('cancels everything pending when disposed', () => {
     const { peek, host } = setup();
     peek.enterStrip('mouse');
