@@ -1434,8 +1434,9 @@ html:active-view-transition-type(docked)::view-transition-group(dock) {
  * A phone's board is not painted while a drawer page rests over all of it (`useCoverBoard`):
  * narrowing the search repainted the board on every frame behind the drawer, which took the
  * GPU memory the drawer's own layers needed. A drawer page that closes loses `data-page` at
- * once, so the board is back before the drawer starts down.
+ * once, so the board is back before the drawer starts down. The drawer is the shell's, so the
+ * board marks what it lets go (`data-board-cover`) while it is covered.
  */
-:has(> [data-drawer][data-page][data-covers]) > div[inert] {
+:root:has([data-drawer][data-page][data-covers]) [data-board-cover][inert] {
   visibility: hidden;
 }

@@ -33,6 +33,7 @@ import { boardRelations, TaskBlockersContext } from './blockers';
 import { taskScreens, taskWrites, useBoardBoundary } from './boundary';
 import { DesktopBoard } from './DesktopBoard';
 import { DragOverlay } from './DragOverlay';
+import { BoardDrawerBridge } from './drawerBridge';
 import { TaskPullRequestsContext } from './githubLinks';
 import { PhoneBoard } from './PhoneBoard';
 import { projectBoardData, secondaryTagsByTask, updatedAtByTask } from './selection';
@@ -176,49 +177,51 @@ export function ProjectBoard({
       <TaskBlockersContext.Provider value={blockers}>
         <TaskPullRequestsContext.Provider value={pulls}>
           <SelectionContentContext.Provider value={selectionContent}>
-            <div className="relative h-full" aria-busy={awaitingTasks}>
-              {!phone && <h1 className="sr-only">{project.name}</h1>}
-              {shell.view === 'graph' ? (
-                <DependencyGraph
-                  phone={phone}
-                  title={
-                    <h1 aria-label={project.name} className="min-w-0">
-                      <ShellMenu phone titleClassName="text-[1.75rem]" />
-                    </h1>
-                  }
-                  syncIndicator={<SyncIndicator />}
-                />
-              ) : phone ? (
-                <PhoneBoard
-                  projectMenu={
-                    <h1 aria-label={project.name} className="min-w-0">
-                      <ShellMenu phone titleClassName="text-[1.75rem]" />
-                    </h1>
-                  }
-                  syncIndicator={<SyncIndicator />}
-                  onBacklogChange={(open) =>
-                    shell.selectProject(
-                      project.workspaceId,
-                      project.id,
-                      open ? 'backlog' : 'board',
-                      true,
-                    )
-                  }
-                  initialBacklog={shell.view === 'backlog'}
-                  palette
-                />
-              ) : (
-                <DesktopBoard />
-              )}
-              <AnimatePresence>
-                {phone &&
-                  screens.map((task) => (
-                    <TaskScreen key={task.id} task={task} covered={task !== openTask} />
-                  ))}
-              </AnimatePresence>
-              <DragOverlay />
-              <BoardAnnouncer />
-            </div>
+            <BoardDrawerBridge>
+              <div className="relative h-full" aria-busy={awaitingTasks}>
+                {!phone && <h1 className="sr-only">{project.name}</h1>}
+                {shell.view === 'graph' ? (
+                  <DependencyGraph
+                    phone={phone}
+                    title={
+                      <h1 aria-label={project.name} className="min-w-0">
+                        <ShellMenu phone titleClassName="text-[1.75rem]" />
+                      </h1>
+                    }
+                    syncIndicator={<SyncIndicator />}
+                  />
+                ) : phone ? (
+                  <PhoneBoard
+                    projectMenu={
+                      <h1 aria-label={project.name} className="min-w-0">
+                        <ShellMenu phone titleClassName="text-[1.75rem]" />
+                      </h1>
+                    }
+                    syncIndicator={<SyncIndicator />}
+                    onBacklogChange={(open) =>
+                      shell.selectProject(
+                        project.workspaceId,
+                        project.id,
+                        open ? 'backlog' : 'board',
+                        true,
+                      )
+                    }
+                    initialBacklog={shell.view === 'backlog'}
+                    palette
+                  />
+                ) : (
+                  <DesktopBoard />
+                )}
+                <AnimatePresence>
+                  {phone &&
+                    screens.map((task) => (
+                      <TaskScreen key={task.id} task={task} covered={task !== openTask} />
+                    ))}
+                </AnimatePresence>
+                <DragOverlay />
+                <BoardAnnouncer />
+              </div>
+            </BoardDrawerBridge>
           </SelectionContentContext.Provider>
         </TaskPullRequestsContext.Provider>
       </TaskBlockersContext.Provider>

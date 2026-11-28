@@ -6,7 +6,6 @@ import { pipeline } from 'node:stream/promises';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import { zValidator } from '@hono/zod-validator';
 import { backupScheduleSchema, createBackupSchema } from '@throw/shared';
-import { eq } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import { issueBackupAccess, readBackupAccess } from '../backups/access';
 import { backupConfig } from '../backups/config';
@@ -22,13 +21,7 @@ import {
 } from '../backups/service';
 import { backupPath, deleteBackup, describeBackup, importBackup, workDir } from '../backups/store';
 import type { AppEnv } from '../context';
-import { db } from '../db/client';
-import { user } from '../db/schema';
-
-async function isAdmin(userId: string) {
-  const [row] = await db.select({ role: user.role }).from(user).where(eq(user.id, userId));
-  return row?.role === 'admin';
-}
+import { isAdmin } from '../lib/requireAdmin';
 
 function onError(error: Error, c: Context<AppEnv>) {
   if (error instanceof BackupError) return c.json({ error: error.message }, 400);
@@ -67,11 +60,6 @@ export const backupDownloadRoutes = new Hono<AppEnv>()
  */
 export const backupRoutes = new Hono<AppEnv>()
   .onError(onError)
-  .use(async (c, next) => {
-    if (!c.get('user')) return c.json({ error: 'Unauthorized' }, 401);
-    if (c.get('user')?.role !== 'admin') return c.json({ error: 'Forbidden' }, 403);
-    await next();
-  })
   .get('/', async (c) => c.json(await backupOverview()))
   .post('/', zValidator('json', createBackupSchema), (c) => {
     if (isBusy()) return c.json({ error: BUSY }, 409);

@@ -248,7 +248,7 @@ export function TaskScreenSurface({ task, covered = false }: { task: Task; cover
   useEffect(() => () => setTaskCardHidden(task.id, false), [task.id]);
   useEffect(showTaskSurface, []);
 
-  // Not a Radix modal: the board's drawer sits above the screen as the task's dock, and the
+  // Not a Radix modal: the shell's drawer sits above the screen as the task's dock, and the
   // board behind it is inert instead. Focus moves in on opening and back out after closing.
   useEffect(() => {
     const screen = document.querySelector<HTMLElement>(`[data-task-screen="${task.id}"]`);

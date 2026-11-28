@@ -312,7 +312,7 @@ function TaskPanelBridge({
 }
 
 /**
- * An open task on a phone, as the board's drawer shows it (ADR 0009): its controls are the
+ * An open task on a phone, as the shell's drawer shows it (ADR 0009): its controls are the
  * dock, and act as tabs over a page holding the picker or actions, with the dock above it.
  * Non-tab pages such as Link a task open with the drawer's own titled header and close button.
  */

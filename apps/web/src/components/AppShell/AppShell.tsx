@@ -55,9 +55,9 @@ import {
 import { searchSidebarOpen } from '@/components/BoardSearch/BoardSearch';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { CommandPalette, type PaletteMode } from '@/components/CommandPalette/CommandPalette';
+import { DrawerHost } from '@/components/Drawer/DrawerHost';
 import { Hint } from '@/components/Hint/Hint';
 import { ShortcutsHelp } from '@/components/KeyboardShortcuts/ShortcutsHelp';
-import { ManagementSurfaceProvider } from '@/components/ManagementSurface/ManagementSurface';
 import { NewTagHost } from '@/components/NewTag/NewTagHost';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
 import { ProjectIcon } from '@/components/ProjectIcon/ProjectIcon';
@@ -383,7 +383,8 @@ export function AppShell() {
       >
         Skip to content
       </a>
-      <ManagementSurfaceProvider active={!fullBoard}>
+      {/* The phone's one drawer, which every screen shows its dock and pages in (ADR 0009). */}
+      <DrawerHost enabled={!desktop}>
         <div className="flex min-h-dvh">
           {desktop && (
             <motion.aside
@@ -613,7 +614,7 @@ export function AppShell() {
         <NewTagHost />
         <ShortcutsHelp />
         <SignOutAccountHost />
-      </ManagementSurfaceProvider>
+      </DrawerHost>
     </ShellContext.Provider>
   );
 }

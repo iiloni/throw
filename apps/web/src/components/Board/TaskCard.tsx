@@ -4,6 +4,7 @@ import { animate, motion, useMotionValue, useReducedMotion } from 'motion/react'
 import {
   type KeyboardEvent,
   type MouseEvent,
+  type PointerEvent,
   type ReactNode,
   useEffect,
   useLayoutEffect,
@@ -23,14 +24,18 @@ import {
   blockedHint,
   blockedLabel,
   cancelBlockerSpotlight,
+  consumeBlockerHoldClick,
+  releaseBlockerHold,
+  SPOTLIGHT_HOLD_MS,
   syncBlockerSpotlight,
+  type TaskBlocker,
   useCardSpotlightRole,
   useSpotlightActiveFor,
   useTaskBlockers,
 } from './blockers';
 import { ARROW_DIRECTIONS, focusNextCard } from './cardFocus';
 import { carryAcross, carryVertically, pickUp, putBack, setDown } from './carry';
-import { consumeDragClick, drag, isPrimed, pressCard } from './drag';
+import { consumeDragClick, drag, isPrimed, pressCard, TOUCH_SLOP } from './drag';
 import { useTaskPullRequests } from './githubLinks';
 import { PriorityGlyph, StatusGlyph } from './glyphs';
 import {
@@ -142,6 +147,94 @@ function closedAgo(closedAt: number) {
   return days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days}d ago`;
 }
 
+/**
+ * Whether a finger on a card's blocked badge can hold its blockers' spotlight: only on a board
+ * that lays its columns out side by side (a tablet, an unfolded foldable), where the blockers
+ * can be on screen beside it. A phone's board, or the compact one beside a task, pages one
+ * column at a time, and there the badge is part of the card like any other.
+ */
+export function holdsBlockerSpotlight(badge: Element) {
+  return isDesktop() && badge.closest('[data-board-layout]:not([data-compact-board])') !== null;
+}
+
+/**
+ * How far beyond the blocked badge a finger still lands on it, each way. The badge is a 20 px
+ * square on a 12 px icon, smaller than a fingertip, and a finger that just misses it would hold
+ * the card instead and select it; this makes the target a finger's 44 px. The badge's box stays
+ * as it is, so a mouse still lingers on the icon itself.
+ */
+export const BLOCKED_BADGE_REACH = 12;
+
+function withinReach(badge: Element, x: number, y: number) {
+  const box = badge.getBoundingClientRect();
+  return (
+    x >= box.left - BLOCKED_BADGE_REACH &&
+    x <= box.right + BLOCKED_BADGE_REACH &&
+    y >= box.top - BLOCKED_BADGE_REACH &&
+    y <= box.bottom + BLOCKED_BADGE_REACH
+  );
+}
+
+/**
+ * A finger held on a card's blocked badge, or close enough to it: it lights up the task's
+ * blockers after the board's long press, for as long as it stays down, in place of the card's
+ * own press. The card is not picked up, selected or opened by it, and a finger that sets off
+ * scrolling lets it go. Its handlers go on the card's face, which holds the badge and the room
+ * around it, so a press just beside the badge reaches them.
+ */
+function useBlockerHold(taskId: string, blockers: readonly TaskBlocker[]) {
+  const badge = useRef<HTMLSpanElement>(null);
+  const hold = useRef<{ pointerId: number; x: number; y: number } | null>(null);
+  const latest = useRef(blockers);
+  latest.current = blockers;
+
+  function end(event: PointerEvent<HTMLElement>) {
+    if (hold.current?.pointerId !== event.pointerId) return;
+    hold.current = null;
+    releaseBlockerHold(taskId);
+  }
+
+  return {
+    badge,
+    onPointerDown(event: PointerEvent<HTMLElement>) {
+      const target = badge.current;
+      if (!target || event.pointerType !== 'touch' || event.button !== 0 || hold.current) return;
+      // Another control in reach keeps its own press.
+      if (
+        event.target instanceof Element &&
+        !target.contains(event.target) &&
+        event.target.closest('a, button, input, [data-no-drag]')
+      )
+        return;
+      if (!withinReach(target, event.clientX, event.clientY)) return;
+      if (!holdsBlockerSpotlight(target)) return;
+      // The card's press would pick it up or select it after the same wait.
+      event.stopPropagation();
+      hold.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+      try {
+        target.setPointerCapture(event.pointerId);
+      } catch {
+        // A pointer already gone has nothing to capture.
+      }
+      armBlockerSpotlight(taskId, latest.current, SPOTLIGHT_HOLD_MS, haptics.selection);
+    },
+    onPointerMove(event: PointerEvent<HTMLElement>) {
+      const press = hold.current;
+      if (press?.pointerId !== event.pointerId) return;
+      if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > TOUCH_SLOP) end(event);
+    },
+    onPointerUp: end,
+    onPointerCancel: end,
+    onLostPointerCapture: end,
+    onContextMenu(event: MouseEvent<HTMLElement>) {
+      // A held finger asks for the browser's menu; the spotlight has answered it.
+      if (!hold.current) return;
+      event.preventDefault();
+      event.stopPropagation();
+    },
+  };
+}
+
 /** A card's status control: its tap target reaches beyond the line without growing it much. */
 export const CARD_STATUS_CONTROL = '-my-2 flex min-h-10 min-w-0 items-center gap-1 rounded-lg px-1';
 
@@ -173,6 +266,7 @@ export function TaskCardFace({
   const blocked = blockers.length > 0 && task.closedAt === null;
   const pulls = useTaskPullRequests(task.id);
   const spotlightActive = useSpotlightActiveFor(task.id, spotlight);
+  const hold = useBlockerHold(task.id, blockers);
   const parent = task.parentId
     ? current(state).tasks.find((item) => item.id === task.parentId)
     : undefined;
@@ -195,7 +289,19 @@ export function TaskCardFace({
   const hintLabel = blocked ? blockedHint(blockers, project) : '';
 
   return (
-    <div className="px-4 pt-3.5 pb-3">
+    <div
+      className="px-4 pt-3.5 pb-3"
+      {...(spotlight && blocked
+        ? {
+            onPointerDown: hold.onPointerDown,
+            onPointerMove: hold.onPointerMove,
+            onPointerUp: hold.onPointerUp,
+            onPointerCancel: hold.onPointerCancel,
+            onLostPointerCapture: hold.onLostPointerCapture,
+            onContextMenu: hold.onContextMenu,
+          }
+        : {})}
+    >
       {parent && !state.actions && (
         <p className="mb-1.5 flex items-center gap-1 text-foreground/55 text-xs">
           <CornerDownRight className="size-3 shrink-0" aria-hidden />
@@ -224,6 +330,7 @@ export function TaskCardFace({
         {blocked && (
           <Hint label={hintLabel}>
             <span
+              ref={hold.badge}
               role="img"
               data-blocked=""
               data-spotlight-trigger={spotlightActive ? 'active' : undefined}
@@ -325,7 +432,7 @@ export function TaskCard({
   });
 
   function onClick(event: MouseEvent<HTMLElement>) {
-    if (overlay || consumeDragClick()) return;
+    if (overlay || consumeDragClick() || consumeBlockerHoldClick()) return;
     // Portalled status choices bubble through React, but are not a click on this card.
     if (event.target instanceof Node && !event.currentTarget.contains(event.target)) return;
     if (event.target instanceof Element && event.target.closest('[data-no-drag]')) return;

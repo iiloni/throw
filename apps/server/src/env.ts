@@ -23,7 +23,7 @@ const envSchema = z.object({
    * Whether anyone who reaches the server may make an account. The first account, the
    * admin's, can always be made; `closed` turns away every one after it.
    */
-  REGISTRATION: z.enum(['open', 'closed']).default('closed'),
+  REGISTRATION: z.enum(['open', 'invite', 'closed']).default('invite'),
   /**
    * Addresses or CIDR ranges of the reverse proxies in front of the server. Only a
    * connection from one of them has its X-Forwarded-For believed. Comma separated.

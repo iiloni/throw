@@ -13,6 +13,7 @@ export const compatibilitySchema = protocolRangeSchema.safeExtend({
   taskSize: z.boolean().default(false),
   statusColor: z.boolean().default(false),
   githubTaskLinks: z.boolean().default(false),
+  adminUsers: z.boolean().default(false),
   githubReleases: z.boolean().default(false),
 });
 

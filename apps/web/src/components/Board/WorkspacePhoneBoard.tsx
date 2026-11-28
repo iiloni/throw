@@ -2,8 +2,8 @@ import { ChevronDown, ChevronUp, Plus, Search } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { memo, type ReactNode, useContext, useLayoutEffect, useRef } from 'react';
 import { NarrowedBar } from '@/components/BoardSearch/BoardFilters';
-import { Drawer } from '@/components/Drawer/Drawer';
-import { boardDrawerPage } from '@/components/ManagementSurface/ManagementSurface';
+import { DockFace } from '@/components/Drawer/DockFace';
+import { useDrawerSlot } from '@/components/Drawer/DrawerHost';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useBackHandler } from '@/lib/backButton';
 import { haptics } from '@/lib/haptics';
@@ -11,15 +11,7 @@ import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { drag, holding, makingWay, pageStride } from './drag';
 import { CATEGORIES, type Category, categoryTarget, priorityName } from './model';
-import {
-  DOCK_SPACE,
-  DockFace,
-  dockButton,
-  FlowTrack,
-  MovePanel,
-  PeekEdge,
-  pageClass,
-} from './PhoneBoard';
+import { DOCK_SPACE, dockButton, FlowTrack, MovePanel, PeekEdge, pageClass } from './PhoneBoard';
 import { CATEGORY_NAMES } from './StatusMenu';
 import {
   bandsOf,
@@ -70,7 +62,6 @@ export function WorkspacePhoneBoard({
   const pagerRef = useRef<HTMLDivElement>(null);
   const [page, pager, quietPager] = usePagerPage(FIRST_PAGE);
   const task = useContext(TaskContentContext)?.drawer;
-  const lent = boardDrawerPage.use();
   const raised = useTaskSurfaceShown();
   const dragging = held?.phase === 'dragging';
   const pick = state.selection.length > 0 && !dragging && !fingerDown;
@@ -125,6 +116,22 @@ export function WorkspacePhoneBoard({
     </div>
   );
 
+  useDrawerSlot({
+    label: task ? 'Task drawer' : 'Board drawer',
+    face: 'workspace-board',
+    origin: 'board',
+    dock: (
+      <AnimatePresence initial={false}>
+        <DockFace key={task ? 'task' : 'board'}>{task ? task.dock : dock}</DockFace>
+      </AnimatePresence>
+    ),
+    move: !task && (makingWay(held) || pick) ? <MovePanel pick={pick} /> : null,
+    gesturesDisabled: held !== null || fingerDown || (!!task && !task.page),
+    page: task ? task.page : null,
+    onClosePage: task ? task.closePage : undefined,
+    raised: !!task || raised,
+  });
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <header className="shrink-0 pt-[var(--safe-top)]" inert={covered}>
@@ -139,7 +146,7 @@ export function WorkspacePhoneBoard({
         <NarrowedBar />
       </header>
 
-      <div className="relative flex min-h-0 flex-1" inert={covered}>
+      <div className="relative flex min-h-0 flex-1" data-board-cover="" inert={covered}>
         <div
           ref={pagerRef}
           data-pager=""
@@ -155,26 +162,6 @@ export function WorkspacePhoneBoard({
         <PeekEdge side={-1} shown={page > 0} />
         <PeekEdge side={1} shown={page < CATEGORIES.length - 1} />
       </div>
-
-      <Drawer
-        label={task ? 'Task drawer' : 'Board drawer'}
-        origin="board"
-        dock={
-          <AnimatePresence initial={false}>
-            <DockFace key={task ? 'task' : 'board'}>{task ? task.dock : dock}</DockFace>
-          </AnimatePresence>
-        }
-        detent="closed"
-        detents={['closed']}
-        onDetent={() => {}}
-        move={!task && (makingWay(held) || pick) ? <MovePanel pick={pick} /> : null}
-        gesturesDisabled={held !== null || fingerDown || (!!task && !task.page)}
-        page={lent ? lent.page : task ? task.page : null}
-        onClosePage={lent ? lent.close : task ? task.closePage : () => {}}
-        raised={!!task || raised}
-      >
-        {null}
-      </Drawer>
     </div>
   );
 }

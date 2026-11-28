@@ -71,7 +71,8 @@ Throw runs with Docker Compose on any machine that can stay on, such as a home s
 small VPS, and it can share a machine and a Postgres container with Catch.
 
 **[Deployment guide](docs/deployment.md)** covers installation, HTTPS, settings, backups
-and updates. The first account becomes the admin, and sign-up then closes.
+and updates. The first account becomes the admin, and later accounts require an invite by default. Set
+`REGISTRATION=open` for public signup or `REGISTRATION=closed` to block further signups.
 
 ## Work on Throw
 
