@@ -1,8 +1,8 @@
 # 0017 — GitHub integration
 
 Status: accepted (2026-11-26) for the connection and inbound webhooks (THR-122), links
-(THR-123) status rules (THR-125) and release bindings (THR-126). Later parts of the integration amend this record as
-they land.
+(THR-123), their cards in the app (THR-124), status rules (THR-125) and release bindings
+(THR-126). Later parts of the integration amend this record as they land.
 
 ## Context
 
@@ -142,6 +142,36 @@ connection to its repository. `DELETE …/links/:linkId` also works after discon
 Both operations return a transaction ID, null on a no-op. MCP exposes the same writes
 as `link_github` and `unlink_github`, and `get_task.githubLinks` returns the public rows.
 
+### In the app (THR-124)
+
+The task pane lists a task's links with its relations: in the Links tab on phones and narrow
+panes, and in the side column of a wide desktop pane ([ADR 0012](0012-task-side-column.md)),
+which a task with only GitHub links also opens. Each item is a row that opens GitHub in a new
+tab: its kind and state icon, number, repository, title, a state pill (`Draft`, `Open`,
+`Merged`, `Closed`), and a pull request's review decision and check counts. The head branch
+is kept for linking but not shown: beside the title it is noise, and gone once merged. Rows
+update in place as deliveries sync. Removing one hides it at once on every surface and brings
+it back if the server refuses; adding cannot be optimistic, since the server builds the row.
+
+Linking by hand reuses the relation picker. When the project has an enabled connection
+(asked of `GET …/projects/:projectId` once a minute per project while a picker or pane is
+open), its field also takes a pasted pull request or issue address: an item of the connected
+repository is offered as the only option, and one from another repository or already linked
+says why it cannot be. A project without a connection, a connection that is off, an older
+server (404) or a device offline shows the picker as before, with no GitHub wording. A 409
+when linking forgets the repository, so the offer goes away. Removal is offered whether or not
+the project is still connected.
+
+A board card shows its most relevant pull request (open, then draft, merged and closed, then
+the newest) as a quiet `#number` beside its identifier, with `+n` for others, tinted by state:
+open green, draft gray, merged violet, closed red, and an open or draft one with failing checks
+red. Issues stay in the task pane. With a mouse the mark is a link to that pull request, outside
+the card's press (`data-no-drag`), and lingering on or focusing it opens a glass preview of each
+pull request with its review and checks. A touch screen and a card's drag copy show the
+mark alone. The boundaries supply links through `TaskPullRequestsContext`; the prototype has
+none.
+
+
 ### Status rules
 
 Status rules (THR-125) are the first automatic writes that change a task's own fields: links
@@ -252,3 +282,6 @@ records a manual release. PUT or DELETE at `/:releaseId/tasks/:taskId` binds or 
 of that project. Manual records work without a connection. MCP exposes `list_github_releases`,
 `bind_task_release`, `unbind_task_release` and `get_task.githubReleases`. Use `list_tasks`
 with `release` (tag name or UUID) or `unreleased: true` for merged tasks awaiting publication.
+The app reads the same rule: a task pane leads its GitHub links with its release pills, or
+Merged · unreleased, and the boards' Release filter chooses Unreleased or any listed release
+(THR-146).

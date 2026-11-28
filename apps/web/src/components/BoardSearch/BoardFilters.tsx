@@ -8,8 +8,10 @@ import {
   Construction,
   Copy,
   Folder,
+  GitMerge,
   Link2,
   type LucideIcon,
+  Rocket,
   Ruler,
   Search,
   Tags,
@@ -40,7 +42,7 @@ import {
   sortOrder,
   type TagMatch,
 } from '@/components/Board/filter';
-import type { Project } from '@/components/Board/model';
+import type { BoardData, Project } from '@/components/Board/model';
 import {
   type BoardState,
   board,
@@ -57,6 +59,7 @@ import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { TagTree } from '@/components/TagTree/TagTree';
 import { useCollapsedTags } from '@/components/TagTree/useCollapsedTags';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
+import { type BoardRelease, releaseQualifier } from '@/lib/githubReleases';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { usePersistentState } from '@/lib/storage';
@@ -125,13 +128,14 @@ function treeTags(project: Project): TagRow[] {
   }));
 }
 
-const filterTabSchema = z.enum(['group', 'size', 'links', 'sort']);
+const filterTabSchema = z.enum(['group', 'size', 'links', 'release', 'sort']);
 /**
  * The card's sections: `group` is a project board's tags, or the workspace board's projects;
- * `links` the task relations, on boards that have them.
+ * `links` the task relations, on boards that have them; `release` the GitHub releases, on
+ * boards whose tasks have merged pull requests or releases.
  */
 type FilterTab = z.infer<typeof filterTabSchema>;
-const TAB_ORDER: FilterTab[] = ['group', 'size', 'links', 'sort'];
+const TAB_ORDER: FilterTab[] = ['group', 'size', 'links', 'release', 'sort'];
 
 const RELATION_ICONS: Record<RelationFilter, LucideIcon> = {
   blocked: Ban,
@@ -204,6 +208,109 @@ function RelationControls({ filter, counts }: { filter: BoardFilter; counts: Fac
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function toggleReleaseFilter(filter: BoardFilter, id: string, order: readonly BoardRelease[]) {
+  haptics.selection();
+  const chosen = filter.releaseIds.includes(id)
+    ? filter.releaseIds.filter((value) => value !== id)
+    : [...filter.releaseIds, id];
+  // Newest first, as the filter lists them; a release no longer listed keeps its place last.
+  const rank = (value: string) => {
+    const index = order.findIndex((release) => release.id === value);
+    return index === -1 ? order.length : index;
+  };
+  setFilter({ releaseIds: chosen.sort((a, b) => rank(a) - rank(b)) });
+}
+
+/** Releases listed before Show all, so a long-lived repository's history stays out of the way. */
+const RELEASES_SHOWN = 8;
+
+/**
+ * Unreleased (merged work no shipped release holds yet) and the board's releases, newest
+ * first: a card in any of the chosen ones stays. On the workspace board, a release names its
+ * project when releases come from more than one.
+ */
+function ReleaseControls({
+  data,
+  filter,
+  counts,
+}: {
+  data: BoardData;
+  filter: BoardFilter;
+  counts: FacetCounts;
+}) {
+  const [all, setAll] = useState(false);
+  const releases = data.releases?.releases ?? [];
+  const members = data.project.members;
+  const several = !!members && new Set(releases.map((release) => release.projectId)).size > 1;
+  const shown = all
+    ? releases
+    : releases.filter(
+        (release, index) => index < RELEASES_SHOWN || filter.releaseIds.includes(release.id),
+      );
+  const hidden = releases.length - shown.length;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      <button
+        type="button"
+        aria-label={`Unreleased, ${tasksLabel(counts.unreleased)}`}
+        aria-pressed={filter.unreleased}
+        onClick={() => {
+          haptics.selection();
+          setFilter({ unreleased: !filter.unreleased });
+        }}
+        className={chip(filter.unreleased)}
+      >
+        <GitMerge className="size-4 shrink-0" aria-hidden />
+        Unreleased
+        <span className="text-xs tabular-nums opacity-60">{counts.unreleased}</span>
+      </button>
+      {shown.map((release) => {
+        const on = filter.releaseIds.includes(release.id);
+        const count = counts.releases.get(release.id) ?? 0;
+        const qualifier = releaseQualifier(release);
+        const member = several
+          ? members?.find((project) => project.id === release.projectId)
+          : undefined;
+        return (
+          <button
+            key={release.id}
+            type="button"
+            data-release={release.tagName}
+            aria-label={[`Release ${release.tagName}`, member?.name, qualifier, tasksLabel(count)]
+              .filter(Boolean)
+              .join(', ')}
+            aria-pressed={on}
+            onClick={() => toggleReleaseFilter(filter, release.id, releases)}
+            className={cn(chip(on), 'max-w-full')}
+          >
+            {member ? (
+              <span data-color={member.color} className="flex shrink-0 text-tint-accent">
+                <ProjectIcon name={member.icon} className="size-4" />
+              </span>
+            ) : (
+              <Rocket className="size-4 shrink-0" aria-hidden />
+            )}
+            <span className="truncate">{release.tagName}</span>
+            {qualifier && (
+              <span className="shrink-0 font-normal text-xs opacity-60">{qualifier}</span>
+            )}
+            <span className="text-xs tabular-nums opacity-60">{count}</span>
+          </button>
+        );
+      })}
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setAll(true)}
+          className={cn(chipBase, 'text-muted-foreground hover:text-foreground')}
+        >
+          {`${hidden} more`}
+        </button>
+      )}
     </div>
   );
 }
@@ -356,9 +463,14 @@ export function BoardFilters({ className }: { className?: string }) {
     filterTabSchema,
     'group',
   );
-  // The prototype has no relations, so a remembered Links tab opens on the first one there.
+  // The prototype has no relations or releases, so a remembered Links or Release tab opens on
+  // the first one there, as does a board with no GitHub work.
   const linked = data.relations !== undefined;
-  const tab = chosenTab === 'links' && !linked ? 'group' : chosenTab;
+  const released = data.releases !== undefined;
+  const tab =
+    (chosenTab === 'links' && !linked) || (chosenTab === 'release' && !released)
+      ? 'group'
+      : chosenTab;
   const [direction, setDirection] = useState(1);
   function selectTab(next: FilterTab | null) {
     if (!next || next === tab) return;
@@ -382,6 +494,7 @@ export function BoardFilters({ className }: { className?: string }) {
             {tab === 'sort' && <SortControls sort={state.sort} />}
             {tab === 'size' && <SizeControls filter={filter} counts={counts} />}
             {tab === 'links' && <RelationControls filter={filter} counts={counts} />}
+            {tab === 'release' && <ReleaseControls data={data} filter={filter} counts={counts} />}
             {tab === 'group' && workspace && (
               <ProjectControls members={project.members ?? []} projectId={filter.projectId} />
             )}
@@ -486,6 +599,16 @@ export function BoardFilters({ className }: { className?: string }) {
             label: 'Links',
             icon: <TabIcon icon={Link2} active={filter.relations.length > 0} />,
             hidden: !linked,
+          },
+          {
+            value: 'release',
+            id: tabId('release'),
+            controls: viewId('release'),
+            label: 'Release',
+            icon: (
+              <TabIcon icon={Rocket} active={filter.releaseIds.length > 0 || filter.unreleased} />
+            ),
+            hidden: !released,
           },
           {
             value: 'sort',
@@ -753,7 +876,7 @@ export function ActiveFilters({
   clear?: boolean;
   className?: string;
 }) {
-  const { project } = current(state);
+  const { project, releases } = current(state);
   const { filter, sort } = state;
   const scope = project.members?.find((member) => member.id === filter.projectId);
   const words = filter.query.trim();
@@ -886,6 +1009,41 @@ export function ActiveFilters({
             </FilterChip>
           );
         })}
+        {filter.unreleased && (
+          <FilterChip key="unreleased">
+            <button
+              type="button"
+              aria-label="Remove Unreleased filter"
+              onClick={() => setFilter({ unreleased: false })}
+              className={badge}
+            >
+              <GitMerge className="size-3.5" aria-hidden />
+              Unreleased
+              <X className="size-3.5" aria-hidden />
+            </button>
+          </FilterChip>
+        )}
+        {filter.releaseIds.map((id) => {
+          const name = releases?.releases.find((release) => release.id === id)?.tagName;
+          return (
+            <FilterChip key={`release:${id}`}>
+              <button
+                type="button"
+                aria-label={
+                  name ? `Remove release ${name} filter` : 'Remove unavailable release filter'
+                }
+                onClick={() =>
+                  setFilter({ releaseIds: filter.releaseIds.filter((value) => value !== id) })
+                }
+                className={badge}
+              >
+                <Rocket className="size-3.5" aria-hidden />
+                {name ?? 'Unavailable release'}
+                <X className="size-3.5" aria-hidden />
+              </button>
+            </FilterChip>
+          );
+        })}
         {filter.unsized && (
           <FilterChip key="unsized">
             <button
@@ -954,7 +1112,7 @@ function FilterSection({
 
 /**
  * Full inline sort and filter controls for the docked desktop search sidebar: Sort, Size, Links
- * (where the board has relations) and Tags (or Projects on the cross-project board) flow inside
+ * (where the board has relations), Release (where it has GitHub releases or merged work) and Tags (or Projects on the cross-project board) flow inside
  * the sidebar's single scroller so nothing is hidden behind tabs or a popup card.
  */
 export function SidebarFilters({ className }: { className?: string }) {
@@ -979,6 +1137,11 @@ export function SidebarFilters({ className }: { className?: string }) {
       {data.relations && (
         <FilterSection title="Links">
           <RelationControls filter={filter} counts={counts} />
+        </FilterSection>
+      )}
+      {data.releases && (
+        <FilterSection title="Release">
+          <ReleaseControls data={data} filter={filter} counts={counts} />
         </FilterSection>
       )}
       {workspace

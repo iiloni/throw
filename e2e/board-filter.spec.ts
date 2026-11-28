@@ -800,6 +800,12 @@ test.describe('phone', () => {
     await expect(page.getByText('1 task on the board', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Close', exact: true }).click();
     await expect.poll(() => cardIds(page, 'Build')).toEqual([board.ids['Earlier position']]);
+    // The flow track counts what the filter leaves.
+    const build = page
+      .getByRole('navigation', { name: 'Columns' })
+      .getByRole('button', { name: /^Build,/ });
+    await expect(build).toHaveAccessibleName('Build, 1 task');
+    await expect(build).toHaveText('1');
     const bar = chips(page);
     await expect(
       bar.getByRole('button', { name: 'Remove Blocked filter', exact: true }),
@@ -809,6 +815,7 @@ test.describe('phone', () => {
     await expect(
       page.getByRole('region', { name: 'Build', exact: true }).getByRole('article'),
     ).toHaveCount(4);
+    await expect(build).toHaveAccessibleName('Build, 4 tasks');
   });
 
   test('the drawer’s search filters and sorts the board, which says so with one-tap clear', async ({

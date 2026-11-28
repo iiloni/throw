@@ -89,7 +89,7 @@ describe('CompactSplitBoard', () => {
       within(screen.getByRole('navigation', { name: 'Columns' })).getByRole('button', {
         current: 'page',
       }),
-    ).toHaveAccessibleName(active[1]!.name);
+    ).toHaveAccessibleName(new RegExp(`^${active[1]!.name}, \\d+ tasks?$`));
   });
 
   it('turns its view switch into the other views’ statuses while a card is held', () => {

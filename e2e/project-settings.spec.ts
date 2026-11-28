@@ -567,7 +567,7 @@ test('status colours render on the board and can be cleared', async ({ page, isM
   await backToBoard(page);
   const tab = page
     .getByRole('navigation', { name: 'Columns' })
-    .getByRole('button', { name: 'Verify', exact: true });
+    .getByRole('button', { name: /^Verify, \d+ tasks?$/ });
   if (isMobile) {
     await expect(tab).toHaveAttribute('data-column-color', 'mint');
     await tab.click();

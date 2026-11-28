@@ -79,15 +79,25 @@ them to `githubHandlers` in `github/dispatch.ts`, where the integration's later 
 Its opt-in status rules (`github/statusRules.ts`) move linked tasks when a pull request or issue
 changes state, in the delivery's transaction and as a board move would; the link and status
 change share one history entry and one webhook (`recordGithubChange` in `github/linkData.ts`).
-The app reads and saves them through `statusRules` on the connection (`saveGithubStatusRules`).
+The app reads and saves them through `statusRules` on the connection (`saveGithubStatusRules`),
+from the GitHub page's Status rules (`GithubConnection/StatusRules.tsx`): a status menu on
+desktop and the drawer's status grid (`StatusOptions`) on a phone.
 GitHub releases and task bindings sync as read-only collections (ADR 0017). Webhook binding
 lives in `github/releaseEvents.ts`, with manual REST and MCP actions in `github/releases.ts`.
+The task pane leads its GitHub links with release pills (`TaskReleases`), or Merged · unreleased
+while a merged pull request waits for a shipped release; both boards filter by Unreleased or a
+release through `BoardData.releases` (`boardReleases` in `lib/githubReleases.ts`, matching MCP's
+`unreleased`), which the prototype leaves out to hide the Release filter.
 Descriptions and comments draw `#KEY-N` task references as links over their plain stored
 text, so Markdown and MCP keep `#KEY-N` (`lib/taskReferences.ts`; the server's
 `mcp/markdown.ts` leaves `#` unescaped before one). The app route's `TaskReferencesProvider` indexes
 the synced tasks (`TaskReferences/referenceIndex.ts`) and `LazyDescriptionEditor`'s `referencesFor` names
 the task whose text it is; the editor decorates with `DescriptionEditor/taskReferencePlugin.ts`, offers
 tasks after `#` (`DescriptionTaskMenu.tsx`) and shows `TaskReferenceCard` on desktop.
+A task's linked pull requests and issues show in its Links tab or side column
+(`components/TaskGithubLinks`), and the relation picker links a pasted address while the
+project is connected (`lib/githubLinks.ts`, online only). Board cards show a pull request mark
+from `TaskPullRequestsContext` (`Board/githubLinks.ts`), previewed on hover with a mouse.
 The activity log syncs to devices and comments are built (`lib/comments.ts`), with a
 timeline query in `collections.ts` and a task history view in `TaskDetails/TaskTimeline.tsx`; its comment cards, list motion and
 composer prompt are `TaskDetails/Comments.tsx`.
@@ -120,6 +130,8 @@ Desktop columns on both boards fold to a strip, as Catch's deck does
 (`Board/BoardColumn.tsx`, remembered per project by `useCollapsedColumns` in `Board/state.ts`).
 A phone's project board reads the same folds: its pager skips folded columns, which stay as
 short handles on `FlowTrack` that open them again (`phoneColumns` in `Board/PhoneBoard.tsx`).
+Every segment and handle on the track carries its column's count as the filter leaves it
+(`countIn`), and the column on screen folds from the end of the row naming it.
 Both boards narrow in place: the board store holds a filter and a temporary sort
 (`Board/filter.ts`, applied by `listTasks` and `countIn`), set from the desktop boards'
 search bar (`components/BoardSearch`, docked as a sidebar on wide boards) or the phone drawer's
@@ -162,6 +174,18 @@ is held and turns drops into `moveTask` and `sendTask` calls; `Board/carry.ts` i
 keyboard carry. The collection hooks hold
 their last rows through a reconnect's full snapshot (`lib/steadyRows.ts`), so the board
 does not unmount while a shape reloads.
+
+The dependency graph (`components/DependencyGraph`) is either board seen as its blocking
+relations, at `view=graph` (`ShellState.showView`; the rail's Dependency graph button and the
+phone switcher's footer switch, and `pageAt` cross-fades between the two; the shell reads
+`view` from the rendered match, not the location, so the transition captures the view it
+leaves). Its nodes, edges and controls settle in on every arrival as a board's cards do
+(`useEntryMotion`, staggered by layer); nodes joining a graph on screen pop in. The boundaries
+render it in place of the board, so the task pane, task screens, search and filters are the
+board's own. `graphModel.ts` turns the board's data, relations and `TaskBlockersContext` into
+nodes and edges (states match the cards' blocked mark), `layout.ts` is the pure layered
+layout and `analysis.ts` the critical path, reachability and bottleneck counts, all unit
+tested. `viewport.ts` pans and zooms by motion values; the canvas fits itself until moved.
 
 Several accounts can be signed in on one device (ADR 0016): `lib/auth.ts` keeps the list,
 the tab's account (`sessionStorage`) and the `/u/<n>` address prefix the router strips and

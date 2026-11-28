@@ -2,7 +2,9 @@ import type { Project as ProjectRow } from '@throw/shared';
 import { AnimatePresence } from 'motion/react';
 import { useMemo, useRef, useState } from 'react';
 import { ShellMenu } from '@/components/AppShell/ShellMenu';
+import { useShell } from '@/components/AppShell/shell';
 import { useSelectionContent } from '@/components/BulkActions/BulkActions';
+import { DependencyGraph } from '@/components/DependencyGraph/DependencyGraph';
 import { SyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { type TaskPanel, taskDrawerContent } from '@/components/TaskDetails/TaskControls';
 import { TaskDetails } from '@/components/TaskDetails/TaskDetails';
@@ -11,12 +13,17 @@ import {
   useActivity,
   useAllTags,
   useAllTaskTags,
+  useGithubReleases,
   useLocalRowsReady,
   useProjects,
   useStatuses,
+  useTaskGithubLinks,
+  useTaskGithubReleases,
   useTaskRelations,
   useTasks,
 } from '@/lib/collections';
+import { pullRequestsByTask, useShownGithubLinks } from '@/lib/githubLinks';
+import { boardReleases } from '@/lib/githubReleases';
 import { useLaunchScreenReady } from '@/lib/launchScreen';
 import { useDesktop } from '@/lib/media';
 import { useAwaitingSync } from '@/lib/syncStatus';
@@ -24,6 +31,7 @@ import { BoardAnnouncer } from './BoardAnnouncer';
 import { boardRelations, TaskBlockersContext } from './blockers';
 import { taskScreens, taskWrites, useBoardBoundary } from './boundary';
 import { DragOverlay } from './DragOverlay';
+import { TaskPullRequestsContext } from './githubLinks';
 import { secondaryTagsByTask, updatedAtByTask, workspaceBoardData } from './selection';
 import { board, canOpenTask } from './state';
 import { TaskScreen } from './TaskView';
@@ -63,6 +71,7 @@ export function WorkspaceBoard({
   onSearch: () => void;
 }) {
   const projects = useSameRows(given);
+  const graph = useShell().view === 'graph';
   const { statuses, isLoading: loadingStatuses } = useStatuses();
   const { tasks, isLoading: loadingTasks } = useTasks();
   const { tags } = useAllTags();
@@ -73,6 +82,11 @@ export function WorkspaceBoard({
   const phone = !useDesktop();
   const blockers = useBlockersByTask();
   const { relations } = useTaskRelations();
+  const { links: githubLinks } = useTaskGithubLinks();
+  const shownGithub = useShownGithubLinks(githubLinks);
+  const pulls = useMemo(() => pullRequestsByTask(shownGithub), [shownGithub]);
+  const { releases } = useGithubReleases();
+  const { bindings } = useTaskGithubReleases();
   const { projects: allProjects } = useProjects();
   const linked = useMemo(
     () => boardRelations(blockers, relations, tasks, allProjects),
@@ -80,13 +94,39 @@ export function WorkspaceBoard({
   );
   const selectionContent = useSelectionContent();
   const state = board.use();
-  const data = useMemo(
-    () => ({
-      ...workspaceBoardData(workspaceId, projects, statuses, tasks, tags, secondaryTags, updates),
+  const data = useMemo(() => {
+    const own = workspaceBoardData(
+      workspaceId,
+      projects,
+      statuses,
+      tasks,
+      tags,
+      secondaryTags,
+      updates,
+    );
+    return {
+      ...own,
       relations: linked,
-    }),
-    [workspaceId, projects, statuses, tasks, tags, secondaryTags, updates, linked],
-  );
+      releases: boardReleases(
+        own.tasks.map((row) => row.id),
+        releases,
+        bindings,
+        shownGithub,
+      ),
+    };
+  }, [
+    workspaceId,
+    projects,
+    statuses,
+    tasks,
+    tags,
+    secondaryTags,
+    updates,
+    linked,
+    releases,
+    bindings,
+    shownGithub,
+  ]);
   const awaiting = useAwaitingSync(loadingStatuses, data.project.statuses.length);
   const awaitingTasks = useAwaitingSync(loadingTasks, data.tasks.length);
   const [taskPage, setTaskPage] = useState<{ taskId: string; panel: TaskPanel } | null>(null);
@@ -164,33 +204,45 @@ export function WorkspaceBoard({
   return (
     <TaskContentContext.Provider value={taskContent}>
       <TaskBlockersContext.Provider value={blockers}>
-        <SelectionContentContext.Provider value={selectionContent}>
-          <div className="relative h-full" aria-busy={awaitingTasks}>
-            {!phone && <h1 className="sr-only">All projects</h1>}
-            {phone ? (
-              <WorkspacePhoneBoard
-                title={
-                  <h1 aria-label="All projects" className="min-w-0">
-                    <ShellMenu phone titleClassName="text-[1.75rem]" />
-                  </h1>
-                }
-                syncIndicator={<SyncIndicator />}
-                onSearch={onSearch}
-                onCreate={onCreate}
-              />
-            ) : (
-              <WorkspaceDesktopBoard />
-            )}
-            <AnimatePresence>
-              {phone &&
-                screens.map((task) => (
-                  <TaskScreen key={task.id} task={task} covered={task !== openTask} />
-                ))}
-            </AnimatePresence>
-            <DragOverlay />
-            <BoardAnnouncer />
-          </div>
-        </SelectionContentContext.Provider>
+        <TaskPullRequestsContext.Provider value={pulls}>
+          <SelectionContentContext.Provider value={selectionContent}>
+            <div className="relative h-full" aria-busy={awaitingTasks}>
+              {!phone && <h1 className="sr-only">All projects</h1>}
+              {graph ? (
+                <DependencyGraph
+                  phone={phone}
+                  title={
+                    <h1 aria-label="All projects" className="min-w-0">
+                      <ShellMenu phone titleClassName="text-[1.75rem]" />
+                    </h1>
+                  }
+                  syncIndicator={<SyncIndicator />}
+                />
+              ) : phone ? (
+                <WorkspacePhoneBoard
+                  title={
+                    <h1 aria-label="All projects" className="min-w-0">
+                      <ShellMenu phone titleClassName="text-[1.75rem]" />
+                    </h1>
+                  }
+                  syncIndicator={<SyncIndicator />}
+                  onSearch={onSearch}
+                  onCreate={onCreate}
+                />
+              ) : (
+                <WorkspaceDesktopBoard />
+              )}
+              <AnimatePresence>
+                {phone &&
+                  screens.map((task) => (
+                    <TaskScreen key={task.id} task={task} covered={task !== openTask} />
+                  ))}
+              </AnimatePresence>
+              <DragOverlay />
+              <BoardAnnouncer />
+            </div>
+          </SelectionContentContext.Provider>
+        </TaskPullRequestsContext.Provider>
       </TaskBlockersContext.Provider>
     </TaskContentContext.Provider>
   );

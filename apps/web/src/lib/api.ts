@@ -30,13 +30,16 @@ import {
   githubConnectionSecretResponseSchema,
   githubReleasesResponseSchema,
   githubReleaseWriteSchema,
+  type linkGithubRequestSchema,
   mcpTokensResponseSchema,
   releaseBindingResponseSchema,
+  txidResponseSchema,
   webhookResponseSchema,
   webhookSecretResponseSchema,
   webhooksResponseSchema,
   webhookTestResponseSchema,
 } from '@throw/shared';
+import type { z } from 'zod';
 import { getAuthToken } from './auth';
 import {
   compatibleFetch,
@@ -56,6 +59,8 @@ export class ApiError extends Error {
     super(message);
   }
 }
+
+export type LinkGithubRequest = z.input<typeof linkGithubRequestSchema>;
 
 async function apiResponse(path: string, init: RequestInit) {
   const token = getAuthToken();
@@ -181,6 +186,19 @@ export const api = {
       method: 'POST',
       signal: AbortSignal.timeout(20_000),
     }).then(githubConnectionResponseSchema.parse),
+  // A task's pull request and issue links (ADR 0017): online only, since a link needs the
+  // connection the server holds. The new row arrives through the links shape.
+  linkGithub: (taskId: string, body: LinkGithubRequest) =>
+    request<unknown>(`/integrations/github/tasks/${taskId}/links`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20_000),
+    }).then(txidResponseSchema.parse),
+  unlinkGithub: (taskId: string, linkId: string) =>
+    request<unknown>(`/integrations/github/tasks/${taskId}/links/${linkId}`, {
+      method: 'DELETE',
+      signal: AbortSignal.timeout(20_000),
+    }).then(txidResponseSchema.parse),
   githubReleases: async (projectId: string) => {
     await ensureGithubReleasesSupport();
     return request<unknown>(`/integrations/github/projects/${projectId}/releases`, {}).then(

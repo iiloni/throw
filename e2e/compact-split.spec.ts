@@ -46,10 +46,12 @@ test.describe('the board beside a task on a narrow desktop', () => {
       compactBoard(page).getByRole('region', { name: 'Review', exact: true }),
     ).not.toBeInViewport();
 
-    await flow(page).getByRole('button', { name: 'Review', exact: true }).click();
+    await flow(page)
+      .getByRole('button', { name: /^Review, \d+ tasks?$/ })
+      .click();
     await expect(card(page, 'Review this')).toBeInViewport();
     // The turn has landed.
-    await expect(flow(page).getByRole('button', { name: 'Review', exact: true })).toHaveAttribute(
+    await expect(flow(page).getByRole('button', { name: /^Review, \d+ tasks?$/ })).toHaveAttribute(
       'aria-current',
       'page',
     );
@@ -186,7 +188,9 @@ test.describe('the board beside a task on a narrow desktop', () => {
     // Turning to another column brings the dock back too.
     await page.mouse.wheel(0, 400);
     await expect(dock(page)).toHaveAttribute('data-away', '');
-    await flow(page).getByRole('button', { name: 'Review', exact: true }).click();
+    await flow(page)
+      .getByRole('button', { name: /^Review, \d+ tasks?$/ })
+      .click();
     await expect(dock(page)).not.toHaveAttribute('data-away');
   });
 
@@ -392,7 +396,9 @@ test.describe('the board beside a task on a narrow desktop', () => {
     // It opens on the work in progress.
     await expect(card(page, 'Water tomatoes')).toBeInViewport();
     await expect(card(page, 'Pick apples')).not.toBeInViewport();
-    await flow(page).getByRole('button', { name: 'Done', exact: true }).click();
+    await flow(page)
+      .getByRole('button', { name: /^Done, \d+ tasks?$/ })
+      .click();
     await expect(card(page, 'Pick apples')).toBeInViewport();
     await page.getByRole('button', { name: 'Back to the board', exact: true }).click();
     await expect(compactBoard(page)).toHaveCount(0);

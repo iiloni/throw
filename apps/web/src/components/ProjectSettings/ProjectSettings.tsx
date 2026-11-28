@@ -43,7 +43,13 @@ export function ProjectSettings({
   const localReady = useLocalRowsReady(
     'workspaces',
     'projects',
-    ...(section === 'statuses' ? ['statuses', 'tasks'] : section === 'tags' ? ['tags'] : []),
+    ...(section === 'statuses'
+      ? ['statuses', 'tasks']
+      : section === 'tags'
+        ? ['tags']
+        : section === 'github'
+          ? ['statuses']
+          : []),
   );
   useLaunchScreenReady(localReady && (section !== 'statuses' || !awaiting));
   return (
@@ -63,7 +69,12 @@ export function ProjectSettings({
         ))}
       {section === 'priorities' && <PrioritySettings project={project} />}
       {section === 'tags' && <TagManager projectId={project.id} titled={false} />}
-      {section === 'github' && <GithubConnectionSettings projectId={project.id} />}
+      {section === 'github' && (
+        <GithubConnectionSettings
+          projectId={project.id}
+          statuses={awaitingStatuses ? null : ownStatuses}
+        />
+      )}
     </>
   );
 }

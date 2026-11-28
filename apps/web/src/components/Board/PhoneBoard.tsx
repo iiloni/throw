@@ -2,7 +2,6 @@ import {
   Check,
   CheckCheck,
   ChevronDown,
-  ChevronRight,
   ChevronsRightLeft,
   Plus,
   Search,
@@ -219,9 +218,9 @@ export const pageClass = 'flex w-full shrink-0 snap-center flex-col px-[var(--pa
 /**
  * The current column by name, and the active columns as one track in the order work moves
  * through them: the ones behind are filled in, so the header says how far along the board
- * the page is. The next column is named at the end, a step further along. On a board whose
- * columns fold, the current one folds from beside its name, and a folded one is a short handle
- * on the track that the pager skips; tapping the handle opens the column and turns to it.
+ * the page is, and each carries its column's count. On a board whose columns fold, the current
+ * one folds from the end of its name's row, and a folded one is a short handle on the track
+ * that the pager skips; tapping the handle opens the column and turns to it.
  */
 export function FlowTrack({
   statuses,
@@ -240,7 +239,6 @@ export function FlowTrack({
   const reduced = useReducedMotion();
   const navRef = useRef<HTMLElement>(null);
   const status = statuses[page];
-  const next = statuses[page + 1];
   const track = folding?.statuses ?? statuses;
   const at = track.findIndex(({ id }) => id === status?.id);
   // Which way the name slides: the way the board turned.
@@ -286,47 +284,51 @@ export function FlowTrack({
               <span className="truncate font-bold font-display text-xl text-[color:var(--column-label,currentColor)] tracking-[-0.01em]">
                 {status.name}
               </span>
-              <span className="text-muted-foreground text-sm tabular-nums">
-                {countIn(state, status.id)}
-              </span>
             </h2>
-            {folding && statuses.length > 1 && !holding && (
-              <IconButton
-                label={`Collapse ${status.name} column`}
-                aria-expanded
-                tooltip={false}
-                className="size-9 shrink-0 text-muted-foreground"
-                onClick={() => {
-                  setFocusing(status.id);
-                  folding.onCollapse(status.id);
-                }}
-              >
-                <ChevronsRightLeft />
-              </IconButton>
-            )}
           </motion.div>
         </AnimatePresence>
         <span className="flex-1" />
-        {next && (
-          <button
-            type="button"
-            onClick={() => onTurn(page + 1)}
-            className="flex h-9 shrink-0 items-center gap-0.5 rounded-full pr-1.5 pl-3 text-muted-foreground text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
-          >
-            {next.name}
-            <ChevronRight aria-hidden className="size-4" />
-          </button>
+        {folding && (
+          <AnimatePresence initial={false}>
+            {statuses.length > 1 && !holding && (
+              <motion.span
+                key="fold"
+                className="flex shrink-0"
+                initial={{ opacity: 0, scale: 0.6 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.6 }}
+                transition={reduced ? { duration: 0 } : springs.snappy}
+              >
+                <IconButton
+                  label={`Collapse ${status.name} column`}
+                  aria-expanded
+                  tooltip={false}
+                  className="size-9 bg-foreground/[0.06] text-muted-foreground"
+                  onClick={() => {
+                    setFocusing(status.id);
+                    folding.onCollapse(status.id);
+                  }}
+                >
+                  <ChevronsRightLeft />
+                </IconButton>
+              </motion.span>
+            )}
+          </AnimatePresence>
         )}
       </div>
       <nav ref={navRef} aria-label="Columns" className="flex gap-1">
         {track.map((item, order) => {
           const index = statuses.findIndex(({ id }) => id === item.id);
           const folded = index === -1;
+          const count = countIn(state, item.id);
+          const tasks = `${count} ${count === 1 ? 'task' : 'tasks'}`;
           return (
             <motion.button
               key={item.id}
               type="button"
-              aria-label={folded ? `Expand ${item.name} column` : item.name}
+              aria-label={
+                folded ? `Expand ${item.name} column, ${tasks}` : `${item.name}, ${tasks}`
+              }
               aria-expanded={folding ? !folded : undefined}
               data-column-id={item.id}
               data-folded={folded ? '' : undefined}
@@ -342,7 +344,7 @@ export function FlowTrack({
               }}
               transition={reduced ? { duration: 0 } : folded ? curves.fold : springs.smooth}
               className={cn(
-                'relative flex h-6 min-w-8 basis-8 items-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60',
+                'relative flex h-6 min-w-11 basis-11 items-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60',
                 // The handle takes a finger's width around it.
                 folded && 'z-10 before:absolute before:-inset-x-1.5 before:-inset-y-2',
               )}
@@ -368,11 +370,46 @@ export function FlowTrack({
                   />
                 )}
               </span>
+              <FlowCount count={count} current={index === page} />
             </motion.button>
           );
         })}
       </nav>
     </div>
+  );
+}
+
+/**
+ * A column's count, a bead on its segment of the track: filled in the column's colour on the
+ * current one. It bumps when the count changes, as the done count does, but not as it mounts.
+ */
+function FlowCount({ count, current }: { count: number; current: boolean }) {
+  const reduced = useReducedMotion();
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+  }, []);
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute inset-0 flex items-center justify-center"
+    >
+      <motion.span
+        key={count}
+        initial={mounted.current && !reduced ? { scale: 1.35 } : false}
+        animate={{ scale: 1 }}
+        transition={springs.snappy}
+        className={cn(
+          'flex h-4 min-w-4 items-center justify-center rounded-full px-1 font-semibold text-[0.6875rem] tabular-nums leading-none shadow-[0_0_0_2px_var(--background)] transition-colors duration-300',
+          current
+            ? 'bg-[color:var(--column-accent,var(--foreground))] text-background'
+            : 'bg-background text-muted-foreground ring-1 ring-foreground/15 ring-inset',
+          count === 0 && !current && 'text-muted-foreground/60',
+        )}
+      >
+        {count > 99 ? '99+' : count}
+      </motion.span>
+    </span>
   );
 }
 

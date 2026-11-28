@@ -1,4 +1,5 @@
 import { SIZES, type Size } from '@throw/shared';
+import type { BoardReleases } from '@/lib/githubReleases';
 import { normalizeSearch, type PreparedQuery, prepareQuery, rankMatch } from '@/lib/taskSearch';
 import {
   type BoardData,
@@ -52,6 +53,10 @@ export type BoardFilter = {
   unsized: boolean;
   /** Any of these relations: blocked, blocking another task, or linked as a duplicate. */
   relations: RelationFilter[];
+  /** Any of these GitHub releases, by id: tasks bound to one (ADR 0017). */
+  releaseIds: string[];
+  /** Merged work no shipped release holds yet, as MCP's `unreleased` reads it. */
+  unreleased: boolean;
   /** The workspace board's project scope. */
   projectId: string | null;
 };
@@ -64,6 +69,8 @@ export const EMPTY_FILTER: BoardFilter = {
   sizes: [],
   unsized: false,
   relations: [],
+  releaseIds: [],
+  unreleased: false,
   projectId: null,
 };
 
@@ -75,6 +82,8 @@ export function chosenFilters(filter: BoardFilter) {
     filter.sizes.length +
     Number(filter.unsized) +
     filter.relations.length +
+    filter.releaseIds.length +
+    Number(filter.unreleased) +
     Number(filter.projectId !== null)
   );
 }
@@ -155,6 +164,25 @@ export function matchesRelations(
   return filter.relations.some((relation) => hasRelation(task, relation, relations));
 }
 
+/**
+ * Whether a task is in any of the chosen releases, or waits for one when Unreleased is chosen.
+ * A board without releases (the prototype) has none.
+ */
+export function matchesReleases(
+  task: Pick<Task, 'id'>,
+  filter: Pick<BoardFilter, 'releaseIds' | 'unreleased'>,
+  releases: BoardReleases | undefined,
+) {
+  if (filter.releaseIds.length === 0 && !filter.unreleased) return true;
+  if (!releases) return false;
+  if (filter.unreleased && releases.unreleased.has(task.id)) return true;
+  const own = releases.byTask.get(task.id);
+  return !!own && filter.releaseIds.some((id) => own.has(id));
+}
+
+/** What a board knows of its tasks' links, for the filters that choose by them. */
+export type BoardLinks = Pick<BoardData, 'relations' | 'releases'>;
+
 function cardText(project: Project, task: Task) {
   const own = projectOf(project, task);
   const names = cardTags(project, task);
@@ -179,11 +207,12 @@ export function matchesFilter(
   task: Task,
   filter: BoardFilter,
   query: PreparedQuery | null = prepareQuery(filter.query),
-  relations?: BoardRelations,
+  links: BoardLinks = {},
 ) {
   if (filter.projectId !== null && task.projectId !== filter.projectId) return false;
   if (!matchesSize(task, filter)) return false;
-  if (!matchesRelations(task, filter, relations)) return false;
+  if (!matchesRelations(task, filter, links.relations)) return false;
+  if (!matchesReleases(task, filter, links.releases)) return false;
   if (!matchesTags(cardTags(project, task), filter)) return false;
   return query === null || queryRank(project, task, query) !== null;
 }
@@ -208,7 +237,7 @@ export function matchingIds(
   const query = prepareQuery(filter.query);
   const ids = new Set<string>();
   for (const task of data.tasks) {
-    if (!matchesFilter(data.project, task, filter, query, data.relations)) continue;
+    if (!matchesFilter(data.project, task, filter, query, data)) continue;
     ids.add(task.id);
     if (!subtasksAsCards && task.parentId !== null) ids.add(task.parentId);
   }
@@ -227,8 +256,7 @@ export function bestMatch(data: BoardData, filter: BoardFilter, closed: (task: T
   if (!query) return undefined;
   let best: { task: Task; rank: number } | undefined;
   for (const task of data.tasks) {
-    if (!matchesFilter(data.project, task, { ...filter, query: '' }, null, data.relations))
-      continue;
+    if (!matchesFilter(data.project, task, { ...filter, query: '' }, null, data)) continue;
     const rank = queryRank(data.project, task, query);
     if (rank === null) continue;
     const shut = closed(task);
@@ -251,13 +279,17 @@ export type FacetCounts = {
   /** The workspace board's projects. */
   projects: ReadonlyMap<string, number>;
   relations: ReadonlyMap<RelationFilter, number>;
+  /** Each listed release's cards, and the cards of merged work awaiting one. */
+  releases: ReadonlyMap<string, number>;
+  unreleased: number;
 };
 
 /**
  * How many cards each choice would leave, given the rest of the filter: a tag's count is of
  * cards that match everything but the tags, a size's of those that match everything but the
  * sizes, a project's of those that match everything but the project scope, and a relation's of
- * those that match everything but the relations.
+ * those that match everything but the relations. A release's count, and Unreleased's, are of
+ * cards that match everything but the release choice.
  */
 export function facetCounts(
   data: BoardData,
@@ -271,29 +303,38 @@ export function facetCounts(
   const relations = new Map<RelationFilter, number>(
     RELATION_FILTERS.map((relation) => [relation, 0]),
   );
+  const releases = new Map<string, number>();
   let untagged = 0;
+  let unreleased = 0;
   const anyTag = { ...filter, tagIds: [], untagged: false };
   const anySize = { ...filter, sizes: [], unsized: false };
   const anyProject = { ...filter, projectId: null };
   const anyRelation = { ...filter, relations: [] };
+  const anyRelease = { ...filter, releaseIds: [], unreleased: false };
   const linked = data.relations;
+  const shipped = data.releases;
   for (const task of data.tasks) {
     if (!subtasksAsCards && task.parentId !== null) continue;
-    if (matchesFilter(data.project, task, anyTag, query, linked)) {
+    if (matchesFilter(data.project, task, anyTag, query, data)) {
       const assigned = cardTags(data.project, task);
       if (assigned.size === 0) untagged += 1;
       for (const id of assigned) tags.set(id, (tags.get(id) ?? 0) + 1);
     }
-    if (matchesFilter(data.project, task, anySize, query, linked))
+    if (matchesFilter(data.project, task, anySize, query, data))
       sizes.set(task.size, (sizes.get(task.size) ?? 0) + 1);
-    if (task.projectId && matchesFilter(data.project, task, anyProject, query, linked))
+    if (task.projectId && matchesFilter(data.project, task, anyProject, query, data))
       projects.set(task.projectId, (projects.get(task.projectId) ?? 0) + 1);
-    if (linked && matchesFilter(data.project, task, anyRelation, query, linked))
+    if (linked && matchesFilter(data.project, task, anyRelation, query, data))
       for (const relation of RELATION_FILTERS)
         if (hasRelation(task, relation, linked))
           relations.set(relation, (relations.get(relation) ?? 0) + 1);
+    if (shipped && matchesFilter(data.project, task, anyRelease, query, data)) {
+      if (shipped.unreleased.has(task.id)) unreleased += 1;
+      for (const id of shipped.byTask.get(task.id) ?? [])
+        releases.set(id, (releases.get(id) ?? 0) + 1);
+    }
   }
-  return { tags, untagged, sizes, projects, relations };
+  return { tags, untagged, sizes, projects, relations, releases, unreleased };
 }
 
 function time(at: string | undefined) {

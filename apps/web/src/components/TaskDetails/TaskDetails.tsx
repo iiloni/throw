@@ -35,10 +35,19 @@ import {
   useScrollEdges,
   useScrollToBottom,
 } from '@/components/ScrollToBottom/ScrollToBottom';
+import { TaskGithubLinks } from '@/components/TaskGithubLinks/TaskGithubLinks';
 import { TaskRelations, useRelationGroups } from '@/components/TaskRelations/TaskRelations';
 import { TaskTags } from '@/components/TaskTags/TaskTags';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
-import { useTags, useTaskTags } from '@/lib/collections';
+import {
+  useGithubReleases,
+  useTags,
+  useTaskGithubLinksOf,
+  useTaskGithubReleasesOf,
+  useTaskTags,
+} from '@/lib/collections';
+import { sortGithubLinks, useGithubRepository, useShownGithubLinks } from '@/lib/githubLinks';
+import { taskReleases } from '@/lib/githubReleases';
 import { haptics } from '@/lib/haptics';
 import { createTask, restoreTask, sendTask, trashTask } from '@/lib/tasks';
 import { cn } from '@/lib/utils';
@@ -154,11 +163,30 @@ export function TaskDetails({
   );
   const shell = useContext(ShellContext);
   const { groups: relationGroups, isLoading: relationsLoading } = useRelationGroups(task);
+  const { links: githubRows, isLoading: githubLoading } = useTaskGithubLinksOf(task.id);
+  const shownGithub = useShownGithubLinks(githubRows);
+  const githubLinks = useMemo(() => sortGithubLinks(shownGithub), [shownGithub]);
+  const { releases: allReleases, isLoading: releasesLoading } = useGithubReleases();
+  const { bindings, isLoading: bindingsLoading } = useTaskGithubReleasesOf(task.id);
+  const released = useMemo(
+    () => taskReleases(task.id, allReleases, bindings, githubLinks),
+    [task.id, allReleases, bindings, githubLinks],
+  );
   const column = useTaskColumn({
     paneWidth: phone ? null : paneWidth,
     hasExtras:
-      hasTags || (task.parentId === null && children.length > 0) || relationGroups.length > 0,
-    ready: !tagsLoading && !taskTagsLoading && !relationsLoading,
+      hasTags ||
+      (task.parentId === null && children.length > 0) ||
+      relationGroups.length > 0 ||
+      githubLinks.length > 0 ||
+      released.releases.length > 0,
+    ready:
+      !tagsLoading &&
+      !taskTagsLoading &&
+      !relationsLoading &&
+      !githubLoading &&
+      !releasesLoading &&
+      !bindingsLoading,
   });
   const tagRow = (
     <TaskTags tags={tags} primaryTagId={task.primaryTagId} secondaryTagIds={secondaryTagIds} />
@@ -171,14 +199,27 @@ export function TaskDetails({
     if (canOpenTask(other.id)) openSubtask(other.id, origin);
     else shell?.openTask(other.projectId, other.id);
   }
-  const linkCount = relationGroups.reduce((sum, group) => sum + group.items.length, 0);
+  const linkCount =
+    relationGroups.reduce((sum, group) => sum + group.items.length, 0) +
+    githubLinks.length +
+    released.releases.length;
   const hasOpenBlocker = relationGroups.some(
     (group) =>
       group.role === 'blocked_by' && group.items.some((item) => !item.closed && !item.trashed),
   );
-  const relations = (className?: string) => (
-    <TaskRelations task={task} groups={relationGroups} onOpen={openRelated} className={className} />
+  /** The task's links: related tasks, then its releases, pull requests and issues. */
+  const relations = () => (
+    <div className="flex flex-col gap-3">
+      <TaskRelations task={task} groups={relationGroups} onOpen={openRelated} />
+      <TaskGithubLinks
+        links={githubLinks}
+        releases={released.releases}
+        unreleased={released.unreleased}
+      />
+    </div>
   );
+  // The picker also takes a pasted pull request or issue once the project follows a repository.
+  const githubRepository = useGithubRepository(project.id);
   const addLinkButton = (
     <button
       type="button"
@@ -186,7 +227,7 @@ export function TaskDetails({
       className="flex min-h-12 w-full items-center gap-2 rounded-2xl border border-foreground/15 border-dashed px-4 text-muted-foreground text-sm outline-none transition-colors hover:border-foreground/30 hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60"
     >
       <Plus className="size-4" aria-hidden />
-      Link a task
+      {githubRepository ? 'Link a task, PR or issue' : 'Link a task'}
     </button>
   );
   /** The subtasks with their slot to add one, inline below the description or in the column. */
@@ -480,7 +521,7 @@ export function TaskDetails({
           {tagRow}
           {task.parentId === null && subtasks('column')}
           <div className="flex flex-col gap-2">
-            {relationGroups.length > 0 ? (
+            {linkCount > 0 ? (
               relations()
             ) : (
               <h2 className="px-1 font-medium text-muted-foreground text-xs">Links</h2>
